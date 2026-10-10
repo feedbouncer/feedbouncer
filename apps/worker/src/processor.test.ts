@@ -8,9 +8,11 @@ import {
   type RunOnce,
 } from './processor.js';
 
-const log = createLogger('test', 'error', () => {});
+const logged: string[] = [];
+const log = createLogger('test', 'warn', (line) => logged.push(line));
 
 function setup(outcome: 'processed' | 'duplicate' = 'processed') {
+  logged.length = 0;
   const sleep = vi.fn(async () => {});
   const runOnce = vi.fn<RunOnce>(async (_key, work) => {
     if (outcome === 'processed') await work();
@@ -45,6 +47,9 @@ describe('createProcessor', () => {
     const { process, sleep } = setup('duplicate');
     await expect(process(job())).resolves.toBe('duplicate');
     expect(sleep).not.toHaveBeenCalled();
+    expect(logged.map((l) => JSON.parse(l))).toEqual([
+      expect.objectContaining({ msg: 'duplicate delivery skipped', jobId: 'selftest_r_1' }),
+    ]);
   });
 
   it('rejects jobs without an id, with unknown names, or with invalid data', async () => {
