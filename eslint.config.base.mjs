@@ -6,6 +6,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import turboPlugin from "eslint-plugin-turbo";
+import eslintConfigPrettier from "eslint-config-prettier";
 
 export default [
   {
@@ -31,4 +32,5 @@ export default [
       "turbo/no-undeclared-env-vars": "error",
     },
   },
+  eslintConfigPrettier,
 ];
