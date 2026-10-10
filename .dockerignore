@@ -22,4 +22,3 @@
 **/playwright-report
 **/tmp
 **/.DS_Store
-!**/.env.prod.example

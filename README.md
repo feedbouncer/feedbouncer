@@ -41,7 +41,7 @@ Every pull request and every push to `main` runs `.github/workflows/ci.yml` on a
 
 These three names are stable and are the ones to mark **required** in branch protection. `Docker discover` and `Docker image (…)` are helper jobs; don't mark them required. Renaming a check is a breaking change: update branch protection in the same PR, and `scripts/ci/workflow.test.mjs` will remind you.
 
-- **Adding a test:** give your package a `"test": "vitest run --exclude '**/dist/**'"` script (copy `packages/placeholder`) and put tests in `src/**/*.test.ts`. CI picks it up automatically.
+- **Adding a test:** give your package a `"test": "vitest run"` script (copy `packages/placeholder`) and put tests in `src/**/*.test.ts` (the package build excludes them via `tsconfig.build.json`). CI picks it up automatically.
 - **Adding an image:** add `Dockerfile` to `apps/<name>/` or `packages/<name>/`, using `apps/placeholder-app/Dockerfile` as the template: build context is the repo root, `ARG NODE_VERSION`, and never read `.env` or prebuilt `dist/`. No workflow edit needed.
 - **Adding a shared root config file** that packages extend: add it to `globalDependencies` in `turbo.json` _and_ to `SHARED_ROOT_CONFIG` in `scripts/ci/turbo-config.test.mjs`, or cached results can go stale.
 - **Lockfile errors in CI** (`ERR_PNPM_OUTDATED_LOCKFILE`): run `pnpm install` locally and commit the updated `pnpm-lock.yaml`.
