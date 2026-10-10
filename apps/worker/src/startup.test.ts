@@ -25,4 +25,16 @@ describe('reportStartupFailure', () => {
     reportStartupFailure(log, 'boom');
     expect(JSON.parse(lines[0] ?? '')).toMatchObject({ msg: 'startup failed', error: 'NonError' });
   });
+
+  it('logs a null cause for an Error without one', () => {
+    const lines: string[] = [];
+    const log = createLogger('worker', 'error', (l) => lines.push(l));
+    reportStartupFailure(log, new Error('boom'));
+    expect(JSON.parse(lines[0] ?? '')).toMatchObject({
+      errorMessage: 'boom',
+      cause: null,
+      causeCode: null,
+      causeMessage: null,
+    });
+  });
 });

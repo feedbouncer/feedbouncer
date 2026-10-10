@@ -54,7 +54,7 @@ All settings live in `.env`, which is git-ignored and copied from `.env.example`
 docker compose up -d --scale worker=2
 ```
 
-Each job is processed exactly once, whatever the number of replicas. A Postgres-backed idempotency ledger (`processed_job`) refuses duplicate deliveries.
+A Postgres-backed idempotency ledger (`processed_job`) refuses duplicate deliveries, so database work done inside the job transaction runs once however many replicas there are. Work with outside side effects, such as calls to external APIs, can still repeat and needs its own idempotency handling.
 
 ### Troubleshooting
 

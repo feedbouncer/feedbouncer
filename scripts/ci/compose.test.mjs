@@ -1,6 +1,5 @@
-// Static guard for the local dev stack. Each assertion maps to an acceptance
-// criterion or a Review Focus item in the compose plan. Runs inside the CI
-// "Test" check with no Docker needed.
+// Static guard for the local dev stack: compose files, .env.example and the
+// Dockerfiles. Runs inside the CI "Test" check with no Docker needed.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
@@ -113,7 +112,8 @@ test('worker publishes nothing and every service is scalable', () => {
 test('healthchecks gate startup in the right order', () => {
   for (const name of LONG_RUNNING)
     assert.ok(svc[name].healthcheck?.test, `${name} has no healthcheck`);
-  // Review Focus #1: TCP probe, not the init-time Unix socket.
+  // pg_isready must use TCP: during first-boot init the Unix socket reports
+  // ready too early and dependents crash-loop.
   assert.match(svc.postgres.healthcheck.test.join(' '), /pg_isready -h 127\.0\.0\.1/);
   for (const name of ['api', 'worker']) {
     assert.deepEqual(svc[name].depends_on, {
