@@ -1,3 +1,3 @@
-import { ping } from "@feedbouncer/placeholder";
+import { ping } from '@feedbouncer/placeholder';
 
 console.log(ping());
