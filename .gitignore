@@ -49,3 +49,6 @@ npm-shrinkwrap.json
 
 # Personal Docker Compose overrides (see compose.override.example.yaml)
 compose.override.yaml
+
+# Integration-test migration fixtures
+packages/db/.tmp/

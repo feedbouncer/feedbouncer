@@ -1,18 +1,9 @@
-// Prisma owns migrations. Runtime SQL currently uses `pg` directly; the core
-// data-model ticket decides whether to adopt Prisma Client.
+// SQL-first: the schema is defined ONLY by prisma/migrations/*/migration.sql
+// (reversed by down.sql). Prisma Migrate is used as the runner (deploy, status,
+// resolve). Do not add models here and never run `prisma migrate dev`, `migrate
+// reset` or `db push`: with no models they would generate DROPs for every table.
+// A future ticket adopting Prisma Client should introspect with `prisma db pull`.
+// See packages/db/README.md.
 datasource db {
   provider = "postgresql"
-}
-
-/// Idempotency ledger for background jobs. System table (no tenant data).
-/// See packages/db/src/job-once.ts.
-model ProcessedJob {
-  queue               String
-  jobId               String   @map("job_id")
-  processedBy         String   @map("processed_by")
-  firstProcessedAt    DateTime @default(now()) @map("first_processed_at") @db.Timestamptz(3)
-  duplicateDeliveries Int      @default(0) @map("duplicate_deliveries")
-
-  @@id([queue, jobId])
-  @@map("processed_job")
 }
