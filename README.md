@@ -25,7 +25,7 @@ The first run builds the images, which takes a few minutes. Then:
 | API health           | http://localhost:3001/healthz (reports Postgres and Redis)              |
 | Status of everything | `docker compose ps -a`: five services `healthy`, `migrate` `exited (0)` |
 
-Database migrations run automatically in the one-shot `migrate` service before the API and worker start. Running it again is harmless.
+Database migrations run automatically in the one-shot `migrate` service before the API and worker start. Running it again is harmless. To roll back, create, or test migrations, see [packages/db/README.md](packages/db/README.md).
 
 Source files in `apps/*/src` and `packages/*/src` are mounted into the containers. Edits reload automatically, with no rebuild needed. The API and worker use file polling, so a change can take a second or two to show up.
 
@@ -86,15 +86,19 @@ pnpm install
 
 ### Common commands
 
-| Command             | What it does                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------- |
-| `pnpm build`        | Builds every package/app via Turborepo (`turbo run build`)                            |
-| `pnpm lint`         | Lints every package/app via Turborepo (`turbo run lint`)                              |
-| `pnpm format`       | Formats every package/app with Prettier via Turborepo (`turbo run format`)            |
-| `pnpm format:check` | Checks formatting without writing changes (`turbo run format:check`) — use this in CI |
-| `pnpm typecheck`    | Type-checks every package/app via Turborepo (`turbo run typecheck`)                   |
-| `pnpm test`         | Runs every package's `test` script via Turborepo, then the `scripts/ci` guard tests   |
-| `pnpm test:scripts` | Runs only the `scripts/ci/*.test.mjs` guard tests (`node --test`)                     |
+| Command                               | What it does                                                                          |
+| ------------------------------------- | ------------------------------------------------------------------------------------- |
+| `pnpm build`                          | Builds every package/app via Turborepo (`turbo run build`)                            |
+| `pnpm lint`                           | Lints every package/app via Turborepo (`turbo run lint`)                              |
+| `pnpm format`                         | Formats every package/app with Prettier via Turborepo (`turbo run format`)            |
+| `pnpm format:check`                   | Checks formatting without writing changes (`turbo run format:check`) — use this in CI |
+| `pnpm typecheck`                      | Type-checks every package/app via Turborepo (`turbo run typecheck`)                   |
+| `pnpm test`                           | Runs every package's `test` script via Turborepo, then the `scripts/ci` guard tests   |
+| `pnpm test:scripts`                   | Runs only the `scripts/ci/*.test.mjs` guard tests (`node --test`)                     |
+| `pnpm db:migrate`                     | Applies pending database migrations (needs `DATABASE_URL`)                            |
+| `pnpm db:rollback --yes-destroy-data` | Rolls back the newest migration                                                       |
+| `pnpm db:migration:new <name>`        | Scaffolds a migration directory with `migration.sql` and `down.sql`                   |
+| `pnpm db:status`                      | Shows which migrations are applied                                                    |
 
 Turborepo caches the per-package `build`, `lint`, `format:check`, `typecheck` and `test` tasks — an unchanged package's task is skipped on a re-run. The root-level `eslint .` and `prettier --check` steps (root config files only) run every time, as does `pnpm format`, which writes files.
 
@@ -102,11 +106,12 @@ Turborepo caches the per-package `build`, `lint`, `format:check`, `typecheck` an
 
 Every pull request and every push to `main` runs `.github/workflows/ci.yml` on a clean GitHub-hosted runner. It uses Node from `.nvmrc`, pnpm from `packageManager`, and a frozen lockfile. The workflow uses no secrets and a read-only token, so fork PRs get the same checks.
 
-| Check (status name) | What it runs                                                                                                                                         | Run it locally                                                                                                                 |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `Typecheck`         | `pnpm typecheck` (Turborepo; builds workspace dependencies first)                                                                                    | `pnpm install --frozen-lockfile && pnpm typecheck`                                                                             |
-| `Test`              | `pnpm test` = every package's `test` script via Turborepo, then `scripts/ci/*.test.mjs`                                                              | `pnpm test`                                                                                                                    |
-| `Docker build`      | Builds (never pushes) each `apps/*/Dockerfile` and `packages/*/Dockerfile` from the repo root. Green with a "nothing to build" note when none exist. | `node scripts/ci/docker-targets.mjs`, then for each: `docker build -f <dockerfile> --build-arg NODE_VERSION="$(cat .nvmrc)" .` |
+| Check (status name)   | What it runs                                                                                                                                         | Run it locally                                                                                                                 |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `Typecheck`           | `pnpm typecheck` (Turborepo; builds workspace dependencies first)                                                                                    | `pnpm install --frozen-lockfile && pnpm typecheck`                                                                             |
+| `Test`                | `pnpm test` = every package's `test` script via Turborepo, then `scripts/ci/*.test.mjs`                                                              | `pnpm test`                                                                                                                    |
+| `Database migrations` | `prisma migrate deploy` twice, `migrate:down` + re-deploy, then `test:integration`, on a fresh `postgres:17-alpine` service                          | see packages/db/README.md                                                                                                      |
+| `Docker build`        | Builds (never pushes) each `apps/*/Dockerfile` and `packages/*/Dockerfile` from the repo root. Green with a "nothing to build" note when none exist. | `node scripts/ci/docker-targets.mjs`, then for each: `docker build -f <dockerfile> --build-arg NODE_VERSION="$(cat .nvmrc)" .` |
 
 Two more jobs cover the dev stack: `Compose config` (static validation of the compose files, including the missing-`.env` error) and `Compose smoke` (the full lifecycle in `scripts/dev-stack/smoke.mjs`; run it locally with `pnpm stack:smoke --yes-destroy-local-data`). Mark `Compose config` **required** together with the three names above, and keep `Compose smoke` non-required until it has been stable for about 10 PRs. These names are stable, so don't rename them without updating branch protection. `Docker discover` and `Docker image (…)` are helper jobs; don't mark them required. Renaming a check is a breaking change: update branch protection in the same PR, and `scripts/ci/workflow.test.mjs` will remind you.
 

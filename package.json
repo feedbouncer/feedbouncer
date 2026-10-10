@@ -17,7 +17,11 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test && pnpm run test:scripts",
     "test:scripts": "node --test \"scripts/ci/*.test.mjs\"",
-    "stack:smoke": "node scripts/dev-stack/smoke.mjs"
+    "stack:smoke": "node scripts/dev-stack/smoke.mjs",
+    "db:migrate": "pnpm --dir packages/db run migrate:deploy",
+    "db:rollback": "pnpm --dir packages/db run migrate:down",
+    "db:migration:new": "pnpm --dir packages/db run migrate:new",
+    "db:status": "pnpm --dir packages/db run migrate:status"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
