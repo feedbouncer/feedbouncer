@@ -37,3 +37,13 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+# JS/TS tooling (pnpm + Turborepo monorepo). Added for this ticket —
+# does not replace or affect the ignore rules above for this repo's
+# existing non-JS tooling.
+.pnpm-store/
+npm-debug.log*
+pnpm-debug.log*
+
+# Stray npm artifacts: this repo uses pnpm (pnpm-lock.yaml); npm is blocked by a preinstall guard
+package-lock.json
+npm-shrinkwrap.json
