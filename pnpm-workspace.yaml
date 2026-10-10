@@ -1,5 +1,3 @@
 packages:
-  - "apps/*"
-  - "packages/*"
-minimumReleaseAgeExclude:
-  - '@types/node@24.19.2'
+  - apps/*
+  - packages/*

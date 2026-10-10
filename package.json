@@ -9,19 +9,18 @@
     "pnpm": ">=12.3.0 <13.0.0"
   },
   "scripts": {
-    "preinstall": "npx --yes only-allow pnpm",
+    "preinstall": "node -e \"if (!/^pnpm\\//.test(process.env.npm_config_user_agent ?? '')) { console.error('Use pnpm instead of npm or yarn'); process.exit(1); }\"",
     "build": "turbo run build",
-    "lint": "turbo run lint",
-    "format": "turbo run format",
-    "format:check": "turbo run format:check",
+    "lint": "turbo run lint && eslint .",
+    "format": "turbo run format && prettier --write \"*.{json,mjs,yaml,md}\" --ignore-unknown",
+    "format:check": "turbo run format:check && prettier --check \"*.{json,mjs,yaml,md}\" --ignore-unknown",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
-    "@eslint/js": "9.17.0",
-    "eslint": "9.17.0",
+    "@eslint/js": "10.0.1",
+    "eslint": "10.12.0",
     "eslint-config-prettier": "9.1.0",
     "eslint-plugin-turbo": "2.11.4",
-    "only-allow": "^1.2.1",
     "prettier": "3.4.2",
     "turbo": "2.11.4",
     "typescript": "6.0.3",
