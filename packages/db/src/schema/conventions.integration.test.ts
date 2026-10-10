@@ -1,0 +1,119 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { migratedDb } from '../testing/fixtures.js';
+
+let ctx: Awaited<ReturnType<typeof migratedDb>>;
+beforeAll(async () => {
+  ctx = await migratedDb();
+});
+afterAll(() => ctx.close());
+const q = async <T>(sql: string) => (await ctx.c.query(sql)).rows as T[];
+
+const SYSTEM_TABLES = ['processed_job'];
+const GLOBAL_TABLES = ['organization', 'app_user'];
+
+describe('schema conventions', () => {
+  it('server encoding is UTF8', async () => {
+    expect((await q<{ server_encoding: string }>('SHOW server_encoding'))[0]!.server_encoding).toBe(
+      'UTF8',
+    );
+  });
+
+  it('names are snake_case and fit in 63 bytes', async () => {
+    const names = await q<{ n: string }>(`
+      SELECT relname AS n FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname <> '_prisma_migrations' AND relname NOT LIKE '%_seq'
+      UNION ALL SELECT conname FROM pg_constraint WHERE connamespace = 'public'::regnamespace
+      UNION ALL SELECT attname FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
+        WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped AND c.relname <> '_prisma_migrations'`);
+    for (const { n } of names.filter(({ n }) => !n.startsWith('_prisma_migrations')))
+      expect(n).toMatch(/^[a-z][a-z0-9_]{0,62}$/);
+  });
+
+  it('constraint and index suffixes follow the convention', async () => {
+    const cons = await q<{ conname: string; contype: string }>(
+      `SELECT conname, contype FROM pg_constraint WHERE connamespace = 'public'::regnamespace`,
+    );
+    const suffix: Record<string, RegExp> = { p: /_pkey$/, u: /_key$/, f: /_fkey$/, c: /_check$/ };
+    for (const k of cons) if (suffix[k.contype]) expect(k.conname).toMatch(suffix[k.contype]!);
+    const idx = await q<{ indexname: string }>(`
+      SELECT i.indexname FROM pg_indexes i
+       WHERE i.schemaname = 'public' AND i.tablename <> '_prisma_migrations'
+         AND NOT EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conname = i.indexname)`);
+    for (const { indexname } of idx) expect(indexname).toMatch(/_(idx|key)$/);
+  });
+
+  it('every table has created_at and updated_at timestamptz NOT NULL', async () => {
+    const rows = await q<{ t: string; ok: number }>(`
+      SELECT c.relname AS t,
+             count(*) FILTER (WHERE a.attname IN ('created_at','updated_at') AND a.attnotnull
+                               AND format_type(a.atttypid, a.atttypmod) = 'timestamp(3) with time zone')::int AS ok
+        FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+       WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND c.relname <> '_prisma_migrations'
+       GROUP BY 1`);
+    for (const r of rows) expect(r.ok, r.t).toBe(2);
+  });
+
+  it('every non-system table has a uuid id primary key with a random default', async () => {
+    const rows = await q<{ t: string; pk: string | null; def: string | null }>(`
+      SELECT c.relname AS t, pg_get_constraintdef(k.oid) AS pk, pg_get_expr(d.adbin, d.adrelid) AS def
+        FROM pg_class c
+        LEFT JOIN pg_constraint k ON k.conrelid = c.oid AND k.contype = 'p'
+        LEFT JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'id'
+        LEFT JOIN pg_attrdef d ON d.adrelid = c.oid AND d.adnum = a.attnum
+       WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND c.relname <> '_prisma_migrations'`);
+    for (const r of rows) {
+      expect(r.pk, r.t).not.toBeNull();
+      if (SYSTEM_TABLES.includes(r.t)) continue;
+      expect(r.pk, r.t).toBe('PRIMARY KEY (id)');
+      expect(r.def, r.t).toBe('gen_random_uuid()');
+    }
+  });
+
+  it('every tenant table has organization_id NOT NULL', async () => {
+    const rows = await q<{ t: string; has: boolean }>(`
+      SELECT c.relname AS t, bool_or(a.attname = 'organization_id' AND a.attnotnull) AS has
+        FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0
+       WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND c.relname <> '_prisma_migrations'
+       GROUP BY 1`);
+    for (const r of rows)
+      if (![...SYSTEM_TABLES, ...GLOBAL_TABLES].includes(r.t)) expect(r.has, r.t).toBe(true);
+  });
+
+  it('no lossy or legacy column types', async () => {
+    const bad = await q<{ col: string }>(`
+      SELECT c.relname || '.' || a.attname || ' ' || format_type(a.atttypid, a.atttypmod) AS col
+        FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
+       WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped
+         AND c.relname <> '_prisma_migrations'
+         AND (a.atttypid IN ('timestamp'::regtype, 'varchar'::regtype, 'bpchar'::regtype, 'json'::regtype, 'money'::regtype)
+              OR (a.atttypid IN ('int4'::regtype, 'int8'::regtype) AND a.attname = 'id'))`);
+    expect(bad).toEqual([]);
+  });
+
+  it('no plaintext credential columns (the Secrets ticket adds encrypted_* bytea deliberately)', async () => {
+    const bad = await q<{ col: string }>(`
+      SELECT c.relname || '.' || a.attname AS col FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
+       WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped
+         AND a.attname ~ '(token|secret|password|api_key|credential)'
+         AND NOT (a.attname LIKE 'encrypted\\_%' AND a.atttypid = 'bytea'::regtype)`);
+    expect(bad).toEqual([]);
+  });
+
+  it('every foreign key has an index led by its pointer (last) column', async () => {
+    const missing = await q<{ fk: string }>(`
+      SELECT k.conname AS fk FROM pg_constraint k
+       WHERE k.contype = 'f' AND k.connamespace = 'public'::regnamespace
+         AND NOT EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = k.conrelid
+                          AND i.indkey[0] = k.conkey[array_length(k.conkey, 1)])`);
+    expect(missing).toEqual([]);
+  });
+
+  it('every mutable table has the updated_at trigger', async () => {
+    const rows = await q<{ t: string }>(`
+      SELECT c.relname AS t FROM pg_class c
+       WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r'
+         AND c.relname NOT IN ('_prisma_migrations', 'decision', 'audit_event')
+         AND NOT EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = c.oid AND NOT t.tgisinternal
+                          AND t.tgfoid = 'fb_set_updated_at'::regproc)`);
+    expect(rows).toEqual([]);
+  });
+});

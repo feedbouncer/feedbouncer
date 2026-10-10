@@ -19,9 +19,12 @@
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "migrate:deploy": "prisma migrate deploy",
-    "migrate:create": "prisma migrate dev --create-only"
+    "migrate:status": "prisma migrate status",
+    "migrate:down": "tsc --build tsconfig.build.json && node dist/migrations/cli.js down",
+    "migrate:new": "tsc --build tsconfig.build.json && node dist/migrations/cli.js new"
   },
   "dependencies": {
+    "@feedbouncer/service-runtime": "workspace:*",
     "pg": "8.23.1"
   },
   "devDependencies": {

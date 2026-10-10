@@ -22,6 +22,7 @@ test('required check names are stable', () => {
   assert.equal(workflow.jobs.typecheck?.name, 'Typecheck');
   assert.equal(workflow.jobs.test?.name, 'Test');
   assert.equal(workflow.jobs['docker-build']?.name, 'Docker build');
+  assert.equal(workflow.jobs['db-migrations']?.name, 'Database migrations');
 });
 
 test('triggers: pull_request and push to main only, no path filters', () => {
@@ -133,4 +134,15 @@ test('compose smoke owns a dedicated project and tests the base file only', () =
   assert.ok(!smoke.env?.COMPOSE_FILE);
   const last = job.steps.at(-1);
   assert.equal(last.env?.COMPOSE_ENV_FILES, '.env.example', 'teardown must not need .env');
+});
+
+test('database migrations check runs on a fresh Postgres 17 service with a stable name', () => {
+  const job = workflow.jobs['db-migrations'];
+  assert.equal(job?.name, 'Database migrations');
+  assert.equal(job.services?.postgres?.image, 'postgres:17-alpine');
+  assert.match(String(job.services.postgres.env?.POSTGRES_PASSWORD), /^dev-only-/);
+  const runs = job.steps.map((s) => s.run ?? '').join('\n');
+  assert.match(runs, /migrate:deploy[\s\S]*migrate:deploy/, 'applies twice (idempotency)');
+  assert.match(runs, /migrate:down --yes-destroy-data[\s\S]*migrate:deploy/, 'rolls back and re-applies');
+  assert.match(runs, /test:integration/);
 });

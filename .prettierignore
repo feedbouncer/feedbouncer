@@ -6,3 +6,6 @@ dist/
 pnpm-lock.yaml
 .next/
 next-env.d.ts
+
+# Integration-test migration fixtures
+packages/db/.tmp/
