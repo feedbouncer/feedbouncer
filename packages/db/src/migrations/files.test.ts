@@ -47,12 +47,22 @@ describe('migration files', () => {
     expect((await stat(path.join(migrationsDir, d, 'down.sql'))).isFile()).toBe(true);
   });
 
-  it.each(dirs)('%s: no explicit transaction control or CONCURRENTLY', async (d) => {
+  // This Prisma version applies a migration.sql statement by statement, so atomicity
+  // comes from an explicit BEGIN; ... COMMIT; around the whole file.
+  it.each(dirs)('%s: migration.sql is wrapped in BEGIN; ... COMMIT;', async (d) => {
+    const sql = stripComments(await read(d, 'migration.sql')).trim();
+    expect(sql, d).toMatch(/^BEGIN\s*;/i);
+    expect(sql, d).toMatch(/COMMIT\s*;$/i);
+    const inner = sql.replace(/^BEGIN\s*;/i, '').replace(/COMMIT\s*;$/i, '');
+    expect(inner, `${d}: nested transaction control`).not.toMatch(TXN_CONTROL);
+  });
+
+  it.each(dirs)('%s: no CONCURRENTLY, and down.sql has no transaction control', async (d) => {
     for (const f of ['migration.sql', 'down.sql']) {
       const sql = stripComments(await read(d, f));
-      expect(sql, `${d}/${f}`).not.toMatch(TXN_CONTROL);
       expect(sql, `${d}/${f}`).not.toMatch(/\bCONCURRENTLY\b/i);
     }
+    expect(stripComments(await read(d, 'down.sql')), `${d}/down.sql`).not.toMatch(TXN_CONTROL);
   });
 
   it.each(dirs)('%s: every REFERENCES clause states ON DELETE', async (d) => {

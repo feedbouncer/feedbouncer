@@ -4,11 +4,14 @@ import { listMigrationDirs } from './rollback.js';
 
 const NAME = /^[a-z0-9_]{1,60}$/;
 
-const UP = `-- Forward migration. Runs as ONE implicit transaction (do not add BEGIN/COMMIT).
+const UP = `-- Forward migration. Keep everything between BEGIN; and COMMIT;: Prisma runs this
+-- file statement by statement, so the explicit transaction is what makes it atomic.
 -- Never use CREATE INDEX CONCURRENTLY here. State ON DELETE on every REFERENCES.
 -- Conventions: packages/db/README.md
-SET lock_timeout = '10s';
+BEGIN;
+SET LOCAL lock_timeout = '10s';
 
+COMMIT;
 `;
 const DOWN = `-- Reverse every statement in migration.sql, in reverse order. No IF EXISTS:
 -- an unexpected state must fail loudly. Runs inside migrate:down's transaction.

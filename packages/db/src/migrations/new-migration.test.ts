@@ -15,7 +15,7 @@ it('creates <UTC timestamp>_<name> with migration.sql and down.sql templates', a
   expect(name).toBe('20261012080910_add_widget');
   expect((await readdir(path.join(dir, name))).sort()).toEqual(['down.sql', 'migration.sql']);
   expect(await readFile(path.join(dir, name, 'migration.sql'), 'utf8')).toMatch(
-    /SET lock_timeout = '10s';/,
+    /BEGIN;\nSET LOCAL lock_timeout = '10s';[\s\S]*COMMIT;\n$/,
   );
   expect(await readFile(path.join(dir, name, 'down.sql'), 'utf8')).toMatch(
     /Reverse every statement/,

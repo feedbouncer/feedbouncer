@@ -1,3 +1,5 @@
+BEGIN;
+
 -- CreateTable
 CREATE TABLE "processed_job" (
     "queue" TEXT NOT NULL,
@@ -8,3 +10,5 @@ CREATE TABLE "processed_job" (
 
     CONSTRAINT "processed_job_pkey" PRIMARY KEY ("queue","job_id")
 );
+
+COMMIT;
