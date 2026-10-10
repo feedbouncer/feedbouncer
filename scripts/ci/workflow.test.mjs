@@ -45,8 +45,8 @@ test('least-privilege token: contents read, never widened per job', () => {
 });
 
 test('no secrets are referenced (fork PRs must work)', () => {
-  assert.doesNotMatch(workflowText, /secrets\./);
-  assert.doesNotMatch(actionText, /secrets\./);
+  assert.doesNotMatch(workflowText, /secrets\s*[.[]/);
+  assert.doesNotMatch(actionText, /secrets\s*[.[]/);
 });
 
 test('every job has a timeout', () => {
@@ -56,7 +56,10 @@ test('every job has a timeout', () => {
 });
 
 test('superseded PR runs are cancelled, main runs are not', () => {
-  assert.match(String(workflow.concurrency.group), /github\.event\.pull_request\.number/);
+  // Each main push needs its own group: GitHub keeps one pending run per group.
+  const group = String(workflow.concurrency.group);
+  assert.match(group, /github\.event\.pull_request\.number/);
+  assert.match(group, /github\.sha/);
   assert.equal(
     workflow.concurrency['cancel-in-progress'],
     "${{ github.event_name == 'pull_request' }}",
@@ -71,6 +74,14 @@ test('third-party actions are pinned to full commit SHAs', () => {
       /^[\w.-]+\/[\w.-]+(\/[\w./-]+)?@[0-9a-f]{40}$/,
       `unpinned action: ${step.uses}`,
     );
+  }
+  // YAML parsing drops comments, so check the raw lines for the version tag.
+  for (const text of [workflowText, actionText]) {
+    for (const line of text.split('\n')) {
+      const m = line.match(/^\s*(?:-\s+)?uses:\s*(\S+)(.*)$/);
+      if (!m || m[1].startsWith('./')) continue;
+      assert.match(m[2], /^\s+#\s*v\d+/, `missing "# v<version>" comment: ${line.trim()}`);
+    }
   }
 });
 
