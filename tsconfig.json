@@ -4,6 +4,7 @@
     { "path": "packages/db" },
     { "path": "packages/placeholder" },
     { "path": "packages/service-runtime" },
-    { "path": "apps/placeholder-app" }
+    { "path": "apps/placeholder-app" },
+    { "path": "apps/api" }
   ]
 }

@@ -7,6 +7,15 @@
     ".prettierignore",
     ".nvmrc"
   ],
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "REDIS_URL",
+    "PORT",
+    "HEALTH_PORT",
+    "LOG_LEVEL",
+    "WORKER_CONCURRENCY",
+    "API_INTERNAL_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
