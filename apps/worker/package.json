@@ -1,0 +1,26 @@
+{
+  "name": "@feedbouncer/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --build tsconfig.build.json",
+    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "start": "node dist/main.js",
+    "lint": "eslint .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore --ignore-unknown",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
+    "typecheck": "tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@feedbouncer/db": "workspace:*",
+    "@feedbouncer/service-runtime": "workspace:*",
+    "bullmq": "6.3.12",
+    "ioredis": "5.11.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "tsx": "4.23.15"
+  }
+}
