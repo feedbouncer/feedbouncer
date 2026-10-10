@@ -4,6 +4,8 @@ import {
   buildEnqueueArgv,
   parsePs,
   parseSmokeArgs,
+  redactText,
+  resolveSmokeConfig,
   selftestWhere,
 } from '../dev-stack/smoke-lib.mjs';
 
@@ -56,4 +58,42 @@ test('parsePs handles array and NDJSON output', () => {
     { Service: 'a' },
     { Service: 'b' },
   ]);
+});
+
+test('smoke config ignores ambient COMPOSE_PROJECT_NAME and sets own defaults', () => {
+  const c = resolveSmokeConfig({ COMPOSE_PROJECT_NAME: 'feedbouncer' });
+  assert.deepEqual(c, {
+    project: 'feedbouncer-smoke',
+    webPort: '23000',
+    apiPort: '23001',
+    bind: '127.0.0.1',
+  });
+});
+
+test('smoke config honours overrides and refuses non-smoke projects', () => {
+  const c = resolveSmokeConfig({
+    SMOKE_PROJECT: 'my-smoke-2',
+    WEB_HOST_PORT: '4000',
+    API_HOST_PORT: '4001',
+    FB_BIND_ADDRESS: '0.0.0.0',
+  });
+  assert.equal(c.project, 'my-smoke-2');
+  assert.equal(c.webPort, '4000');
+  assert.equal(c.bind, '0.0.0.0');
+  assert.throws(() => resolveSmokeConfig({ SMOKE_PROJECT: 'feedbouncer' }), /smoke/);
+  assert.throws(() => resolveSmokeConfig({ SMOKE_PROJECT: 'Smoke;rm' }));
+});
+
+test('smoke config validates ports as integers 1..65535', () => {
+  for (const bad of ['0', '65536', '30a', '', '-1', '1.5', ' 3000']) {
+    assert.throws(() => resolveSmokeConfig({ WEB_HOST_PORT: bad }), /WEB_HOST_PORT/, bad);
+    assert.throws(() => resolveSmokeConfig({ API_HOST_PORT: bad }), /API_HOST_PORT/, bad);
+  }
+  assert.equal(resolveSmokeConfig({ API_HOST_PORT: '65535' }).apiPort, '65535');
+});
+
+test('redactText strips known secrets and URL credentials', () => {
+  const out = redactText('pw=s3cret url=postgresql://u:p4ss@host/db ok', ['s3cret']);
+  assert.doesNotMatch(out, /s3cret|p4ss/);
+  assert.match(out, /ok/);
 });

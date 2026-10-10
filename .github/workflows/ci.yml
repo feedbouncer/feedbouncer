@@ -165,7 +165,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      COMPOSE_FILE: compose.yaml:compose.expose-db.yaml
+      # The smoke script requires a project name containing "smoke" and
+      # every later step uses the same project.
+      COMPOSE_PROJECT_NAME: feedbouncer-smoke
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -178,6 +180,10 @@ jobs:
       - name: Full lifecycle smoke test
         run: node scripts/dev-stack/smoke.mjs --yes-destroy-local-data
       - name: Start stack for DB integration tests
+        # The overlay publishes Postgres on 127.0.0.1 for the tests below only;
+        # the smoke above ran against compose.yaml alone.
+        env:
+          COMPOSE_FILE: compose.yaml:compose.expose-db.yaml
         run: docker compose up -d --wait --wait-timeout 420
       - name: DB integration tests
         run: |
@@ -188,7 +194,11 @@ jobs:
           pnpm --filter @feedbouncer/db test:integration
       - name: Container logs on failure
         if: failure()
-        run: docker compose logs --no-color --timestamps
+        env:
+          COMPOSE_ENV_FILES: .env.example
+        run: docker compose logs --no-color --timestamps --tail 200
       - name: Tear down
         if: always()
+        env:
+          COMPOSE_ENV_FILES: .env.example
         run: docker compose down -v --remove-orphans

@@ -55,3 +55,44 @@ export function parsePs(stdout) {
   if (!text) return [];
   return text.startsWith('[') ? JSON.parse(text) : text.split('\n').map((l) => JSON.parse(l));
 }
+
+const PROJECT = /^[a-z0-9][a-z0-9_-]*$/;
+const BIND = /^[0-9a-fA-F.:]+$/;
+
+function portValue(env, name, fallback) {
+  const raw = env[name] ?? fallback;
+  const n = /^\d{1,5}$/.test(raw) ? Number(raw) : Number.NaN;
+  if (!Number.isInteger(n) || n < 1 || n > 65_535) {
+    throw new Error(`${name} must be an integer port 1..65535`);
+  }
+  return String(n);
+}
+
+// The smoke owns a dedicated Compose project and its own host ports, so that it
+// can never `down -v` a contributor's real stack or collide with it. An ambient
+// COMPOSE_PROJECT_NAME is deliberately ignored.
+export function resolveSmokeConfig(env) {
+  const project = env.SMOKE_PROJECT ?? 'feedbouncer-smoke';
+  if (!PROJECT.test(project)) throw new Error('SMOKE_PROJECT is not a valid project name');
+  if (!project.includes('smoke')) {
+    throw new Error(`refusing to run against project "${project}": the name must contain "smoke"`);
+  }
+  const bind = env.FB_BIND_ADDRESS ?? '127.0.0.1';
+  if (!BIND.test(bind)) throw new Error('FB_BIND_ADDRESS must be an IP address');
+  return {
+    project,
+    webPort: portValue(env, 'WEB_HOST_PORT', '23000'),
+    apiPort: portValue(env, 'API_HOST_PORT', '23001'),
+    bind,
+  };
+}
+
+// Best-effort scrub for diagnostic output: known secret values plus any
+// user:password@ part of a URL.
+export function redactText(text, secrets = []) {
+  let out = text.replace(/(\w+:\/\/)[^\s/@]*@/g, '$1***@');
+  for (const secret of secrets) {
+    if (secret) out = out.split(secret).join('***');
+  }
+  return out;
+}
