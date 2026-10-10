@@ -46,3 +46,6 @@ pnpm-debug.log*
 # Stray npm artifacts: this repo uses pnpm
 package-lock.json
 npm-shrinkwrap.json
+
+# Personal Docker Compose overrides (see compose.override.example.yaml)
+compose.override.yaml

@@ -1,0 +1,14 @@
+# Optional personal tweaks. Copy to compose.override.yaml (git-ignored);
+# Compose loads it automatically unless COMPOSE_FILE is set.
+services:
+  api:
+    environment:
+      LOG_LEVEL: debug
+  worker:
+    environment:
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+  web:
+    environment:
+      # Use if hot reload misses changes (e.g. repo on a Windows drive under WSL2).
+      # Milliseconds between polls of the Next.js (Turbopack) file watcher.
+      WEB_WATCH_POLL_MS: '1000'

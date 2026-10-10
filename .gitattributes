@@ -1,0 +1,7 @@
+# Force LF in the working tree on every OS. Files are mounted into Linux
+# containers, and CRLF breaks shebangs and some parsers.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

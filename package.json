@@ -16,7 +16,8 @@
     "format:check": "turbo run format:check && prettier --check \"*.{json,mjs,yaml,md}\" --ignore-unknown",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test && pnpm run test:scripts",
-    "test:scripts": "node --test \"scripts/ci/*.test.mjs\""
+    "test:scripts": "node --test \"scripts/ci/*.test.mjs\"",
+    "stack:smoke": "node scripts/dev-stack/smoke.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

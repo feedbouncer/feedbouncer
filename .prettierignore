@@ -4,3 +4,5 @@ node_modules/
 dist/
 .turbo/
 pnpm-lock.yaml
+.next/
+next-env.d.ts
