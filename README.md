@@ -1,5 +1,74 @@
 # FeedBouncer
 
+## Local stack with Docker Compose
+
+Runs everything locally: Postgres, Redis, the API, the background worker and the web app. **This stack is for development and evaluation only.** It is not a production deployment.
+
+### Prerequisites
+
+- Docker Engine 25+ with Docker Compose v2.20+ (Docker Desktop on macOS and Windows). Check with `docker compose version`.
+- At least **4 GB of memory** allocated to Docker. The stack's limits add up to about 3.3 GB.
+- **Windows:** use WSL2 and clone the repo **inside the WSL filesystem** (for example `~/src/feed-bouncer`), not under `/mnt/c/...`. File-change events don't cross from the Windows drive, so hot reload would silently stop. The repo forces LF line endings via `.gitattributes`.
+
+### Start
+
+```bash
+cp .env.example .env
+docker compose up
+```
+
+The first run builds the images, which takes a few minutes. Then:
+
+| What                 | Where                                                                   |
+| -------------------- | ----------------------------------------------------------------------- |
+| Web app              | http://localhost:3000                                                   |
+| API health           | http://localhost:3001/healthz (reports Postgres and Redis)              |
+| Status of everything | `docker compose ps -a`: five services `healthy`, `migrate` `exited (0)` |
+
+Database migrations run automatically in the one-shot `migrate` service before the API and worker start. Running it again is harmless.
+
+Source files in `apps/*/src` and `packages/*/src` are mounted into the containers. Edits reload automatically, with no rebuild needed. The API and worker use file polling, so a change can take a second or two to show up.
+
+### Stop, restart, reset
+
+| Command                  | Effect                                                                      |
+| ------------------------ | --------------------------------------------------------------------------- |
+| `docker compose down`    | Stops everything. **Database data is kept.**                                |
+| `docker compose up`      | Starts again with your data.                                                |
+| `docker compose down -v` | Stops everything and **deletes the database volume**, giving a clean slate. |
+
+`down`, `ps` and `logs` read the same configuration as `up`, so they also need `.env` to exist (the credentials are required variables).
+
+### Configuration
+
+All settings live in `.env`, which is git-ignored and copied from `.env.example`. The values in `.env.example` are development-only. Never reuse them anywhere real.
+
+- **Port already in use?** Change `WEB_HOST_PORT` or `API_HOST_PORT` in `.env`. You never need to edit `compose.yaml`.
+- **Need psql or a GUI client?** Postgres and Redis are not published by default. To publish them on `127.0.0.1` only, run `docker compose -f compose.yaml -f compose.expose-db.yaml up`, or uncomment `COMPOSE_FILE` in `.env`. Use `POSTGRES_HOST_PORT`/`REDIS_HOST_PORT` if 5432 or 6379 are taken.
+- **Personal tweaks:** copy `compose.override.example.yaml` to `compose.override.yaml`, which is git-ignored and loaded automatically (unless `COMPOSE_FILE` is set).
+- `FB_BIND_ADDRESS` defaults to `127.0.0.1`, so nothing is reachable from other machines. Change it only if you mean to expose the stack to your network.
+
+### More workers
+
+```bash
+docker compose up -d --scale worker=2
+```
+
+Each job is processed exactly once, whatever the number of replicas. A Postgres-backed idempotency ledger (`processed_job`) refuses duplicate deliveries.
+
+### Troubleshooting
+
+| Symptom                                                                                                    | Fix                                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `required variable POSTGRES_USER is missing a value: POSTGRES_USER is not set - copy .env.example to .env` | You have no `.env` (or it is missing a variable). Run `cp .env.example .env`, or add the missing line from `.env.example`.                                |
+| `Bind for 127.0.0.1:3000 failed: port is already allocated`                                                | Set a free port in `.env` (`WEB_HOST_PORT=3100`) and run `docker compose up` again.                                                                       |
+| Errors about a missing package after pulling changes (stale image)                                         | Dependencies are baked into the images. Rebuild with `docker compose up --build`. For a completely fresh build: `docker compose build --no-cache --pull`. |
+| Hot reload doesn't pick up edits                                                                           | On Windows, move the clone into the WSL filesystem. For the web app, you can also set `WATCHPACK_POLLING=true` in `.env`.                                 |
+| A service stays `unhealthy`                                                                                | `docker compose logs <service>`. `docker compose down -v` then `up` gives a clean start.                                                                  |
+| Containers are killed / out of memory                                                                      | Give Docker more memory (4 GB minimum).                                                                                                                   |
+
+Maintainers can run the full end-to-end check with `pnpm stack:smoke --yes-destroy-local-data`. It runs in its own Compose project (`feedbouncer-smoke`) on its own ports (23000 and 23001) and uses `compose.yaml` only, so it does not touch your dev stack. It still **deletes the smoke project's database volume**, and it reads the credentials from `.env`.
+
 ## Development
 
 This is a pnpm workspace orchestrated by [Turborepo](https://turborepo.com).
