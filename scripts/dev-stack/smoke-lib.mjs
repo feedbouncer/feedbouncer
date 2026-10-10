@@ -42,6 +42,23 @@ export function buildEnqueueArgv({ runId, count, delayMs }) {
   ];
 }
 
+// `docker compose` arguments that run the enqueue CLI in worker replica 1.
+// `timeout` runs inside the container (killing the docker client would not stop
+// the process there). Works with both GNU coreutils and busybox: `timeout 60 cmd`.
+export function buildEnqueueExecArgv(input) {
+  return [
+    'exec',
+    '-T',
+    '--index',
+    '1',
+    'worker',
+    'timeout',
+    '60',
+    'node_modules/.bin/tsx',
+    ...buildEnqueueArgv(input),
+  ];
+}
+
 // SQL predicate for one selftest run. The id is validated as a UUID first, so
 // the interpolation cannot carry anything but hex digits and dashes.
 export function selftestWhere(runId) {

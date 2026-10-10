@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildEnqueueArgv,
+  buildEnqueueExecArgv,
   parsePs,
   parseSmokeArgs,
   redactText,
@@ -96,4 +97,19 @@ test('redactText strips known secrets and URL credentials', () => {
   const out = redactText('pw=s3cret url=postgresql://u:p4ss@host/db ok', ['s3cret']);
   assert.doesNotMatch(out, /s3cret|p4ss/);
   assert.match(out, /ok/);
+});
+
+test('in-container enqueue is wrapped in timeout and targets replica 1', () => {
+  const argv = buildEnqueueExecArgv({ runId, count: 2, delayMs: 0 });
+  assert.deepEqual(argv.slice(0, 8), [
+    'exec',
+    '-T',
+    '--index',
+    '1',
+    'worker',
+    'timeout',
+    '60',
+    'node_modules/.bin/tsx',
+  ]);
+  assert.equal(argv.at(-1), '0');
 });

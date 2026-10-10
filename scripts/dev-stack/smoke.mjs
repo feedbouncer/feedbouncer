@@ -16,7 +16,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import {
   DESTROY_FLAG,
-  buildEnqueueArgv,
+  buildEnqueueExecArgv,
   parsePs,
   parseSmokeArgs,
   redactText,
@@ -210,15 +210,7 @@ async function main() {
   step('two worker replicas never process a job twice');
   await compose(['up', '-d', ...WAIT, '--scale', 'worker=2'], { timeout: LONG });
   const runId = randomUUID();
-  const enqueue = [
-    'exec',
-    '-T',
-    '--index',
-    '1',
-    'worker',
-    'node_modules/.bin/tsx',
-    ...buildEnqueueArgv({ runId, count: JOBS, delayMs: 20 }),
-  ];
+  const enqueue = buildEnqueueExecArgv({ runId, count: JOBS, delayMs: 20 });
   await compose(enqueue);
   await compose(enqueue); // same ids again: must be a no-op
   const where = selftestWhere(runId);
