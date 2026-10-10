@@ -14,7 +14,9 @@
     "lint": "turbo run lint && eslint .",
     "format": "turbo run format && prettier --write \"*.{json,mjs,yaml,md}\" --ignore-unknown",
     "format:check": "turbo run format:check && prettier --check \"*.{json,mjs,yaml,md}\" --ignore-unknown",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test && pnpm run test:scripts",
+    "test:scripts": "node --test \"scripts/ci/*.test.mjs\""
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -24,6 +26,8 @@
     "prettier": "3.4.2",
     "turbo": "2.11.4",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.71.1"
+    "typescript-eslint": "8.71.1",
+    "vitest": "5.0.3",
+    "yaml": "2.9.1"
   }
 }

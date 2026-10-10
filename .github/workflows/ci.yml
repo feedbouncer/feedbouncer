@@ -1,0 +1,135 @@
+# CI: required checks are "Typecheck", "Test", "Docker build".
+# Do not rename these jobs' `name:` without updating branch protection.
+# Local equivalents are documented in README.md -> "Continuous integration".
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+  FORCE_COLOR: '1'
+
+jobs:
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-scope: typecheck
+      - name: Typecheck
+        run: pnpm typecheck
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-scope: test
+      - name: Test
+        run: pnpm test
+
+  docker-discover:
+    name: Docker discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      targets: ${{ steps.discover.outputs.targets }}
+      has_targets: ${{ steps.discover.outputs.has_targets }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - id: discover
+        name: Find Dockerfiles
+        run: node scripts/ci/docker-targets.mjs
+
+  docker-image:
+    name: Docker image (${{ matrix.name }})
+    needs: docker-discover
+    if: needs.docker-discover.outputs.has_targets == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.docker-discover.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: node
+        name: Read Node version from .nvmrc
+        run: |
+          version="$(tr -d '[:space:]' < .nvmrc)"
+          if ! [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+            echo "::error file=.nvmrc::expected a numeric Node version, got '$version'"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build (no push)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          build-args: NODE_VERSION=${{ steps.node.outputs.version }}
+          outputs: type=cacheonly
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  # Stable required check. Green when every image built OR there are no
+  # Dockerfiles; red if discovery or any image failed.
+  docker-build:
+    name: Docker build
+    needs: [docker-discover, docker-image]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Summarize Docker results
+        env:
+          DISCOVER_RESULT: ${{ needs.docker-discover.result }}
+          HAS_TARGETS: ${{ needs.docker-discover.outputs.has_targets }}
+          IMAGE_RESULT: ${{ needs.docker-image.result }}
+        run: |
+          set -euo pipefail
+          if [ "$DISCOVER_RESULT" != "success" ]; then
+            echo "::error::Docker target discovery ended with: $DISCOVER_RESULT"
+            exit 1
+          fi
+          case "$IMAGE_RESULT" in
+            success)
+              echo "All Docker images built." ;;
+            skipped)
+              if [ "$HAS_TARGETS" = "true" ]; then
+                echo "::error::Dockerfiles were found but no image was built."
+                exit 1
+              fi
+              echo "No Dockerfiles in apps/* or packages/*; nothing to build." ;;
+            *)
+              echo "::error::At least one Docker image build ended with: $IMAGE_RESULT"
+              exit 1 ;;
+          esac

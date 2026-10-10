@@ -6,5 +6,5 @@
     "types": ["node"]
   },
   "include": ["src"],
-  "references": [{ "path": "../../packages/placeholder" }]
+  "references": [{ "path": "../../packages/placeholder/tsconfig.build.json" }]
 }

@@ -1,0 +1,24 @@
+# Build context is the repo root. Keep local-only, generated, and secret files out.
+.git
+.github
+**/node_modules
+**/dist
+**/.turbo
+**/*.tsbuildinfo
+**/coverage
+**/.env
+**/.npmrc
+**/.env.*
+!**/.env.example
+.venv
+.pytest_cache
+.worktrees
+.state
+.pnpm-store
+*.log
+**/dist-*
+**/.next
+**/test-results
+**/playwright-report
+**/tmp
+**/.DS_Store

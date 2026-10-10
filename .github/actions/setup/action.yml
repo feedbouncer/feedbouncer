@@ -1,0 +1,32 @@
+name: Setup workspace
+description: Pinned Node (.nvmrc) + pnpm (packageManager), pnpm store and Turborepo caches, frozen install.
+inputs:
+  turbo-cache-scope:
+    description: Cache namespace, usually the job id (typecheck, test).
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Install pnpm (version from package.json packageManager)
+      uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+    - name: Install Node (version from .nvmrc)
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+
+    # Storage only. Turborepo's own content hashing (task inputs +
+    # globalDependencies + lockfile) decides hit vs miss, so a restored
+    # cache can never produce a stale result by itself.
+    - name: Restore Turborepo cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: .turbo/cache
+        key: turbo-${{ runner.os }}-${{ inputs.turbo-cache-scope }}-${{ github.sha }}
+        restore-keys: |
+          turbo-${{ runner.os }}-${{ inputs.turbo-cache-scope }}-
+
+    - name: Install dependencies (frozen lockfile)
+      shell: bash
+      run: pnpm install --frozen-lockfile

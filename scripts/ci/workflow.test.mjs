@@ -1,0 +1,114 @@
+// Guards CI invariants that branch protection and fork-PR safety depend on.
+// If a change here is intentional (e.g. renaming a check), update branch
+// protection in the same PR. Renamed checks silently stop being required.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { URL } from 'node:url';
+import { parse } from 'yaml';
+
+const read = (rel) => readFile(new URL(`../../${rel}`, import.meta.url), 'utf8');
+const workflowText = await read('.github/workflows/ci.yml');
+const actionText = await read('.github/actions/setup/action.yml');
+const workflow = parse(workflowText);
+const action = parse(actionText);
+const jobs = Object.entries(workflow.jobs);
+
+function allSteps() {
+  return [...jobs.flatMap(([, job]) => job.steps ?? []), ...action.runs.steps];
+}
+
+test('required check names are stable', () => {
+  assert.equal(workflow.jobs.typecheck?.name, 'Typecheck');
+  assert.equal(workflow.jobs.test?.name, 'Test');
+  assert.equal(workflow.jobs['docker-build']?.name, 'Docker build');
+});
+
+test('triggers: pull_request and push to main only, no path filters', () => {
+  assert.deepEqual(Object.keys(workflow.on).sort(), ['pull_request', 'push']);
+  assert.deepEqual(workflow.on.push.branches, ['main']);
+  for (const trigger of Object.values(workflow.on)) {
+    assert.ok(
+      !trigger?.paths && !trigger?.['paths-ignore'],
+      'path filters would leave required checks pending',
+    );
+  }
+});
+
+test('least-privilege token: contents read, never widened per job', () => {
+  assert.deepEqual(workflow.permissions, { contents: 'read' });
+  for (const [id, job] of jobs) {
+    for (const level of Object.values(job.permissions ?? {})) {
+      assert.ok(['read', 'none'].includes(level), `job ${id} widens permissions`);
+    }
+  }
+});
+
+test('no secrets are referenced (fork PRs must work)', () => {
+  assert.doesNotMatch(workflowText, /secrets\s*[.[]/);
+  assert.doesNotMatch(actionText, /secrets\s*[.[]/);
+});
+
+test('every job has a timeout', () => {
+  for (const [id, job] of jobs) {
+    assert.equal(typeof job['timeout-minutes'], 'number', `job ${id} has no timeout-minutes`);
+  }
+});
+
+test('superseded PR runs are cancelled, main runs are not', () => {
+  // Each main push needs its own group: GitHub keeps one pending run per group.
+  const group = String(workflow.concurrency.group);
+  assert.match(group, /github\.event\.pull_request\.number/);
+  assert.match(group, /github\.sha/);
+  assert.equal(
+    workflow.concurrency['cancel-in-progress'],
+    "${{ github.event_name == 'pull_request' }}",
+  );
+});
+
+test('third-party actions are pinned to full commit SHAs', () => {
+  for (const step of allSteps()) {
+    if (!step.uses || step.uses.startsWith('./')) continue;
+    assert.match(
+      step.uses,
+      /^[\w.-]+\/[\w.-]+(\/[\w./-]+)?@[0-9a-f]{40}$/,
+      `unpinned action: ${step.uses}`,
+    );
+  }
+  // YAML parsing drops comments, so check the raw lines for the version tag.
+  for (const text of [workflowText, actionText]) {
+    for (const line of text.split('\n')) {
+      const m = line.match(/^\s*(?:-\s+)?uses:\s*(\S+)(.*)$/);
+      if (!m || m[1].startsWith('./')) continue;
+      assert.match(m[2], /^\s+#\s*v\d+/, `missing "# v<version>" comment: ${line.trim()}`);
+    }
+  }
+});
+
+test('no ${{ }} expressions inside run scripts (script-injection guard)', () => {
+  for (const step of allSteps()) {
+    if (step.run)
+      assert.doesNotMatch(step.run, /\$\{\{/, `expression in run: ${step.name ?? step.run}`);
+  }
+});
+
+test('checkout never persists credentials', () => {
+  for (const step of allSteps()) {
+    if (step.uses?.startsWith('actions/checkout@')) {
+      assert.equal(step.with?.['persist-credentials'], false);
+    }
+  }
+});
+
+test('images are built from a local repo-root context and never pushed', () => {
+  const build = workflow.jobs['docker-image'].steps.find((s) =>
+    s.uses?.startsWith('docker/build-push-action@'),
+  );
+  assert.equal(build.with.context, '.');
+  assert.equal(build.with.outputs, 'type=cacheonly');
+  assert.ok(!('push' in build.with) || build.with.push === false);
+});
+
+test('installs use the frozen lockfile', () => {
+  assert.ok(action.runs.steps.some((s) => s.run?.includes('pnpm install --frozen-lockfile')));
+});
