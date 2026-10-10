@@ -14,7 +14,8 @@
     "lint": "turbo run lint && eslint .",
     "format": "turbo run format && prettier --write \"*.{json,mjs,yaml,md}\" --ignore-unknown",
     "format:check": "turbo run format:check && prettier --check \"*.{json,mjs,yaml,md}\" --ignore-unknown",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "test:scripts": "node --test \"scripts/ci/*.test.mjs\""
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
