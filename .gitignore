@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build output and byproducts (tsc --build, tsdown, Turborepo, Next.js)
+dist/
+dist-*/
+*.tsbuildinfo
+.turbo/
+.next/
+next-env.d.ts
+
+# Test output
+coverage/
+test-results/
+playwright-report/
+tmp/
+
+# Env files — only .env.example and .env.prod.example are committed
+.env
+.env.*
+!.env.example
+!.env.prod.example
+
+# Logs
+*.log
+
+# System
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
