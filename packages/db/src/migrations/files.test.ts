@@ -12,6 +12,27 @@ const dirs = (await readdir(migrationsDir, { withFileTypes: true }))
   .sort();
 const read = (d: string, f: string) => readFile(path.join(migrationsDir, d, f), 'utf8');
 const stripComments = (sql: string) => sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+// Transaction-control statements only: a bare BEGIN opening a PL/pgSQL body has no semicolon.
+const TXN_CONTROL = /^\s*(BEGIN|COMMIT|ROLLBACK)\s*;|^\s*START\s+TRANSACTION\b/im;
+
+describe('transaction-control check', () => {
+  it('does not flag a PL/pgSQL body with bare BEGIN / END;', () => {
+    const fn =
+      'CREATE FUNCTION f() RETURNS trigger AS $$\nBEGIN\n  RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql;';
+    expect(fn).not.toMatch(TXN_CONTROL);
+  });
+
+  it.each([
+    'BEGIN;',
+    'COMMIT;',
+    'ROLLBACK;',
+    'CREATE TABLE t (a int);\n  begin ;',
+    'START TRANSACTION',
+    'COMMIT\n;',
+  ])('flags %j', (sql) => {
+    expect(sql).toMatch(TXN_CONTROL);
+  });
+});
 
 describe('migration files', () => {
   it('has at least one migration and only well-named directories, in strictly ascending order', () => {
@@ -29,7 +50,7 @@ describe('migration files', () => {
   it.each(dirs)('%s: no explicit transaction control or CONCURRENTLY', async (d) => {
     for (const f of ['migration.sql', 'down.sql']) {
       const sql = stripComments(await read(d, f));
-      expect(sql, `${d}/${f}`).not.toMatch(/^\s*(BEGIN|COMMIT|ROLLBACK|START\s+TRANSACTION)\b/im);
+      expect(sql, `${d}/${f}`).not.toMatch(TXN_CONTROL);
       expect(sql, `${d}/${f}`).not.toMatch(/\bCONCURRENTLY\b/i);
     }
   });
