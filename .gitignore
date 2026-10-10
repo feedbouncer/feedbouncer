@@ -37,3 +37,12 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# pnpm store and debug logs
+.pnpm-store/
+npm-debug.log*
+pnpm-debug.log*
+
+# Stray npm artifacts: this repo uses pnpm
+package-lock.json
+npm-shrinkwrap.json

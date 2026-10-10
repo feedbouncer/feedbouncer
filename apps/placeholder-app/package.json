@@ -1,0 +1,20 @@
+{
+  "name": "@feedbouncer/placeholder-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --build",
+    "lint": "eslint .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore --ignore-unknown",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
+    "typecheck": "tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@feedbouncer/placeholder": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6"
+  }
+}
