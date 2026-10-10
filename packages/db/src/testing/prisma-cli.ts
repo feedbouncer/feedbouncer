@@ -17,7 +17,8 @@ export function runPrisma(args: string[], url: URL, opts: { migrationsDir?: stri
     const secrets = [url.href, url.password, decodeURIComponent(url.password)].filter(Boolean);
     const redact = (text: string) =>
       secrets.reduce((acc, secret) => acc.replaceAll(secret, '[redacted]'), text);
-    execFile(PRISMA, args, { cwd: PACKAGE_ROOT, env, timeout: 120_000 }, (err, stdout, stderr) => {
+    const argv = [...args, '--config', 'prisma.test.config.ts'];
+    execFile(PRISMA, argv, { cwd: PACKAGE_ROOT, env, timeout: 120_000 }, (err, stdout, stderr) => {
       const code = err ? (typeof err.code === 'number' ? err.code : 1) : 0;
       resolve({ code, stdout: redact(stdout), stderr: redact(stderr) });
     });

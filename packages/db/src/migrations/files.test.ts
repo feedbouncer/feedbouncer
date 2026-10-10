@@ -12,6 +12,8 @@ const dirs = (await readdir(migrationsDir, { withFileTypes: true }))
   .sort();
 const read = (d: string, f: string) => readFile(path.join(migrationsDir, d, f), 'utf8');
 const stripComments = (sql: string) => sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+// Predates the explicit BEGIN/COMMIT rule; it is one statement, so it is already atomic.
+const LEGACY_MIGRATION = '20261010000000_processed_job';
 // Transaction-control statements only: a bare BEGIN opening a PL/pgSQL body has no semicolon.
 const TXN_CONTROL = /^\s*(BEGIN|COMMIT|ROLLBACK)\s*;|^\s*START\s+TRANSACTION\b/im;
 
@@ -49,13 +51,16 @@ describe('migration files', () => {
 
   // This Prisma version applies a migration.sql statement by statement, so atomicity
   // comes from an explicit BEGIN; ... COMMIT; around the whole file.
-  it.each(dirs)('%s: migration.sql is wrapped in BEGIN; ... COMMIT;', async (d) => {
-    const sql = stripComments(await read(d, 'migration.sql')).trim();
-    expect(sql, d).toMatch(/^BEGIN\s*;/i);
-    expect(sql, d).toMatch(/COMMIT\s*;$/i);
-    const inner = sql.replace(/^BEGIN\s*;/i, '').replace(/COMMIT\s*;$/i, '');
-    expect(inner, `${d}: nested transaction control`).not.toMatch(TXN_CONTROL);
-  });
+  it.each(dirs.filter((d) => d > LEGACY_MIGRATION))(
+    '%s: migration.sql is wrapped in BEGIN; ... COMMIT;',
+    async (d) => {
+      const sql = stripComments(await read(d, 'migration.sql')).trim();
+      expect(sql, d).toMatch(/^BEGIN\s*;/i);
+      expect(sql, d).toMatch(/COMMIT\s*;$/i);
+      const inner = sql.replace(/^BEGIN\s*;/i, '').replace(/COMMIT\s*;$/i, '');
+      expect(inner, `${d}: nested transaction control`).not.toMatch(TXN_CONTROL);
+    },
+  );
 
   it.each(dirs)('%s: no CONCURRENTLY, and down.sql has no transaction control', async (d) => {
     for (const f of ['migration.sql', 'down.sql']) {

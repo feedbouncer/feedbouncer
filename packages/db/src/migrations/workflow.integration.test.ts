@@ -223,9 +223,8 @@ describe('migration workflow', () => {
     const r = await runPrisma(['migrate', 'deploy'], db.url);
     expect(r.code).not.toBe(0);
     await withClient(db, async (c) => {
-      // The wrapped migration leaves the schema engine's connection in an aborted
-      // transaction, which masks the guard's own message in the CLI output, so the
-      // refusal is asserted through the ledger and the schema instead.
+      // The CLI output only says the transaction is aborted (see the README), so the
+      // refusal is asserted through the ledger, the schema and a replay of the file.
       expect(await appliedNames(c)).toEqual(['20261010000000_processed_job']);
       const t = await c.query(
         "SELECT to_regclass('organization') AS org, to_regproc('fb_set_updated_at') AS fn",

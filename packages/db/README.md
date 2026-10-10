@@ -26,7 +26,8 @@ Prisma 7.10.0 applies `migration.sql` one statement at a time, not as a single
 implicit transaction (verified by the failing-migration case in
 `src/migrations/workflow.integration.test.ts`). Every `migration.sql` is
 therefore wrapped in an explicit `BEGIN;` ... `COMMIT;`, and `files.test.ts`
-enforces it. New migrations must keep both. `down.sql` must not contain
+enforces it for every migration after `20261010000000_processed_job`, which is a
+single statement and predates the rule. New migrations must keep both. `down.sql` must not contain
 transaction control: `migrate:down` runs it inside its own transaction.
 
 ## Commands
@@ -59,15 +60,8 @@ The user in `DATABASE_URL` must be allowed to create databases.
 ## Existing local databases
 
 No reset is needed. `docker compose up` (or `docker compose run --rm migrate`)
-applies the four new migrations on top of `processed_job`, and existing
-`processed_job` rows are kept. Only someone who ran a pre-release copy of these
-migrations with different contents needs `docker compose down -v`.
-
-One caveat: the `processed_job` migration was edited once to add the
-`BEGIN;` / `COMMIT;` wrapper. A local database that applied the old file is
-unaffected: with Prisma 7.10.0 both `migrate deploy` and `migrate status` ignore
-a changed file for an already-applied migration. If anything misbehaves,
-`docker compose down -v` resets the stack.
+applies the pending migrations on top of `processed_job`, and existing
+`processed_job` rows are kept.
 
 ## Writing a migration
 
@@ -96,7 +90,18 @@ a changed file for an already-applied migration. If anything misbehaves,
 
 Because Prisma applies the file statement by statement but the file is wrapped in
 an explicit transaction, a failure rolls the schema back to where it was and
-leaves the ledger row unfinished. Fix the SQL, then:
+leaves the ledger row unfinished.
+
+Prisma's own output for that failure is only `current transaction is aborted,
+commands ignored until end of transaction block`, not the original error. To find
+the cause, either read the Postgres server log (`docker compose logs postgres`),
+where the real `ERROR:` precedes that message, or replay the file:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/db/prisma/migrations/<name>/migration.sql
+```
+
+Fix the SQL, then mark the attempt as rolled back and deploy again:
 
 ```bash
 pnpm --filter @feedbouncer/db exec prisma migrate resolve --rolled-back <name>
@@ -234,18 +239,3 @@ In practice:
 - The `fb_*` trigger functions pin `search_path` to `pg_catalog, pg_temp` and
   qualify `pg_trigger_depth()` and `now()`, so a same-named function created in
   another schema cannot shadow them and defeat the append-only guard.
-
-## Open questions
-
-Defaults chosen for the original brief's open questions. All are easy to change
-later:
-
-1. **Comment edits:** edited in place, no revision history. A `comment_revision`
-   table can be added without touching existing tables.
-2. **Soft deletion:** none. Rows are hard-deleted with the cascade rules above,
-   and `audit_event` records significant changes.
-3. **Roles:** a fixed set enforced by a CHECK: `owner`, `admin`, `member`.
-
-Needs a maintainer decision: the brief mentions `moderator`, while the roadmap's
-Auth item lists `owner`, `admin`, `member`. The schema follows the roadmap.
-Changing the set is a one-line migration on `membership_role_check`.
