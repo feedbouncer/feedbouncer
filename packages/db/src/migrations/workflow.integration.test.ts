@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import pg from 'pg';
 import { DEFAULT_MIGRATIONS_DIR } from './cli.js';
@@ -192,6 +194,24 @@ describe('migration workflow', () => {
     });
   });
 
-  // Enabled in the task that adds the UTF8 guard to the first schema migration.
-  it.todo('the first schema migration refuses a non-UTF8 database');
+  it('the tenancy migration refuses a non-UTF8 database and leaves nothing behind', async () => {
+    const db = await scratch({ encoding: 'SQL_ASCII' });
+    const r = await runPrisma(['migrate', 'deploy'], db.url);
+    expect(r.code).not.toBe(0);
+    await withClient(db, async (c) => {
+      // The wrapped migration leaves the schema engine's connection in an aborted
+      // transaction, which masks the guard's own message in the CLI output, so the
+      // refusal is asserted through the ledger and the schema instead.
+      expect(await appliedNames(c)).toEqual(['20261010000000_processed_job']);
+      const t = await c.query(
+        "SELECT to_regclass('organization') AS org, to_regproc('fb_set_updated_at') AS fn",
+      );
+      expect(t.rows[0]).toEqual({ org: null, fn: null });
+      const sql = await readFile(
+        path.join(DEFAULT_MIGRATIONS_DIR, '20261011000100_tenancy', 'migration.sql'),
+        'utf8',
+      );
+      await expect(c.query(sql)).rejects.toThrow(/requires a UTF8 database/);
+    });
+  });
 });
