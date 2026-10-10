@@ -55,4 +55,21 @@ describe('startHealthServer', () => {
     expect((await fetch(`${base}/../etc/passwd`)).status).toBe(404);
     expect((await fetch(`${base}/`)).status).toBe(404);
   });
+
+  it('does not leave an unhandled rejection when the response cannot be sent', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (e: unknown) => unhandled.push(e);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const base = await start(true);
+      const ctrl = new AbortController();
+      const pending = fetch(`${base}/healthz`, { signal: ctrl.signal }).catch(() => undefined);
+      ctrl.abort();
+      await pending;
+      await new Promise((r) => setTimeout(r, 50));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
 });

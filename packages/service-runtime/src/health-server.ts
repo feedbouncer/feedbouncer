@@ -50,10 +50,14 @@ export async function startHealthServer(opts: HealthServerOptions): Promise<Runn
       send(res, 200, { status: 'ok' });
       return;
     }
-    runChecks(opts.checks, opts).then(
-      (report) => send(res, report.status === 'ok' ? 200 : 503, report),
-      () => send(res, 500, { status: 'error' }),
-    );
+    runChecks(opts.checks, opts)
+      .then((report) => send(res, report.status === 'ok' ? 200 : 503, report))
+      .catch(() => {
+        // The client may be gone or headers already sent: nothing left to do
+        // except make sure this never surfaces as an unhandled rejection.
+        if (!res.headersSent) send(res, 500, { status: 'error' });
+        else res.destroy();
+      });
   });
   server.requestTimeout = 5_000;
   server.headersTimeout = 5_000;

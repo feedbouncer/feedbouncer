@@ -40,4 +40,18 @@ describe('onShutdown', () => {
     expect(cleanup).toHaveBeenCalledTimes(1);
     expect(exit).toHaveBeenCalledWith(1);
   });
+
+  it('exits 1 when cleanup throws synchronously', async () => {
+    const { proc, exit } = fakeProcess();
+    onShutdown(
+      () => {
+        throw new Error('sync');
+      },
+      log,
+      proc,
+    );
+    proc.emit('SIGTERM');
+    await flush();
+    expect(exit).toHaveBeenCalledWith(1);
+  });
 });

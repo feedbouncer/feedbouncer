@@ -39,6 +39,45 @@ describe('redact', () => {
     );
     expect(redact('no url here')).toBe('no url here');
   });
+
+  it('redacts the whole userinfo when the password contains @', () => {
+    expect(redact('postgres://u:p@ss@db/x')).toBe('postgres://[redacted]@db/x');
+  });
+
+  it('redacts the whole userinfo when the password contains /', () => {
+    expect(redact('postgres://u:p/ss@db/x')).toBe('postgres://[redacted]@db/x');
+  });
+
+  it('redacts every URL in a string without eating text between them', () => {
+    expect(redact('a postgres://u:p@ss@db/x and redis://:pw@r:6379 done')).toBe(
+      'a postgres://[redacted]@db/x and redis://[redacted]@r:6379 done',
+    );
+  });
+
+  it('leaves credential-less URLs alone, including @ in path or query', () => {
+    for (const url of [
+      'http://host/a@b',
+      'http://host:80/a@b',
+      'https://h/p?email=a@b.c',
+      'http://[::1]:8080/x@y',
+    ]) {
+      expect(redact(`see ${url} now`)).toBe(`see ${url} now`);
+    }
+  });
+
+  it('stops at quotes and angle brackets', () => {
+    expect(redact('"postgres://u:pw@db/x" <redis://:pw@r>')).toBe(
+      '"postgres://[redacted]@db/x" <redis://[redacted]@r>',
+    );
+  });
+
+  it('masks key=value secrets in DSNs and query strings', () => {
+    expect(redact('host=x password=hunter2 dbname=y')).toBe('host=x password=[redacted] dbname=y');
+    expect(redact('postgres://h/db?sslpassword=abc&sslmode=require')).toBe(
+      'postgres://h/db?sslpassword=[redacted]&sslmode=require',
+    );
+    expect(redact('api_key: k123, TOKEN=t0k')).toBe('api_key: [redacted], TOKEN=[redacted]');
+  });
 });
 
 describe('errorFields', () => {

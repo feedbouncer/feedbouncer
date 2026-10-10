@@ -21,13 +21,15 @@ export function onShutdown(
       }
       stopping = true;
       log.info('shutting down', { signal });
-      cleanup().then(
-        () => proc.exit(0),
-        (err: unknown) => {
-          log.error('shutdown failed', errorFields(err));
-          proc.exit(1);
-        },
-      );
+      Promise.resolve()
+        .then(cleanup)
+        .then(
+          () => proc.exit(0),
+          (err: unknown) => {
+            log.error('shutdown failed', errorFields(err));
+            proc.exit(1);
+          },
+        );
     });
   }
 }

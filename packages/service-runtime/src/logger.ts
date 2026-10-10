@@ -11,10 +11,35 @@ export interface Logger {
   error(msg: string, fields?: LogFields): void;
 }
 
-const URL_USERINFO = /\/\/[^\s/@]+@/g;
+// A URL token runs from "//" to whitespace, a quote or an angle bracket.
+const URL_TOKEN = /\/\/([^\s'"<>]+)/g;
+const SECRET_PAIR =
+  /([\w-]*(?:password|passwd|pwd|secret|token|apikey|api_key))(\s*[=:]\s*)([^\s&,;'"]+)/gi;
+
+// Position of the last "@" that ends the userinfo of a URL token, or -1.
+// The authority ends at the first "/", "?" or "#", so an "@" there is userinfo
+// (the LAST one, because a password may hold a raw "@"). Some drivers also
+// accept a raw "/" in the password: a "user:password" authority whose tail is
+// not a port is then treated as userinfo up to the last "@" in the token.
+// Anything else ("http://host/a@b") has no credentials and is left alone.
+function userinfoEnd(token: string): number {
+  const authorityEnd = token.search(/[/?#]/);
+  const authority = authorityEnd === -1 ? token : token.slice(0, authorityEnd);
+  const at = authority.lastIndexOf('@');
+  if (at !== -1) return at;
+  if (authorityEnd !== -1 && !authority.startsWith('[') && /^[^:]*:(?!\d*$).*$/.test(authority)) {
+    return token.lastIndexOf('@');
+  }
+  return -1;
+}
 
 export function redact(text: string): string {
-  return text.replace(URL_USERINFO, '//[redacted]@');
+  return text
+    .replace(URL_TOKEN, (match, token: string) => {
+      const end = userinfoEnd(token);
+      return end === -1 ? match : `//[redacted]@${token.slice(end + 1)}`;
+    })
+    .replace(SECRET_PAIR, (_m, key: string, sep: string) => `${key}${sep}[redacted]`);
 }
 
 export function errorFields(err: unknown): LogFields {
