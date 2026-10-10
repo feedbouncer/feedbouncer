@@ -152,6 +152,12 @@ importers:
 
   packages/placeholder: {}
 
+  packages/service-runtime:
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+
 packages:
 
   '@cacheable/memory@2.2.0':

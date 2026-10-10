@@ -1,4 +1,8 @@
 {
   "files": [],
-  "references": [{ "path": "packages/placeholder" }, { "path": "apps/placeholder-app" }]
+  "references": [
+    { "path": "packages/placeholder" },
+    { "path": "packages/service-runtime" },
+    { "path": "apps/placeholder-app" }
+  ]
 }
