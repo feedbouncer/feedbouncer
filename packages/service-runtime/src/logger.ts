@@ -11,11 +11,12 @@ export interface Logger {
   error(msg: string, fields?: LogFields): void;
 }
 
-// Tokens are scanned linearly (no regex that can backtrack over the whole
-// input), because redact() runs on arbitrary error text.
-const TOKEN = /[^\s'"<>,;]+/g;
+// A token is a maximal run of non-whitespace: a password may contain quotes,
+// commas or brackets, so those must not split it. Scanned linearly, because
+// redact() runs on arbitrary error text.
+const TOKEN = /\S+/g;
 const SECRET_PAIR =
-  /(password|passwd|pwd|secret|token|apikey|api_key)(["']?\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s&,;'"]+)/gi;
+  /(password|passwd|pwd|secret|token|apikey|api_key)(["']?\s*[=:]\s*)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s&,;'"]+)/gi;
 
 // Inside a token, everything between the first "//" and the LAST "@" is
 // treated as userinfo. A password may itself contain "@", "/", "?" or "#", so

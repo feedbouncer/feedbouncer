@@ -76,11 +76,20 @@ describe('redact', () => {
     }
   });
 
-  it('splits URLs joined by commas or semicolons', () => {
-    expect(redact('postgres://u:p@h/x,redis://:pw@r:6379')).toBe(
-      'postgres://[redacted]@h/x,redis://[redacted]@r:6379',
-    );
-    expect(redact('http://h/x;redis://:pw@r')).toBe('http://h/x;redis://[redacted]@r');
+  it('redacts passwords containing quotes, angle brackets, commas or semicolons', () => {
+    for (const pw of ['pa"ss', "p'w", 'pw,1', 'pw;1', 'p<w>1']) {
+      expect(redact(`postgres://u:${pw}@host/db`)).toBe('postgres://[redacted]@host/db');
+    }
+  });
+
+  it('never leaks when URLs are joined by commas or semicolons (over-redacts the middle)', () => {
+    expect(redact('postgres://u:p@h/x,redis://:pw@r:6379')).toBe('postgres://[redacted]@r:6379');
+    expect(redact('http://h/x;redis://:pw@r')).toBe('http://[redacted]@r');
+  });
+
+  it('keeps punctuation that follows the last @', () => {
+    expect(redact('(postgres://u:pw@db/x), done')).toBe('(postgres://[redacted]@db/x), done');
+    expect(redact('url="postgres://u:pw@db/x";')).toBe('url="postgres://[redacted]@db/x";');
   });
 
   it('masks quoted and JSON secrets', () => {
@@ -89,9 +98,31 @@ describe('redact', () => {
     expect(redact("{'password': 'hun ter2'}")).toBe("{'password': '[redacted]'}");
   });
 
+  it('handles escaped quotes inside quoted secrets', () => {
+    expect(redact('password="pa\\"ss" x')).toBe('password="[redacted]" x');
+    expect(redact("password='pa\\'ss' x")).toBe("password='[redacted]' x");
+    expect(redact('{"password":"a\\"b\\\\"}')).toBe('{"password":"[redacted]"}');
+  });
+
   it('stays fast on pathological input', () => {
     const n = 100_000;
-    for (const piece of ['a', ':', '@', '//', 'password', 'password ', '//a:', 'x@//']) {
+    for (const piece of [
+      'a',
+      ':',
+      '@',
+      '//',
+      'password',
+      'password ',
+      '//a:',
+      'x@//',
+      '"',
+      "'",
+      ',',
+      'password="',
+      'password="\\',
+      'http://a@',
+      '//a,',
+    ]) {
       const input = piece.repeat(Math.ceil(n / piece.length));
       const started = performance.now();
       redact(input);
