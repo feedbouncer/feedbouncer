@@ -6,6 +6,11 @@ describe('validateJobKey', () => {
   it('accepts a normal key', () => {
     expect(() => validateJobKey(ok)).not.toThrow();
   });
+  it.each(['queue', 'jobId', 'workerId'] as const)('rejects a missing %s', (field) => {
+    const partial: Record<string, string> = { ...ok };
+    delete partial[field];
+    expect(() => validateJobKey(partial as unknown as typeof ok)).toThrow(RangeError);
+  });
   it.each([
     ['queue', ''],
     ['jobId', ''],

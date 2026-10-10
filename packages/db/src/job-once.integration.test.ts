@@ -69,6 +69,20 @@ describe('runJobOnce', () => {
     expect(await runJobOnce(pool, key('c'), async () => {})).toBe('processed');
   });
 
+  it('rejects when work swallows a failed statement, since the transaction is aborted', async () => {
+    await expect(
+      runJobOnce(pool, key('e'), async (client) => {
+        try {
+          await client.query('SELECT * FROM table_that_does_not_exist');
+        } catch {
+          // swallowed on purpose: the transaction is now aborted
+        }
+      }),
+    ).rejects.toThrow();
+    expect(await row('e')).toBeUndefined();
+    expect(await runJobOnce(pool, key('e'), async () => {})).toBe('processed');
+  });
+
   it('lets exactly one of many concurrent deliveries do the work', async () => {
     let calls = 0;
     const outcomes = await Promise.all(

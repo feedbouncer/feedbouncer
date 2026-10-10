@@ -8,9 +8,11 @@ export interface JobKey {
 export type JobOutcome = 'processed' | 'duplicate';
 
 const MAX_LEN = 200;
+const KEY_FIELDS = ['queue', 'jobId', 'workerId'] as const;
 
 export function validateJobKey(key: JobKey): void {
-  for (const [field, value] of Object.entries(key)) {
+  for (const field of KEY_FIELDS) {
+    const value: unknown = key[field];
     if (typeof value !== 'string' || value.length === 0 || value.length > MAX_LEN) {
       throw new RangeError(
         `JobKey.${field} must be a non-empty string of at most ${MAX_LEN} characters`,
@@ -25,7 +27,8 @@ export function validateJobKey(key: JobKey): void {
 // - If work throws, the claim rolls back, so a retry processes normally.
 // Limitation: the transaction stays open while `work` runs. Fine for DB-only
 // work; jobs calling external APIs need a claim/complete state machine
-// (job-queue ticket).
+// (job-queue ticket). `work` must use the provided client, not the pool
+// (otherwise a saturated pool can stall).
 const CLAIM_SQL = `
   INSERT INTO processed_job (queue, job_id, processed_by)
   VALUES ($1, $2, $3)
@@ -53,7 +56,15 @@ export async function runJobOnce(
       return 'duplicate';
     }
     await work(client);
-    await client.query('COMMIT');
+    // COMMIT on an aborted transaction does not throw: Postgres answers with the
+    // command tag ROLLBACK. Treat that as failure, or the claim and the work
+    // would be silently lost while we report success.
+    const committed = await client.query('COMMIT');
+    if (committed.command !== 'COMMIT') {
+      throw new Error(
+        'job transaction was aborted and rolled back; work and claim were not committed',
+      );
+    }
     return 'processed';
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {
