@@ -133,3 +133,62 @@ jobs:
               echo "::error::At least one Docker image build ended with: $IMAGE_RESULT"
               exit 1 ;;
           esac
+
+  compose-config:
+    name: Compose config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate compose files with the example env
+        run: |
+          set -euo pipefail
+          docker compose version
+          docker compose --env-file .env.example config --quiet
+          docker compose --env-file .env.example -f compose.yaml -f compose.expose-db.yaml config --quiet
+          docker compose --env-file .env.example -f compose.yaml -f compose.override.example.yaml config --quiet
+      - name: Missing env must fail loudly
+        run: |
+          set -uo pipefail
+          : > "$RUNNER_TEMP/empty.env"
+          if docker compose --env-file "$RUNNER_TEMP/empty.env" config --quiet 2> "$RUNNER_TEMP/err.txt"; then
+            echo "::error::compose config succeeded without required variables"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/err.txt"
+          grep -q 'copy .env.example to .env' "$RUNNER_TEMP/err.txt"
+
+  compose-smoke:
+    name: Compose smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      COMPOSE_FILE: compose.yaml:compose.expose-db.yaml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-scope: compose-smoke
+      - name: Create .env from the example
+        run: cp .env.example .env
+      - name: Full lifecycle smoke test
+        run: node scripts/dev-stack/smoke.mjs --yes-destroy-local-data
+      - name: Start stack for DB integration tests
+        run: docker compose up -d --wait --wait-timeout 420
+      - name: DB integration tests
+        run: |
+          set -euo pipefail
+          set -a; . ./.env; set +a
+          export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_HOST_PORT:-5432}/${POSTGRES_DB}"
+          pnpm turbo run build --filter=@feedbouncer/db
+          pnpm --filter @feedbouncer/db test:integration
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose logs --no-color --timestamps
+      - name: Tear down
+        if: always()
+        run: docker compose down -v --remove-orphans

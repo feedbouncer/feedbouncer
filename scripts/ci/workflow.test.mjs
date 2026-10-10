@@ -112,3 +112,14 @@ test('images are built from a local repo-root context and never pushed', () => {
 test('installs use the frozen lockfile', () => {
   assert.ok(action.runs.steps.some((s) => s.run?.includes('pnpm install --frozen-lockfile')));
 });
+
+test('compose checks exist with stable names', () => {
+  assert.equal(workflow.jobs['compose-config']?.name, 'Compose config');
+  assert.equal(workflow.jobs['compose-smoke']?.name, 'Compose smoke');
+});
+
+test('compose smoke always tears the stack down', () => {
+  const last = workflow.jobs['compose-smoke'].steps.at(-1);
+  assert.equal(last.if, 'always()');
+  assert.match(last.run, /docker compose down -v/);
+});
