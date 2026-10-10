@@ -30,6 +30,10 @@ async function withClient<T>(db: ScratchDb, fn: (c: pg.Client) => Promise<T>): P
     await c.end();
   }
 }
+async function deployOk(db: ScratchDb, migrationsDir?: string): Promise<void> {
+  const r = await runPrisma(['migrate', 'deploy'], db.url, migrationsDir ? { migrationsDir } : {});
+  expect(r.code, r.stderr).toBe(0);
+}
 const appliedNames = (c: pg.ClientBase) =>
   c
     .query<{
@@ -41,14 +45,14 @@ describe('migration workflow', () => {
   it('applies every migration to an empty database, and a second run is a no-op', async () => {
     const db = await scratch();
     const all = await listMigrationDirs(DEFAULT_MIGRATIONS_DIR);
-    expect((await runPrisma(['migrate', 'deploy'], db.url)).code).toBe(0);
+    await deployOk(db);
     const first = await withClient(db, async (c) => ({
       s: await snapshotSchema(c),
       n: await appliedNames(c),
     }));
     expect(first.n).toEqual(all);
     const again = await runPrisma(['migrate', 'deploy'], db.url);
-    expect(again.code).toBe(0);
+    expect(again.code, again.stderr).toBe(0);
     expect(again.stdout).toMatch(/No pending migrations/i);
     await withClient(db, async (c) => {
       expect(await snapshotSchema(c)).toEqual(first.s);
@@ -62,7 +66,7 @@ describe('migration workflow', () => {
       runPrisma(['migrate', 'deploy'], db.url),
       runPrisma(['migrate', 'deploy'], db.url),
     ]);
-    expect([a.code, b.code]).toEqual([0, 0]);
+    expect([a.code, b.code], `${a.stderr}\n${b.stderr}`).toEqual([0, 0]);
     await withClient(db, async (c) => {
       const { rows } = await c.query(
         'SELECT migration_name, count(*)::int AS n FROM _prisma_migrations GROUP BY 1 HAVING count(*) > 1',
@@ -72,53 +76,64 @@ describe('migration workflow', () => {
     });
   });
 
-  it('deploy waits while the shared advisory lock is held (rollback and deploy cannot interleave)', async () => {
+  it('deploy waits on the shared advisory lock (rollback and deploy cannot interleave)', async () => {
     const db = await scratch();
     const holder = await db.client();
     cleanups.push(() => holder.end());
     await holder.query('SELECT pg_advisory_lock($1)', [PRISMA_MIGRATE_LOCK_ID]);
-    let done = false;
-    const deploy = runPrisma(['migrate', 'deploy'], db.url).then((r) => {
-      done = true;
-      return r;
-    });
-    await new Promise((r) => setTimeout(r, 3_000));
-    expect(done, 'Prisma no longer uses lock key 72707369; update PRISMA_MIGRATE_LOCK_ID').toBe(
-      false,
-    );
+    const deploy = runPrisma(['migrate', 'deploy'], db.url);
+    // Prove the wait positively: a waiter on exactly our key shows up as an ungranted lock.
+    // A key that fits in 32 bits is stored as classid 0, objid = key, objsubid 1.
+    const deadline = Date.now() + 60_000;
+    let waiting = false;
+    while (!waiting && Date.now() < deadline) {
+      const { rows } = await holder.query(
+        `SELECT 1 FROM pg_locks
+          WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+            AND classid = 0 AND objid = $1 AND objsubid = 1`,
+        [PRISMA_MIGRATE_LOCK_ID],
+      );
+      waiting = rows.length > 0;
+      if (!waiting) await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(
+      waiting,
+      `no session waits on advisory lock ${PRISMA_MIGRATE_LOCK_ID}; Prisma may use a different key`,
+    ).toBe(true);
     await holder.query('SELECT pg_advisory_unlock($1)', [PRISMA_MIGRATE_LOCK_ID]);
-    expect((await deploy).code).toBe(0);
+    const res = await deploy;
+    expect(res.code, res.stderr).toBe(0);
   });
 
-  it('a failing migration leaves the schema exactly as before and blocks rollback until resolved', async () => {
+  it('a failing migration leaves no partial DDL behind and blocks rollback until resolved', async () => {
     const db = await scratch();
     const all = await listMigrationDirs(DEFAULT_MIGRATIONS_DIR);
-    expect((await runPrisma(['migrate', 'deploy'], db.url)).code).toBe(0);
+    await deployOk(db);
     const before = await withClient(db, snapshotSchema);
     const broken = '29991231235959_broken_fixture';
     const fx = await makeMigrationsDir(all, {
       name: broken,
-      sql: 'BEGIN;\nCREATE TABLE should_not_survive (id int);\nALTER TABLE organization ADD COLUMN should_not_survive int;\nSELECT 1/0;\nCOMMIT;\n',
+      sql: 'BEGIN;\nCREATE TABLE fixture_a (id int);\nALTER TABLE fixture_a ADD COLUMN x int;\nSELECT 1/0;\nCOMMIT;\n',
     });
     cleanups.push(fx.cleanup);
     const res = await runPrisma(['migrate', 'deploy'], db.url, { migrationsDir: fx.relDir });
     expect(res.code).not.toBe(0);
     await withClient(db, async (c) => {
       expect(await snapshotSchema(c)).toEqual(before);
+      expect((await snapshotSchema(c)).join('\n')).not.toContain('fixture_a');
       const { rows } = await c.query(
         'SELECT finished_at FROM _prisma_migrations WHERE migration_name = $1',
         [broken],
       );
       expect(rows).toEqual([{ finished_at: null }]);
-      await expect(rollbackLatest(c, fx.absDir)).rejects.toBeInstanceOf(RollbackError);
+      const err = await rollbackLatest(c, fx.absDir).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(RollbackError);
+      expect((err as Error).message).toContain(`prisma migrate resolve --rolled-back ${broken}`);
     });
-    expect(
-      (
-        await runPrisma(['migrate', 'resolve', '--rolled-back', broken], db.url, {
-          migrationsDir: fx.relDir,
-        })
-      ).code,
-    ).toBe(0);
+    const resolved = await runPrisma(['migrate', 'resolve', '--rolled-back', broken], db.url, {
+      migrationsDir: fx.relDir,
+    });
+    expect(resolved.code, resolved.stderr).toBe(0);
     await withClient(db, async (c) => {
       expect(await rollbackLatest(c, fx.absDir)).toEqual({
         status: 'rolled_back',
@@ -134,14 +149,11 @@ describe('migration workflow', () => {
       const db = await scratch();
       const fx = await makeMigrationsDir(all.slice(0, k));
       cleanups.push(fx.cleanup);
-      if (k > 0)
-        expect(
-          (await runPrisma(['migrate', 'deploy'], db.url, { migrationsDir: fx.relDir })).code,
-        ).toBe(0);
+      if (k > 0) await deployOk(db, fx.relDir);
       forward.push(await withClient(db, snapshotSchema));
     }
     const db = await scratch();
-    expect((await runPrisma(['migrate', 'deploy'], db.url)).code).toBe(0);
+    await deployOk(db);
     await withClient(db, async (c) => {
       expect(await snapshotSchema(c)).toEqual(forward[all.length]);
       for (let k = all.length; k > 0; k--) {
@@ -155,21 +167,28 @@ describe('migration workflow', () => {
         status: 'nothing_to_roll_back',
       });
     });
-    expect((await runPrisma(['migrate', 'deploy'], db.url)).code).toBe(0);
+    await deployOk(db);
     expect(await withClient(db, snapshotSchema)).toEqual(forward[all.length]);
   });
 
   it('rollback refuses a tampered ledger name and changes nothing', async () => {
     const db = await scratch();
-    expect((await runPrisma(['migrate', 'deploy'], db.url)).code).toBe(0);
+    await deployOk(db);
     await withClient(db, async (c) => {
       await c.query(
         `INSERT INTO _prisma_migrations (id, checksum, migration_name, started_at, finished_at, applied_steps_count)
          VALUES (gen_random_uuid()::text, 'x', '99999999999999_zz/../../../etc', now(), now(), 1)`,
       );
-      const before = await snapshotSchema(c);
-      await expect(rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).rejects.toBeInstanceOf(RollbackError);
-      expect(await snapshotSchema(c)).toEqual(before);
+      const ledger = () =>
+        c.query(
+          'SELECT migration_name, finished_at, rolled_back_at FROM _prisma_migrations ORDER BY 1',
+        );
+      const before = { schema: await snapshotSchema(c), ledger: (await ledger()).rows };
+      const err = await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(RollbackError);
+      expect((err as Error).message).toMatch(/is not in .*; refusing/);
+      expect(await snapshotSchema(c)).toEqual(before.schema);
+      expect((await ledger()).rows).toEqual(before.ledger);
     });
   });
 
