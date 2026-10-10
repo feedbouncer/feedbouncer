@@ -1,4 +1,5 @@
-# CI: required checks are "Typecheck", "Test", "Docker build".
+# CI: required checks are "Typecheck", "Test", "Docker build" and "Compose config".
+# "Compose smoke" runs the full dev-stack lifecycle; keep it non-required until stable.
 # Do not rename these jobs' `name:` without updating branch protection.
 # Local equivalents are documented in README.md -> "Continuous integration".
 name: CI

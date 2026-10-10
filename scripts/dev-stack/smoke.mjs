@@ -207,12 +207,12 @@ async function main() {
     `re-running migrate changes nothing (${after} applied)`,
   );
 
-  step('two worker replicas never process a job twice');
+  step('two worker replicas process each job exactly once');
   await compose(['up', '-d', ...WAIT, '--scale', 'worker=2'], { timeout: LONG });
   const runId = randomUUID();
   const enqueue = buildEnqueueExecArgv({ runId, count: JOBS, delayMs: 20 });
   await compose(enqueue);
-  await compose(enqueue); // same ids again: must be a no-op
+  await compose(enqueue); // same job ids again: BullMQ dedupes them at enqueue, so this is a no-op
   const where = selftestWhere(runId);
   let stats = '';
   for (let i = 0; i < 120; i += 1) {

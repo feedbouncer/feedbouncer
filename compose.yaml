@@ -187,7 +187,8 @@ services:
     environment:
       API_INTERNAL_URL: http://api:3001
       NEXT_TELEMETRY_DISABLED: '1'
-      WATCHPACK_POLLING: ${WATCHPACK_POLLING:-false}
+      # Poll interval in ms for next dev's (Turbopack) file watcher. 0 = native events.
+      WEB_WATCH_POLL_MS: ${WEB_WATCH_POLL_MS:-0}
     ports:
       - '${FB_BIND_ADDRESS:-127.0.0.1}:${WEB_HOST_PORT:-3000}:3000'
     volumes:

@@ -10,4 +10,5 @@ services:
   web:
     environment:
       # Use if hot reload misses changes (e.g. repo on a Windows drive under WSL2).
-      WATCHPACK_POLLING: 'true'
+      # Milliseconds between polls of the Next.js (Turbopack) file watcher.
+      WEB_WATCH_POLL_MS: '1000'

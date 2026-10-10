@@ -14,7 +14,8 @@
     "HEALTH_PORT",
     "LOG_LEVEL",
     "WORKER_CONCURRENCY",
-    "API_INTERNAL_URL"
+    "API_INTERNAL_URL",
+    "WEB_WATCH_POLL_MS"
   ],
   "tasks": {
     "build": {
