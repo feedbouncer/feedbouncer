@@ -62,6 +62,30 @@ describe('migration workflow', () => {
     });
   });
 
+  it('existing processed_job rows are backfilled with their first_processed_at timestamps', async () => {
+    const db = await scratch();
+    const all = await listMigrationDirs(DEFAULT_MIGRATIONS_DIR);
+    const first = await makeMigrationsDir([all[0]!]);
+    cleanups.push(first.cleanup);
+    await deployOk(db, first.relDir);
+    await withClient(db, (c) =>
+      c.query(
+        "INSERT INTO processed_job (queue, job_id, processed_by, first_processed_at) VALUES ('q', 'j', 'w', '2020-01-02T03:04:05.678Z')",
+      ),
+    );
+    await deployOk(db);
+    await withClient(db, async (c) => {
+      const row = (
+        await c.query<{ created_at: Date; updated_at: Date; first_processed_at: Date }>(
+          "SELECT created_at, updated_at, first_processed_at FROM processed_job WHERE queue = 'q'",
+        )
+      ).rows[0]!;
+      expect(row.first_processed_at.toISOString()).toBe('2020-01-02T03:04:05.678Z');
+      expect(row.created_at).toEqual(row.first_processed_at);
+      expect(row.updated_at).toEqual(row.first_processed_at);
+    });
+  });
+
   it('two concurrent deploys apply each migration exactly once and both exit 0', async () => {
     const db = await scratch();
     const [a, b] = await Promise.all([

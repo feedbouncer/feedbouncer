@@ -117,15 +117,4 @@ describe('tenancy', () => {
         .rows[0].n,
     ).toBe(1);
   });
-
-  it('existing processed_job rows gain timestamps', async () => {
-    await ctx.c.query(
-      "INSERT INTO processed_job (queue, job_id, processed_by) VALUES ('q', 'j', 'w')",
-    );
-    const r = (
-      await ctx.c.query("SELECT created_at, updated_at FROM processed_job WHERE queue = 'q'")
-    ).rows[0];
-    expect(r.created_at).toBeInstanceOf(Date);
-    expect(r.updated_at).toBeInstanceOf(Date);
-  });
 });

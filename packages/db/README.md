@@ -64,10 +64,10 @@ applies the four new migrations on top of `processed_job`, and existing
 migrations with different contents needs `docker compose down -v`.
 
 One caveat: the `processed_job` migration was edited once to add the
-`BEGIN;` / `COMMIT;` wrapper. A local database that applied the old file may
-show a checksum difference in `prisma migrate status`. `migrate deploy` does not
-re-verify the checksums of applied migrations, so this is harmless. If anything
-misbehaves, `docker compose down -v` resets the stack.
+`BEGIN;` / `COMMIT;` wrapper. A local database that applied the old file is
+unaffected: with Prisma 7.10.0 both `migrate deploy` and `migrate status` ignore
+a changed file for an already-applied migration. If anything misbehaves,
+`docker compose down -v` resets the stack.
 
 ## Writing a migration
 
@@ -80,11 +80,13 @@ misbehaves, `docker compose down -v` resets the stack.
 - State `ON DELETE` on every `REFERENCES` clause (a static guard checks it).
 - `down.sql` reverses the migration in reverse order and does not use
   `IF EXISTS`, so a half-applied state fails loudly.
-- Naming: snake*case singular tables; constraints `<table>_pkey`,
-  `<table>*<cols>_key`, `<table>_<cols>_fkey`, `<table>_<what>_check`; indexes
-`<table>_<cols>_idx`; triggers `<table>_<purpose>_trg`; functions
-`fb_<verb>\_<noun>()`. Keep every identifier within 63 bytes, because Postgres
-  silently truncates longer ones.
+- Naming: snake_case singular tables, and keep every identifier within 63
+  bytes, because Postgres silently truncates longer ones.
+  - Constraints: `<table>_pkey`, `<table>_<cols>_key`, `<table>_<cols>_fkey`,
+    `<table>_<what>_check`.
+  - Indexes: `<table>_<cols>_idx`.
+  - Triggers: `<table>_<purpose>_trg`.
+  - Functions: `fb_<verb>_<noun>()`.
 - Every table has `created_at` and `updated_at` (`timestamptz(3)`), every tenant
   table has `organization_id`, and every foreign key has an index whose first
   column is the pointer column.
@@ -229,6 +231,9 @@ In practice:
   disable triggers) or a session with `session_replication_role = replica`. When
   application roles are introduced, `REVOKE UPDATE, DELETE, TRUNCATE` on
   `decision` and `audit_event` from them.
+- The `fb_*` trigger functions pin `search_path` to `pg_catalog, pg_temp` and
+  qualify `pg_trigger_depth()` and `now()`, so a same-named function created in
+  another schema cannot shadow them and defeat the append-only guard.
 
 ## Open questions
 

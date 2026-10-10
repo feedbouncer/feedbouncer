@@ -61,7 +61,8 @@ export async function rollbackLatest(
     const known = await listMigrationDirs(migrationsDir);
     if (!known.includes(name)) {
       throw new RollbackError(
-        `Latest applied migration ${shown(name)} is not in ${migrationsDir}; refusing.`,
+        `Latest applied migration ${shown(name)} is not in ${migrationsDir}; refusing. ` +
+          'Inspect _prisma_migrations: if that row is bogus, delete it or use `prisma migrate resolve`.',
       );
     }
     let downSql: string;

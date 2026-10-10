@@ -51,8 +51,12 @@ async function decide(c: pg.ClientBase, t: Tenant, commentId: string, d: D = {})
         actorType,
         d.userId !== undefined ? d.userId : actorType === 'user' ? t.userId : null,
         d.ruleId !== undefined ? d.ruleId : actorType === 'rule' ? t.ruleId : null,
-        d.provider !== undefined ? d.provider : actorType === 'classifier' ? 'anthropic' : null,
-        d.model !== undefined ? d.model : actorType === 'classifier' ? 'claude-haiku' : null,
+        d.provider !== undefined
+          ? d.provider
+          : actorType === 'classifier'
+            ? 'example-provider'
+            : null,
+        d.model !== undefined ? d.model : actorType === 'classifier' ? 'example-model-1' : null,
         d.confidence ?? null,
         d.reason ?? 'Matched rule: scam link',
       ],
@@ -110,6 +114,23 @@ describe('decision history', () => {
     );
     await expectPgError(ctx.c.query('DELETE FROM decision WHERE id = $1', [id]), '23001');
     await expectPgError(ctx.c.query('TRUNCATE decision'), '23001');
+  });
+
+  it('the append-only guard cannot be bypassed by shadowing pg_trigger_depth() via search_path', async () => {
+    const id = await decide(ctx.c, a, await comment(ctx.c, a));
+    await ctx.c.query(
+      'CREATE FUNCTION public.pg_trigger_depth() RETURNS int LANGUAGE sql AS $$ SELECT 100 $$',
+    );
+    try {
+      await ctx.c.query('SET search_path = public, pg_catalog');
+      await expectPgError(
+        ctx.c.query("UPDATE decision SET reason = 'rewritten' WHERE id = $1", [id]),
+        '23001',
+      );
+    } finally {
+      await ctx.c.query('RESET search_path');
+      await ctx.c.query('DROP FUNCTION public.pg_trigger_depth()');
+    }
   });
 });
 

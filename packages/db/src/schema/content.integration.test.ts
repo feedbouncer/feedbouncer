@@ -296,6 +296,28 @@ describe('lookups and deletion', () => {
     expect(plan).not.toMatch(/Sort/);
   });
 
+  it('the organization-wide newest-first listing uses its own index without a sort', async () => {
+    // The per-source index is dropped inside a rolled-back transaction so the planner choice is deterministic.
+    let plan = '';
+    await ctx.c.query('BEGIN');
+    try {
+      await ctx.c.query('DROP INDEX comment_organization_id_source_id_ingested_at_idx');
+      await ctx.c.query('SET LOCAL enable_seqscan = off');
+      plan = (
+        await ctx.c.query(
+          'EXPLAIN SELECT id FROM comment WHERE organization_id = $1 ORDER BY ingested_at DESC, id DESC LIMIT 50',
+          [a.organizationId],
+        )
+      ).rows
+        .map((r) => r['QUERY PLAN'])
+        .join('\n');
+    } finally {
+      await ctx.c.query('ROLLBACK');
+    }
+    expect(plan).toMatch(/comment_organization_id_ingested_at_idx/);
+    expect(plan).not.toMatch(/Sort/);
+  });
+
   it('deleting a source removes its comments only; authors stay', async () => {
     const t = await seedTenant(ctx.c, `src-${uuid()}`);
     await insertComment(ctx.c, t);

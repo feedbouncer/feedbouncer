@@ -84,7 +84,8 @@ CREATE INDEX decision_brand_id_created_at_idx ON decision (brand_id, created_at 
 CREATE INDEX decision_rule_id_idx ON decision (rule_id) WHERE rule_id IS NOT NULL;
 CREATE INDEX decision_actor_user_id_idx ON decision (actor_user_id) WHERE actor_user_id IS NOT NULL;
 
-CREATE FUNCTION fb_decision_require_actor() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION fb_decision_require_actor() RETURNS trigger LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp AS $$
 BEGIN
   IF NEW.actor_type = 'user' AND NEW.actor_user_id IS NULL THEN
     RAISE EXCEPTION 'decision by a user must set actor_user_id'

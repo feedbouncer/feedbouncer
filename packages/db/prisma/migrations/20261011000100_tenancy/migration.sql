@@ -12,9 +12,10 @@ BEGIN
 END
 $$;
 
-CREATE FUNCTION fb_set_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION fb_set_updated_at() RETURNS trigger LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp AS $$
 BEGIN
-  NEW.updated_at := now();
+  NEW.updated_at := pg_catalog.now();
   RETURN NEW;
 END
 $$;
@@ -22,9 +23,12 @@ $$;
 -- Append-only guard. pg_trigger_depth() = 1 means a client issued the statement
 -- directly; >= 2 means a foreign-key action (CASCADE / SET NULL) issued it while
 -- a parent row was deleted, which is allowed. TRUNCATE is always refused.
-CREATE FUNCTION fb_forbid_direct_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+-- The function pins search_path and qualifies pg_trigger_depth() so a user-created
+-- function of the same name in another schema cannot shadow it.
+CREATE FUNCTION fb_forbid_direct_mutation() RETURNS trigger LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp AS $$
 BEGIN
-  IF TG_OP = 'TRUNCATE' OR pg_trigger_depth() < 2 THEN
+  IF TG_OP = 'TRUNCATE' OR pg_catalog.pg_trigger_depth() < 2 THEN
     RAISE EXCEPTION '% is append-only: % is not allowed', TG_TABLE_NAME, TG_OP
       USING ERRCODE = 'restrict_violation';
   END IF;

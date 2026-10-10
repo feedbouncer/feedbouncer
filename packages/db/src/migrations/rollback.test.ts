@@ -104,6 +104,9 @@ describe('rollbackLatest', () => {
     async (name) => {
       const f = fakeClient({ latest: name });
       await expect(rollbackLatest(f.client, dir)).rejects.toBeInstanceOf(RollbackError);
+      await expect(rollbackLatest(f.client, dir)).rejects.toThrow(
+        /is not in .*refusing.*_prisma_migrations.*prisma migrate resolve/s,
+      );
       expect(f.texts()).not.toContain('BEGIN');
     },
   );
