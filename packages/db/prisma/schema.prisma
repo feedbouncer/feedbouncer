@@ -1,0 +1,18 @@
+// Prisma owns migrations. Runtime SQL currently uses `pg` directly; the core
+// data-model ticket decides whether to adopt Prisma Client.
+datasource db {
+  provider = "postgresql"
+}
+
+/// Idempotency ledger for background jobs. System table (no tenant data).
+/// See packages/db/src/job-once.ts.
+model ProcessedJob {
+  queue               String
+  jobId               String   @map("job_id")
+  processedBy         String   @map("processed_by")
+  firstProcessedAt    DateTime @default(now()) @map("first_processed_at") @db.Timestamptz(3)
+  duplicateDeliveries Int      @default(0) @map("duplicate_deliveries")
+
+  @@id([queue, jobId])
+  @@map("processed_job")
+}
