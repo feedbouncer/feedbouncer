@@ -76,7 +76,10 @@ test('symlinked workspace entry throws instead of being followed', async () => {
 
 test('symlinked Dockerfile throws', async () => {
   const root = await fixture(['outside/Dockerfile', 'apps/web/package.json']);
-  await symlink(path.join(root, 'outside', 'Dockerfile'), path.join(root, 'apps', 'web', 'Dockerfile'));
+  await symlink(
+    path.join(root, 'outside', 'Dockerfile'),
+    path.join(root, 'apps', 'web', 'Dockerfile'),
+  );
   await assert.rejects(findDockerTargets(root), /regular file/);
   await rm(root, { recursive: true });
 });
@@ -108,6 +111,32 @@ test('CLI exits 1 with a one-line message on unsafe input', async () => {
   await assert.rejects(
     run(process.execPath, [SCRIPT], { cwd: root, env: { ...process.env, GITHUB_OUTPUT: '' } }),
     (err) => err.code === 1 && /Unsafe workspace directory name/.test(err.stderr),
+  );
+  await rm(root, { recursive: true });
+});
+
+test('CLI still writes output when invoked through a symlinked path', async () => {
+  const root = await fixture(['apps/web/Dockerfile']);
+  const out = path.join(root, 'gh-output');
+  await writeFile(out, '');
+  await symlink(path.dirname(SCRIPT), path.join(root, 'tools'));
+  await run(process.execPath, [path.join(root, 'tools', 'docker-targets.mjs')], {
+    cwd: root,
+    env: { ...process.env, GITHUB_OUTPUT: out },
+  });
+  assert.equal(
+    await readFile(out, 'utf8'),
+    'targets=[{"name":"apps-web","dockerfile":"apps/web/Dockerfile"}]\nhas_targets=true\n',
+  );
+  await rm(root, { recursive: true });
+});
+
+test('symlink error message stays one line even if the name contains a newline', async () => {
+  const root = await fixture(['outside/Dockerfile', 'apps/.keep']);
+  await symlink(path.join(root, 'outside'), path.join(root, 'apps', 'evil\nname'));
+  await assert.rejects(
+    findDockerTargets(root),
+    (err) => !err.message.includes('\n') && /symlink/i.test(err.message),
   );
   await rm(root, { recursive: true });
 });
