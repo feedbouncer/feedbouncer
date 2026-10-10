@@ -25,4 +25,4 @@ pnpm install
 | `pnpm format:check` | Checks formatting without writing changes (`turbo run format:check`) — use this in CI |
 | `pnpm typecheck`    | Type-checks every package/app via Turborepo (`turbo run typecheck`)                   |
 
-Turborepo caches `build`, `lint`, `format:check` and `typecheck` — an unchanged package's task is skipped on a re-run. `pnpm format` always runs because it writes files.
+Turborepo caches the per-package `build`, `lint`, `format:check` and `typecheck` tasks — an unchanged package's task is skipped on a re-run. The root-level `eslint .` and `prettier --check` steps (root config files only) run every time, as does `pnpm format`, which writes files.

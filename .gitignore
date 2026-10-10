@@ -37,6 +37,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
 # pnpm store and debug logs
 .pnpm-store/
 npm-debug.log*
