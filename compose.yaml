@@ -19,7 +19,7 @@ x-node-service: &node-service
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is not set - copy .env.example to .env}
