@@ -12,6 +12,7 @@
     "preinstall": "npx --yes only-allow pnpm"
   },
   "devDependencies": {
-    "only-allow": "^1.2.1"
+    "only-allow": "^1.2.1",
+    "typescript": "7.0.2"
   }
 }
