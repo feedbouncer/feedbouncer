@@ -1,4 +1,4 @@
-# CI: required checks are "Typecheck", "Test", "Docker build" and "Compose config".
+# CI: required checks are "Typecheck", "Test", "Docker build", "Compose config" and "Database migrations".
 # "Compose smoke" runs the full dev-stack lifecycle; keep it non-required until stable.
 # Do not rename these jobs' `name:` without updating branch protection.
 # Local equivalents are documented in README.md -> "Continuous integration".
@@ -160,6 +160,46 @@ jobs:
           fi
           cat "$RUNNER_TEMP/err.txt"
           grep -q 'copy .env.example to .env' "$RUNNER_TEMP/err.txt"
+
+  db-migrations:
+    name: Database migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: feedbouncer
+          POSTGRES_PASSWORD: dev-only-ci-postgres
+          POSTGRES_DB: feedbouncer
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U feedbouncer -d feedbouncer"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      # Throwaway service container on an ephemeral runner; not a secret.
+      DATABASE_URL: postgresql://feedbouncer:dev-only-ci-postgres@127.0.0.1:5432/feedbouncer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-scope: db-migrations
+      - name: Build the db package and its dependencies
+        run: pnpm turbo run build --filter=@feedbouncer/db...
+      - name: Apply every migration to the empty database
+        run: pnpm --filter @feedbouncer/db migrate:deploy
+      - name: Re-run is a no-op
+        run: pnpm --filter @feedbouncer/db migrate:deploy
+      - name: Roll back the newest migration and re-apply it
+        run: |
+          set -euo pipefail
+          pnpm --filter @feedbouncer/db migrate:down --yes-destroy-data
+          pnpm --filter @feedbouncer/db migrate:deploy
+      - name: Migration workflow and schema invariant tests
+        run: pnpm --filter @feedbouncer/db test:integration
 
   compose-smoke:
     name: Compose smoke
