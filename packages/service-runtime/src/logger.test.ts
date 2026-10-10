@@ -54,14 +54,48 @@ describe('redact', () => {
     );
   });
 
-  it('leaves credential-less URLs alone, including @ in path or query', () => {
-    for (const url of [
-      'http://host/a@b',
-      'http://host:80/a@b',
-      'https://h/p?email=a@b.c',
-      'http://[::1]:8080/x@y',
-    ]) {
+  it('leaves URLs without an @ untouched', () => {
+    for (const url of ['http://host/a', 'http://host:80/a/b?x=1', 'http://[::1]:8080/x']) {
       expect(redact(`see ${url} now`)).toBe(`see ${url} now`);
+    }
+  });
+
+  it('prefers over-redaction when an @ appears in the path or query', () => {
+    expect(redact('http://host/a@b')).toBe('http://[redacted]@b');
+    expect(redact('https://h/p?email=a@b.c')).toBe('https://[redacted]@b.c');
+  });
+
+  it('redacts digit-only passwords containing / ? #', () => {
+    for (const url of [
+      'postgres://u:123/ab@db/x',
+      'postgres://u:12?3@db/x',
+      'postgres://u:12#3@db/x',
+    ]) {
+      const out = redact(url);
+      expect(out).toBe('postgres://[redacted]@db/x');
+    }
+  });
+
+  it('splits URLs joined by commas or semicolons', () => {
+    expect(redact('postgres://u:p@h/x,redis://:pw@r:6379')).toBe(
+      'postgres://[redacted]@h/x,redis://[redacted]@r:6379',
+    );
+    expect(redact('http://h/x;redis://:pw@r')).toBe('http://h/x;redis://[redacted]@r');
+  });
+
+  it('masks quoted and JSON secrets', () => {
+    expect(redact('password="hunter2" x')).toBe('password="[redacted]" x');
+    expect(redact('{"password":"hunter2","a":1}')).toBe('{"password":"[redacted]","a":1}');
+    expect(redact("{'password': 'hun ter2'}")).toBe("{'password': '[redacted]'}");
+  });
+
+  it('stays fast on pathological input', () => {
+    const n = 100_000;
+    for (const piece of ['a', ':', '@', '//', 'password', 'password ', '//a:', 'x@//']) {
+      const input = piece.repeat(Math.ceil(n / piece.length));
+      const started = performance.now();
+      redact(input);
+      expect(performance.now() - started).toBeLessThan(1_000);
     }
   });
 
