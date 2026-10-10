@@ -15,3 +15,10 @@
 .state
 .pnpm-store
 *.log
+**/dist-*
+**/.next
+**/test-results
+**/playwright-report
+**/tmp
+**/.DS_Store
+!**/.env.prod.example
