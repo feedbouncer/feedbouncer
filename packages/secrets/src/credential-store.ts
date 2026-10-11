@@ -135,21 +135,30 @@ export class CredentialStore {
   }
 }
 
-/** Flags the connection for reconnect and audits it, atomically and at most once. */
+/**
+ * Flags the connection for reconnect and audits it, atomically and at most once.
+ * The audit event records the status the connection had (previousStatus) so a
+ * later recheck can restore exactly that status.
+ */
 export async function markReconnectRequired(
   db: Queryable,
   scope: ConnectionScope,
   err: CredentialUnreadableError,
 ): Promise<boolean> {
   const r = await db.query(
-    `WITH flagged AS (
-       UPDATE connection SET status = 'reconnect_required', status_reason = $4
+    `WITH prev AS (
+       SELECT id, status FROM connection
         WHERE id = $3 AND organization_id = $1 AND brand_id = $2
           AND status IN ('active', 'paused', 'error')
-       RETURNING id, organization_id, brand_id)
+          FOR UPDATE),
+     flagged AS (
+       UPDATE connection c SET status = 'reconnect_required', status_reason = $4
+         FROM prev
+        WHERE c.id = prev.id AND c.status IN ('active', 'paused', 'error')
+       RETURNING c.id, c.organization_id, c.brand_id, prev.status AS previous_status)
      INSERT INTO audit_event (organization_id, brand_id, actor_type, action, subject_type, subject_id, details)
      SELECT organization_id, brand_id, 'system', 'connection.reconnect_required', 'connection', id,
-            jsonb_build_object('reason', $5::text, 'keyId', $6::text)
+            jsonb_build_object('reason', $5::text, 'keyId', $6::text, 'previousStatus', previous_status)
        FROM flagged
      RETURNING id`,
     [

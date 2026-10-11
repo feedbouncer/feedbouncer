@@ -91,7 +91,7 @@ export async function reencryptAll(
     for (const row of rows) {
       cursor = row.id;
       report.scanned++;
-      let next: Awaited<ReturnType<typeof rewrap>>;
+      let next: { keyId: string; blob: Buffer };
       try {
         next = await rewrap(keys, row.encrypted_value, ctxOf(row));
       } catch (err) {
@@ -99,7 +99,6 @@ export async function reencryptAll(
         report.unreadable.push(unreadableOf(row, err));
         continue;
       }
-      if (!next.changed) continue; // already on the active key (concurrently refreshed)
       if (opts.dryRun) {
         report.rewrapped++;
         continue;
@@ -196,16 +195,35 @@ export async function secretsStatus(db: Queryable, keys: Keyring): Promise<Secre
   };
 }
 
+export interface RecheckReport {
+  checked: number;
+  restored: number;
+  /** Some stored credential still cannot be opened with the configured keys. */
+  stillUnreadable: number;
+  /** Flagged connection with no stored credentials at all: only a reconnect can fix it. */
+  noCredentials: number;
+  /** Credentials are readable, but the pre-flag status was not recorded: left flagged, never guessed. */
+  unknownPreviousStatus: number;
+}
+
+const RESTORABLE_STATUSES = ['active', 'paused', 'error'];
+
 export async function recheckConnections(
   db: Queryable,
   keys: KeyProvider,
   opts: { dryRun: boolean },
-): Promise<{ checked: number; restored: number; stillUnreadable: number }> {
+): Promise<RecheckReport> {
   const { rows: conns } = await db.query<{ id: string; organization_id: string; brand_id: string }>(
     `SELECT id, organization_id, brand_id FROM connection
       WHERE status = 'reconnect_required' AND status_reason LIKE 'credential\\_%' ORDER BY id`,
   );
-  const out = { checked: 0, restored: 0, stillUnreadable: 0 };
+  const out: RecheckReport = {
+    checked: 0,
+    restored: 0,
+    stillUnreadable: 0,
+    noCredentials: 0,
+    unknownPreviousStatus: 0,
+  };
   for (const c of conns) {
     out.checked++;
     const { rows } = await db.query<SecretRow>(
@@ -213,7 +231,11 @@ export async function recheckConnections(
         WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3`,
       [c.organization_id, c.brand_id, c.id],
     );
-    let readable = rows.length > 0;
+    if (rows.length === 0) {
+      out.noCredentials++;
+      continue;
+    }
+    let readable = true;
     for (const row of rows) {
       try {
         await open(keys, row.encrypted_value, ctxOf(row));
@@ -227,20 +249,34 @@ export async function recheckConnections(
       out.stillUnreadable++;
       continue;
     }
+    // The status the connection had when it was flagged, from the latest flagging audit event.
+    const prev = await db.query<{ previous_status: string | null }>(
+      `SELECT details->>'previousStatus' AS previous_status FROM audit_event
+        WHERE organization_id = $1 AND subject_type = 'connection' AND subject_id = $2
+          AND action = 'connection.reconnect_required'
+        ORDER BY sequence DESC LIMIT 1`,
+      [c.organization_id, c.id],
+    );
+    const previous = prev.rows[0]?.previous_status ?? null;
+    if (previous === null || !RESTORABLE_STATUSES.includes(previous)) {
+      out.unknownPreviousStatus++;
+      continue;
+    }
     if (opts.dryRun) {
       out.restored++;
       continue;
     }
     const r = await db.query(
       `WITH restored AS (
-         UPDATE connection SET status = 'active', status_reason = NULL
+         UPDATE connection SET status = $3, status_reason = NULL
           WHERE id = $1 AND organization_id = $2 AND status = 'reconnect_required' AND status_reason LIKE 'credential\\_%'
          RETURNING id, organization_id, brand_id)
        INSERT INTO audit_event (organization_id, brand_id, actor_type, action, subject_type, subject_id, details)
-       SELECT organization_id, brand_id, 'system', 'connection.credentials_restored', 'connection', id, '{}'::jsonb
+       SELECT organization_id, brand_id, 'system', 'connection.credentials_restored', 'connection', id,
+              jsonb_build_object('status', $3::text)
          FROM restored
        RETURNING id`,
-      [c.id, c.organization_id],
+      [c.id, c.organization_id, previous],
     );
     if ((r.rowCount ?? 0) > 0) out.restored++;
   }

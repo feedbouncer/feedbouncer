@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
@@ -110,7 +110,8 @@ describe('reencryptAll', () => {
       dryRun: false,
       batchSize: 10,
       beforeWrite: async () => {
-        await new CredentialStore(pool, ringBoth).put(
+        // Same key as the row being rewrapped: key_id is unchanged, only the blob differs.
+        await new CredentialStore(pool, ringV1).put(
           scopeOf(t),
           'access_token',
           new Secret('refreshed-token-777777777'),
@@ -118,9 +119,51 @@ describe('reencryptAll', () => {
       },
     });
     expect(r.skippedConcurrent).toBe(1);
+    expect(r.rewrapped).toBe(0);
     expect(
       (await new CredentialStore(pool, ringBoth).get(scopeOf(t), 'access_token'))!.value.reveal(),
     ).toBe('refreshed-token-777777777');
+  });
+
+  it('repairs a key_id column that drifted from the blob header and counts it as rewrapped', async () => {
+    await freshDataset(1);
+    const t = tenants[0]!;
+    // Seal under k2, then make the key_id column claim k1. The envelope CHECK forbids that
+    // state, so lift it for the duration of the test and re-add it afterwards.
+    await new CredentialStore(pool, ringBoth).put(
+      scopeOf(t),
+      'access_token',
+      new Secret('sealed-under-k2-0000000'),
+    );
+    const def = (
+      await h.c.query<{ def: string }>(
+        "SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = 'connection_secret_envelope_check'",
+      )
+    ).rows[0]!.def;
+    await h.c.query(
+      'ALTER TABLE connection_secret DROP CONSTRAINT connection_secret_envelope_check',
+    );
+    try {
+      await h.c.query("UPDATE connection_secret SET key_id = 'k1' WHERE connection_id = $1", [
+        t.connectionId,
+      ]);
+      expect((await secretsStatus(pool, ringBoth)).removableKeyIds).toEqual([]);
+      const r = await reencryptAll(pool, ringBoth, { dryRun: false, batchSize: 10 });
+      expect(r).toMatchObject({
+        scanned: 1,
+        rewrapped: 1,
+        skippedConcurrent: 0,
+        remainingOnOldKeys: 0,
+      });
+    } finally {
+      await h.c.query(
+        `ALTER TABLE connection_secret ADD CONSTRAINT connection_secret_envelope_check ${def} NOT VALID`,
+      );
+    }
+    expect((await secretsStatus(pool, ringBoth)).removableKeyIds).toEqual(['k1']);
+    expect(
+      (await new CredentialStore(pool, ringV2).get(scopeOf(t), 'access_token'))!.value.reveal(),
+    ).toBe('sealed-under-k2-0000000');
   });
 
   it('reports unreadable rows without aborting the run and without rewriting them', async () => {
@@ -214,6 +257,78 @@ describe('recheckConnections', () => {
       [tenants.map((t) => t.connectionId)],
     );
     expect(rows[0].n).toBe(2);
+  });
+});
+
+describe('recheckConnections state handling', () => {
+  const flag = (t: Tenant) =>
+    markReconnectRequired(pool, scopeOf(t), new CredentialUnreadableError('unknown_key', 'k1'));
+  const statusOf = async (t: Tenant) =>
+    (
+      await h.c.query('SELECT status, status_reason FROM connection WHERE id = $1', [
+        t.connectionId,
+      ])
+    ).rows[0];
+
+  beforeEach(async () => {
+    await h.c.query(
+      "UPDATE connection SET status = 'active', status_reason = NULL WHERE status = 'reconnect_required'",
+    );
+  });
+
+  it('restores each connection to the status it had before it was flagged', async () => {
+    await freshDataset(3);
+    const before = ['paused', 'active', 'error'] as const;
+    for (const [i, t] of tenants.entries()) {
+      await h.c.query('UPDATE connection SET status = $2 WHERE id = $1', [
+        t.connectionId,
+        before[i],
+      ]);
+      expect(await flag(t)).toBe(true);
+    }
+    expect(await recheckConnections(pool, ringV1, { dryRun: false })).toMatchObject({
+      checked: 3,
+      restored: 3,
+      stillUnreadable: 0,
+      noCredentials: 0,
+      unknownPreviousStatus: 0,
+    });
+    for (const [i, t] of tenants.entries()) {
+      expect(await statusOf(t)).toEqual({ status: before[i], status_reason: null });
+    }
+  });
+
+  it('leaves a connection flagged when its previous status was never recorded', async () => {
+    await freshDataset(1);
+    const t = tenants[0]!;
+    // Flagged without going through markReconnectRequired: no audit event, no previous status.
+    await h.c.query(
+      "UPDATE connection SET status = 'reconnect_required', status_reason = 'credential_unknown_key' WHERE id = $1",
+      [t.connectionId],
+    );
+    expect(await recheckConnections(pool, ringV1, { dryRun: false })).toMatchObject({
+      checked: 1,
+      restored: 0,
+      unknownPreviousStatus: 1,
+    });
+    expect(await statusOf(t)).toEqual({
+      status: 'reconnect_required',
+      status_reason: 'credential_unknown_key',
+    });
+  });
+
+  it('leaves a flagged connection with no stored credentials flagged and counts it separately', async () => {
+    await freshDataset(1);
+    const t = tenants[0]!;
+    await flag(t);
+    await h.c.query('DELETE FROM connection_secret WHERE connection_id = $1', [t.connectionId]);
+    expect(await recheckConnections(pool, ringV1, { dryRun: false })).toMatchObject({
+      checked: 1,
+      restored: 0,
+      stillUnreadable: 0,
+      noCredentials: 1,
+    });
+    expect((await statusOf(t)).status).toBe('reconnect_required');
   });
 });
 

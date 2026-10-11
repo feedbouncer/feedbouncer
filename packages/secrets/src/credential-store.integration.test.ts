@@ -179,7 +179,10 @@ describe('markReconnectRequired', () => {
       [t.connectionId],
     );
     expect(audit).toEqual([
-      { actor_type: 'system', details: { reason: 'unknown_key', keyId: 'k0' } },
+      {
+        actor_type: 'system',
+        details: { reason: 'unknown_key', keyId: 'k0', previousStatus: 'active' },
+      },
     ]);
   });
 
