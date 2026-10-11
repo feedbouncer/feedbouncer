@@ -51,7 +51,7 @@ async function resetLinkToken(email: string) {
   });
   await flush();
   const link = extractFirstUrl(api.mailer.lastTo(email)!.text)!;
-  return /reset-password\/([^?]+)/.exec(link)![1]!;
+  return new URL(link).searchParams.get('token')!;
 }
 
 const getSession = (cookie: string) => auth.api.getSession({ headers: new Headers({ cookie }) });

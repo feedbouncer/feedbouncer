@@ -47,9 +47,9 @@ async function expectError(res, status, code, what) {
   if (body?.error?.code !== code) fail(`${what}: expected error code ${code}`);
 }
 
-async function mailLink(to) {
+async function mailLink(to, subject) {
   for (let i = 0; i < 40; i += 1) {
-    const q = encodeURIComponent(`to:${to}`);
+    const q = encodeURIComponent(`to:${to} subject:"${subject}"`);
     const list = await (await fetch(`${MAILPIT}/api/v1/search?query=${q}`)).json();
     if (list.messages?.length) {
       const msg = await (await fetch(`${MAILPIT}/api/v1/message/${list.messages[0].ID}`)).json();
@@ -76,7 +76,7 @@ res = await post('/api/v1/orgs', { name: 'Smoke Org', brandName: 'Smoke Brand' }
 await expectError(res, 403, 'email_not_verified', 'unverified user cannot create an organization');
 
 // The link in the email points at PUBLIC_WEB_URL; follow its path through the web origin.
-const verify = await mailLink(email);
+const verify = await mailLink(email, 'Confirm your email');
 res = await request(`${verify.pathname}${verify.search}`);
 expectStatus(res, 302, 'verification link redirects');
 if (res.headers.get('location') !== '/verified') fail('verification did not succeed');
@@ -105,5 +105,25 @@ res = await post('/api/auth/sign-out', {}, cookie);
 expectStatus(res, 200, 'sign-out');
 res = await request('/api/v1/me', { cookie });
 expectStatus(res, 401, 'signed-out session no longer works');
+
+// Forgot password: the emailed link opens the web reset page, which posts its token.
+res = await post('/api/auth/request-password-reset', { email });
+expectStatus(res, 200, 'password reset requested');
+const reset = await mailLink(email, 'Reset your');
+if (reset.origin !== new URL(ORIGIN).origin || reset.pathname !== '/reset-password') {
+  fail('reset link is not the web reset page');
+}
+const resetToken = reset.searchParams.get('token');
+if (!resetToken) fail('reset link carries no token');
+res = await request(`${reset.pathname}${reset.search}`);
+expectStatus(res, 200, 'reset link opens the reset page');
+if (!(await res.text()).includes('Choose a new password')) fail('reset page shows no form');
+const newPassword = 'a different smoke passphrase 43';
+res = await post('/api/auth/reset-password', { token: resetToken, newPassword });
+expectStatus(res, 200, 'password reset with the emailed token');
+res = await post('/api/auth/sign-in/email', { email, password });
+await expectError(res, 401, 'invalid_credentials', 'old password no longer signs in');
+res = await post('/api/auth/sign-in/email', { email, password: newPassword });
+expectStatus(res, 200, 'new password signs in');
 
 console.log('auth smoke: ok');

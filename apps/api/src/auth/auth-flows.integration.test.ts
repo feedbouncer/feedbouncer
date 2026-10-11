@@ -209,7 +209,7 @@ describe('password change and reset', () => {
     await api.req('POST', '/api/auth/request-password-reset', { body: { email: 'rstemo@x.test' } });
     await tick();
     const link = extractFirstUrl(api.mailer.lastTo('rstemo@x.test')!.text)!;
-    const token = /reset-password\/([^?]+)/.exec(link)![1]!;
+    const token = new URL(link).searchParams.get('token')!;
     const r = await api.req('POST', '/api/auth/reset-password', {
       body: { token, newPassword: EMOJI_PASSPHRASE },
     });
@@ -229,7 +229,7 @@ describe('password change and reset', () => {
     expect(unknown.body).toEqual(known.body);
     await tick();
     const link = extractFirstUrl(api.mailer.lastTo('rst@x.test')!.text)!;
-    const token = /reset-password\/([^?]+)/.exec(link)![1]!;
+    const token = new URL(link).searchParams.get('token')!;
     const ok = await api.req('POST', '/api/auth/reset-password', {
       body: { token, newPassword: 'reset to this long phrase 8' },
     });

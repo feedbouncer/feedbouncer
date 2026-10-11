@@ -162,7 +162,14 @@ export function createAuth(deps: AppDeps, emails: AuthEmails, hooks: AuthHooks) 
       maxPasswordLength: 4 * 128,
       resetPasswordTokenExpiresIn: 3_600,
       revokeSessionsOnPasswordReset: true,
-      sendResetPassword: async ({ user, url }) => emails.passwordReset(user.email, url),
+      // Better Auth's own `url` is its GET /api/auth/reset-password/<token>
+      // redirect endpoint, which the proxy does not expose. Link straight to
+      // the web page that posts the token to POST /api/auth/reset-password.
+      sendResetPassword: async ({ user, token }) =>
+        emails.passwordReset(
+          user.email,
+          `${web}/reset-password?${new URLSearchParams({ token }).toString()}`,
+        ),
     },
     emailVerification: {
       sendOnSignUp: true,

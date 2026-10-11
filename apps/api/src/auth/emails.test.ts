@@ -22,7 +22,7 @@ describe('createAuthEmails', () => {
     const mailer = new MemoryMailer();
     const { emails } = setup(mailer);
     emails.verify('a@x.test', `${WEB}/api/auth/verify-email?token=v1`);
-    emails.passwordReset('b@x.test', `${WEB}/api/auth/reset-password/r1`);
+    emails.passwordReset('b@x.test', `${WEB}/reset-password?token=r1`);
     emails.accountExists('c@x.test');
     emails.invitation('d@x.test', {
       organizationName: 'Acme',
@@ -32,7 +32,7 @@ describe('createAuthEmails', () => {
     });
     await flush();
     expect(mailer.lastTo('a@x.test')!.text).toContain(`${WEB}/api/auth/verify-email?token=v1`);
-    expect(mailer.lastTo('b@x.test')!.text).toContain(`${WEB}/api/auth/reset-password/r1`);
+    expect(mailer.lastTo('b@x.test')!.text).toContain(`${WEB}/reset-password?token=r1`);
     expect(mailer.lastTo('c@x.test')!.text).toContain(`${WEB}/login`);
     expect(mailer.lastTo('c@x.test')!.text).toContain(`${WEB}/forgot-password`);
     const invite = mailer.lastTo('d@x.test')!;
@@ -51,7 +51,7 @@ describe('createAuthEmails', () => {
     };
     const { emails, lines } = setup(failing);
     expect(() =>
-      emails.passwordReset('b@x.test', `${WEB}/api/auth/reset-password/SECRET1`),
+      emails.passwordReset('b@x.test', `${WEB}/reset-password?token=SECRET1`),
     ).not.toThrow();
     release();
     await flush();

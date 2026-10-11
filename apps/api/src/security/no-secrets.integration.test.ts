@@ -100,9 +100,8 @@ describe('no secrets in responses or logs', () => {
     // Password reset: the token is only in the email and in the reset request.
     await call('POST', '/api/auth/request-password-reset', { body: { email: 'sec@x.test' } });
     const resetUrl = await linkFrom('sec@x.test', RESET_SUBJECT);
-    // Better Auth puts the reset token in the last path segment of the link.
-    const resetSegment = /\/reset-password\/([^/?#]+)$/.exec(resetUrl.pathname)?.[1];
-    const resetToken = secret('reset token', resetSegment);
+    // The link is the web reset page with the token in its query string.
+    const resetToken = secret('reset token', queryToken(resetUrl));
     const reset = await call('POST', '/api/auth/reset-password', {
       body: { token: resetToken, newPassword: NEW_PASSWORD },
     });

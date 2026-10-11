@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { extractFirstUrl } from '@feedbouncer/mailer/testing';
 import {
   PASSWORD,
+  WEB,
   login,
   signUpAndVerify,
   startTestApi,
@@ -56,6 +57,41 @@ describe('email verification', () => {
     const mails = api.mailer.sent.filter((m) => m.to === 'sv@x.test');
     expect(mails.length).toBe(before + 1);
     expect(JSON.stringify(mails.at(-1))).not.toContain('evil.test');
+  });
+});
+
+describe('emailed links', () => {
+  it('the emailed reset link is the web reset page carrying the token, and that token resets the password', async () => {
+    await signUpAndVerify(api, 'rstlink@x.test');
+    await api.req('POST', '/api/auth/request-password-reset', {
+      body: { email: 'rstlink@x.test' },
+    });
+    await tick();
+    const link = new URL(extractFirstUrl(api.mailer.lastTo('rstlink@x.test')!.text)!);
+    expect(link.origin).toBe(WEB);
+    expect(link.pathname).toBe('/reset-password');
+    expect([...link.searchParams.keys()]).toEqual(['token']);
+    const token = link.searchParams.get('token')!;
+    expect(token).toMatch(/^[A-Za-z0-9_-]{16,}$/);
+    const r = await api.req('POST', '/api/auth/reset-password', {
+      body: { token, newPassword: 'reset through the emailed link 7' },
+    });
+    expect(r.status).toBe(200);
+    await login(api, 'rstlink@x.test', 'reset through the emailed link 7');
+  });
+
+  it('the emailed verification link is a web-origin URL the proxy serves', async () => {
+    const r = await api.req('POST', '/api/v1/auth/sign-up', {
+      body: { email: 'vlink@x.test', password: PASSWORD, name: 'V' },
+    });
+    expect(r.status).toBe(202);
+    await tick();
+    const link = new URL(extractFirstUrl(api.mailer.lastTo('vlink@x.test')!.text)!);
+    expect(link.origin).toBe(WEB);
+    expect(link.pathname).toBe('/api/auth/verify-email');
+    const v = await api.req('GET', `${link.pathname}${link.search}`);
+    expect(v.status).toBe(302);
+    expect(v.headers.location).toBe('/verified');
   });
 });
 
