@@ -13,6 +13,7 @@ const actionText = await read('.github/actions/setup/action.yml');
 const workflow = parse(workflowText);
 const action = parse(actionText);
 const jobs = Object.entries(workflow.jobs);
+const pkg = JSON.parse(await read('package.json'));
 
 function allSteps() {
   return [...jobs.flatMap(([, job]) => job.steps ?? []), ...action.runs.steps];
@@ -143,6 +144,32 @@ test('database migrations check runs on a fresh Postgres 17 service with a stabl
   assert.match(String(job.services.postgres.env?.POSTGRES_PASSWORD), /^dev-only-/);
   const runs = job.steps.map((s) => s.run ?? '').join('\n');
   assert.match(runs, /migrate:deploy[\s\S]*migrate:deploy/, 'applies twice (idempotency)');
-  assert.match(runs, /migrate:down --yes-destroy-data[\s\S]*migrate:deploy/, 'rolls back and re-applies');
+  assert.match(
+    runs,
+    /migrate:down --yes-destroy-data[\s\S]*migrate:deploy/,
+    'rolls back and re-applies',
+  );
   assert.match(runs, /test:integration/);
+});
+
+test('API integration runs against Postgres 17 and Redis services with a stable name', () => {
+  const job = workflow.jobs['api-integration'];
+  assert.equal(job?.name, 'API integration');
+  assert.equal(job.services?.postgres?.image, 'postgres:17-alpine');
+  assert.match(String(job.services.postgres.env?.POSTGRES_PASSWORD), /^dev-only-/);
+  assert.match(String(job.services?.redis?.image), /^redis:/);
+  assert.match(String(job.env?.REDIS_URL), /^redis:\/\/127\.0\.0\.1:/);
+  const runs = job.steps.map((s) => s.run ?? '').join('\n');
+  assert.match(runs, /@feedbouncer\/api test:integration/);
+});
+
+test('compose smoke runs the auth smoke after the lifecycle smoke and before teardown', () => {
+  const steps = workflow.jobs['compose-smoke'].steps;
+  const at = (needle) => steps.findIndex((s) => s.run?.includes(needle));
+  const lifecycle = at('scripts/dev-stack/smoke.mjs');
+  const auth = at('pnpm stack:auth-smoke');
+  assert.ok(lifecycle >= 0 && auth > lifecycle, 'auth smoke runs after the lifecycle smoke');
+  assert.ok(auth < steps.length - 1, 'auth smoke runs before teardown');
+  assert.ok(!steps[auth].env?.COMPOSE_FILE);
+  assert.equal(pkg.scripts['stack:auth-smoke'], 'node scripts/dev-stack/auth-smoke.mjs');
 });

@@ -135,6 +135,7 @@ services:
     volumes:
       - ./apps/api/src:/repo/apps/api/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
+      - ./packages/authz/src:/repo/packages/authz/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
     depends_on:

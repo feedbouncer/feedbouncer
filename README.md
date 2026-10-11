@@ -2,7 +2,7 @@
 
 ## Local stack with Docker Compose
 
-Runs everything locally: Postgres, Redis, the API, the background worker and the web app. **This stack is for development and evaluation only.** It is not a production deployment.
+Runs everything locally: Postgres, Redis, the API, the background worker, the web app and Mailpit (a dev mail inbox). **This stack is for development and evaluation only.** It is not a production deployment.
 
 ### Prerequisites
 
@@ -19,15 +19,24 @@ docker compose up
 
 The first run builds the images, which takes a few minutes. Then:
 
-| What                 | Where                                                                   |
-| -------------------- | ----------------------------------------------------------------------- |
-| Web app              | http://localhost:3000                                                   |
-| API health           | http://localhost:3001/healthz (reports Postgres and Redis)              |
-| Status of everything | `docker compose ps -a`: five services `healthy`, `migrate` `exited (0)` |
+| What                 | Where                                                                  |
+| -------------------- | ---------------------------------------------------------------------- |
+| Web app              | http://localhost:3000                                                  |
+| API health           | http://localhost:3001/healthz (reports Postgres and Redis)             |
+| Dev mail inbox       | http://127.0.0.1:8025 (Mailpit; confirmation and reset emails)         |
+| Status of everything | `docker compose ps -a`: six services `healthy`, `migrate` `exited (0)` |
 
 Database migrations run automatically in the one-shot `migrate` service before the API and worker start. Running it again is harmless. To roll back, create, or test migrations, see [packages/db/README.md](packages/db/README.md).
 
 Source files in `apps/*/src` and `packages/*/src` are mounted into the containers. Edits reload automatically, with no rebuild needed. The API and worker use file polling, so a change can take a second or two to show up.
+
+### Accounts and email
+
+Sign-up, email confirmation, password reset and invitations send real emails. In the dev stack they all go to **Mailpit**, so open http://127.0.0.1:8025 to find the confirmation link after signing up. Nothing leaves your machine. Mailpit's web UI has no authentication and is for development only: it is bound to `127.0.0.1` by default (`FB_BIND_ADDRESS`), so do not expose it to a network. Its port is `MAILPIT_UI_HOST_PORT`.
+
+- **`AUTH_SECRET`** signs session cookies and is required (at least 32 characters). `.env.example` has a development-only value; for anything else generate one with `openssl rand -base64 48`.
+- **`PUBLIC_WEB_URL`** is set by compose to `http://localhost:<WEB_HOST_PORT>`. It must be the exact origin users type: cookies, the origin check on state-changing requests and the links in emails all depend on it. Browse the app as `localhost`, not `127.0.0.1`.
+- API settings such as `TRUST_PROXY_HOPS` (reverse proxies trusted for the client IP) and `MAIL_FROM`, plus the roles, routes and rate limits, are described in [apps/api/README.md](apps/api/README.md).
 
 ### Stop, restart, reset
 
@@ -69,6 +78,8 @@ A Postgres-backed idempotency ledger (`processed_job`) refuses duplicate deliver
 
 Maintainers can run the full end-to-end check with `pnpm stack:smoke --yes-destroy-local-data`. It runs in its own Compose project (`feedbouncer-smoke`) on its own ports (23000 and 23001) and uses `compose.yaml` only, so it does not touch your dev stack. It still **deletes the smoke project's database volume**, and it reads the credentials from `.env`.
 
+With a stack running, `pnpm stack:auth-smoke` exercises sign-up, email confirmation (read from Mailpit), login, organization creation and the cross-site and forged-cookie refusals through the web origin. It targets `http://127.0.0.1:3000` and Mailpit on `8025`; if you changed `WEB_HOST_PORT` or `MAILPIT_UI_HOST_PORT`, export the same values first. It creates a throwaway account, so run it against development stacks only.
+
 ## Development
 
 This is a pnpm workspace orchestrated by [Turborepo](https://turborepo.com).
@@ -100,6 +111,7 @@ pnpm install
 | `pnpm db:migration:new <name>`                    | Scaffolds a migration directory with `migration.sql` and `down.sql`                                     |
 | `pnpm db:status`                                  | Shows which migrations are applied                                                                      |
 | `pnpm --filter @feedbouncer/api test:integration` | API tests against real services (needs `DATABASE_URL` with rights to create databases, and `REDIS_URL`) |
+| `pnpm stack:auth-smoke`                           | End-to-end auth smoke against a running Compose stack (see above)                                       |
 
 Turborepo caches the per-package `build`, `lint`, `format:check`, `typecheck` and `test` tasks — an unchanged package's task is skipped on a re-run. The root-level `eslint .` and `prettier --check` steps (root config files only) run every time, as does `pnpm format`, which writes files.
 
@@ -114,7 +126,7 @@ Every pull request and every push to `main` runs `.github/workflows/ci.yml` on a
 | `Database migrations` | `prisma migrate deploy` twice, `migrate:down` + re-deploy, then `test:integration`, on a fresh `postgres:17-alpine` service                          | see packages/db/README.md                                                                                                      |
 | `Docker build`        | Builds (never pushes) each `apps/*/Dockerfile` and `packages/*/Dockerfile` from the repo root. Green with a "nothing to build" note when none exist. | `node scripts/ci/docker-targets.mjs`, then for each: `docker build -f <dockerfile> --build-arg NODE_VERSION="$(cat .nvmrc)" .` |
 
-Two more jobs cover the dev stack: `Compose config` (static validation of the compose files, including the missing-`.env` error) and `Compose smoke` (the full lifecycle in `scripts/dev-stack/smoke.mjs`; run it locally with `pnpm stack:smoke --yes-destroy-local-data`). Mark `Compose config` **required** together with the four names above, and keep `Compose smoke` non-required until it has been stable for about 10 PRs. These names are stable, so don't rename them without updating branch protection. `Docker discover` and `Docker image (…)` are helper jobs; don't mark them required. Renaming a check is a breaking change: update branch protection in the same PR, and `scripts/ci/workflow.test.mjs` will remind you.
+Three more jobs: `Compose config` (static validation of the compose files, including the missing-`.env` error), `API integration` (the API's integration tests, including tenant isolation, against Postgres and Redis service containers) and `Compose smoke` (the full lifecycle in `scripts/dev-stack/smoke.mjs`, then the auth smoke; run them locally with `pnpm stack:smoke --yes-destroy-local-data` and `pnpm stack:auth-smoke`). Mark `Compose config` **required** together with the four names above, and keep `API integration` and `Compose smoke` non-required until it has been stable for about 10 PRs. These names are stable, so don't rename them without updating branch protection. `Docker discover` and `Docker image (…)` are helper jobs; don't mark them required. Renaming a check is a breaking change: update branch protection in the same PR, and `scripts/ci/workflow.test.mjs` will remind you.
 
 - **Adding a test:** give your package a `"test": "vitest run"` script (copy `packages/placeholder`) and put tests in `src/**/*.test.ts` (the package build excludes them via `tsconfig.build.json`). CI picks it up automatically.
 - **Adding an image:** add `Dockerfile` to `apps/<name>/` or `packages/<name>/`, using `apps/placeholder-app/Dockerfile` as the template: build context is the repo root, `ARG NODE_VERSION`, and never read `.env` or prebuilt `dist/`. No workflow edit needed.
