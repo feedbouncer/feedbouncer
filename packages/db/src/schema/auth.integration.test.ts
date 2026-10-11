@@ -1,5 +1,7 @@
+import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migratedDb, seedTenant, uuid } from '../testing/fixtures.js';
+import { isOwnerRequiredViolation } from '../pg-errors.js';
 import { expectPgError } from '../testing/pg-error.js';
 
 let ctx: Awaited<ReturnType<typeof migratedDb>>;
@@ -101,6 +103,49 @@ describe('last-owner trigger', () => {
   });
 });
 
+describe('last-owner trigger under concurrency', () => {
+  it('lets only one of two concurrent owner removals commit', async () => {
+    const a = await ctx.db.client();
+    const b = await ctx.db.client();
+    try {
+      for (const c of [a, b]) await c.query("SET statement_timeout = '20s'");
+      // The race window is narrow, so repeat it. Without the organization row
+      // lock in fb_require_org_owner, at least one round ends with no owner.
+      for (let round = 0; round < 25; round++) {
+        const t = await seedTenant(ctx.c, `lo-race-${round}`);
+        const second = (
+          await ctx.c.query('INSERT INTO app_user (email) VALUES ($1) RETURNING id', [
+            `race-${uuid()}@x.test`,
+          ])
+        ).rows[0].id as string;
+        await ctx.c.query(
+          "INSERT INTO membership (organization_id, user_id, role) VALUES ($1, $2, 'owner')",
+          [t.organizationId, second],
+        );
+        await a.query('BEGIN');
+        await b.query('BEGIN');
+        await a.query('DELETE FROM membership WHERE organization_id = $1 AND user_id = $2', [
+          t.organizationId,
+          t.userId,
+        ]);
+        await b.query(
+          "UPDATE membership SET role = 'member' WHERE organization_id = $1 AND user_id = $2",
+          [t.organizationId, second],
+        );
+        const results = await Promise.allSettled([a.query('COMMIT'), b.query('COMMIT')]);
+        for (const c of [a, b]) await c.query('ROLLBACK');
+        const rejected = results.filter((r) => r.status === 'rejected');
+        expect(rejected).toHaveLength(1);
+        expect(isOwnerRequiredViolation((rejected[0] as PromiseRejectedResult).reason)).toBe(true);
+        expect(await ownerCount(t.organizationId)).toBe(1);
+      }
+    } finally {
+      await a.end();
+      await b.end();
+    }
+  });
+});
+
 describe('brand names', () => {
   it('are unique per organization, case- and whitespace-insensitively, among active brands', async () => {
     const t = await seedTenant(ctx.c, 'bn1');
@@ -135,7 +180,7 @@ describe('brand names', () => {
 });
 
 describe('invitation', () => {
-  const hash = () => Buffer.alloc(32, Math.floor(Math.random() * 255));
+  const hash = () => randomBytes(32);
   it('allows one pending invite per (organization, email)', async () => {
     const t = await seedTenant(ctx.c, 'inv1');
     const ins = () =>

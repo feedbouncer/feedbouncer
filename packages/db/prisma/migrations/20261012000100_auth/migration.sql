@@ -127,10 +127,20 @@ CREATE UNIQUE INDEX brand_organization_id_name_key ON brand (organization_id, lo
 -- search_path is pinned.
 CREATE FUNCTION fb_require_org_owner() RETURNS trigger LANGUAGE plpgsql
 SET search_path = pg_catalog, pg_temp AS $$
+DECLARE
+  locked uuid;
 BEGIN
-  IF EXISTS (SELECT 1 FROM public.organization o WHERE o.id = OLD.organization_id)
-     AND NOT EXISTS (SELECT 1 FROM public.membership m
-                      WHERE m.organization_id = OLD.organization_id AND m.role = 'owner') THEN
+  -- Serialize concurrent owner changes per organization. Under READ COMMITTED
+  -- the owner check below runs after the lock is granted, so it sees the
+  -- result of any transaction that committed first. No row means the
+  -- organization is gone (deleted in this or another transaction).
+  SELECT o.id INTO locked FROM public.organization o
+   WHERE o.id = OLD.organization_id FOR NO KEY UPDATE;
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.membership m
+                  WHERE m.organization_id = OLD.organization_id AND m.role = 'owner') THEN
     RAISE EXCEPTION 'organization % must keep at least one owner', OLD.organization_id
       USING ERRCODE = 'check_violation', CONSTRAINT = 'membership_owner_required';
   END IF;
