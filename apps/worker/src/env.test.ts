@@ -1,3 +1,4 @@
+import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { EnvError } from '@feedbouncer/service-runtime';
 import { randomKeyEntry } from '@feedbouncer/secrets/testing';
@@ -59,5 +60,20 @@ describe('loadWorkerEnv', () => {
     const msg = messageOf(() => load({ ...without('FB_ENV'), DATABASE_URL: dbUrl }));
     expect(msg).toMatch(/DATABASE_URL is set to a documented example value/);
     expect(msg).not.toContain('dev-only-postgres-password');
+  });
+  it('a whole-config dump contains no connection passwords or key material', () => {
+    const entry = randomKeyEntry('k1');
+    const env = load({
+      ...base,
+      DATABASE_URL: 'postgresql://u:sentinel-db-pw-123@db:5432/x',
+      REDIS_URL: 'redis://:sentinel-redis-pw-456@redis:6379/0',
+      FB_ENCRYPTION_KEYS: entry,
+    });
+    const material = entry.slice(3);
+    for (const out of [JSON.stringify(env), inspect(env, { depth: 10, showHidden: true })]) {
+      for (const s of ['sentinel-db-pw-123', 'sentinel-redis-pw-456', material])
+        expect(out).not.toContain(s);
+    }
+    expect(env.databaseUrl.password).toBe('sentinel-db-pw-123');
   });
 });

@@ -97,7 +97,8 @@ test('.env.example covers every referenced variable, with dev-only credentials',
   // Only the two encryption variables may use the dev-example prefix.
   const ENCRYPTION_VARS = new Set(['FB_ENCRYPTION_KEYS', 'FB_ENCRYPTION_ACTIVE_KEY_ID']);
   for (const [name, { value, commented }] of entries) {
-    if (commented) continue; // commented examples (e.g. *_FILE paths) are not values
+    // Only commented <NAME>_FILE path examples are exempt; other commented lines are still checked.
+    if (commented && /_FILE$/.test(name)) continue;
     if (ENCRYPTION_VARS.has(name)) {
       assert.match(value, /^dev-example(:|$)/, `${name} must be the dev-example key`);
     } else if (/PASSWORD|SECRET|TOKEN|KEY/.test(name)) {
@@ -274,4 +275,10 @@ test('local env and override files are git-ignored; the examples are not', async
   assert.equal(await ignored('compose.override.yaml'), true);
   assert.equal(await ignored('.env.example'), false);
   assert.equal(await ignored('compose.override.example.yaml'), false);
+});
+
+test('FB_ENV is explicit in .env.example and never silently defaults to development in compose', () => {
+  assert.equal(envEntries().get('FB_ENV')?.value, 'development');
+  assert.ok(!/\$\{FB_ENV:-development\}/.test(composeText));
+  assert.match(composeText, /FB_ENV: \$\{FB_ENV:-production\}/);
 });

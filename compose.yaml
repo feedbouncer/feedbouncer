@@ -12,7 +12,7 @@ x-backend-env: &backend-env
 
 # Only the services that touch credentials get the encryption keys (not migrate).
 x-secrets-env: &secrets-env
-  FB_ENV: ${FB_ENV:-development}
+  FB_ENV: ${FB_ENV:-production}
   FB_ENCRYPTION_KEYS: ${FB_ENCRYPTION_KEYS:?FB_ENCRYPTION_KEYS is not set - copy .env.example to .env}
   FB_ENCRYPTION_ACTIVE_KEY_ID: ${FB_ENCRYPTION_ACTIVE_KEY_ID:?FB_ENCRYPTION_ACTIVE_KEY_ID is not set - copy .env.example to .env}
 

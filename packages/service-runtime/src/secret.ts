@@ -43,3 +43,19 @@ export class Secret {
     return `Secret(${REDACTED})`;
   }
 }
+
+/**
+ * Makes JSON.stringify and util.inspect of a whole config object print only
+ * `summary` (which must hold no secret-bearing field). The fields themselves
+ * stay readable to code: the hooks are non-enumerable own properties.
+ */
+export function redactOnSerialize<T extends object>(
+  config: T,
+  summary: Record<string, unknown>,
+): T {
+  Object.defineProperties(config, {
+    toJSON: { value: () => summary, enumerable: false },
+    [inspect.custom]: { value: () => summary, enumerable: false },
+  });
+  return config;
+}

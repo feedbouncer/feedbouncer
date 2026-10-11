@@ -39,7 +39,7 @@ describe('loadApiEnv', () => {
     expect(env.logLevel).toBe('info');
     expect(env.databaseUrl.hostname).toBe('postgres');
     expect(env.redisUrl.hostname).toBe('redis');
-    expect(env.authSecret).toBe(SECRET);
+    expect(env.authSecret.reveal()).toBe(SECRET);
     expect(env.publicWebUrl.origin).toBe('http://localhost:3000');
     expect(env.smtpUrl.hostname).toBe('mailpit');
     expect(env.mailFrom).toBe('FeedBouncer <no-reply@localhost>');
@@ -67,7 +67,7 @@ describe('loadApiEnv', () => {
       const msg = messageOf(() => load({ ...base, AUTH_SECRET: short }));
       expect(msg).toMatch(/AUTH_SECRET must be at least 32 characters/);
       expect(msg).not.toContain(short);
-      expect(load({ ...base, AUTH_SECRET: 'x'.repeat(32) }).authSecret).toHaveLength(32);
+      expect(load({ ...base, AUTH_SECRET: 'x'.repeat(32) }).authSecret.reveal()).toHaveLength(32);
     });
   });
 
@@ -196,7 +196,7 @@ describe('secrets configuration', () => {
       },
       { warn: () => {}, fs },
     );
-    expect(env.authSecret).toBe(SECRET);
+    expect(env.authSecret.reveal()).toBe(SECRET);
     expect(env.encryption.activeKeyId).toBe('k1');
   });
 });

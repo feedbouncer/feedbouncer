@@ -127,11 +127,11 @@ describe('no secrets in responses or logs', () => {
       inviteHashBase64Url: inviteHash.toString('base64url'),
       resetToken,
       verificationToken,
-      authSecret: api.deps.env.authSecret,
+      authSecret: api.deps.env.authSecret.reveal(),
       databaseUrl: String(api.deps.env.databaseUrl),
       redisUrl: api.deps.env.redisUrl.href,
       smtpUrl: api.deps.env.smtpUrl.href,
-      authSecretDigest: createHash('sha256').update(api.deps.env.authSecret).digest('hex'),
+      authSecretDigest: createHash('sha256').update(api.deps.env.authSecret.reveal()).digest('hex'),
     };
 
     // Set-Cookie is the one place a session token legitimately travels, as the cookie itself.

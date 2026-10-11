@@ -10,7 +10,7 @@ import { createPool } from '@feedbouncer/db';
 import { migratedDb } from '@feedbouncer/db/testing';
 import { extractFirstUrl, MemoryMailer } from '@feedbouncer/mailer/testing';
 import { testKeyring } from '@feedbouncer/secrets/testing';
-import { createLogger } from '@feedbouncer/service-runtime';
+import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { buildApp } from '../app.factory.js';
 import type { AppDeps } from '../deps.js';
 import type { ApiEnv } from '../env.js';
@@ -58,7 +58,7 @@ export async function startTestApi(overrides: Partial<ApiEnv> = {}): Promise<Tes
     redisUrl: new URL(redisRaw),
     port: 0,
     logLevel: 'error',
-    authSecret: 'test-only-auth-secret-0123456789abcdef',
+    authSecret: new Secret('test-only-auth-secret-0123456789abcdef'),
     publicWebUrl: new URL(WEB),
     smtpUrl: new URL('smtp://127.0.0.1:1'),
     mailFrom: 'FeedBouncer <no-reply@localhost>',

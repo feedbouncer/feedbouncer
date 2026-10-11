@@ -7,6 +7,7 @@ import {
   readEnum,
   readInt,
   readUrl,
+  redactOnSerialize,
   resolveFileEnv,
   type AppEnv,
   type Env,
@@ -38,7 +39,7 @@ export function loadWorkerEnv(
   const redisUrl = readUrl(env, 'REDIS_URL', REDIS_PROTOCOLS);
   checkNotPlaceholder(appEnv, 'DATABASE_URL', databaseUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);
-  return {
+  const config: WorkerEnv = {
     appEnv,
     databaseUrl,
     redisUrl,
@@ -47,4 +48,12 @@ export function loadWorkerEnv(
     logLevel: readEnum(env, 'LOG_LEVEL', LOG_LEVELS, 'info'),
     encryption: loadEncryptionKeyring(env, appEnv, opts.warn),
   };
+  // A whole-config dump (JSON, util.inspect) must never carry URL passwords or keys.
+  return redactOnSerialize(config, {
+    appEnv,
+    concurrency: config.concurrency,
+    healthPort: config.healthPort,
+    logLevel: config.logLevel,
+    activeEncryptionKeyId: config.encryption.activeKeyId,
+  });
 }

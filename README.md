@@ -17,6 +17,8 @@ cp .env.example .env
 docker compose up
 ```
 
+`.env` sets `FB_ENV=development`, which is what lets the API and worker start with the documented example credentials. Compose defaults to `production` when `FB_ENV` is unset, and production refuses example values, so keep that line when you edit `.env`.
+
 The first run builds the images, which takes a few minutes. Then:
 
 | What                 | Where                                                                  |

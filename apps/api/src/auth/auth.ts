@@ -131,7 +131,7 @@ export function createAuth(deps: AppDeps, emails: AuthEmails, hooks: AuthHooks) 
     appName: 'FeedBouncer',
     baseURL: web,
     basePath: '/api/auth',
-    secret: deps.env.authSecret,
+    secret: deps.env.authSecret.reveal(),
     database: (options: BetterAuthOptions) => {
       const adapter = getAdapter({ ...options, database: deps.pool });
       adapter.catch(() => {}); // surfaced by the first query that awaits it

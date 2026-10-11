@@ -7,9 +7,11 @@ import {
   readAppEnv,
   readEnum,
   readInt,
+  Secret,
   readSecret,
   readString,
   readUrl,
+  redactOnSerialize,
   resolveFileEnv,
   type AppEnv,
   type Env,
@@ -36,7 +38,7 @@ export interface ApiEnv {
   readonly port: number;
   readonly logLevel: LogLevel;
   /** Signs session cookies. Never log it. */
-  readonly authSecret: string;
+  readonly authSecret: Secret;
   /** Origin of the web app: the only allowed Origin for state-changing requests. */
   readonly publicWebUrl: URL;
   readonly smtpUrl: URL;
@@ -68,13 +70,13 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
   checkNotPlaceholder(appEnv, 'DATABASE_URL', databaseUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'AUTH_SECRET', authSecret, opts.warn);
-  return {
+  const config: ApiEnv = {
     appEnv,
     databaseUrl,
     redisUrl,
     port: readInt(env, 'PORT', { min: 1, max: 65_535, fallback: 3001 }),
     logLevel: readEnum(env, 'LOG_LEVEL', LOG_LEVELS, 'info'),
-    authSecret,
+    authSecret: new Secret(authSecret),
     publicWebUrl,
     smtpUrl,
     mailFrom: readString(env, 'MAIL_FROM', {
@@ -85,4 +87,13 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     trustProxyHops: readInt(env, 'TRUST_PROXY_HOPS', { min: 0, max: 5, fallback: 0 }),
     encryption: loadEncryptionKeyring(env, appEnv, opts.warn),
   };
+  // A whole-config dump (JSON, util.inspect) must never carry secrets or URL passwords.
+  return redactOnSerialize(config, {
+    appEnv,
+    port: config.port,
+    logLevel: config.logLevel,
+    publicWebUrl: publicWebUrl.origin,
+    trustProxyHops: config.trustProxyHops,
+    activeEncryptionKeyId: config.encryption.activeKeyId,
+  });
 }
