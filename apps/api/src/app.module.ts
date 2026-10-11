@@ -9,6 +9,8 @@ import { SignUpController } from './auth/sign-up.controller.js';
 import { BrandsController } from './brands/brands.controller.js';
 import { BrandsService } from './brands/brands.service.js';
 import { HealthController } from './http/health.controller.js';
+import { MembersController } from './members/members.controller.js';
+import { MembersService } from './members/members.service.js';
 import { MeController } from './me/me.controller.js';
 import { OrgController, OrgsListController } from './orgs/orgs.controller.js';
 import { OrgsService } from './orgs/orgs.service.js';
@@ -34,6 +36,7 @@ export class AppModule {
         OrgsListController,
         OrgController,
         BrandsController,
+        MembersController,
       ],
       providers: [
         Reflector,
@@ -41,6 +44,7 @@ export class AppModule {
         OrgAccessGuard,
         OrgsService,
         BrandsService,
+        MembersService,
         { provide: DEPS, useValue: deps },
         {
           provide: AUTH_EMAILS,
