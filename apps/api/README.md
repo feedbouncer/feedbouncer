@@ -124,7 +124,7 @@ Redis-backed, per 15-minute or 1-hour window:
 | Emails per address           | 3 per hour (verification, reset, sign-up, invitations) |
 | Emails per client IP         | 20 per hour                                            |
 
-Changing or deleting a password counts as a login attempt. A successful login clears the account counter. The trade-off: anyone who knows an address can lock that account out of password login for 15 minutes by failing five times; this is accepted over allowing unlimited guessing.
+Changing a password or deleting an account counts as a login attempt, once the request body is valid: a request refused for its body (a missing current password, or a new password that is too short or too weak) does not. A successful login clears the account counter. The trade-off: anyone who knows an address can lock that account out of password login for 15 minutes by failing five times; this is accepted over allowing unlimited guessing.
 
 #### Client IP
 

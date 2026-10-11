@@ -103,17 +103,17 @@ export class AuthProxyController {
         if (!session) throw new ApiError(401, 'unauthenticated');
         email = session.user.email;
         const current = credential(kind === 'delete-user' ? input.password : input.currentPassword);
-        // Both verify the current password, so they count as guessing attempts.
-        await this.limits.reserveLoginAttempt(email, req.ip);
         if (kind === 'delete-user') {
           forward = { password: current };
         } else {
-          const currentPassword = current;
           const newPassword = str(input.newPassword);
           if (newPassword === undefined) throw new ApiError(400, 'invalid_request');
           assertPassword(newPassword, [email, session.user.name]);
-          forward = { currentPassword, newPassword, revokeOtherSessions: true };
+          forward = { currentPassword: current, newPassword, revokeOtherSessions: true };
         }
+        // Both verify the current password, so they count as guessing attempts;
+        // only once the body is valid, so a refused request never spends one.
+        await this.limits.reserveLoginAttempt(email, req.ip);
         break;
       }
       case 'verify-email': {

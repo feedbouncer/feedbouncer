@@ -164,6 +164,34 @@ describe('upstream failures', () => {
   );
 });
 
+describe('requests refused before the password check', () => {
+  it('never spend the account login budget', async () => {
+    const u = await signUpAndVerify(api, 'budget@x.test');
+    const cookie = await login(api, u.email);
+    const refused = [
+      ['/api/auth/change-password', { currentPassword: PASSWORD, newPassword: 'short' }, 422],
+      [
+        '/api/auth/change-password',
+        { currentPassword: PASSWORD, newPassword: 'aaaaaaaaaaaa' },
+        422,
+      ],
+      ['/api/auth/change-password', { currentPassword: PASSWORD }, 400],
+      ['/api/auth/change-password', { currentPassword: PASSWORD, newPassword: 7 }, 400],
+      ['/api/auth/delete-user', { password: '' }, 401],
+      ['/api/auth/delete-user', {}, 401],
+    ] as const;
+    // More than the 5 attempts an account gets per window.
+    for (const [path, body, status] of [...refused, ...refused]) {
+      const r = await api.req('POST', path, { cookie, body });
+      expect(r.status, `${path} ${JSON.stringify(body)}`).toBe(status);
+    }
+    const r = await api.req('POST', '/api/auth/sign-in/email', {
+      body: { email: u.email, password: PASSWORD },
+    });
+    expect(r.status).toBe(200);
+  });
+});
+
 describe('delete account', () => {
   it('a wrong password is 401 invalid_credentials and keeps the account', async () => {
     await signUpAndVerify(api, 'delw@x.test');
