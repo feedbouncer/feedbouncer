@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { Secret } from '@feedbouncer/service-runtime';
 import { CredentialUnreadableError } from './errors.js';
+import type { KeyProvider } from './key-provider.js';
 import { Keyring } from './keyring.js';
 import {
   MAX_PLAINTEXT_BYTES,
@@ -114,5 +115,99 @@ describe('envelope v1', () => {
     const err = await seal(ringK1, new Secret(big), ctx).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(RangeError);
     expect((err as Error).message).not.toContain('xxxx');
+  });
+
+  it('rewrap also preserves iv and tag, reports unknown_key, and round-trips webhook_secret', async () => {
+    const wctx: EnvelopeContext = { ...ctx, kind: 'webhook_secret' };
+    const { blob } = await seal(ringK1, new Secret(TOKEN), wctx);
+    expect((await open(ringK1, blob, wctx)).reveal()).toBe(TOKEN);
+    const r = await rewrap(ringBoth, blob, wctx);
+    const before = parseEnvelope(blob);
+    const after = parseEnvelope(r.blob);
+    expect(after.iv.equals(before.iv)).toBe(true);
+    expect(after.tag.equals(before.tag)).toBe(true);
+    await expect(rewrap(ringK2, blob, wctx)).rejects.toMatchObject({
+      reason: 'unknown_key',
+      keyId: 'k1',
+    });
+  });
+
+  describe('misbehaving KeyProvider', () => {
+    const stub = (over: Partial<KeyProvider>): KeyProvider => ({
+      activeKeyId: ringK2.activeKeyId,
+      has: (id) => ringBoth.has(id),
+      wrap: (dek, aad) => ringBoth.wrap(dek, aad),
+      unwrap: (id, w, aad) => ringBoth.unwrap(id, w, aad),
+      ...over,
+    });
+
+    it('seal rejects a wrap result for a key other than the active key', async () => {
+      const p = stub({
+        wrap: async (dek, aad) => ({ ...(await ringBoth.wrap(dek, aad)), keyId: 'k9' }),
+      });
+      await expect(seal(p, new Secret(TOKEN), ctx)).rejects.toThrow(/active key/);
+    });
+
+    it('rewrap rejects a wrap result for a key other than the active key', async () => {
+      const { blob } = await seal(ringK1, new Secret(TOKEN), ctx);
+      const p = stub({
+        wrap: async (dek, aad) => ({ ...(await ringBoth.wrap(dek, aad)), keyId: 'k9' }),
+      });
+      await expect(rewrap(p, blob, ctx)).rejects.toThrow(/active key/);
+    });
+
+    it('seal rejects wrapped keys of length 0 or above 65535', async () => {
+      for (const len of [0, 65_536]) {
+        const p = stub({ wrap: async () => ({ keyId: 'k2', wrapped: Buffer.alloc(len, 1) }) });
+        await expect(seal(p, new Secret(TOKEN), ctx), `len ${len}`).rejects.toThrow(/wrapped/);
+      }
+    });
+
+    it('open and rewrap treat a data key that is not 32 bytes as malformed', async () => {
+      const { blob } = await seal(ringK1, new Secret(TOKEN), ctx);
+      const p = stub({ unwrap: async () => Buffer.alloc(16, 1) });
+      await expect(open(p, blob, ctx)).rejects.toMatchObject({ reason: 'malformed', keyId: 'k1' });
+      await expect(rewrap(p, blob, ctx)).rejects.toMatchObject({
+        reason: 'malformed',
+        keyId: 'k1',
+      });
+    });
+
+    it('binds the data layer to the record even when the wrap layer ignores context', async () => {
+      const blind = stub({
+        activeKeyId: 'k1',
+        wrap: (dek) => ringK1.wrap(dek, Buffer.alloc(0)),
+        unwrap: (id, w) => ringK1.unwrap(id, w, Buffer.alloc(0)),
+      });
+      const { blob } = await seal(blind, new Secret(TOKEN), ctx);
+      expect((await open(blind, blob, ctx)).reveal()).toBe(TOKEN);
+      await expect(open(blind, blob, { ...ctx, connectionId: randomUUID() })).rejects.toMatchObject(
+        {
+          reason: 'tampered',
+        },
+      );
+    });
+  });
+
+  describe('context validation', () => {
+    it('rejects NUL in ids and unknown kinds without echoing them', async () => {
+      const { blob } = await seal(ringK1, new Secret(TOKEN), ctx);
+      const bad: EnvelopeContext[] = [
+        { ...ctx, organizationId: 'a\0b' },
+        { ...ctx, connectionId: 'a\0b' },
+        { ...ctx, kind: 'bogus-kind' as never },
+      ];
+      for (const c of bad) {
+        for (const run of [
+          () => seal(ringK1, new Secret(TOKEN), c),
+          () => open(ringK1, blob, c),
+          () => rewrap(ringBoth, blob, c),
+        ]) {
+          const err = await run().catch((e: unknown) => e);
+          expect(err).toBeInstanceOf(TypeError);
+          expect((err as Error).message).not.toContain('bogus-kind');
+        }
+      }
+    });
   });
 });

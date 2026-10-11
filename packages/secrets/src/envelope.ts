@@ -31,6 +31,35 @@ interface ParsedEnvelope {
   ct: Buffer;
 }
 
+// The AAD joins the identity fields with NUL, so a NUL inside a field could make
+// two different records produce the same AAD. Reject it (and unknown kinds).
+function assertContext(c: EnvelopeContext): void {
+  if (
+    typeof c.organizationId !== 'string' ||
+    typeof c.connectionId !== 'string' ||
+    c.organizationId.includes('\0') ||
+    c.connectionId.includes('\0')
+  ) {
+    throw new TypeError('Envelope context ids must be strings without NUL characters.');
+  }
+  if (!(CREDENTIAL_KINDS as readonly string[]).includes(c.kind)) {
+    throw new TypeError('Envelope context has an unknown credential kind.');
+  }
+}
+
+function checkWrapped(w: { keyId: string; wrapped: Buffer }, activeKeyId: string): void {
+  if (w.keyId !== activeKeyId) {
+    throw new Error('KeyProvider wrapped with a key other than its active key');
+  }
+  if (w.wrapped.length < 1 || w.wrapped.length > 0xffff) {
+    throw new Error('KeyProvider returned a wrapped key of unsupported length');
+  }
+}
+
+function checkDek(dek: Buffer, keyId: string): void {
+  if (dek.length !== DEK) throw new CredentialUnreadableError('malformed', keyId);
+}
+
 const identity = (c: EnvelopeContext) => `${c.organizationId}\0${c.connectionId}\0${c.kind}`;
 const dataAad = (c: EnvelopeContext) => Buffer.from(`fb-credential:v1\0${identity(c)}`, 'utf8');
 const wrapAad = (keyId: string, c: EnvelopeContext) =>
@@ -79,10 +108,14 @@ function decryptData(dek: Buffer, p: ParsedEnvelope, ctx: EnvelopeContext): Buff
   const d = createDecipheriv('aes-256-gcm', dek, p.iv, { authTagLength: TAG });
   d.setAAD(dataAad(ctx));
   d.setAuthTag(p.tag);
+  let head: Buffer | undefined;
   try {
-    return Buffer.concat([d.update(p.ct), d.final()]);
+    head = d.update(p.ct);
+    return Buffer.concat([head, d.final()]);
   } catch {
     throw new CredentialUnreadableError('tampered', p.keyId);
+  } finally {
+    head?.fill(0);
   }
 }
 
@@ -91,6 +124,7 @@ export async function seal(
   value: Secret,
   ctx: EnvelopeContext,
 ): Promise<{ keyId: string; blob: Buffer }> {
+  assertContext(ctx);
   const plain = Buffer.from(value.reveal(), 'utf8');
   const dek = randomBytes(DEK);
   try {
@@ -104,8 +138,7 @@ export async function seal(
     const tag = c.getAuthTag();
     const keyId = keys.activeKeyId;
     const w = await keys.wrap(dek, wrapAad(keyId, ctx));
-    if (w.keyId !== keyId)
-      throw new Error('KeyProvider wrapped with a key other than its active key');
+    checkWrapped(w, keyId);
     return { keyId, blob: assemble(keyId, w.wrapped, iv, tag, ct) };
   } finally {
     dek.fill(0);
@@ -114,9 +147,11 @@ export async function seal(
 }
 
 export async function open(keys: KeyProvider, blob: Buffer, ctx: EnvelopeContext): Promise<Secret> {
+  assertContext(ctx);
   const p = parseEnvelope(blob);
   const dek = await keys.unwrap(p.keyId, p.wrapped, wrapAad(p.keyId, ctx));
   try {
+    checkDek(dek, p.keyId);
     const plain = decryptData(dek, p, ctx);
     try {
       return new Secret(plain.toString('utf8'));
@@ -134,13 +169,16 @@ export async function rewrap(
   blob: Buffer,
   ctx: EnvelopeContext,
 ): Promise<{ keyId: string; blob: Buffer; changed: boolean }> {
+  assertContext(ctx);
   const p = parseEnvelope(blob);
   if (p.keyId === keys.activeKeyId) return { keyId: p.keyId, blob, changed: false };
   const dek = await keys.unwrap(p.keyId, p.wrapped, wrapAad(p.keyId, ctx));
   try {
+    checkDek(dek, p.keyId);
     decryptData(dek, p, ctx).fill(0); // never launder a tampered record onto the new key
     const keyId = keys.activeKeyId;
     const w = await keys.wrap(dek, wrapAad(keyId, ctx));
+    checkWrapped(w, keyId);
     return { keyId, blob: assemble(keyId, w.wrapped, p.iv, p.tag, p.ct), changed: true };
   } finally {
     dek.fill(0);
