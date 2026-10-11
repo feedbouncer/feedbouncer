@@ -187,6 +187,44 @@ describe('field-name redaction', () => {
     expect(parsed.connectionId).toBe('c-1');
   });
 
+  it('does not redact harmless fields that merely contain a secret-looking fragment', () => {
+    const lines: string[] = [];
+    const log = createLogger('t', 'debug', (l) => lines.push(l));
+    log.info('x', {
+      bypass: true,
+      passCount: 3,
+      tokenExpiresAt: '2026-10-11T00:00:00Z',
+      credentialKind: 'oauth',
+      secretLength: 32,
+      compass: 'north',
+    });
+    expect(JSON.parse(lines[0]!)).toMatchObject({
+      bypass: true,
+      passCount: 3,
+      tokenExpiresAt: '2026-10-11T00:00:00Z',
+      credentialKind: 'oauth',
+      secretLength: 32,
+      compass: 'north',
+    });
+  });
+
+  it('redacts secret-named fields in every casing style', () => {
+    const lines: string[] = [];
+    const log = createLogger('t', 'debug', (l) => lines.push(l));
+    log.info('x', {
+      'x-api-key': 'v1',
+      APIKey: 'v2',
+      db_password: 'v3',
+      privateKey: 'v4',
+      accesstoken: 'v5',
+      tokenValue: 'v6',
+      Passwd: 'v7',
+    });
+    for (const v of ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7']) {
+      expect(lines[0]).not.toContain(`"${v}"`);
+    }
+  });
+
   it('redacts FB_ENCRYPTION_KEYS=... pairs inside messages', () => {
     expect(redact('bad config FB_ENCRYPTION_KEYS=k1:QUJD')).not.toContain('QUJD');
   });

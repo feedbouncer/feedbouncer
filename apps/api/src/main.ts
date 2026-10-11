@@ -9,11 +9,11 @@ import {
   createLogger,
   errorFields,
   installCrashHandlers,
+  logConfigurationLoaded,
   onShutdown,
 } from '@feedbouncer/service-runtime';
 import { buildApp } from './app.factory.js';
 import { loadApiEnv, type ApiEnv } from './env.js';
-import { logConfigurationLoaded } from './startup.js';
 
 let env: ApiEnv;
 const configWarnings: string[] = [];

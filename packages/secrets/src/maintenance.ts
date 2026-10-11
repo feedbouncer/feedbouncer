@@ -155,9 +155,9 @@ export interface SecretsStatus {
   plaintextCredentialColumns: string[];
 }
 
-// Same rule as packages/db/src/schema/conventions.integration.test.ts. The NOT IN list MUST
-// equal that test's ALLOWED_CREDENTIAL_COLUMNS keys: copy them verbatim from the test when
-// implementing (packages/db/README.md names these three; the test is the source of truth).
+// Credential-like columns that are not encrypted envelopes. The NOT IN list holds the hash-only
+// columns the schema conventions test allows; maintenance.integration.test.ts fails if this
+// query reports anything on the migrated schema.
 const PLAINTEXT_COLUMNS_SQL = `
 SELECT c.relname || '.' || a.attname AS col FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
  WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped

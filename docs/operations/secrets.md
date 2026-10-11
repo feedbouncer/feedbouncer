@@ -61,10 +61,8 @@ the `_FILE` forms of the first two).
 
   or `node /repo/packages/secrets/dist/bin.js status`.
 
-What was verified: the `node .../dist/bin.js` and `tsx .../src/bin.ts` command
-lines run correctly from `apps/worker` in a repository checkout after
-`pnpm build`. They were not run inside the built compose images; confirm the
-path (`/repo/packages/secrets`) in your image before relying on it.
+The path `/repo/packages/secrets` depends on how your image is built; adjust
+it to where the workspace lives in your image.
 
 The CLI reads `FB_ENV` like the services do and **defaults to `production`**,
 which refuses the example key from `.env.example`. For local use against the

@@ -9,13 +9,14 @@ import {
   createLogger,
   errorFields,
   installCrashHandlers,
+  logConfigurationLoaded,
   onShutdown,
   startHealthServer,
   waitUntil,
 } from '@feedbouncer/service-runtime';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
-import { logConfigurationLoaded, reportStartupFailure } from './startup.js';
+import { reportStartupFailure } from './startup.js';
 
 let env: WorkerEnv;
 const configWarnings: string[] = [];

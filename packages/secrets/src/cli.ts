@@ -43,7 +43,7 @@ type FlagKind = 'boolean' | 'value';
 const COMMAND_FLAGS: Readonly<Record<string, Readonly<Record<string, FlagKind>>>> = {
   keygen: { '--id': 'value' },
   status: {},
-  verify: { '--batch-size': 'value' },
+  verify: {},
   reencrypt: { '--dry-run': 'boolean', '--batch-size': 'value' },
   'recheck-connections': { '--dry-run': 'boolean' },
 };
@@ -152,7 +152,7 @@ export async function main(
         return s.rowsOnUnconfiguredKeys > 0 || cols.length > 0 ? 1 : 0;
       }
       if (cmd === 'verify') {
-        const r = await verifyAll(pool, keys, { batchSize });
+        const r = await verifyAll(pool, keys);
         printUnreadable(r.unreadable, io);
         io.out(`verified ${r.scanned} credentials, ${r.unreadable.length} unreadable`);
         return r.unreadable.length === 0 ? 0 : 1;

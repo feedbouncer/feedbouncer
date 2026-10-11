@@ -64,6 +64,7 @@ describe('secrets CLI', () => {
       ['reencrypt', 'dry-run'],
       ['status', '--dry-run'],
       ['verify', '--dry-run'],
+      ['verify', '--batch-size', '5'],
       ['recheck-connections', '--batch-size', '5'],
       ['keygen', '--dry-run'],
       ['keygen', 'extra'],
