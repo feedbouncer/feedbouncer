@@ -6,17 +6,17 @@ NestJS (Fastify) API: accounts, organizations, brands, members and invitations. 
 
 Read and validated at startup by `src/env.ts`; the process refuses to start on a missing or invalid value.
 
-| Variable           | Required | Purpose                                                                                                                                                                                           |
-| ------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`     | yes      | Postgres connection URL                                                                                                                                                                           |
-| `REDIS_URL`        | yes      | Redis URL (rate limits)                                                                                                                                                                           |
-| `AUTH_SECRET`      | yes      | Signs session cookies and tokens; at least 32 characters. Generate with `openssl rand -base64 48`. Never log or commit a real one.                                                                |
-| `PUBLIC_WEB_URL`   | yes      | The exact origin users type, with no path (for example `https://app.example.com`). It is the only origin allowed on state-changing requests and the base of every emailed link.                   |
-| `SMTP_URL`         | yes      | `smtp://` or `smtps://` URL of the mail server (Mailpit in the dev stack)                                                                                                                         |
-| `MAIL_FROM`        | no       | From header of outgoing mail. Default `FeedBouncer <no-reply@localhost>`                                                                                                                          |
-| `TRUST_PROXY_HOPS` | no       | Number of reverse proxies in front of the API whose `X-Forwarded-For` is trusted for the client IP (0-5, default 0). Per-IP rate limits depend on it: set it to the real hop count, never higher. |
-| `PORT`             | no       | Listen port, default 3001                                                                                                                                                                         |
-| `LOG_LEVEL`        | no       | Default `info`                                                                                                                                                                                    |
+| Variable           | Required | Purpose                                                                                                                                                                                                                        |
+| ------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`     | yes      | Postgres connection URL                                                                                                                                                                                                        |
+| `REDIS_URL`        | yes      | Redis URL (rate limits)                                                                                                                                                                                                        |
+| `AUTH_SECRET`      | yes      | Signs session cookies and tokens; at least 32 characters. Generate with `openssl rand -base64 48`. Never log or commit a real one.                                                                                             |
+| `PUBLIC_WEB_URL`   | yes      | The exact origin users type, with no path (for example `https://app.example.com`). It is the only origin allowed on state-changing requests and the base of every emailed link.                                                |
+| `SMTP_URL`         | yes      | `smtp://` or `smtps://` URL of the mail server (Mailpit in the dev stack)                                                                                                                                                      |
+| `MAIL_FROM`        | no       | From header of outgoing mail. Default `FeedBouncer <no-reply@localhost>`                                                                                                                                                       |
+| `TRUST_PROXY_HOPS` | no       | Number of reverse proxies in front of the API whose `X-Forwarded-For` is trusted for the client IP (0-5, default 0). Per-IP rate limits depend on it: set it to the real hop count, never higher. See [Client IP](#client-ip). |
+| `PORT`             | no       | Listen port, default 3001                                                                                                                                                                                                      |
+| `LOG_LEVEL`        | no       | Default `info`                                                                                                                                                                                                                 |
 
 ## Roles and tenancy
 
@@ -124,7 +124,19 @@ Redis-backed, per 15-minute or 1-hour window:
 | Emails per address           | 3 per hour (verification, reset, sign-up, invitations) |
 | Emails per client IP         | 20 per hour                                            |
 
-Changing or deleting a password counts as a login attempt. A successful login clears the account counter. The trade-off: anyone who knows an address can lock that account out of password login for 15 minutes by failing five times; this is accepted over allowing unlimited guessing. The client IP comes from `TRUST_PROXY_HOPS`, so a wrong value either shares one budget across all users or lets clients choose their own address.
+Changing or deleting a password counts as a login attempt. A successful login clears the account counter. The trade-off: anyone who knows an address can lock that account out of password login for 15 minutes by failing five times; this is accepted over allowing unlimited guessing.
+
+#### Client IP
+
+The per-IP limits (and `auth_session.ip_address`) use the client address Fastify derives with `TRUST_PROXY_HOPS`: the TCP peer, or, when that peer is an internal address within the trusted hop count, the last `X-Forwarded-For` entry. A wrong value either shares one budget across all users (too low) or lets clients choose their own address (too high, or a proxy that passes the client's header through).
+
+Browsers reach the API only through the web app, which is the one trusted hop (`TRUST_PROXY_HOPS=1` in `compose.yaml`). The web app forwards `/api/auth/*` and `/api/v1/*` with route handlers, not Next.js rewrites (a rewrite neither adds `X-Forwarded-For` nor drops the client's own): its `proxy.ts` deletes every client-supplied `X-Forwarded-*`, `Forwarded` and `X-Real-IP` header, Next then sets `X-Forwarded-For` to the TCP peer it accepted the connection from, and only that single address is sent to the API (see `apps/web/src/lib/api-proxy.ts`). `pnpm stack:auth-smoke` checks that a client-supplied `X-Forwarded-For` is ignored.
+
+Consequences:
+
+- In the Compose stack, every browser on the host reaches the web container through Docker's port publishing, so they all share one address (the Docker gateway) and one per-IP budget. That is expected in development.
+- If another reverse proxy or load balancer is put in front of the web app, the web app sees that proxy as the client: per-IP limits then apply to the proxy as a whole. Making them per user again needs the web tier to trust that proxy's `X-Forwarded-For`, which it does not do today.
+- Requests that reach the API port directly (published on `127.0.0.1` in development) come from the Docker gateway, an internal address, so they could choose their own `X-Forwarded-For`. Never publish the API port to an untrusted network.
 
 ## Tests
 

@@ -3,18 +3,12 @@ import type { NextConfig } from 'next';
 // Docker Desktop bind mounts often drop file events, so `next dev` never sees
 // edits. WEB_WATCH_POLL_MS > 0 makes Next's (Turbopack) watcher poll instead.
 const pollMs = Number(process.env.WEB_WATCH_POLL_MS ?? 0);
-// Server-side only: where the browser-facing /api/* paths are proxied to.
-const apiOrigin = process.env.API_INTERNAL_URL ?? 'http://localhost:3001';
 
 const config: NextConfig = {
   poweredByHeader: false,
   agentRules: false,
-  async rewrites() {
-    return [
-      { source: '/api/auth/:path*', destination: `${apiOrigin}/api/auth/:path*` },
-      { source: '/api/v1/:path*', destination: `${apiOrigin}/api/v1/:path*` },
-    ];
-  },
+  // /api/auth/* and /api/v1/* are forwarded to the API by route handlers
+  // (src/app/api/*/[...path]), not rewrites: see src/lib/api-proxy.ts.
   async headers() {
     return [
       {
