@@ -161,3 +161,44 @@ export async function verifiedUser(
   const u = await signUpAndVerify(api, `${label}-${randomUUID().slice(0, 8)}@x.test`);
   return { ...u, cookie: await login(api, u.email) };
 }
+
+export interface TestUser {
+  userId: string;
+  email: string;
+  cookie: string;
+}
+
+export interface OrgFixture {
+  orgId: string;
+  brandId: string;
+  owner: TestUser;
+  admin: TestUser;
+  member: TestUser;
+}
+
+/**
+ * An organization created through the API by its owner, plus an admin and a
+ * member added directly in the database. Signs up three users unless `users`
+ * is given (each test file has a small email budget, so share users).
+ */
+export async function orgWithRoles(
+  api: TestApi,
+  label: string,
+  users?: Pick<OrgFixture, 'owner' | 'admin' | 'member'>,
+): Promise<OrgFixture> {
+  const owner = users?.owner ?? (await verifiedUser(api, `${label}-owner`));
+  const created = await api.req('POST', '/api/v1/orgs', {
+    cookie: owner.cookie,
+    body: { name: `${label} Org`, brandName: `${label} Brand` },
+  });
+  if (created.status !== 201) throw new Error(`org create failed: ${created.status}`);
+  const orgId = created.body.organization.id as string;
+  const brandId = created.body.brand.id as string;
+  const admin = users?.admin ?? (await verifiedUser(api, `${label}-admin`));
+  const member = users?.member ?? (await verifiedUser(api, `${label}-member`));
+  await api.pool.query(
+    "INSERT INTO membership (organization_id, user_id, role) VALUES ($1, $2, 'admin'), ($1, $3, 'member')",
+    [orgId, admin.userId, member.userId],
+  );
+  return { orgId, brandId, owner, admin, member };
+}

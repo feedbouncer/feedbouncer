@@ -70,12 +70,9 @@ it('text/plain bodies are rejected', async () => {
     body: 'x',
     headers: { 'content-type': 'text/plain' },
   });
-  // 404, not 415: there is no POST /api/v1/orgs route yet, and Fastify
-  // resolves the route before it looks for a content-type parser. What stops a
-  // text/plain body from ever being parsed is the parser removal asserted in
-  // the next test; once real POST routes exist this becomes 415.
-  expect(r.status).toBe(404);
-  expect(r.body.error.code).toBe('not_found');
+  // Fastify resolves the route first, then finds no parser for the type.
+  expect(r.status).toBe(415);
+  expect(r.body.error.code).toBe('invalid_request');
 });
 
 it('only JSON bodies are parsed (no CORS-simple content types)', () => {
@@ -91,7 +88,7 @@ it('form-encoded bodies are rejected', async () => {
     body: 'name=x',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
   });
-  expect(r.status).toBe(404); // no such route yet; see the text/plain test
+  expect(r.status).toBe(415);
 });
 
 it('request logs carry the route pattern, never the URL or query string', async () => {

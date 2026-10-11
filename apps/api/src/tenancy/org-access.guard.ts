@@ -29,14 +29,15 @@ export class OrgAccessGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<OrgRequest>();
     const params = req.params as Record<string, string | undefined>;
+    // Read first and fail closed: a route without @RequireCapability is a bug,
+    // never an open door, and must not depend on who is asking.
+    const cap = this.reflector.get<Capability | undefined>(CAPABILITY, ctx.getHandler());
+    if (cap === undefined)
+      throw new Error(`route ${req.routeOptions.url} has no @RequireCapability`);
     const organizationId = parseUuidOr404(params.orgId);
     const m = await findMembership(this.deps.pool, organizationId, req.user.id);
     if (!m) throw notFound();
     req.org = { organizationId, actorUserId: req.user.id, role: m.role };
-    const cap = this.reflector.get<Capability | undefined>(CAPABILITY, ctx.getHandler());
-    // Fail closed: a route without @RequireCapability is a bug, never an open door.
-    if (cap === undefined)
-      throw new Error(`route ${req.routeOptions.url} has no @RequireCapability`);
     if (!can(m.role, cap)) throw new ApiError(403, 'forbidden');
     return true;
   }

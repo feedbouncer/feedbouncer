@@ -8,6 +8,8 @@ import { SessionGuard } from './auth/session.guard.js';
 import { SignUpController } from './auth/sign-up.controller.js';
 import { HealthController } from './http/health.controller.js';
 import { MeController } from './me/me.controller.js';
+import { OrgController, OrgsListController } from './orgs/orgs.controller.js';
+import { OrgsService } from './orgs/orgs.service.js';
 import { OrgAccessGuard } from './tenancy/org-access.guard.js';
 import { ACCOUNT_DELETION, AUTH, AUTH_EMAILS, DEPS, RATE_LIMITS } from './tokens.js';
 import type { AppDeps } from './deps.js';
@@ -22,11 +24,19 @@ export class AppModule {
   static forRoot(deps: AppDeps): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, SignUpController, AuthProxyController, MeController],
+      controllers: [
+        HealthController,
+        SignUpController,
+        AuthProxyController,
+        MeController,
+        OrgsListController,
+        OrgController,
+      ],
       providers: [
         Reflector,
         SessionGuard,
         OrgAccessGuard,
+        OrgsService,
         { provide: DEPS, useValue: deps },
         {
           provide: AUTH_EMAILS,

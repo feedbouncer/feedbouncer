@@ -20,6 +20,7 @@ export type ErrorCode =
   | 'forbidden'
   | 'email_not_verified'
   | 'sole_owner'
+  | 'confirmation_mismatch'
   | 'rate_limited'
   | 'temporarily_unavailable';
 
@@ -38,6 +39,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   forbidden: 'You do not have permission to do this.',
   email_not_verified: 'Verify your email address first.',
   sole_owner: 'You are the only owner of an organization. Transfer ownership or delete it first.',
+  confirmation_mismatch: 'Type the organization name exactly to confirm.',
   rate_limited: 'Too many attempts. Try again later.',
   temporarily_unavailable: 'Temporarily unavailable. Try again shortly.',
 };
