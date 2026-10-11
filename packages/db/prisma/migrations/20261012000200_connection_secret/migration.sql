@@ -34,14 +34,17 @@ CREATE TABLE connection_secret (
   --   [2+N .. 4+N)  wrapped key length W, big-endian, 1..65535
   --   then W wrapped key bytes, 12 IV bytes, 16 tag bytes, and 1..16384
   --   ciphertext bytes (the bytes after the tag).
-  -- CASE keeps evaluation ordered so get_byte never reads past the end; the
-  -- smallest valid blob is 94 bytes, which also covers every get_byte below.
-  -- Plaintext cannot satisfy this.
+  -- CASE keeps evaluation ordered: every get_byte is reached only after the
+  -- guards above it proved its offset is inside the blob. Any wrapped key size
+  -- from 1 byte up is accepted (the key provider decides the size), so the
+  -- smallest valid blob is 2 + N + 2 + 1 + 12 + 16 + 1 bytes. Plaintext cannot
+  -- satisfy this.
   CONSTRAINT connection_secret_envelope_check CHECK (
     CASE
-      WHEN octet_length(encrypted_value) < 94 THEN false
+      WHEN octet_length(encrypted_value) < 2 THEN false
       WHEN get_byte(encrypted_value, 0) <> 1 THEN false
       WHEN get_byte(encrypted_value, 1) NOT BETWEEN 1 AND 32 THEN false
+      WHEN octet_length(encrypted_value) < 4 + get_byte(encrypted_value, 1) THEN false
       WHEN get_byte(encrypted_value, 2 + get_byte(encrypted_value, 1)) * 256
            + get_byte(encrypted_value, 3 + get_byte(encrypted_value, 1)) = 0 THEN false
       WHEN octet_length(encrypted_value) - (4 + get_byte(encrypted_value, 1)

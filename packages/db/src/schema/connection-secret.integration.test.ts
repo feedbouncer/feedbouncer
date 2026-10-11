@@ -62,13 +62,37 @@ describe('connection_secret', () => {
     );
   });
 
+  it('accepts a short wrapped key (a 40-byte RFC 3394 wrap) and the smallest possible wrap', async () => {
+    const t = await seedTenant(h.c, 'shortwrap');
+    await insert(t, 'access_token', 'k1', fakeEnvelope('k1', { wrapped: 40, ct: 1 }));
+    await insert(t, 'refresh_token', 'k1', fakeEnvelope('k1', { wrapped: 1, ct: 1 }));
+  });
+
+  it('rejects every truncation with the check constraint, never an out-of-range error', async () => {
+    const t = await seedTenant(h.c, 'truncate');
+    const sources = [
+      fakeEnvelope('k1', { wrapped: 60, ct: 1 }),
+      fakeEnvelope('k1', { wrapped: 1, ct: 1 }),
+      fakeEnvelope('k'.repeat(32), { wrapped: 40, ct: 1 }),
+    ];
+    for (const src of sources) {
+      const keyId = src.subarray(2, 2 + src[1]!).toString('latin1');
+      for (let len = 0; len < src.length; len++) {
+        await expectPgError(
+          insert(t, 'webhook_secret', keyId, src.subarray(0, len)),
+          '23514',
+          ENVELOPE,
+        );
+      }
+    }
+  });
+
   it('rejects plaintext, a wrong version byte, a key id mismatch and short blobs', async () => {
     const plaintext = Buffer.from('EAAGplaintextAccessToken'.padEnd(120, 'x'));
     const cases: [string, Buffer][] = [
       ['k1', plaintext],
       ['k1', fakeEnvelope('k1', { version: 2 })],
       ['k2', fakeEnvelope('k1')],
-      ['k1', fakeEnvelope('k1', { wrapped: 10, ct: 10 })],
       ['k1', Buffer.alloc(0)],
     ];
     for (const [keyId, blob] of cases) {

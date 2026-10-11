@@ -12,7 +12,6 @@ export const MAX_PLAINTEXT_BYTES = 16_384;
 const IV = 12;
 const TAG = 16;
 const DEK = 32;
-export const MIN_ENVELOPE_BYTES = 1 + 1 + 1 + 2 + 60 + IV + TAG + 1; // 94 with a 1-char key id
 
 export const CREDENTIAL_KINDS = ['access_token', 'refresh_token', 'webhook_secret'] as const;
 export type CredentialKind = (typeof CREDENTIAL_KINDS)[number];
