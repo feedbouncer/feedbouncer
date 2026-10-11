@@ -10,6 +10,12 @@ x-backend-env: &backend-env
   REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is not set - copy .env.example to .env}@redis:6379/0
   LOG_LEVEL: ${LOG_LEVEL:-info}
 
+# Only the services that touch credentials get the encryption keys (not migrate).
+x-secrets-env: &secrets-env
+  FB_ENV: ${FB_ENV:-development}
+  FB_ENCRYPTION_KEYS: ${FB_ENCRYPTION_KEYS:?FB_ENCRYPTION_KEYS is not set - copy .env.example to .env}
+  FB_ENCRYPTION_ACTIVE_KEY_ID: ${FB_ENCRYPTION_ACTIVE_KEY_ID:?FB_ENCRYPTION_ACTIVE_KEY_ID is not set - copy .env.example to .env}
+
 x-node-service: &node-service
   init: true
   restart: on-failure:3
@@ -120,7 +126,7 @@ services:
       dockerfile: apps/api/Dockerfile
       target: dev
     environment:
-      <<: *backend-env
+      <<: [*backend-env, *secrets-env]
       # tsx watch gets no file events through Docker Desktop bind mounts.
       CHOKIDAR_USEPOLLING: '1'
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is not set - copy .env.example to .env}
@@ -138,6 +144,7 @@ services:
       - ./packages/authz/src:/repo/packages/authz/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
+      - ./packages/secrets/src:/repo/packages/secrets/src:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -172,7 +179,7 @@ services:
       dockerfile: apps/worker/Dockerfile
       target: dev
     environment:
-      <<: *backend-env
+      <<: [*backend-env, *secrets-env]
       CHOKIDAR_USEPOLLING: '1'
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
     # No ports: the worker is internal. Scale with --scale worker=N.
@@ -180,6 +187,7 @@ services:
       - ./apps/worker/src:/repo/apps/worker/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro
+      - ./packages/secrets/src:/repo/packages/secrets/src:ro
     depends_on:
       postgres:
         condition: service_healthy

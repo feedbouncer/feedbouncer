@@ -31,6 +31,8 @@ const REQUIRED = [
   'POSTGRES_DB',
   'REDIS_PASSWORD',
   'AUTH_SECRET',
+  'FB_ENCRYPTION_KEYS',
+  'FB_ENCRYPTION_ACTIVE_KEY_ID',
 ];
 
 function envEntries() {
@@ -92,13 +94,15 @@ test('.env.example covers every referenced variable, with dev-only credentials',
       `${name} must be set (uncommented) in .env.example`,
     );
   }
-  for (const [name, { value }] of entries) {
-    if (/PASSWORD|SECRET|TOKEN|KEY/.test(name))
-      assert.match(
-        value,
-        /^dev-(only-|example)/,
-        `${name} must start with dev-only- (or dev-example for encryption keys)`,
-      );
+  // Only the two encryption variables may use the dev-example prefix.
+  const ENCRYPTION_VARS = new Set(['FB_ENCRYPTION_KEYS', 'FB_ENCRYPTION_ACTIVE_KEY_ID']);
+  for (const [name, { value, commented }] of entries) {
+    if (commented) continue; // commented examples (e.g. *_FILE paths) are not values
+    if (ENCRYPTION_VARS.has(name)) {
+      assert.match(value, /^dev-example(:|$)/, `${name} must be the dev-example key`);
+    } else if (/PASSWORD|SECRET|TOKEN|KEY/.test(name)) {
+      assert.match(value, /^dev-only-/, `${name} must start with dev-only-`);
+    }
   }
 });
 
