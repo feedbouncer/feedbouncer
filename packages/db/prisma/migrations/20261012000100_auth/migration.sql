@@ -1,6 +1,5 @@
 -- Identity (Better Auth tables, mapped to snake_case) and tenancy rules:
--- invitations, brand archiving/uniqueness, and the last-owner backstop.
--- See packages/db/README.md and the auth plan for the reasoning.
+-- invitations, brand archiving/uniqueness, and the last-owner check.
 BEGIN;
 
 SET LOCAL lock_timeout = '10s';

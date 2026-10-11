@@ -179,18 +179,35 @@ concurrent transactions can commit in the opposite order.
 ### Last owner
 
 Every organization must keep at least one `owner` membership. A deferred
-constraint trigger on `membership` (`membership_require_owner_trg`) checks this at
-COMMIT, so one transaction can add a new owner and demote the old one in any
-order. Deleting the organization itself passes, because it no longer exists when
-the check runs; deleting a user who is the sole owner fails with SQLSTATE `23514`
-and constraint `membership_owner_required` (`isOwnerRequiredViolation`). The
-trigger is a backstop: application code must also take the `organization` row lock
-(`SELECT ... FOR UPDATE`) before changing owners, so two concurrent demotions
-cannot each see the other owner still present.
+constraint trigger on `membership` (`membership_require_owner_trg`, function
+`fb_require_org_owner`) enforces this at COMMIT, so one transaction can add a new
+owner and demote the old one in any order.
+
+For each changed membership row (role or organization change, or delete) the
+trigger first takes a `FOR NO KEY UPDATE` lock on the `organization` row, then
+checks that an owner remains. Because the lock is taken at commit, before the
+check, concurrent demotions are serialized by the database and the second one
+sees the first one's result: they are safe without any locking in application
+code. If the organization row is gone (deleted in the same or another
+transaction) the check passes, so deleting an organization works. Deleting a user
+who is the sole owner fails with SQLSTATE `23514` and constraint
+`membership_owner_required` (`isOwnerRequiredViolation`).
+
+Deadlocks: the trigger locks one organization per changed membership row, so
+transactions that change owner memberships in several organizations in different
+orders can deadlock. Postgres aborts one of them with SQLSTATE `40P01`; callers
+should retry the transaction or surface the error.
+
+### Emails and brand names
 
 Emails are stored lowercase (`app_user_email_lower_check`). The migration
 lowercases existing rows, and `down.sql` does not reverse that, because it is
 lossless for the application.
+
+Brands are archived rather than deleted: `brand.archived_at` is set when a brand
+is archived. Brand names are unique per organization among active brands
+(`archived_at IS NULL`), compared case-insensitively after trimming whitespace
+(`lower(btrim(name))`), so an archived brand's name can be reused.
 
 ## Deletion behavior
 
@@ -245,10 +262,15 @@ In practice:
 
 - Credential-like columns are limited to a reviewed allowlist in
   `conventions.integration.test.ts`: `auth_account.password_hash` (scrypt hash),
-  `auth_session.token` (opaque session token, a documented residual risk) and
-  `invitation.token_hash` (sha256 of a random token). The guard rejects any other
-  column named like `token`, `secret`, `password` or `api_key`; the Secrets
-  ticket adds `encrypted_*` `bytea` columns, which are exempt.
+  `auth_session.token` (stored as a SHA-256 hash by the API's Better Auth adapter
+  layer; the raw token exists only in the cookie) and `invitation.token_hash`
+  (sha256 of a random token). The guard rejects any other column named like
+  `token`, `secret`, `password` or `api_key`; the Secrets ticket adds
+  `encrypted_*` `bytea` columns, which are exempt.
+- `auth_verification.value` and `auth_verification.identifier` do not match the
+  guard's name pattern, so they are not on the allowlist, but they follow the
+  same rule: stored as a SHA-256 hash by the API's Better Auth adapter layer; the
+  raw token exists only in the cookie/email link.
 - Never run the Better Auth CLI against this database. It would generate its own
   schema; the `auth_*` tables are maintained by hand-written migrations.
 - `audit_event.details` must not hold secrets or comment bodies (see the contract

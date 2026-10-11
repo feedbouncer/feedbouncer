@@ -17,11 +17,12 @@ const GLOBAL_TABLES = [
   'auth_verification',
 ];
 
-// Credential-like columns that are allowed on purpose. Each one is a hash or a
-// documented residual risk (see the auth plan). Adding to this list needs review.
+// Credential-like columns that are allowed on purpose. Each one holds a hash,
+// never a raw secret. Adding to this list needs review.
 const ALLOWED_CREDENTIAL_COLUMNS: Record<string, string> = {
   'auth_account.password_hash': 'Better Auth scrypt hash (salted, slow); never plaintext',
-  'auth_session.token': 'Better Auth opaque session token; residual risk accepted in the auth plan',
+  'auth_session.token':
+    "stored as a SHA-256 hash by the API's Better Auth adapter layer; the raw token exists only in the cookie",
   'invitation.token_hash': 'sha256 of a 32-byte random invitation token',
 };
 
