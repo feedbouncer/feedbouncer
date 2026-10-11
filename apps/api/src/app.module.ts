@@ -6,6 +6,8 @@ import { createAuthEmails, type AuthEmails } from './auth/emails.js';
 import { createAuthRateLimits } from './auth/rate-limit.js';
 import { SessionGuard } from './auth/session.guard.js';
 import { SignUpController } from './auth/sign-up.controller.js';
+import { BrandsController } from './brands/brands.controller.js';
+import { BrandsService } from './brands/brands.service.js';
 import { HealthController } from './http/health.controller.js';
 import { MeController } from './me/me.controller.js';
 import { OrgController, OrgsListController } from './orgs/orgs.controller.js';
@@ -31,12 +33,14 @@ export class AppModule {
         MeController,
         OrgsListController,
         OrgController,
+        BrandsController,
       ],
       providers: [
         Reflector,
         SessionGuard,
         OrgAccessGuard,
         OrgsService,
+        BrandsService,
         { provide: DEPS, useValue: deps },
         {
           provide: AUTH_EMAILS,

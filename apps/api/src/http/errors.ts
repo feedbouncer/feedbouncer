@@ -21,6 +21,8 @@ export type ErrorCode =
   | 'email_not_verified'
   | 'sole_owner'
   | 'confirmation_mismatch'
+  | 'brand_name_taken'
+  | 'brand_archived'
   | 'rate_limited'
   | 'temporarily_unavailable';
 
@@ -40,6 +42,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   email_not_verified: 'Verify your email address first.',
   sole_owner: 'You are the only owner of an organization. Transfer ownership or delete it first.',
   confirmation_mismatch: 'Type the organization name exactly to confirm.',
+  brand_name_taken: 'A brand with this name already exists in this organization.',
+  brand_archived: 'Archived brands cannot be renamed.',
   rate_limited: 'Too many attempts. Try again later.',
   temporarily_unavailable: 'Temporarily unavailable. Try again shortly.',
 };
