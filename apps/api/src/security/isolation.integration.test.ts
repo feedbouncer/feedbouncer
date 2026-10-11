@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { extractFirstUrl } from '@feedbouncer/mailer/testing';
 import { orgWithRoles, startTestApi, type TestApi } from '../testing/harness.js';
-import { CASES, type IsolationFixture } from './isolation-cases.js';
+import { CASES, TOKEN_CASES, type IsolationFixture } from './isolation-cases.js';
 
 let api: TestApi;
 let f: IsolationFixture;
@@ -12,7 +13,14 @@ beforeAll(async () => {
     cookie: B.owner.cookie,
     body: { email: 'iso@x.test', role: 'member' },
   });
-  f = { A, B, bInvitationId: inv.body.invitation.id };
+  await new Promise((r) => setTimeout(r, 20)); // emails are fire-and-forget
+  const link = new URL(extractFirstUrl(api.mailer.lastTo('iso@x.test')!.text)!);
+  f = {
+    A,
+    B,
+    bInvitationId: inv.body.invitation.id,
+    bInvitationToken: link.searchParams.get('token')!,
+  };
 });
 afterAll(() => api.close());
 
@@ -56,7 +64,30 @@ describe('A owner cannot reach B', () => {
   }
 });
 
+describe("A owner holding B's invitation token", () => {
+  for (const c of TOKEN_CASES) {
+    it(`${c.name} -> ${c.status}, nothing more`, async () => {
+      const beforeB = await snapshot(f.B.orgId);
+      const beforeA = await snapshot(f.A.orgId);
+      expect(beforeB.invitations.map((i) => i.status)).toEqual(['pending']);
+      const [method, url] = c.route.split(' ');
+      const r = await api.req(method!, url!, { cookie: f.A.owner.cookie, body: c.body(f) });
+      expect(r.status).toBe(c.status);
+      expect(r.body).toEqual(c.response);
+      expect(await snapshot(f.B.orgId)).toEqual(beforeB);
+      expect(await snapshot(f.A.orgId)).toEqual(beforeA);
+    });
+  }
+});
+
 describe('without a session', () => {
+  for (const c of TOKEN_CASES) {
+    it(`${c.name} -> 401`, async () => {
+      const [method, url] = c.route.split(' ');
+      const r = await api.req(method!, url!, { body: c.body(f) });
+      expect(r.status).toBe(401);
+    });
+  }
   for (const c of CASES) {
     it(`${c.name} -> 401`, async () => {
       const [method] = c.route.split(' ');

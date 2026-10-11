@@ -4,6 +4,8 @@ export interface IsolationFixture {
   A: OrgFixture;
   B: OrgFixture;
   bInvitationId: string;
+  /** The emailed token of B's pending invitation, which is for another address. */
+  bInvitationToken: string;
 }
 
 export interface IsolationCase {
@@ -95,6 +97,40 @@ export const CASES: IsolationCase[] = [
     name: 'revoke B invite under A path',
     url: (f) => `/api/v1/orgs/${f.A.orgId}/invitations/${f.bInvitationId}/revoke`,
     body: () => ({}),
+  },
+];
+
+export interface TokenCase {
+  route: string;
+  name: string;
+  body: (f: IsolationFixture) => unknown;
+  status: number;
+  /** The whole response body: nothing else about B may be revealed. */
+  response: unknown;
+}
+
+// Organization A's owner presenting B's invitation token (an invitation for
+// another address). Lookup may show only what the invitation page needs;
+// accepting is refused with the mismatch error and changes nothing.
+export const TOKEN_CASES: TokenCase[] = [
+  {
+    route: 'POST /api/v1/invitations/lookup',
+    name: "look up B's invitation",
+    body: (f) => ({ token: f.bInvitationToken }),
+    status: 200,
+    response: { organizationName: 'isoB Org', role: 'member', emailMatches: false },
+  },
+  {
+    route: 'POST /api/v1/invitations/accept',
+    name: "accept B's invitation for another address",
+    body: (f) => ({ token: f.bInvitationToken }),
+    status: 403,
+    response: {
+      error: {
+        code: 'invitation_email_mismatch',
+        message: 'This invitation was sent to a different email address.',
+      },
+    },
   },
 ];
 

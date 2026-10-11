@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ROUTES } from '../auth/auth-proxy.controller.js';
 import { startTestApi, type TestApi } from '../testing/harness.js';
 import { CAPABILITY } from '../tenancy/capability.decorator.js';
-import { ACCOUNT_ROUTES, CASES, PROXY_ROUTES } from './isolation-cases.js';
+import { ACCOUNT_ROUTES, CASES, PROXY_ROUTES, TOKEN_CASES } from './isolation-cases.js';
 
 const COVERED_ROUTES = CASES.map((c) => c.route);
 
@@ -36,6 +36,11 @@ describe('route inventory', () => {
   it('every /api/v1 route is tenant-scoped (covered) or a known account route', () => {
     const v1 = registered().filter((r) => r.includes(' /api/v1/'));
     expect(v1.sort()).toEqual([...COVERED_ROUTES, ...ACCOUNT_ROUTES].sort());
+  });
+
+  it('every invitation token route has a cross-organization case', () => {
+    const tokenRoutes = ACCOUNT_ROUTES.filter((r) => r.includes(' /api/v1/invitations/'));
+    expect(TOKEN_CASES.map((c) => c.route).sort()).toEqual(tokenRoutes.sort());
   });
 
   it('every tenant handler (path contains :orgId) declares @RequireCapability', () => {
