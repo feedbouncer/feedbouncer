@@ -56,4 +56,28 @@ describe('secrets CLI', () => {
     expect(await main(['verify'], { FB_ENV: 'test' }, t.io)).toBe(1);
     expect([...t.out, ...t.err].join('\n')).toMatch(/DATABASE_URL/);
   });
+
+  it('rejects unknown flags and stray arguments before touching config or the database', async () => {
+    const cases = [
+      ['reencrypt', '--dryrun'],
+      ['recheck-connections', '--dryrun'],
+      ['reencrypt', 'dry-run'],
+      ['status', '--dry-run'],
+      ['verify', '--dry-run'],
+      ['recheck-connections', '--batch-size', '5'],
+      ['keygen', '--dry-run'],
+      ['keygen', 'extra'],
+      ['reencrypt', '--batch-size=5'],
+    ];
+    for (const argv of cases) {
+      const t = io();
+      // No env at all: a usage error (2) must win over config errors (1), so
+      // nothing connected to a database or wrote anything.
+      expect(await main(argv, {}, t.io), argv.join(' ')).toBe(2);
+      expect(t.err.join('\n')).toMatch(/Usage:/);
+    }
+    const t = io();
+    await main(['reencrypt', '--dryrun'], {}, t.io);
+    expect(t.err.join('\n')).toMatch(/--dryrun/);
+  });
 });

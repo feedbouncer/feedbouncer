@@ -41,7 +41,18 @@ it('status -> reencrypt --dry-run -> reencrypt -> status shows k1 removable', as
   const io = { out: (l: string) => out.push(l), err: (l: string) => out.push(l) };
   expect(await main(['status'], env, io)).toBe(0);
   expect(out.join('\n')).toMatch(/credentials not on the active key: 1/);
+  out.length = 0;
+  // A mistyped flag must not fall through to a real run.
+  expect(await main(['reencrypt', '--dryrun'], env, io)).toBe(2);
+  expect(await main(['reencrypt', 'dry-run'], env, io)).toBe(2);
+  expect(await main(['recheck-connections', '--dryrun'], env, io)).toBe(2);
+  expect(out.join('\n')).not.toMatch(/rewrapped|restored/);
+  out.length = 0;
+  expect(await main(['status'], env, io)).toBe(0);
+  expect(out.join('\n')).toMatch(/credentials not on the active key: 1/);
+  out.length = 0;
   expect(await main(['reencrypt', '--dry-run'], env, io)).toBe(1); // dry run leaves rows remaining
+  expect(out.join('\n')).toMatch(/re-encrypting to active key k2/);
   expect(await main(['reencrypt', '--batch-size', '10'], env, io)).toBe(0);
   out.length = 0;
   expect(await main(['status'], env, io)).toBe(0);

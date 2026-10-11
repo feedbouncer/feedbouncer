@@ -34,26 +34,50 @@ const USAGE = `Usage: pnpm secrets <command>
   reencrypt [--dry-run] [--batch-size <n>]   move credentials onto the active key (resumable)
   recheck-connections [--dry-run]            restore connections whose credentials are readable again`;
 
-const DB_COMMANDS = ['status', 'verify', 'reencrypt', 'recheck-connections'];
-
 class UsageError extends Error {}
 
-function flag(args: readonly string[], name: string): boolean {
-  return args.includes(name);
+type FlagKind = 'boolean' | 'value';
+
+// Every command's accepted flags. Anything else is a usage error: a mistyped
+// --dry-run must never silently turn into a real run.
+const COMMAND_FLAGS: Readonly<Record<string, Readonly<Record<string, FlagKind>>>> = {
+  keygen: { '--id': 'value' },
+  status: {},
+  verify: { '--batch-size': 'value' },
+  reencrypt: { '--dry-run': 'boolean', '--batch-size': 'value' },
+  'recheck-connections': { '--dry-run': 'boolean' },
+};
+
+interface ParsedFlags {
+  flags: Set<string>;
+  values: Map<string, string>;
 }
 
-function option(args: readonly string[], name: string): string | undefined {
-  const i = args.indexOf(name);
-  if (i === -1) return undefined;
-  const v = args[i + 1];
-  if (v === undefined || v.startsWith('--')) throw new UsageError(`${name} needs a value`);
-  return v;
+function parseFlags(cmd: string, args: readonly string[]): ParsedFlags {
+  const allowed = COMMAND_FLAGS[cmd] ?? {};
+  const flags = new Set<string>();
+  const values = new Map<string, string>();
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i] as string;
+    if (!a.startsWith('--')) throw new UsageError(`unexpected argument "${a}"`);
+    const kind = allowed[a];
+    if (kind === undefined) throw new UsageError(`unknown flag ${a} for "${cmd}"`);
+    if (kind === 'boolean') {
+      flags.add(a);
+      continue;
+    }
+    const v = args[i + 1];
+    if (v === undefined || v.startsWith('--')) throw new UsageError(`${a} needs a value`);
+    values.set(a, v);
+    i++;
+  }
+  return { flags, values };
 }
 
-function keygen(args: readonly string[], io: CliIo): number {
+function keygen(parsed: ParsedFlags, io: CliIo): number {
   const d = new Date();
   const today = `k${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
-  const id = option(args, '--id') ?? today;
+  const id = parsed.values.get('--id') ?? today;
   if (!KEY_ID_PATTERN.test(id)) {
     throw new UsageError('--id must be 1-32 lowercase letters, digits or dashes');
   }
@@ -81,16 +105,18 @@ export async function main(
 ): Promise<number> {
   const [cmd, ...args] = argv;
   try {
-    if (cmd === 'keygen') return keygen(args, io);
-    if (!DB_COMMANDS.includes(cmd ?? '')) {
-      throw new UsageError(cmd ? `unknown command "${cmd}"` : 'missing command');
+    if (cmd !== undefined && !Object.hasOwn(COMMAND_FLAGS, cmd)) {
+      throw new UsageError(`unknown command "${cmd}"`);
     }
-    const batchRaw = option(args, '--batch-size') ?? '100';
+    if (cmd === undefined) throw new UsageError('missing command');
+    const parsed = parseFlags(cmd, args);
+    if (cmd === 'keygen') return keygen(parsed, io);
+    const batchRaw = parsed.values.get('--batch-size') ?? '100';
     const batchSize = /^\d+$/.test(batchRaw) ? Number(batchRaw) : Number.NaN;
     if (!(batchSize >= 1 && batchSize <= 1000)) {
       throw new UsageError('--batch-size must be an integer between 1 and 1000');
     }
-    const dryRun = flag(args, '--dry-run');
+    const dryRun = parsed.flags.has('--dry-run');
 
     const env = resolveFileEnv(rawEnv, ['DATABASE_URL', ...ENCRYPTION_FILE_VARS]);
     const appEnv = readAppEnv(env);
@@ -132,6 +158,7 @@ export async function main(
         return r.unreadable.length === 0 ? 0 : 1;
       }
       if (cmd === 'reencrypt') {
+        io.out(`re-encrypting to active key ${keys.activeKeyId}`);
         const r = await reencryptAll(pool, keys, {
           dryRun,
           batchSize,
