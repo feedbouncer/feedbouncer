@@ -1,6 +1,9 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { APIError } from 'better-auth/api';
+import type { DBAdapter } from 'better-auth/adapters';
 import { getAdapter } from 'better-auth/db/adapter';
+import { isOwnerRequiredViolation } from '@feedbouncer/db';
 import { errorFields } from '@feedbouncer/service-runtime';
 import type { AppDeps } from '../deps.js';
 import type { AuthEmails } from './emails.js';
@@ -30,6 +33,43 @@ export interface AuthHooks {
  */
 export const CLIENT_IP_HEADER = 'x-fb-client-ip';
 
+const soleOwner = () => new APIError('CONFLICT', { message: 'sole_owner' });
+
+const deletingAccount = new AsyncLocalStorage<true>();
+
+/** Marks the Better Auth calls made by fn as part of an account deletion request. */
+export const runAccountDeletion = <T>(fn: () => Promise<T>): Promise<T> =>
+  deletingAccount.run(true, fn);
+
+/**
+ * Backstop for beforeDeleteUser: if the last-owner trigger refuses the user
+ * delete at commit (a co-owner left after the hook ran), report the same denial
+ * instead of a 500. Better Auth deletes a user's sessions and accounts first,
+ * outside any transaction, so a refused delete would also have signed the user
+ * out and removed their password; during a deletion request those deletes are
+ * skipped and left to the foreign-key cascade, which is atomic with the user row.
+ * This depends on Better Auth's non-transactional delete order (1.7.7); the
+ * last-owner race test in account-deletion.integration.test.ts pins it.
+ */
+function withLastOwnerGuard(adapter: DBAdapter): DBAdapter {
+  return {
+    ...adapter,
+    deleteMany: async (args) => {
+      const cascaded = args.model === 'session' || args.model === 'account';
+      const byUser = args.where?.some((w) => w.field === 'userId') ?? false;
+      if (cascaded && deletingAccount.getStore() && byUser) return 0;
+      return adapter.deleteMany(args);
+    },
+    delete: async (args) => {
+      try {
+        return await adapter.delete(args);
+      } catch (err) {
+        throw args.model === 'user' && isOwnerRequiredViolation(err) ? soleOwner() : err;
+      }
+    },
+  };
+}
+
 const ts = { createdAt: 'created_at', updatedAt: 'updated_at' } as const;
 
 // Better Auth is mapped onto the hand-written auth_* tables (packages/db); its
@@ -46,7 +86,7 @@ export function createAuth(deps: AppDeps, emails: AuthEmails, hooks: AuthHooks) 
     database: (options: BetterAuthOptions) => {
       const adapter = getAdapter({ ...options, database: deps.pool });
       adapter.catch(() => {}); // surfaced by the first query that awaits it
-      return withSessionTokenDigests(adapter);
+      return withLastOwnerGuard(withSessionTokenDigests(adapter));
     },
     trustedOrigins: [web],
     rateLimit: { enabled: false }, // the API's Redis limiter owns rate limiting
@@ -76,7 +116,7 @@ export function createAuth(deps: AppDeps, emails: AuthEmails, hooks: AuthHooks) 
             await hooks.beforeDeleteUser(user.id);
           } catch (err) {
             if (err instanceof UserDeletionBlockedError) {
-              throw new APIError('CONFLICT', { message: 'sole_owner' });
+              throw soleOwner();
             }
             throw err;
           }

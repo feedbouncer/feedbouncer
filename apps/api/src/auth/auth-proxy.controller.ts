@@ -3,7 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
 import { AUTH, DEPS, RATE_LIMITS } from '../tokens.js';
-import { CLIENT_IP_HEADER, type Auth } from './auth.js';
+import { CLIENT_IP_HEADER, runAccountDeletion, type Auth } from './auth.js';
 import { normalizeEmail } from './email.js';
 import { assertPassword } from './password-policy.js';
 import type { AuthRateLimits } from './rate-limit.js';
@@ -34,6 +34,16 @@ const OK = { status: 'ok' } as const;
 const FORWARD_HEADERS = ['cookie', 'user-agent'];
 const MAX_LOGIN_PASSWORD = 512;
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+// A password Better Auth is asked to verify. It skips verification for falsy
+// values (an empty string), so anything that is not a non-empty string within
+// the bound is refused here, as a wrong credential, without being forwarded.
+const credential = (v: unknown): string => {
+  const s = str(v);
+  if (s === undefined || s.length === 0 || s.length > MAX_LOGIN_PASSWORD) {
+    throw new ApiError(401, 'invalid_credentials');
+  }
+  return s;
+};
 
 @Controller('api/auth')
 export class AuthProxyController {
@@ -63,10 +73,7 @@ export class AuthProxyController {
     switch (kind) {
       case 'sign-in': {
         email = normalizeEmail(input.email);
-        const password = str(input.password);
-        if (password === undefined || password.length > MAX_LOGIN_PASSWORD) {
-          throw new ApiError(401, 'invalid_credentials');
-        }
+        const password = credential(input.password);
         await this.limits.reserveLoginAttempt(email, req.ip);
         forward = { email, password };
         break;
@@ -94,18 +101,15 @@ export class AuthProxyController {
         const session = await this.auth.api.getSession({ headers: toHeaders(req) });
         if (!session) throw new ApiError(401, 'unauthenticated');
         email = session.user.email;
+        const current = credential(kind === 'delete-user' ? input.password : input.currentPassword);
         // Both verify the current password, so they count as guessing attempts.
         await this.limits.reserveLoginAttempt(email, req.ip);
         if (kind === 'delete-user') {
-          const password = str(input.password);
-          if (password === undefined) throw new ApiError(400, 'invalid_request');
-          forward = { password };
+          forward = { password: current };
         } else {
-          const currentPassword = str(input.currentPassword);
+          const currentPassword = current;
           const newPassword = str(input.newPassword);
-          if (currentPassword === undefined || newPassword === undefined) {
-            throw new ApiError(400, 'invalid_request');
-          }
+          if (newPassword === undefined) throw new ApiError(400, 'invalid_request');
           assertPassword(newPassword, [email, session.user.name]);
           forward = { currentPassword, newPassword, revokeOtherSessions: true };
         }
@@ -128,13 +132,15 @@ export class AuthProxyController {
       headers.set('content-type', 'application/json');
       headers.set('origin', web); // the origin guard already vetted this request
     }
-    const upstream = await this.auth.handler(
-      new Request(`${web}/api/auth${sub}${search}`, {
-        method: req.method,
-        headers,
-        ...(forward ? { body: JSON.stringify(forward) } : {}),
-      }),
-    );
+    const call = () =>
+      this.auth.handler(
+        new Request(`${web}/api/auth${sub}${search}`, {
+          method: req.method,
+          headers,
+          ...(forward ? { body: JSON.stringify(forward) } : {}),
+        }),
+      );
+    const upstream = await (kind === 'delete-user' ? runAccountDeletion(call) : call());
     for (const c of upstream.headers.getSetCookie()) void reply.header('set-cookie', c);
     const s = upstream.status;
 

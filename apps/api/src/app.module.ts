@@ -1,5 +1,6 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { createAccountDeletionHooks } from './auth/account-deletion.js';
 import { createAuth, type AuthHooks } from './auth/auth.js';
 import { AuthProxyController } from './auth/auth-proxy.controller.js';
 import { createAuthEmails, type AuthEmails } from './auth/emails.js';
@@ -22,9 +23,6 @@ import { OrgsService } from './orgs/orgs.service.js';
 import { OrgAccessGuard } from './tenancy/org-access.guard.js';
 import { ACCOUNT_DELETION, AUTH, AUTH_EMAILS, DEPS, RATE_LIMITS } from './tokens.js';
 import type { AppDeps } from './deps.js';
-
-// Until account deletion has its own service, nothing blocks a deletion.
-const allowAccountDeletion: AuthHooks = { beforeDeleteUser: async () => {} };
 
 // Providers are wired explicitly (inject: [DEPS, ...]) rather than through
 // constructor type metadata, which the test transformer does not emit.
@@ -64,7 +62,11 @@ export class AppModule {
           inject: [DEPS],
           useFactory: (d: AppDeps) => createAuthRateLimits(d.redis, d.redisKeyPrefix),
         },
-        { provide: ACCOUNT_DELETION, useValue: allowAccountDeletion },
+        {
+          provide: ACCOUNT_DELETION,
+          inject: [DEPS],
+          useFactory: (d: AppDeps) => createAccountDeletionHooks(d.pool),
+        },
         {
           provide: AUTH,
           inject: [DEPS, AUTH_EMAILS, ACCOUNT_DELETION],
