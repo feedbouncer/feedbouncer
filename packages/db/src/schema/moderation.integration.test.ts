@@ -239,6 +239,15 @@ describe('deletion and erasure', () => {
   it('erasing a user keeps their decisions with actor_user_id NULL', async () => {
     const t = await seedTenant(ctx.c, `user-${uuid()}`);
     const did = await decide(ctx.c, t, await comment(ctx.c, t), { actorType: 'user' });
+    const heir = (
+      await ctx.c.query<{ id: string }>('INSERT INTO app_user (email) VALUES ($1) RETURNING id', [
+        `heir-${uuid()}@example.test`,
+      ])
+    ).rows[0]!.id;
+    await ctx.c.query(
+      "INSERT INTO membership (organization_id, user_id, role) VALUES ($1, $2, 'owner')",
+      [t.organizationId, heir],
+    );
     await ctx.c.query('DELETE FROM app_user WHERE id = $1', [t.userId]);
     expect(
       (await ctx.c.query('SELECT actor_type, actor_user_id FROM decision WHERE id = $1', [did]))

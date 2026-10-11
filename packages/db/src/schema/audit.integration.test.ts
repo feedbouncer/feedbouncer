@@ -73,6 +73,15 @@ describe('audit_event', () => {
     const t = await seedTenant(ctx.c, `aud-${uuid()}`);
     const id = await audit(ctx.c, t);
     await ctx.c.query('DELETE FROM brand WHERE id = $1', [t.brandId]);
+    const heir = (
+      await ctx.c.query<{ id: string }>('INSERT INTO app_user (email) VALUES ($1) RETURNING id', [
+        `heir-${uuid()}@example.test`,
+      ])
+    ).rows[0]!.id;
+    await ctx.c.query(
+      "INSERT INTO membership (organization_id, user_id, role) VALUES ($1, $2, 'owner')",
+      [t.organizationId, heir],
+    );
     await ctx.c.query('DELETE FROM app_user WHERE id = $1', [t.userId]);
     expect(
       (
