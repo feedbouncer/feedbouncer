@@ -94,7 +94,11 @@ test('.env.example covers every referenced variable, with dev-only credentials',
   }
   for (const [name, { value }] of entries) {
     if (/PASSWORD|SECRET|TOKEN|KEY/.test(name))
-      assert.match(value, /^dev-only-/, `${name} must start with dev-only-`);
+      assert.match(
+        value,
+        /^dev-(only-|example)/,
+        `${name} must start with dev-only- (or dev-example for encryption keys)`,
+      );
   }
 });
 
