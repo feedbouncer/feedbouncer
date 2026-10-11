@@ -23,7 +23,7 @@ const nvmrc = (await read('.nvmrc')).trim();
 const svc = compose.services;
 
 const APPS = ['api', 'worker', 'web'];
-const LONG_RUNNING = ['postgres', 'redis', ...APPS];
+const LONG_RUNNING = ['postgres', 'redis', 'mailpit', ...APPS];
 const REQUIRED = ['POSTGRES_USER', 'POSTGRES_PASSWORD', 'POSTGRES_DB', 'REDIS_PASSWORD'];
 
 function envEntries() {
@@ -43,9 +43,10 @@ function memBytes(value) {
   return Number(m[1]) * (m[2].toLowerCase() === 'g' ? 1024 ** 3 : 1024 ** 2);
 }
 
-test('defines the five services plus the one-shot migrate service', () => {
+test('defines the long-running services plus the one-shot migrate service', () => {
   assert.deepEqual(Object.keys(svc).sort(), [
     'api',
+    'mailpit',
     'migrate',
     'postgres',
     'redis',
@@ -101,6 +102,12 @@ test('postgres and redis are unpublished by default and localhost-only when opte
 test('web and api publish on a configurable, localhost-default bind address', () => {
   assert.deepEqual(svc.api.ports, ['${FB_BIND_ADDRESS:-127.0.0.1}:${API_HOST_PORT:-3001}:3001']);
   assert.deepEqual(svc.web.ports, ['${FB_BIND_ADDRESS:-127.0.0.1}:${WEB_HOST_PORT:-3000}:3000']);
+});
+
+test('mailpit UI is published on the configurable, localhost-default bind address', () => {
+  assert.deepEqual(svc.mailpit.ports, [
+    '${FB_BIND_ADDRESS:-127.0.0.1}:${MAILPIT_UI_HOST_PORT:-8025}:8025',
+  ]);
 });
 
 test('worker publishes nothing and every service is scalable', () => {
@@ -192,6 +199,7 @@ test('memory limits fit a typical laptop Docker allocation', () => {
 test('images are pinned to the ROADMAP majors, never latest', () => {
   assert.match(svc.postgres.image, /^postgres:17(\.\d+)?-alpine$/);
   assert.match(svc.redis.image, /^redis:8\.\d+(\.\d+)?-alpine$/);
+  assert.match(svc.mailpit.image, /^axllent\/mailpit:v1\.\d+\.\d+@sha256:[0-9a-f]{64}$/);
 });
 
 test('services receive explicit environment only (no env_file)', () => {
