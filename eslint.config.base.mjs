@@ -44,7 +44,11 @@ export function restrictProcessEnv({ exempt, message }) {
       'no-restricted-imports': [
         'error',
         {
-          paths: ['node:process', 'process'].map((name) => ({ name, importNames: ['env'], message })),
+          paths: ['node:process', 'process'].map((name) => ({
+            name,
+            importNames: ['env'],
+            message,
+          })),
         },
       ],
       'no-restricted-syntax': [
