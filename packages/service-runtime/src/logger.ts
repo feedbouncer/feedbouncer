@@ -16,7 +16,12 @@ export interface Logger {
 // redact() runs on arbitrary error text.
 const TOKEN = /\S+/g;
 const SECRET_PAIR =
-  /(password|passwd|pwd|secret|token|apikey|api_key)(["']?\s*[=:]\s*)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s&,;'"]+)/gi;
+  /(password|passwd|pwd|secret|token|apikey|api_key|encryption_keys?)(["']?\s*[=:]\s*)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s&,;'"]+)/gi;
+
+// A field whose NAME looks secret is redacted whatever its value, so a caller
+// cannot leak a token by logging it under a descriptive key.
+const SECRET_FIELD =
+  /(pass(word|wd)?|pwd|secret|token|api_?key|authorization|cookie|credential|private_?key|encryption_?keys?)/i;
 
 // Inside a token, everything between the first "//" and the LAST "@" is
 // treated as userinfo. A password may itself contain "@", "/", "?" or "#", so
@@ -61,7 +66,10 @@ export function createLogger(
     (msg: string, fields: LogFields = {}): void => {
       if (LOG_LEVELS.indexOf(lvl) < min) return;
       const safe = Object.fromEntries(
-        Object.entries(fields).map(([k, v]) => [k, typeof v === 'string' ? redact(v) : v]),
+        Object.entries(fields).map(([k, v]) => [
+          k,
+          SECRET_FIELD.test(k) ? '[redacted]' : typeof v === 'string' ? redact(v) : v,
+        ]),
       );
       write(
         JSON.stringify({
