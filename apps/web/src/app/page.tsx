@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { apiInternalUrl } from '../lib/api-url';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +27,10 @@ export default async function Home() {
       <p>
         Local development stack. API: <strong data-testid="api-status">{status}</strong>
       </p>
+      <nav>
+        <Link href="/login">Log in</Link> · <Link href="/sign-up">Sign up</Link> ·{' '}
+        <Link href="/orgs">My organizations</Link>
+      </nav>
     </main>
   );
 }

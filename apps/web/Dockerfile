@@ -25,6 +25,10 @@ EXPOSE 3000
 CMD ["node_modules/.bin/next", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
 
 FROM base AS build
+# next.config.ts resolves the /api rewrites at build time, so the production
+# image must be built with the API's in-network URL (default: compose's api).
+ARG API_INTERNAL_URL=http://api:3001
+ENV API_INTERNAL_URL=${API_INTERNAL_URL}
 RUN pnpm turbo run build --filter=@feedbouncer/web...
 
 FROM node:${NODE_VERSION}-slim AS runtime
