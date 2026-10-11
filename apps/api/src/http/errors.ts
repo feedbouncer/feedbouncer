@@ -26,6 +26,8 @@ export type ErrorCode =
   | 'confirmation_mismatch'
   | 'brand_name_taken'
   | 'brand_archived'
+  | 'invitation_email_mismatch'
+  | 'invitation_not_pending'
   | 'rate_limited'
   | 'temporarily_unavailable';
 
@@ -50,6 +52,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   confirmation_mismatch: 'Type the organization name exactly to confirm.',
   brand_name_taken: 'A brand with this name already exists in this organization.',
   brand_archived: 'Archived brands cannot be renamed.',
+  invitation_email_mismatch: 'This invitation was sent to a different email address.',
+  invitation_not_pending: 'This invitation is no longer pending.',
   rate_limited: 'Too many attempts. Try again later.',
   temporarily_unavailable: 'Temporarily unavailable. Try again shortly.',
 };
