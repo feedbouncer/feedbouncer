@@ -1,20 +1,12 @@
-import baseConfig from '../../eslint.config.base.mjs';
+import baseConfig, { restrictProcessEnv } from '../../eslint.config.base.mjs';
 
 export default [
   ...baseConfig,
-  {
-    files: ['src/**/*.ts'],
-    ignores: ['src/main.ts', 'src/cli/**', 'src/**/*.test.ts'],
-    rules: {
-      'no-restricted-properties': [
-        'error',
-        {
-          object: 'process',
-          property: 'env',
-          message:
-            'Read configuration only via loadWorkerEnv() in main.ts (single typed config layer). CLI entry points under src/cli are exempt because they are standalone processes.',
-        },
-      ],
-    },
-  },
+  restrictProcessEnv({
+    // enqueue-selftest is a standalone operator tool that needs only REDIS_URL (validated with
+    // readUrl); requiring the full worker secrets would regress it. Exempt that file only, so a
+    // new CLI must go through loadWorkerEnv() or be added here deliberately.
+    exempt: ['src/main.ts', 'src/cli/enqueue-selftest.ts', 'src/**/*.test.ts'],
+    message: 'Read configuration only via loadWorkerEnv() in main.ts (single typed config layer).',
+  }),
 ];

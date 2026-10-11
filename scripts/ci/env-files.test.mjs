@@ -110,31 +110,71 @@ test('the dev-only check rejects real-looking secret values', () => {
   ]);
 });
 
+// Lint a snippet as if it lived at <cwd>/<file>; resolves to eslint's stdout (empty when clean).
+async function lintOutput(cwd, file, source = 'export const x = process.env.FOO;\n') {
+  const p = run('pnpm', ['exec', 'eslint', '--stdin', '--stdin-filename', file], {
+    cwd: new URL(cwd, root),
+  });
+  p.child.stdin.end(source);
+  try {
+    return (await p).stdout;
+  } catch (e) {
+    return e.stdout ?? '';
+  }
+}
+
+// The turbo env-var rule also fires on process.env.FOO; match only the process.env restrictions.
+const RESTRICTED = /no-restricted-(properties|imports|syntax)/;
+
 test('ESLint restricts process.env to the config entry points', async () => {
-  const RULE = /no-restricted-properties/;
-  const lintOutput = async (cwd, file) => {
-    const p = run('pnpm', ['exec', 'eslint', '--stdin', '--stdin-filename', file], {
-      cwd: new URL(cwd, root),
-    });
-    p.child.stdin.end('export const x = process.env.FOO;\n');
-    try {
-      return (await p).stdout;
-    } catch (e) {
-      return e.stdout ?? '';
-    }
-  };
   for (const [cwd, file] of [
     ['apps/api/', 'src/routes/foo.ts'],
     ['apps/worker/', 'src/jobs/foo.ts'],
+    ['apps/worker/', 'src/cli/other.ts'],
     ['packages/secrets/', 'src/foo.ts'],
   ]) {
-    assert.match(await lintOutput(cwd, file), RULE, `${cwd}${file} must be rejected`);
+    assert.match(await lintOutput(cwd, file), RESTRICTED, `${cwd}${file} must be rejected`);
   }
   for (const [cwd, file] of [
     ['apps/api/', 'src/main.ts'],
-    ['apps/worker/', 'src/cli/foo.ts'],
+    ['apps/api/', 'src/testing/harness.ts'],
+    ['apps/worker/', 'src/main.ts'],
+    ['apps/worker/', 'src/cli/enqueue-selftest.ts'],
     ['packages/secrets/', 'src/bin.ts'],
   ]) {
-    assert.doesNotMatch(await lintOutput(cwd, file), RULE, `${cwd}${file} must be exempt`);
+    assert.doesNotMatch(await lintOutput(cwd, file), RESTRICTED, `${cwd}${file} must be exempt`);
+  }
+});
+
+test('ESLint exemptions are exact files or the test-only directory, not whole trees', async () => {
+  // A same-named file elsewhere, and a sibling under cli/, are not exempt.
+  for (const [cwd, file] of [
+    ['apps/api/', 'src/routes/harness.ts'],
+    ['apps/api/', 'src/testing.ts'],
+    ['apps/worker/', 'src/cli/enqueue-selftest.ts.ts'],
+    ['apps/worker/', 'src/cli/nested/enqueue-selftest.ts'],
+    ['packages/secrets/', 'src/cli/bin.ts'],
+  ]) {
+    assert.match(await lintOutput(cwd, file), RESTRICTED, `${cwd}${file} must be rejected`);
+  }
+});
+
+test('ESLint catches indirect ways of reading process.env', async () => {
+  const forms = {
+    'globalThis.process.env': 'export const x = globalThis.process.env.FOO;\n',
+    'global.process.env': 'export const x = global.process.env;\n',
+    'bracket access': "export const x = process['env'].FOO;\n",
+    "import { env } from 'node:process'": "import { env } from 'node:process';\nexport const x = env.FOO;\n",
+    "import { env } from 'process'": "import { env } from 'process';\nexport const x = env.FOO;\n",
+    "import * as p from 'node:process'": "import * as p from 'node:process';\nexport const x = p.env.FOO;\n",
+    'const p = process': 'const p = process;\nexport const x = p.env.FOO;\n',
+    'const { env } = process': 'const { env } = process;\nexport const x = env.FOO;\n',
+  };
+  for (const [name, source] of Object.entries(forms)) {
+    assert.match(await lintOutput('apps/api/', 'src/routes/foo.ts', source), RESTRICTED, name);
+  }
+  // Same forms stay allowed where process.env is exempt.
+  for (const [name, source] of Object.entries(forms)) {
+    assert.doesNotMatch(await lintOutput('apps/api/', 'src/main.ts', source), RESTRICTED, `${name} in main.ts`);
   }
 });
