@@ -262,17 +262,19 @@ In practice:
 
 - Credential-like columns are limited to a reviewed allowlist in
   `conventions.integration.test.ts`: `auth_account.password_hash` (scrypt hash),
-  `auth_session.token` (the column Better Auth requires; the API must store only
-  a SHA-256 digest of the session token, enforced by an API-level test added
-  with the API's auth layer) and `invitation.token_hash` (sha256 of a random
-  token). The guard rejects any other column named like
-  `token`, `secret`, `password` or `api_key`; the Secrets ticket adds
-  `encrypted_*` `bytea` columns, which are exempt.
-- `auth_verification.value` and `auth_verification.identifier` do not match the
-  guard's name pattern, so they are not on the allowlist, but they follow the
-  same rule: the API must store only a SHA-256 digest, enforced by an API-level
-  test added with the API's auth layer; the raw token exists only in the
-  cookie/email link.
+  `auth_session.token` (SHA-256 digest of the session token) and
+  `invitation.token_hash` (SHA-256 of a random token). The guard rejects any
+  other column named like `token`, `secret`, `password` or `api_key`; the Secrets
+  ticket adds `encrypted_*` `bytea` columns, which are exempt.
+- Bearer tokens are stored only as SHA-256 digests; the raw token exists only in
+  the cookie or email link. `auth_session.token` holds the digest of the session
+  token (the API wraps Better Auth's database adapter), and
+  `auth_verification.identifier` holds the digest of identifiers such as
+  `reset-password:<token>` (Better Auth's `storeIdentifier: 'hashed'`).
+  `auth_verification.value` holds no secret (for a password reset, the user id).
+  Email verification links carry a signed token that is not stored.
+  The API's auth contract test (`apps/api/src/auth/auth-contract.integration.test.ts`)
+  enforces this. Anything new written to these columns must follow the same rule.
 - Never run the Better Auth CLI against this database. It would generate its own
   schema; the `auth_*` tables are maintained by hand-written migrations.
 - `audit_event.details` must not hold secrets or comment bodies (see the contract

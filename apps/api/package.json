@@ -21,6 +21,7 @@
     "@nestjs/common": "12.1.2",
     "@nestjs/core": "12.1.2",
     "@nestjs/platform-fastify": "12.1.2",
+    "better-auth": "1.7.7",
     "fastify": "5.12.5",
     "ioredis": "5.11.1",
     "ipaddr.js": "2.5.0",
