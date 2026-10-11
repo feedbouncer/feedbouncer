@@ -6,7 +6,8 @@
 // "feedbouncer-smoke", must contain "smoke") and passes -p and its own host
 // ports to every docker call. It ignores COMPOSE_PROJECT_NAME and .env ports, and
 // uses compose.yaml only (no overlays), so a developer's "feedbouncer" stack is
-// never touched. WEB_HOST_PORT / API_HOST_PORT / FB_BIND_ADDRESS override its defaults.
+// never touched. WEB_HOST_PORT / API_HOST_PORT / MAILPIT_UI_HOST_PORT / FB_BIND_ADDRESS
+// override its defaults.
 // Spawns docker with argument arrays only (no shell). Never prints env values.
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -16,6 +17,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import {
   DESTROY_FLAG,
+  SMOKE_SERVICES,
   buildEnqueueExecArgv,
   parsePs,
   parseSmokeArgs,
@@ -25,8 +27,14 @@ import {
 } from './smoke-lib.mjs';
 
 const exec = promisify(execFile);
-const REQUIRED = ['POSTGRES_USER', 'POSTGRES_PASSWORD', 'POSTGRES_DB', 'REDIS_PASSWORD'];
-const LONG_RUNNING = ['postgres', 'redis', 'api', 'worker', 'web'];
+const REQUIRED = [
+  'POSTGRES_USER',
+  'POSTGRES_PASSWORD',
+  'POSTGRES_DB',
+  'REDIS_PASSWORD',
+  'AUTH_SECRET',
+];
+const LONG_RUNNING = SMOKE_SERVICES;
 const WAIT = ['--wait', '--wait-timeout', '420'];
 const JOBS = 200;
 
@@ -48,6 +56,7 @@ const CHILD_ENV = {
   COMPOSE_FILE: 'compose.yaml',
   WEB_HOST_PORT: cfg.webPort,
   API_HOST_PORT: cfg.apiPort,
+  MAILPIT_UI_HOST_PORT: cfg.mailpitPort,
   FB_BIND_ADDRESS: cfg.bind,
 };
 delete CHILD_ENV.COMPOSE_PROFILES;
@@ -168,7 +177,7 @@ async function main() {
   check(migrate?.State === 'exited' && migrate?.ExitCode === 0, 'migrate ran once and exited 0');
 
   step(
-    'exposure: only web and api are published (base compose.yaml, no overlay), on the bind address',
+    'exposure: only web, api and the mail UI are published (base compose.yaml, no overlay), on the bind address',
   );
   for (const c of running) {
     const published = (c.Publishers ?? []).filter((p) => p.PublishedPort > 0);

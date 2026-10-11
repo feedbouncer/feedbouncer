@@ -73,8 +73,3 @@ export function renderInvitation(p: {
     html: page(`Join ${org}`, [intro], { label: 'Accept invitation', url: p.url }),
   };
 }
-
-/** Test helper: the first http(s) URL in a text body. */
-export function extractFirstUrl(text: string): string | null {
-  return /https?:\/\/[^\s"<>]+/.exec(text)?.[0] ?? null;
-}

@@ -11,15 +11,27 @@
     "format": "prettier --write . --ignore-path ../../.prettierignore --ignore-unknown",
     "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
     "typecheck": "tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@feedbouncer/db": "workspace:*",
+    "@feedbouncer/mailer": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
-    "ioredis": "5.11.1"
+    "@nestjs/common": "12.1.2",
+    "@nestjs/core": "12.1.2",
+    "@nestjs/platform-fastify": "12.1.2",
+    "fastify": "5.12.5",
+    "ioredis": "5.11.1",
+    "ipaddr.js": "2.5.0",
+    "pg": "8.23.1",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/node": "24.13.6",
+    "@types/pg": "8.23.1",
     "tsx": "4.23.15"
   }
 }

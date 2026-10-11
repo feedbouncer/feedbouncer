@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml, extractFirstUrl, headerSafe, renderInvitation } from './templates.js';
+import { escapeHtml, headerSafe, renderInvitation } from './templates.js';
 
 describe('templates', () => {
   it('escapes HTML in organization and inviter names', () => {
@@ -37,10 +37,5 @@ describe('templates', () => {
   });
   it('escapes the URL attribute', () => {
     expect(escapeHtml('http://x/?a=1&b="2"')).toBe('http://x/?a=1&amp;b=&quot;2&quot;');
-  });
-  it('extractFirstUrl finds the link in a text body', () => {
-    expect(extractFirstUrl('Click: http://localhost:3000/invite?token=a_b-c\nThanks')).toBe(
-      'http://localhost:3000/invite?token=a_b-c',
-    );
   });
 });

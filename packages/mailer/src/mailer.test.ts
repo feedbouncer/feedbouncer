@@ -1,25 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { MemoryMailer } from './mailer.js';
 import { createSmtpMailer } from './smtp.js';
 
 const msg = (to: string) => ({ to, subject: 's', text: 't', html: '<p>t</p>' });
-
-describe('MemoryMailer', () => {
-  it('records messages and clears them', async () => {
-    const m = new MemoryMailer();
-    await m.send(msg('a@x.test'));
-    expect(m.sent).toHaveLength(1);
-    m.clear();
-    expect(m.sent).toHaveLength(0);
-  });
-  it('lastTo matches case-insensitively and returns the latest', async () => {
-    const m = new MemoryMailer();
-    await m.send({ ...msg('Alice@X.test'), subject: 'first' });
-    await m.send({ ...msg('alice@x.test'), subject: 'second' });
-    expect(m.lastTo('ALICE@x.TEST')?.subject).toBe('second');
-    expect(m.lastTo('bob@x.test')).toBeUndefined();
-  });
-});
 
 describe('createSmtpMailer', () => {
   it('rejects a recipient containing CR/LF before touching the network', async () => {

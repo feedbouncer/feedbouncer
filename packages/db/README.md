@@ -262,15 +262,17 @@ In practice:
 
 - Credential-like columns are limited to a reviewed allowlist in
   `conventions.integration.test.ts`: `auth_account.password_hash` (scrypt hash),
-  `auth_session.token` (stored as a SHA-256 hash by the API's Better Auth adapter
-  layer; the raw token exists only in the cookie) and `invitation.token_hash`
-  (sha256 of a random token). The guard rejects any other column named like
+  `auth_session.token` (the column Better Auth requires; the API must store only
+  a SHA-256 digest of the session token, enforced by an API-level test added
+  with the API's auth layer) and `invitation.token_hash` (sha256 of a random
+  token). The guard rejects any other column named like
   `token`, `secret`, `password` or `api_key`; the Secrets ticket adds
   `encrypted_*` `bytea` columns, which are exempt.
 - `auth_verification.value` and `auth_verification.identifier` do not match the
   guard's name pattern, so they are not on the allowlist, but they follow the
-  same rule: stored as a SHA-256 hash by the API's Better Auth adapter layer; the
-  raw token exists only in the cookie/email link.
+  same rule: the API must store only a SHA-256 digest, enforced by an API-level
+  test added with the API's auth layer; the raw token exists only in the
+  cookie/email link.
 - Never run the Better Auth CLI against this database. It would generate its own
   schema; the `auth_*` tables are maintained by hand-written migrations.
 - `audit_event.details` must not hold secrets or comment bodies (see the contract

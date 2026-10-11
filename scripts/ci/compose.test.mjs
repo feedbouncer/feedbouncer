@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { URL } from 'node:url';
 import { parse } from 'yaml';
+import { SMOKE_SERVICES } from '../dev-stack/smoke-lib.mjs';
 
 const run = promisify(execFile);
 const root = new URL('../../', import.meta.url);
@@ -24,7 +25,13 @@ const svc = compose.services;
 
 const APPS = ['api', 'worker', 'web'];
 const LONG_RUNNING = ['postgres', 'redis', 'mailpit', ...APPS];
-const REQUIRED = ['POSTGRES_USER', 'POSTGRES_PASSWORD', 'POSTGRES_DB', 'REDIS_PASSWORD'];
+const REQUIRED = [
+  'POSTGRES_USER',
+  'POSTGRES_PASSWORD',
+  'POSTGRES_DB',
+  'REDIS_PASSWORD',
+  'AUTH_SECRET',
+];
 
 function envEntries() {
   const entries = new Map();
@@ -122,13 +129,13 @@ test('healthchecks gate startup in the right order', () => {
   // pg_isready must use TCP: during first-boot init the Unix socket reports
   // ready too early and dependents crash-loop.
   assert.match(svc.postgres.healthcheck.test.join(' '), /pg_isready -h 127\.0\.0\.1/);
-  for (const name of ['api', 'worker']) {
-    assert.deepEqual(svc[name].depends_on, {
-      postgres: { condition: 'service_healthy' },
-      redis: { condition: 'service_healthy' },
-      migrate: { condition: 'service_completed_successfully' },
-    });
-  }
+  const backend = {
+    postgres: { condition: 'service_healthy' },
+    redis: { condition: 'service_healthy' },
+    migrate: { condition: 'service_completed_successfully' },
+  };
+  assert.deepEqual(svc.api.depends_on, { ...backend, mailpit: { condition: 'service_healthy' } });
+  assert.deepEqual(svc.worker.depends_on, backend);
   assert.deepEqual(svc.web.depends_on, { api: { condition: 'service_healthy' } });
   assert.deepEqual(svc.migrate.depends_on, { postgres: { condition: 'service_healthy' } });
   assert.equal(svc.migrate.restart, 'no');
@@ -178,6 +185,26 @@ test("app services mount their own and their workspace dependencies' src read-on
     }
   }
   assert.ok(svc.migrate.volumes.includes('./packages/db/prisma:/repo/packages/db/prisma:ro'));
+});
+
+test('the smoke test checks every long-running service', () => {
+  assert.deepEqual([...SMOKE_SERVICES].sort(), [...LONG_RUNNING].sort());
+});
+
+test('api gets its auth and mail settings, with mail going to the dev sink only', () => {
+  const env = svc.api.environment;
+  assert.equal(
+    env.AUTH_SECRET,
+    '${AUTH_SECRET:?AUTH_SECRET is not set - copy .env.example to .env}',
+  );
+  assert.equal(env.PUBLIC_WEB_URL, 'http://localhost:${WEB_HOST_PORT:-3000}');
+  assert.equal(env.SMTP_URL, 'smtp://mailpit:1025');
+  assert.equal(env.TRUST_PROXY_HOPS, '1');
+  assert.equal(svc.worker.environment.AUTH_SECRET, undefined);
+});
+
+test('.env.example AUTH_SECRET is long enough for the API to start', () => {
+  assert.ok(envEntries().get('AUTH_SECRET').value.length >= 32);
 });
 
 test('redis: no eviction (BullMQ requirement) and no persistence', () => {

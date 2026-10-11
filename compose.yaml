@@ -123,12 +123,20 @@ services:
       <<: *backend-env
       # tsx watch gets no file events through Docker Desktop bind mounts.
       CHOKIDAR_USEPOLLING: '1'
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is not set - copy .env.example to .env}
+      # Browsers reach the API through the web app, so this is the only origin
+      # allowed to send state-changing requests.
+      PUBLIC_WEB_URL: http://localhost:${WEB_HOST_PORT:-3000}
+      SMTP_URL: smtp://mailpit:1025
+      # The web app's server-side proxy is one hop in front of the API.
+      TRUST_PROXY_HOPS: '1'
     ports:
       - '${FB_BIND_ADDRESS:-127.0.0.1}:${API_HOST_PORT:-3001}:3001'
     volumes:
       - ./apps/api/src:/repo/apps/api/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro
+      - ./packages/mailer/src:/repo/packages/mailer/src:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,6 +144,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      mailpit:
+        condition: service_healthy
     healthcheck:
       test:
         [

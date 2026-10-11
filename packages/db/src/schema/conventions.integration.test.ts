@@ -22,7 +22,7 @@ const GLOBAL_TABLES = [
 const ALLOWED_CREDENTIAL_COLUMNS: Record<string, string> = {
   'auth_account.password_hash': 'Better Auth scrypt hash (salted, slow); never plaintext',
   'auth_session.token':
-    "stored as a SHA-256 hash by the API's Better Auth adapter layer; the raw token exists only in the cookie",
+    'token column Better Auth requires; the API must store only a SHA-256 digest (enforced by an API-level test)',
   'invitation.token_hash': 'sha256 of a 32-byte random invitation token',
 };
 

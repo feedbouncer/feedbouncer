@@ -86,19 +86,20 @@ pnpm install
 
 ### Common commands
 
-| Command                               | What it does                                                                          |
-| ------------------------------------- | ------------------------------------------------------------------------------------- |
-| `pnpm build`                          | Builds every package/app via Turborepo (`turbo run build`)                            |
-| `pnpm lint`                           | Lints every package/app via Turborepo (`turbo run lint`)                              |
-| `pnpm format`                         | Formats every package/app with Prettier via Turborepo (`turbo run format`)            |
-| `pnpm format:check`                   | Checks formatting without writing changes (`turbo run format:check`) — use this in CI |
-| `pnpm typecheck`                      | Type-checks every package/app via Turborepo (`turbo run typecheck`)                   |
-| `pnpm test`                           | Runs every package's `test` script via Turborepo, then the `scripts/ci` guard tests   |
-| `pnpm test:scripts`                   | Runs only the `scripts/ci/*.test.mjs` guard tests (`node --test`)                     |
-| `pnpm db:migrate`                     | Applies pending database migrations (needs `DATABASE_URL`)                            |
-| `pnpm db:rollback --yes-destroy-data` | Rolls back the newest migration                                                       |
-| `pnpm db:migration:new <name>`        | Scaffolds a migration directory with `migration.sql` and `down.sql`                   |
-| `pnpm db:status`                      | Shows which migrations are applied                                                    |
+| Command                                           | What it does                                                                                            |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `pnpm build`                                      | Builds every package/app via Turborepo (`turbo run build`)                                              |
+| `pnpm lint`                                       | Lints every package/app via Turborepo (`turbo run lint`)                                                |
+| `pnpm format`                                     | Formats every package/app with Prettier via Turborepo (`turbo run format`)                              |
+| `pnpm format:check`                               | Checks formatting without writing changes (`turbo run format:check`) — use this in CI                   |
+| `pnpm typecheck`                                  | Type-checks every package/app via Turborepo (`turbo run typecheck`)                                     |
+| `pnpm test`                                       | Runs every package's `test` script via Turborepo, then the `scripts/ci` guard tests                     |
+| `pnpm test:scripts`                               | Runs only the `scripts/ci/*.test.mjs` guard tests (`node --test`)                                       |
+| `pnpm db:migrate`                                 | Applies pending database migrations (needs `DATABASE_URL`)                                              |
+| `pnpm db:rollback --yes-destroy-data`             | Rolls back the newest migration                                                                         |
+| `pnpm db:migration:new <name>`                    | Scaffolds a migration directory with `migration.sql` and `down.sql`                                     |
+| `pnpm db:status`                                  | Shows which migrations are applied                                                                      |
+| `pnpm --filter @feedbouncer/api test:integration` | API tests against real services (needs `DATABASE_URL` with rights to create databases, and `REDIS_URL`) |
 
 Turborepo caches the per-package `build`, `lint`, `format:check`, `typecheck` and `test` tasks — an unchanged package's task is skipped on a re-run. The root-level `eslint .` and `prettier --check` steps (root config files only) run every time, as does `pnpm format`, which writes files.
 
