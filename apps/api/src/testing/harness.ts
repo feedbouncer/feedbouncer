@@ -8,7 +8,7 @@ import { Redis } from 'ioredis';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createPool } from '@feedbouncer/db';
 import { migratedDb } from '@feedbouncer/db/testing';
-import { MemoryMailer } from '@feedbouncer/mailer/testing';
+import { extractFirstUrl, MemoryMailer } from '@feedbouncer/mailer/testing';
 import { createLogger } from '@feedbouncer/service-runtime';
 import { buildApp } from '../app.factory.js';
 import type { AppDeps } from '../deps.js';
@@ -123,4 +123,41 @@ export async function startTestApi(overrides: Partial<ApiEnv> = {}): Promise<Tes
       await db.close();
     },
   };
+}
+
+export const PASSWORD = 'correct horse battery staple 42';
+const tick = () => new Promise((r) => setTimeout(r, 20)); // emails are fire-and-forget
+
+/** Signs up through the public endpoint and follows the emailed verification link. */
+export async function signUpAndVerify(
+  api: TestApi,
+  email: string,
+  name = 'Test User',
+): Promise<{ userId: string; email: string }> {
+  const r = await api.req('POST', '/api/v1/auth/sign-up', {
+    body: { email, password: PASSWORD, name },
+  });
+  if (r.status !== 202) throw new Error(`sign-up failed: ${r.status}`);
+  await tick();
+  const normalized = email.trim().toLowerCase();
+  const url = new URL(extractFirstUrl(api.mailer.lastTo(normalized)!.text)!);
+  const v = await api.req('GET', `${url.pathname}${url.search}`);
+  if (v.status !== 302) throw new Error(`verify failed: ${v.status}`);
+  const { rows } = await api.pool.query('SELECT id FROM app_user WHERE email = $1', [normalized]);
+  return { userId: rows[0].id as string, email: normalized };
+}
+
+/** Logs in through the public endpoint and returns the Cookie header value. */
+export async function login(api: TestApi, email: string, password = PASSWORD): Promise<string> {
+  const r = await api.req('POST', '/api/auth/sign-in/email', { body: { email, password } });
+  if (r.status !== 200 || !r.cookie) throw new Error(`login failed: ${r.status}`);
+  return r.cookie;
+}
+
+export async function verifiedUser(
+  api: TestApi,
+  label: string,
+): Promise<{ userId: string; email: string; cookie: string }> {
+  const u = await signUpAndVerify(api, `${label}-${randomUUID().slice(0, 8)}@x.test`);
+  return { ...u, cookie: await login(api, u.email) };
 }

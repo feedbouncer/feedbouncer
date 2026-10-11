@@ -24,6 +24,12 @@ export interface AuthHooks {
   beforeDeleteUser(userId: string): Promise<void>;
 }
 
+/**
+ * Set by the auth proxy from the connection's address, always overwriting any
+ * client-supplied value; Better Auth records it as the session's ip_address.
+ */
+export const CLIENT_IP_HEADER = 'x-fb-client-ip';
+
 const ts = { createdAt: 'created_at', updatedAt: 'updated_at' } as const;
 
 // Better Auth is mapped onto the hand-written auth_* tables (packages/db); its
@@ -56,6 +62,7 @@ export function createAuth(deps: AppDeps, emails: AuthEmails, hooks: AuthHooks) 
     },
     advanced: {
       database: { generateId: 'uuid' },
+      ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
       cookiePrefix: 'fb',
       useSecureCookies: deps.env.publicWebUrl.protocol === 'https:',
     },
@@ -109,7 +116,10 @@ export function createAuth(deps: AppDeps, emails: AuthEmails, hooks: AuthHooks) 
       autoSignIn: false,
       requireEmailVerification: false, // login allowed; creating or joining an org is gated by the API
       minPasswordLength: 12,
-      maxPasswordLength: 128,
+      // Better Auth counts UTF-16 units, our policy (the real limit, in
+      // password-policy.ts) counts code points. Leave room for 4 units per
+      // code point so it can never reject what the policy accepted.
+      maxPasswordLength: 4 * 128,
       resetPasswordTokenExpiresIn: 3_600,
       revokeSessionsOnPasswordReset: true,
       sendResetPassword: async ({ user, url }) => emails.passwordReset(user.email, url),

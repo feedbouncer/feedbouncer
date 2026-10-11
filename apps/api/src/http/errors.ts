@@ -5,13 +5,37 @@ import { Catch, HttpException, type ArgumentsHost, type ExceptionFilter } from '
 import type { FastifyReply } from 'fastify';
 import { errorFields, type Logger } from '@feedbouncer/service-runtime';
 
-export type ErrorCode = 'invalid_request' | 'invalid_origin' | 'not_found' | 'internal_error';
+export type ErrorCode =
+  | 'invalid_request'
+  | 'invalid_origin'
+  | 'not_found'
+  | 'internal_error'
+  | 'invalid_email'
+  | 'password_too_short'
+  | 'password_too_long'
+  | 'weak_password'
+  | 'invalid_credentials'
+  | 'invalid_or_expired_token'
+  | 'unauthenticated'
+  | 'sole_owner'
+  | 'rate_limited'
+  | 'temporarily_unavailable';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
   invalid_origin: 'Request origin is not allowed.',
   not_found: 'Not found.',
   internal_error: 'Something went wrong.',
+  invalid_email: 'Enter a valid email address.',
+  password_too_short: 'Use at least 12 characters.',
+  password_too_long: 'Use at most 128 characters.',
+  weak_password: 'This password is too easy to guess. Try a longer phrase.',
+  invalid_credentials: 'Email or password is incorrect.',
+  invalid_or_expired_token: 'This link is invalid or has expired. Request a new one.',
+  unauthenticated: 'Sign in to continue.',
+  sole_owner: 'You are the only owner of an organization. Transfer ownership or delete it first.',
+  rate_limited: 'Too many attempts. Try again later.',
+  temporarily_unavailable: 'Temporarily unavailable. Try again shortly.',
 };
 
 export class ApiError extends Error {
