@@ -3,7 +3,8 @@ import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { APIError } from 'better-auth/api';
 import type { DBAdapter } from 'better-auth/adapters';
 import { getAdapter } from 'better-auth/db/adapter';
-import { isOwnerRequiredViolation } from '@feedbouncer/db';
+import { isOwnerRequiredViolation, withTransaction } from '@feedbouncer/db';
+import type pg from 'pg';
 import { errorFields } from '@feedbouncer/service-runtime';
 import type { AppDeps } from '../deps.js';
 import type { AuthEmails } from './emails.js';
@@ -34,6 +35,48 @@ export interface AuthHooks {
 export const CLIENT_IP_HEADER = 'x-fb-client-ip';
 
 const soleOwner = () => new APIError('CONFLICT', { message: 'sole_owner' });
+const retryLater = () =>
+  new APIError('SERVICE_UNAVAILABLE', { message: 'temporarily_unavailable' });
+
+// deadlock_detected, serialization_failure: nothing was committed, a retry can succeed.
+const isTransientConflict = (err: unknown): boolean => {
+  const code = (err as { code?: unknown } | null)?.code;
+  return code === '40P01' || code === '40001';
+};
+
+/** The id of a `delete user` call that targets exactly one user by id, if it is one. */
+function singleUserId(
+  where: readonly { field: string; value: unknown; operator?: string | undefined }[],
+) {
+  const [w] = where;
+  return where.length === 1 &&
+    w!.field === 'id' &&
+    (w!.operator ?? 'eq') === 'eq' &&
+    typeof w!.value === 'string'
+    ? w!.value
+    : null;
+}
+
+/**
+ * Deletes a user the way every membership change does: organization rows are
+ * locked first, then membership rows. The cascade deletes the user's
+ * memberships and the deferred last-owner trigger then locks each of their
+ * organizations at commit, which in a plain DELETE would be membership first,
+ * organization second, and could deadlock with a member removal or with
+ * another deletion. Locking the user's organizations up front, in id order,
+ * removes both orders of acquisition.
+ */
+async function deleteUserLocked(pool: pg.Pool, userId: string): Promise<void> {
+  await withTransaction(pool, async (c) => {
+    await c.query(
+      `SELECT o.id FROM organization o
+        WHERE o.id IN (SELECT m.organization_id FROM membership m WHERE m.user_id = $1)
+        ORDER BY o.id FOR NO KEY UPDATE`,
+      [userId],
+    );
+    await c.query('DELETE FROM app_user WHERE id = $1', [userId]);
+  });
+}
 
 const deletingAccount = new AsyncLocalStorage<true>();
 
@@ -50,8 +93,10 @@ export const runAccountDeletion = <T>(fn: () => Promise<T>): Promise<T> =>
  * skipped and left to the foreign-key cascade, which is atomic with the user row.
  * This depends on Better Auth's non-transactional delete order (1.7.7); the
  * last-owner race test in account-deletion.integration.test.ts pins it.
+ * The user row itself is deleted by deleteUserLocked (organization locks
+ * first); a deadlock or serialization failure there is reported as 503.
  */
-function withLastOwnerGuard(adapter: DBAdapter): DBAdapter {
+function withLastOwnerGuard(adapter: DBAdapter, pool: pg.Pool): DBAdapter {
   return {
     ...adapter,
     deleteMany: async (args) => {
@@ -61,10 +106,14 @@ function withLastOwnerGuard(adapter: DBAdapter): DBAdapter {
       return adapter.deleteMany(args);
     },
     delete: async (args) => {
+      if (args.model !== 'user') return adapter.delete(args);
+      const userId = singleUserId(args.where);
       try {
-        return await adapter.delete(args);
+        return await (userId ? deleteUserLocked(pool, userId) : adapter.delete(args));
       } catch (err) {
-        throw args.model === 'user' && isOwnerRequiredViolation(err) ? soleOwner() : err;
+        if (isOwnerRequiredViolation(err)) throw soleOwner();
+        if (isTransientConflict(err)) throw retryLater();
+        throw err;
       }
     },
   };
@@ -86,7 +135,7 @@ export function createAuth(deps: AppDeps, emails: AuthEmails, hooks: AuthHooks) 
     database: (options: BetterAuthOptions) => {
       const adapter = getAdapter({ ...options, database: deps.pool });
       adapter.catch(() => {}); // surfaced by the first query that awaits it
-      return withLastOwnerGuard(withSessionTokenDigests(adapter));
+      return withLastOwnerGuard(withSessionTokenDigests(adapter), deps.pool);
     },
     trustedOrigins: [web],
     rateLimit: { enabled: false }, // the API's Redis limiter owns rate limiting

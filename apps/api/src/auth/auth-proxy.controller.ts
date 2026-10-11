@@ -168,10 +168,13 @@ export class AuthProxyController {
           await this.limits.recordLoginSuccess(email!, req.ip);
           return send(reply, 200, OK);
         }
-        if (kind === 'delete-user' && s === 409) {
-          // The password was verified before the deletion was refused.
+        if (kind === 'delete-user' && (s === 409 || s === 503)) {
+          // The password was verified before the deletion was refused or
+          // rolled back (a lock conflict: nothing was deleted, retrying works).
           await this.limits.recordLoginSuccess(email!, req.ip);
-          throw new ApiError(409, 'sole_owner');
+          throw s === 409
+            ? new ApiError(409, 'sole_owner')
+            : new ApiError(503, 'temporarily_unavailable');
         }
         if (s === 400 || s === 401) throw new ApiError(401, 'invalid_credentials');
         throw new ApiError(500, 'internal_error');

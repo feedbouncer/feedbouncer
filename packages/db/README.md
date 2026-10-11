@@ -196,7 +196,12 @@ who is the sole owner fails with SQLSTATE `23514` and constraint
 Deadlocks: the trigger locks one organization per changed membership row, so
 transactions that change owner memberships in several organizations in different
 orders can deadlock. Postgres aborts one of them with SQLSTATE `40P01`; callers
-should retry the transaction or surface the error.
+should retry the transaction or surface the error. The same applies to a cascade:
+deleting an `app_user` deletes (and row-locks) its memberships first and only
+then, at commit, locks their organizations, the reverse of an application
+transaction that locks the organization and then changes a membership. Lock the
+affected organizations first, in id order, in the same transaction (the API's
+account deletion does this).
 
 ### Emails and brand names
 
