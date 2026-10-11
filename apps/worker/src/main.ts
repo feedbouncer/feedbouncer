@@ -15,7 +15,7 @@ import {
 } from '@feedbouncer/service-runtime';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
-import { reportStartupFailure } from './startup.js';
+import { logConfigurationLoaded, reportStartupFailure } from './startup.js';
 
 let env: WorkerEnv;
 const configWarnings: string[] = [];
@@ -29,10 +29,7 @@ try {
 const log = createLogger('worker', env.logLevel);
 installCrashHandlers(log);
 for (const w of configWarnings) log.warn(w, { appEnv: env.appEnv });
-log.info('configuration loaded', {
-  appEnv: env.appEnv,
-  activeEncryptionKeyId: env.encryption.activeKeyId,
-});
+logConfigurationLoaded(log, env);
 try {
   const workerId = hostname();
   const pool = createPool(env.databaseUrl, {

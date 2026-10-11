@@ -54,6 +54,6 @@ export function loadWorkerEnv(
     concurrency: config.concurrency,
     healthPort: config.healthPort,
     logLevel: config.logLevel,
-    activeEncryptionKeyId: config.encryption.activeKeyId,
+    activeKeyId: config.encryption.activeKeyId,
   });
 }

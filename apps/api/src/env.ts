@@ -94,6 +94,6 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     logLevel: config.logLevel,
     publicWebUrl: publicWebUrl.origin,
     trustProxyHops: config.trustProxyHops,
-    activeEncryptionKeyId: config.encryption.activeKeyId,
+    activeKeyId: config.encryption.activeKeyId,
   });
 }

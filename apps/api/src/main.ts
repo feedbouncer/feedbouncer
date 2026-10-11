@@ -13,6 +13,7 @@ import {
 } from '@feedbouncer/service-runtime';
 import { buildApp } from './app.factory.js';
 import { loadApiEnv, type ApiEnv } from './env.js';
+import { logConfigurationLoaded } from './startup.js';
 
 let env: ApiEnv;
 const configWarnings: string[] = [];
@@ -26,10 +27,7 @@ try {
 const log = createLogger('api', env.logLevel);
 installCrashHandlers(log);
 for (const w of configWarnings) log.warn(w, { appEnv: env.appEnv });
-log.info('configuration loaded', {
-  appEnv: env.appEnv,
-  activeEncryptionKeyId: env.encryption.activeKeyId,
-});
+logConfigurationLoaded(log, env);
 const pool = createPool(env.databaseUrl, {
   applicationName: 'feedbouncer-api',
   onIdleError: (err) => log.warn('postgres idle client error', errorFields(err)),
