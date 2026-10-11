@@ -23,6 +23,18 @@ describe('templates', () => {
     });
     expect(m.subject).not.toMatch(/[\r\n]/);
   });
+  it('keeps newlines in names from spoofing lines of the text body', () => {
+    const m = renderInvitation({
+      organizationName: 'Acme\n\nhttp://evil.test/phish',
+      inviterName: 'Eve\r\nhttp://evil.test/x',
+      role: 'member',
+      url: 'http://x/i?token=1',
+    });
+    const lines = m.text.split('\n');
+    expect(lines.some((l) => l.startsWith('http://evil.test'))).toBe(false);
+    expect(lines.filter((l) => l.startsWith('http'))).toEqual(['http://x/i?token=1']);
+    expect(lines[0]).toContain('Acme http://evil.test/phish');
+  });
   it('escapes the URL attribute', () => {
     expect(escapeHtml('http://x/?a=1&b="2"')).toBe('http://x/?a=1&amp;b=&quot;2&quot;');
   });

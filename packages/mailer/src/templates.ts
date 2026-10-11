@@ -63,12 +63,14 @@ export function renderInvitation(p: {
   role: string;
   url: string;
 }): Body {
-  const who = p.inviterName ? `${p.inviterName} invited you` : 'You have been invited';
-  const intro = `${who} to join ${p.organizationName} on FeedBouncer as ${p.role}. The invitation expires in 7 days.`;
+  const org = headerSafe(p.organizationName);
+  const inviter = p.inviterName ? headerSafe(p.inviterName) : '';
+  const who = inviter ? `${inviter} invited you` : 'You have been invited';
+  const intro = `${who} to join ${org} on FeedBouncer as ${p.role}. The invitation expires in 7 days.`;
   return {
-    subject: headerSafe(`Join ${p.organizationName} on FeedBouncer`),
+    subject: `Join ${org} on FeedBouncer`,
     text: `${intro}\n\n${p.url}\n`,
-    html: page(`Join ${p.organizationName}`, [intro], { label: 'Accept invitation', url: p.url }),
+    html: page(`Join ${org}`, [intro], { label: 'Accept invitation', url: p.url }),
   };
 }
 
