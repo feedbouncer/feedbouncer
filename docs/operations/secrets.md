@@ -21,9 +21,58 @@ Settings that accept `<NAME>_FILE`:
 - Worker: `DATABASE_URL`, `REDIS_URL`, `FB_ENCRYPTION_KEYS`.
 - `pnpm secrets` commands: `DATABASE_URL`, `FB_ENCRYPTION_KEYS`.
 
+`FB_ENCRYPTION_ACTIVE_KEY_ID` is a key id, not a secret, so it has no `_FILE`
+form anywhere.
+
 The API and worker validate all of these at startup and refuse to start on a
 missing, malformed, too-short or example value. Errors name the setting and
 never print its value.
+
+## Running the CLI
+
+Every `pnpm secrets <command>` below is the package's `cli` script. Pick the
+form that fits where you run it. All of them need `DATABASE_URL`,
+`FB_ENCRYPTION_KEYS` and `FB_ENCRYPTION_ACTIVE_KEY_ID` in the environment (or
+the `_FILE` forms of the first two).
+
+- **From a checkout** (your machine or a jump host with the database
+  reachable): `pnpm secrets <command>`. It builds the package first
+  (`tsc --build`), so the checkout must be writable and installed.
+- **Inside the compose dev stack**: the containers already carry the database
+  URL and keys, and pnpm is present, but `/repo` is owned by root, so
+  `pnpm secrets` cannot write its build output there. Run the TypeScript source
+  directly instead:
+
+  ```sh
+  docker compose exec api sh -c \
+    'node_modules/.bin/tsx ../../packages/secrets/src/bin.ts status'
+  ```
+
+  (`NODE_OPTIONS=--conditions=@feedbouncer/source` is already set in dev
+  containers, which makes workspace imports resolve to source.)
+
+- **Inside a runtime image** (the default Dockerfile target; it has no pnpm, but
+  ships the built workspace): run the compiled entry point from the app
+  directory, with the same environment the service uses:
+
+  ```sh
+  docker compose exec worker node ../../packages/secrets/dist/bin.js status
+  ```
+
+  or `node /repo/packages/secrets/dist/bin.js status`.
+
+What was verified: the `node .../dist/bin.js` and `tsx .../src/bin.ts` command
+lines run correctly from `apps/worker` in a repository checkout after
+`pnpm build`. They were not run inside the built compose images; confirm the
+path (`/repo/packages/secrets`) in your image before relying on it.
+
+The CLI reads `FB_ENV` like the services do and **defaults to `production`**,
+which refuses the example key from `.env.example`. For local use against the
+dev example key, set `FB_ENV=development` (compose containers already have it
+from `.env`).
+
+Unknown flags and stray arguments are rejected with exit code 2 before anything
+runs, so a mistyped `--dryrun` cannot turn into a real run.
 
 ## First-time setup
 
@@ -35,11 +84,15 @@ never print its value.
 3. Store the line in your password manager or secret store **separately from
    database backups**.
 
-Docker secrets example:
+Docker secrets example (the API and the worker both need the keys):
 
 ```yaml
 services:
   api:
+    environment:
+      FB_ENCRYPTION_KEYS_FILE: /run/secrets/fb_encryption_keys
+    secrets: [fb_encryption_keys]
+  worker:
     environment:
       FB_ENCRYPTION_KEYS_FILE: /run/secrets/fb_encryption_keys
     secrets: [fb_encryption_keys]
@@ -67,9 +120,10 @@ rolling.
 3. **Re-encrypt** existing credentials: `pnpm secrets reencrypt --dry-run`, then
    `pnpm secrets reencrypt`. This is online, idempotent and resumable: if it is
    interrupted (Ctrl-C, crash), run it again. Rows changed concurrently by a
-   token refresh are skipped safely; a second run picks them up. It also
-   repairs any row whose `key_id` column disagrees with its envelope header.
-   Use `--batch-size <n>` (1-1000, default 100) to change the batch size.
+   token refresh are skipped safely; a second run picks them up. Ctrl-C stops
+   it after the current batch. It prints `re-encrypting to active key <id>` at
+   the start: check that this is the key you meant to activate before it goes
+   on. Use `--batch-size <n>` (1-1000, default 100) to change the batch size.
 4. **Confirm**: `pnpm secrets status` must show
    `key k2026a (retired): 0 credentials, safe to remove`.
 5. **Remove** `k2026a` from `FB_ENCRYPTION_KEYS` and restart. Keep a backup of
@@ -93,8 +147,20 @@ pnpm secrets recheck-connections [--dry-run]
 store; hints go to stderr. Results go to stdout, warnings and progress to
 stderr. No command prints a credential value.
 
-Exit codes: `0` nothing left to do, `1` work or problems remain (or the command
-failed, for example on a configuration error), `2` usage error.
+Exit codes: `0` success, `1` work or problems remain (or the command failed,
+for example on a configuration error), `2` usage error. What counts as
+"remaining" depends on the command:
+
+- `reencrypt`: `0` only when no credential is left on a non-active key and none
+  is unreadable. A `--dry-run` therefore exits `1` while anything would be
+  rewrapped.
+- `status`: `1` only when credentials need a key that is not configured, or a
+  plaintext credential column exists. It exits `0` even while credentials still
+  await re-encryption on a configured retired key; read the
+  `credentials not on the active key` line.
+- `verify`: `1` if any credential is unreadable.
+- `recheck-connections`: `1` while any connection stays unreadable, has no
+  credentials, or has no recorded previous status.
 
 ## Checking health
 
@@ -159,6 +225,10 @@ marked `reconnect_required` (reason `credential_tampered`) and audited, and the
 brand must reconnect. Investigate how the row changed: it can only happen
 through direct database writes. `recheck-connections` will not restore such a
 connection, because its credential stays unreadable.
+
+Reusing a key id with different key material has the same effect: the id still
+matches, so the old credentials are read with the wrong key and fail as
+tampered (not `unknown_key`). Never recycle a key id; generate a new one.
 
 ## Development and tests
 
