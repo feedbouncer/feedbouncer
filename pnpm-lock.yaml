@@ -142,6 +142,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@feedbouncer/authz':
+        specifier: workspace:*
+        version: link:../../packages/authz
       '@feedbouncer/db':
         specifier: workspace:*
         version: link:../../packages/db

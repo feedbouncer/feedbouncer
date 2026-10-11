@@ -17,6 +17,8 @@ export type ErrorCode =
   | 'invalid_credentials'
   | 'invalid_or_expired_token'
   | 'unauthenticated'
+  | 'forbidden'
+  | 'email_not_verified'
   | 'sole_owner'
   | 'rate_limited'
   | 'temporarily_unavailable';
@@ -33,6 +35,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_credentials: 'Email or password is incorrect.',
   invalid_or_expired_token: 'This link is invalid or has expired. Request a new one.',
   unauthenticated: 'Sign in to continue.',
+  forbidden: 'You do not have permission to do this.',
+  email_not_verified: 'Verify your email address first.',
   sole_owner: 'You are the only owner of an organization. Transfer ownership or delete it first.',
   rate_limited: 'Too many attempts. Try again later.',
   temporarily_unavailable: 'Temporarily unavailable. Try again shortly.',

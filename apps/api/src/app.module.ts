@@ -1,10 +1,14 @@
 import { Module, type DynamicModule } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { createAuth, type AuthHooks } from './auth/auth.js';
 import { AuthProxyController } from './auth/auth-proxy.controller.js';
 import { createAuthEmails, type AuthEmails } from './auth/emails.js';
 import { createAuthRateLimits } from './auth/rate-limit.js';
+import { SessionGuard } from './auth/session.guard.js';
 import { SignUpController } from './auth/sign-up.controller.js';
 import { HealthController } from './http/health.controller.js';
+import { MeController } from './me/me.controller.js';
+import { OrgAccessGuard } from './tenancy/org-access.guard.js';
 import { ACCOUNT_DELETION, AUTH, AUTH_EMAILS, DEPS, RATE_LIMITS } from './tokens.js';
 import type { AppDeps } from './deps.js';
 
@@ -18,8 +22,11 @@ export class AppModule {
   static forRoot(deps: AppDeps): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, SignUpController, AuthProxyController],
+      controllers: [HealthController, SignUpController, AuthProxyController, MeController],
       providers: [
+        Reflector,
+        SessionGuard,
+        OrgAccessGuard,
         { provide: DEPS, useValue: deps },
         {
           provide: AUTH_EMAILS,

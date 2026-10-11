@@ -15,6 +15,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
+    "@feedbouncer/authz": "workspace:*",
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/mailer": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
