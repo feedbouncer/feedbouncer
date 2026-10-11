@@ -20,7 +20,7 @@ type Kind =
   | 'reset-password'
   | 'change-password'
   | 'delete-user';
-const ROUTES: Readonly<Record<string, Kind>> = {
+export const ROUTES: Readonly<Record<string, Kind>> = {
   'POST /sign-in/email': 'sign-in',
   'POST /sign-out': 'sign-out',
   'GET /verify-email': 'verify-email',
