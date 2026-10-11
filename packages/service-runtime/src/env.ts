@@ -67,3 +67,28 @@ export function readEnum<T extends string>(
   }
   return raw as T;
 }
+
+// For secrets (signing keys, API keys): required, with a minimum length. The
+// error never contains the value.
+export function readSecret(env: Env, name: string, opts: { minLength: number }): string {
+  const value = required(env, name);
+  if (value.length < opts.minLength) {
+    throw new EnvError(`${name} must be at least ${opts.minLength} characters (value not shown).`);
+  }
+  return value;
+}
+
+export function readString(
+  env: Env,
+  name: string,
+  opts: { fallback: string; maxLength: number; pattern?: RegExp },
+): string {
+  const value = present(env, name) ?? opts.fallback;
+  if (value.length > opts.maxLength) {
+    throw new EnvError(`${name} is not valid (at most ${opts.maxLength} characters).`);
+  }
+  if (opts.pattern && !opts.pattern.test(value)) {
+    throw new EnvError(`${name} is not valid (unexpected format).`);
+  }
+  return value;
+}

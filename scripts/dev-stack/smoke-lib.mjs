@@ -3,6 +3,9 @@
 import { parseArgs } from 'node:util';
 
 export const DESTROY_FLAG = 'yes-destroy-local-data';
+// Services that must be running and healthy after a cold start
+// (scripts/ci/compose.test.mjs keeps this in sync with compose.yaml).
+export const SMOKE_SERVICES = ['postgres', 'redis', 'mailpit', 'api', 'worker', 'web'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export function parseSmokeArgs(argv) {
@@ -100,6 +103,7 @@ export function resolveSmokeConfig(env) {
     project,
     webPort: portValue(env, 'WEB_HOST_PORT', '23000'),
     apiPort: portValue(env, 'API_HOST_PORT', '23001'),
+    mailpitPort: portValue(env, 'MAILPIT_UI_HOST_PORT', '28025'),
     bind,
   };
 }

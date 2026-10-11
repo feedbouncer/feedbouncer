@@ -1,5 +1,6 @@
 # CI: required checks are "Typecheck", "Test", "Docker build", "Compose config" and "Database migrations".
-# "Compose smoke" runs the full dev-stack lifecycle; keep it non-required until stable.
+# "API integration" and "Compose smoke" are non-required until they have been stable for a while;
+# "Compose smoke" runs the full dev-stack lifecycle plus the end-to-end auth smoke.
 # Do not rename these jobs' `name:` without updating branch protection.
 # Local equivalents are documented in README.md -> "Continuous integration".
 name: CI
@@ -201,6 +202,44 @@ jobs:
       - name: Migration workflow and schema invariant tests
         run: pnpm --filter @feedbouncer/db test:integration
 
+  api-integration:
+    name: API integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: feedbouncer
+          POSTGRES_PASSWORD: dev-only-ci-postgres
+          POSTGRES_DB: feedbouncer
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U feedbouncer -d feedbouncer"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+      redis:
+        image: redis:8.10-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      # Throwaway service containers on an ephemeral runner; nothing sensitive.
+      DATABASE_URL: postgresql://feedbouncer:dev-only-ci-postgres@127.0.0.1:5432/feedbouncer
+      REDIS_URL: redis://127.0.0.1:6379/0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-scope: api-integration
+      - name: Build the API and its dependencies
+        run: pnpm turbo run build --filter=@feedbouncer/api...
+      - name: API integration tests (auth, tenancy, isolation)
+        run: pnpm --filter @feedbouncer/api test:integration
+
   compose-smoke:
     name: Compose smoke
     runs-on: ubuntu-latest
@@ -233,6 +272,9 @@ jobs:
           export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_HOST_PORT:-5432}/${POSTGRES_DB}"
           pnpm turbo run build --filter=@feedbouncer/db
           pnpm --filter @feedbouncer/db test:integration
+      - name: Auth end-to-end smoke
+        # Sign-up, email confirmation (via Mailpit), login and tenancy through the web origin.
+        run: pnpm stack:auth-smoke
       - name: Container logs on failure
         if: failure()
         env:

@@ -9,7 +9,22 @@ afterAll(() => ctx.close());
 const q = async <T>(sql: string) => (await ctx.c.query(sql)).rows as T[];
 
 const SYSTEM_TABLES = ['processed_job'];
-const GLOBAL_TABLES = ['organization', 'app_user'];
+const GLOBAL_TABLES = [
+  'organization',
+  'app_user',
+  'auth_session',
+  'auth_account',
+  'auth_verification',
+];
+
+// Credential-like columns that are allowed on purpose. Each one holds a hash,
+// never a raw secret. Adding to this list needs review.
+const ALLOWED_CREDENTIAL_COLUMNS: Record<string, string> = {
+  'auth_account.password_hash': 'Better Auth scrypt hash (salted, slow); never plaintext',
+  'auth_session.token':
+    'SHA-256 digest of the session token; the raw token exists only in the cookie (apps/api auth contract test)',
+  'invitation.token_hash': 'sha256 of a 32-byte random invitation token',
+};
 
 describe('schema conventions', () => {
   it('server encoding is UTF8', async () => {
@@ -89,13 +104,16 @@ describe('schema conventions', () => {
     expect(bad).toEqual([]);
   });
 
-  it('no plaintext credential columns (the Secrets ticket adds encrypted_* bytea deliberately)', async () => {
-    const bad = await q<{ col: string }>(`
+  it('no plaintext credential columns except the reviewed allowlist', async () => {
+    const found = await q<{ col: string }>(`
       SELECT c.relname || '.' || a.attname AS col FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
        WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped
          AND a.attname ~ '(token|secret|password|api_key|credential)'
          AND NOT (a.attname LIKE 'encrypted\\_%' AND a.atttypid = 'bytea'::regtype)`);
-    expect(bad).toEqual([]);
+    const cols = found.map((r) => r.col).sort();
+    expect(cols.filter((c) => !(c in ALLOWED_CREDENTIAL_COLUMNS))).toEqual([]);
+    // The allowlist must not rot: every entry must still exist.
+    expect(cols).toEqual(Object.keys(ALLOWED_CREDENTIAL_COLUMNS).sort());
   });
 
   it('every foreign key has an index led by its pointer (last) column', async () => {

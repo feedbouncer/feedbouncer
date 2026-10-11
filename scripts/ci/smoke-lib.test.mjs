@@ -67,6 +67,7 @@ test('smoke config ignores ambient COMPOSE_PROJECT_NAME and sets own defaults', 
     project: 'feedbouncer-smoke',
     webPort: '23000',
     apiPort: '23001',
+    mailpitPort: '28025',
     bind: '127.0.0.1',
   });
 });
@@ -76,8 +77,10 @@ test('smoke config honours overrides and refuses non-smoke projects', () => {
     SMOKE_PROJECT: 'my-smoke-2',
     WEB_HOST_PORT: '4000',
     API_HOST_PORT: '4001',
+    MAILPIT_UI_HOST_PORT: '4025',
     FB_BIND_ADDRESS: '0.0.0.0',
   });
+  assert.equal(c.mailpitPort, '4025');
   assert.equal(c.project, 'my-smoke-2');
   assert.equal(c.webPort, '4000');
   assert.equal(c.bind, '0.0.0.0');
@@ -89,6 +92,11 @@ test('smoke config validates ports as integers 1..65535', () => {
   for (const bad of ['0', '65536', '30a', '', '-1', '1.5', ' 3000']) {
     assert.throws(() => resolveSmokeConfig({ WEB_HOST_PORT: bad }), /WEB_HOST_PORT/, bad);
     assert.throws(() => resolveSmokeConfig({ API_HOST_PORT: bad }), /API_HOST_PORT/, bad);
+    assert.throws(
+      () => resolveSmokeConfig({ MAILPIT_UI_HOST_PORT: bad }),
+      /MAILPIT_UI_HOST_PORT/,
+      bad,
+    );
   }
   assert.equal(resolveSmokeConfig({ API_HOST_PORT: '65535' }).apiPort, '65535');
 });

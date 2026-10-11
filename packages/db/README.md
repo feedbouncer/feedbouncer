@@ -121,20 +121,24 @@ and `updated_at`. Tenant tables carry `organization_id`, brand-scoped tables als
 carry `brand_id`, and each child foreign key includes its parent's scope columns,
 so the database refuses cross-tenant links.
 
-| Table           | Purpose                                                                                              | Tenant scope                      | Natural key                                 |
-| --------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------------- |
-| `organization`  | The tenant (workspace) boundary.                                                                     | itself                            | none                                        |
-| `app_user`      | A person who can sign in. Not named `user`, which is reserved in Postgres.                           | global                            | `lower(email)`                              |
-| `membership`    | Links a user to an organization with a role (`owner`, `admin`, `member`).                            | `organization_id`                 | `(organization_id, user_id)`                |
-| `brand`         | A client or brand inside an organization.                                                            | `organization_id`                 | none                                        |
-| `connection`    | A connected platform account for a brand. No credential columns yet.                                 | `organization_id`, `brand_id`     | `(brand_id, platform, external_account_id)` |
-| `source`        | A post, ad, video or thread on a connection.                                                         | org, brand, connection            | `(connection_id, external_id)`              |
-| `author`        | A commenter's platform identity, scoped to a connection (platform user IDs are not global).          | org, brand, connection            | `(connection_id, external_id)`              |
-| `comment`       | A comment on a source. `body` is unbounded text. Optional parent in the same source.                 | org, brand, connection, source    | `(source_id, external_id)`                  |
-| `rule`          | A brand's moderation rule: conditions, action, mode, priority, `enabled`.                            | `organization_id`, `brand_id`     | none                                        |
-| `decision`      | One append-only moderation outcome for a comment, with actor, reason and optional classifier fields. | `organization_id`, `brand_id`     | none (`id`)                                 |
-| `audit_event`   | Append-only record of significant changes.                                                           | `organization_id`, optional brand | none (`id`)                                 |
-| `processed_job` | Idempotency ledger for background jobs (system table, no tenant).                                    | none                              | `(queue, job_id)`                           |
+| Table               | Purpose                                                                                              | Tenant scope                      | Natural key                                 |
+| ------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------------- |
+| `organization`      | The tenant (workspace) boundary.                                                                     | itself                            | none                                        |
+| `app_user`          | A person who can sign in. Not named `user`, which is reserved in Postgres.                           | global                            | `lower(email)`                              |
+| `auth_session`      | A sign-in session. Owned by Better Auth through field mapping.                                       | global                            | `token`                                     |
+| `auth_account`      | A credential (password hash) for a user. Owned by Better Auth through field mapping.                 | global                            | `(provider_id, account_id)`                 |
+| `auth_verification` | Short-lived verification values. Owned by Better Auth through field mapping.                         | global                            | none                                        |
+| `invitation`        | An invitation to join an organization with a role.                                                   | `organization_id`                 | `(organization_id, email)` where pending    |
+| `membership`        | Links a user to an organization with a role (`owner`, `admin`, `member`).                            | `organization_id`                 | `(organization_id, user_id)`                |
+| `brand`             | A client or brand inside an organization.                                                            | `organization_id`                 | none                                        |
+| `connection`        | A connected platform account for a brand. No credential columns yet.                                 | `organization_id`, `brand_id`     | `(brand_id, platform, external_account_id)` |
+| `source`            | A post, ad, video or thread on a connection.                                                         | org, brand, connection            | `(connection_id, external_id)`              |
+| `author`            | A commenter's platform identity, scoped to a connection (platform user IDs are not global).          | org, brand, connection            | `(connection_id, external_id)`              |
+| `comment`           | A comment on a source. `body` is unbounded text. Optional parent in the same source.                 | org, brand, connection, source    | `(source_id, external_id)`                  |
+| `rule`              | A brand's moderation rule: conditions, action, mode, priority, `enabled`.                            | `organization_id`, `brand_id`     | none                                        |
+| `decision`          | One append-only moderation outcome for a comment, with actor, reason and optional classifier fields. | `organization_id`, `brand_id`     | none (`id`)                                 |
+| `audit_event`       | Append-only record of significant changes.                                                           | `organization_id`, optional brand | none (`id`)                                 |
+| `processed_job`     | Idempotency ledger for background jobs (system table, no tenant).                                    | none                              | `(queue, job_id)`                           |
 
 Ingestion is idempotent: writers use `INSERT ... ON CONFLICT (<natural key>) DO
 NOTHING`, so a webhook and a poller inserting the same comment produce one row.
@@ -172,26 +176,67 @@ concurrent transactions can commit in the opposite order.
 - `details` must never contain credentials or comment bodies. Store IDs and
   small facts, not content.
 
+### Last owner
+
+Every organization must keep at least one `owner` membership. A deferred
+constraint trigger on `membership` (`membership_require_owner_trg`, function
+`fb_require_org_owner`) enforces this at COMMIT, so one transaction can add a new
+owner and demote the old one in any order.
+
+For each changed membership row (role or organization change, or delete) the
+trigger first takes a `FOR NO KEY UPDATE` lock on the `organization` row, then
+checks that an owner remains. Because the lock is taken at commit, before the
+check, concurrent demotions are serialized by the database and the second one
+sees the first one's result: they are safe without any locking in application
+code. If the organization row is gone (deleted in the same or another
+transaction) the check passes, so deleting an organization works. Deleting a user
+who is the sole owner fails with SQLSTATE `23514` and constraint
+`membership_owner_required` (`isOwnerRequiredViolation`).
+
+Deadlocks: the trigger locks one organization per changed membership row, so
+transactions that change owner memberships in several organizations in different
+orders can deadlock. Postgres aborts one of them with SQLSTATE `40P01`; callers
+should retry the transaction or surface the error. The same applies to a cascade:
+deleting an `app_user` deletes (and row-locks) its memberships first and only
+then, at commit, locks their organizations, the reverse of an application
+transaction that locks the organization and then changes a membership. Lock the
+affected organizations first, in id order, in the same transaction (the API's
+account deletion does this).
+
+### Emails and brand names
+
+Emails are stored lowercase (`app_user_email_lower_check`). The migration
+lowercases existing rows, and `down.sql` does not reverse that, because it is
+lossless for the application.
+
+Brands are archived rather than deleted: `brand.archived_at` is set when a brand
+is archived. Brand names are unique per organization among active brands
+(`archived_at IS NULL`), compared case-insensitively after trimming whitespace
+(`lower(btrim(name))`), so an archived brand's name can be reused.
+
 ## Deletion behavior
 
 Every foreign key states its `ON DELETE` action. These are the actions as built:
 
-| Parent deleted   | Child                       | Action                                  |
-| ---------------- | --------------------------- | --------------------------------------- |
-| `organization`   | `membership`, `brand`       | CASCADE                                 |
-| `app_user`       | `membership`                | CASCADE                                 |
-| `brand`          | `connection`                | CASCADE                                 |
-| `connection`     | `source`, `author`          | CASCADE                                 |
-| `source`         | `comment`                   | CASCADE                                 |
-| `author`         | `comment.author_id`         | SET NULL                                |
-| parent `comment` | `comment.parent_comment_id` | SET NULL (`parent_external_id` is kept) |
-| `brand`          | `rule`, `decision`          | CASCADE                                 |
-| `comment`        | `decision`                  | CASCADE                                 |
-| `rule`           | `decision`                  | NO ACTION, deferred (checked at commit) |
-| `app_user`       | `decision.actor_user_id`    | SET NULL                                |
-| `organization`   | `audit_event`               | CASCADE                                 |
-| `brand`          | `audit_event.brand_id`      | SET NULL                                |
-| `app_user`       | `audit_event.actor_user_id` | SET NULL                                |
+| Parent deleted   | Child                                                             | Action                                  |
+| ---------------- | ----------------------------------------------------------------- | --------------------------------------- |
+| `organization`   | `membership`, `brand`                                             | CASCADE                                 |
+| `app_user`       | `membership`                                                      | CASCADE                                 |
+| `app_user`       | `auth_session`, `auth_account`                                    | CASCADE                                 |
+| `organization`   | `invitation`                                                      | CASCADE                                 |
+| `app_user`       | `invitation.invited_by_user_id`, `invitation.accepted_by_user_id` | SET NULL                                |
+| `brand`          | `connection`                                                      | CASCADE                                 |
+| `connection`     | `source`, `author`                                                | CASCADE                                 |
+| `source`         | `comment`                                                         | CASCADE                                 |
+| `author`         | `comment.author_id`                                               | SET NULL                                |
+| parent `comment` | `comment.parent_comment_id`                                       | SET NULL (`parent_external_id` is kept) |
+| `brand`          | `rule`, `decision`                                                | CASCADE                                 |
+| `comment`        | `decision`                                                        | CASCADE                                 |
+| `rule`           | `decision`                                                        | NO ACTION, deferred (checked at commit) |
+| `app_user`       | `decision.actor_user_id`                                          | SET NULL                                |
+| `organization`   | `audit_event`                                                     | CASCADE                                 |
+| `brand`          | `audit_event.brand_id`                                            | SET NULL                                |
+| `app_user`       | `audit_event.actor_user_id`                                       | SET NULL                                |
 
 In practice:
 
@@ -220,10 +265,23 @@ In practice:
 
 ## Security notes
 
-- There are no credential columns yet. The Secrets ticket adds `encrypted_*`
-  `bytea` columns and must update the guard test in
-  `conventions.integration.test.ts`, which rejects columns named like `token`,
-  `secret`, `password` or `api_key`.
+- Credential-like columns are limited to a reviewed allowlist in
+  `conventions.integration.test.ts`: `auth_account.password_hash` (scrypt hash),
+  `auth_session.token` (SHA-256 digest of the session token) and
+  `invitation.token_hash` (SHA-256 of a random token). The guard rejects any
+  other column named like `token`, `secret`, `password` or `api_key`; the Secrets
+  ticket adds `encrypted_*` `bytea` columns, which are exempt.
+- Bearer tokens are stored only as SHA-256 digests; the raw token exists only in
+  the cookie or email link. `auth_session.token` holds the digest of the session
+  token (the API wraps Better Auth's database adapter), and
+  `auth_verification.identifier` holds the digest of identifiers such as
+  `reset-password:<token>` (Better Auth's `storeIdentifier: 'hashed'`).
+  `auth_verification.value` holds no secret (for a password reset, the user id).
+  Email verification links carry a signed token that is not stored.
+  The API's auth contract test (`apps/api/src/auth/auth-contract.integration.test.ts`)
+  enforces this. Anything new written to these columns must follow the same rule.
+- Never run the Better Auth CLI against this database. It would generate its own
+  schema; the `auth_*` tables are maintained by hand-written migrations.
 - `audit_event.details` must not hold secrets or comment bodies (see the contract
   above).
 - Every query must filter by `organization_id` (and `brand_id`) taken from the

@@ -1,9 +1,16 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "outDir": "dist", "rootDir": "src", "types": ["node"] },
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"],
+    "experimentalDecorators": true
+  },
   "include": ["src"],
   "references": [
+    { "path": "../../packages/authz/tsconfig.build.json" },
     { "path": "../../packages/service-runtime/tsconfig.build.json" },
-    { "path": "../../packages/db/tsconfig.build.json" }
+    { "path": "../../packages/db/tsconfig.build.json" },
+    { "path": "../../packages/mailer/tsconfig.build.json" }
   ]
 }

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { EnvError, PG_PROTOCOLS, REDIS_PROTOCOLS, readEnum, readInt, readUrl } from './env.js';
+import {
+  EnvError,
+  PG_PROTOCOLS,
+  REDIS_PROTOCOLS,
+  readEnum,
+  readInt,
+  readSecret,
+  readString,
+  readUrl,
+} from './env.js';
 
 function messageOf(fn: () => unknown): string {
   try {
@@ -77,5 +86,43 @@ describe('readEnum', () => {
     expect(
       messageOf(() => readEnum({ LOG_LEVEL: 'loud' }, 'LOG_LEVEL', ['info'] as const, 'info')),
     ).toMatch(/LOG_LEVEL must be one of info/);
+  });
+});
+
+describe('readSecret', () => {
+  it('requires the minimum length and never echoes the value', () => {
+    expect(() => readSecret({ S: 'short' }, 'S', { minLength: 32 })).toThrow(
+      /S must be at least 32 characters/,
+    );
+    expect(
+      messageOf(() => readSecret({ S: 'short-secret' }, 'S', { minLength: 32 })),
+    ).not.toContain('short-secret');
+    expect(readSecret({ S: 'x'.repeat(32) }, 'S', { minLength: 32 })).toBe('x'.repeat(32));
+  });
+  it('is required', () => {
+    expect(messageOf(() => readSecret({}, 'S', { minLength: 32 }))).toMatch(/S is not set/);
+  });
+});
+
+describe('readString', () => {
+  it('falls back, enforces length and pattern', () => {
+    expect(readString({}, 'M', { fallback: 'a', maxLength: 5 })).toBe('a');
+    expect(() => readString({ M: 'abcdef' }, 'M', { fallback: 'a', maxLength: 5 })).toThrow(/M/);
+    expect(() =>
+      readString({ M: 'a\nb' }, 'M', { fallback: 'a', maxLength: 5, pattern: /^[^\n]+$/ }),
+    ).toThrow(/M/);
+    expect(
+      messageOf(() => readString({ M: 'abcdef' }, 'M', { fallback: 'a', maxLength: 5 })),
+    ).not.toContain('abcdef');
+  });
+  it('names the check that failed', () => {
+    expect(messageOf(() => readString({ M: 'abcdef' }, 'M', { fallback: 'a', maxLength: 5 }))).toBe(
+      'M is not valid (at most 5 characters).',
+    );
+    expect(
+      messageOf(() =>
+        readString({ M: 'a\nb' }, 'M', { fallback: 'a', maxLength: 5, pattern: /^[^\n]+$/ }),
+      ),
+    ).toBe('M is not valid (unexpected format).');
   });
 });

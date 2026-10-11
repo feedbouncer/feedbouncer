@@ -27,6 +27,8 @@ CMD ["node_modules/.bin/next", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
 FROM base AS build
 RUN pnpm turbo run build --filter=@feedbouncer/web...
 
+# Set API_INTERNAL_URL (the API's in-network URL) when running this image: the
+# /api/* route handlers and server-rendered pages read it at request time.
 FROM node:${NODE_VERSION}-slim AS runtime
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1

@@ -35,10 +35,15 @@ describe('tenancy', () => {
     );
   });
 
-  it('emails are unique case-insensitively', async () => {
-    await ctx.c.query("INSERT INTO app_user (email) VALUES ('Dana@Example.test')");
+  it('emails are stored lowercase and unique', async () => {
     await expectPgError(
-      ctx.c.query("INSERT INTO app_user (email) VALUES ('dana@example.TEST')"),
+      ctx.c.query("INSERT INTO app_user (email) VALUES ('Dana@Example.test')"),
+      '23514',
+      'app_user_email_lower_check',
+    );
+    await ctx.c.query("INSERT INTO app_user (email) VALUES ('dana@example.test')");
+    await expectPgError(
+      ctx.c.query("INSERT INTO app_user (email) VALUES ('dana@example.test')"),
       '23505',
       'app_user_email_lower_key',
     );
