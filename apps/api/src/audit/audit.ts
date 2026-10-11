@@ -10,10 +10,10 @@ export type AuditAction =
   | 'membership.role_changed'
   | 'membership.removed'
   | 'membership.left'
-  | 'membership.joined'
   | 'invitation.created'
   | 'invitation.renewed'
   | 'invitation.revoked'
+  /** Also records joining: details.joined is false when the user was already a member. */
   | 'invitation.accepted';
 
 export interface AuditInput {

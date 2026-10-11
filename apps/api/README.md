@@ -42,18 +42,18 @@ All bodies are JSON. State-changing requests must carry the web origin (`Origin`
 
 ### Account (no session unless noted)
 
-| Method and path                          | Notes                                                                                      |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `POST /api/v1/auth/sign-up`              | `{ email, password, name }` -> `202`. Same response for new and existing addresses.        |
-| `POST /api/auth/sign-in/email`           | `{ email, password }` -> `200 { status: "ok" }` and a session cookie                       |
-| `POST /api/auth/sign-out`                | `200`                                                                                      |
-| `GET /api/auth/verify-email?token=`      | Redirects to `/verified` (or `/verified?error=invalid_token`)                              |
-| `POST /api/auth/send-verification-email` | `{ email }` -> always `200`                                                                |
-| `POST /api/auth/request-password-reset`  | `{ email }` -> always `200`                                                                |
-| `POST /api/auth/reset-password`          | `{ token, newPassword }`; revokes all sessions                                             |
-| `POST /api/auth/change-password`         | session; `{ currentPassword, newPassword }`; revokes other sessions                        |
-| `POST /api/auth/delete-user`             | session; `{ password }`; `409 sole_owner` if the user is the only owner of an organization |
-| `GET /api/v1/me`                         | session; `{ user, memberships }`                                                           |
+| Method and path                          | Notes                                                                                                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /api/v1/auth/sign-up`              | `{ email, password, name }` -> `202`. Same response for new and existing addresses.                                                                                            |
+| `POST /api/auth/sign-in/email`           | `{ email, password }` -> `200 { status: "ok" }` and a session cookie                                                                                                           |
+| `POST /api/auth/sign-out`                | `200`                                                                                                                                                                          |
+| `GET /api/auth/verify-email?token=`      | Redirects to `/verified` (or `/verified?error=invalid_token`)                                                                                                                  |
+| `POST /api/auth/send-verification-email` | `{ email }` -> always `200`                                                                                                                                                    |
+| `POST /api/auth/request-password-reset`  | `{ email }` -> always `200`                                                                                                                                                    |
+| `POST /api/auth/reset-password`          | `{ token, newPassword }`; revokes all sessions                                                                                                                                 |
+| `POST /api/auth/change-password`         | session; `{ currentPassword, newPassword }`; revokes other sessions                                                                                                            |
+| `POST /api/auth/delete-user`             | session; `{ password }`; `409 sole_owner` if the user is the only owner of an organization; `503 temporarily_unavailable` on a database lock conflict (nothing deleted, retry) |
+| `GET /api/v1/me`                         | session; `{ user, memberships }`                                                                                                                                               |
 
 Only these `/api/auth/*` paths are reachable; everything else under it is `404`.
 
@@ -81,7 +81,7 @@ Only these `/api/auth/*` paths are reachable; everything else under it is `404`.
 | `POST /api/v1/invitations/lookup`                  | any session               | `200` (`{ token }`)                                                  |
 | `POST /api/v1/invitations/accept`                  | verified, matching email  | `200` (`{ token }`)                                                  |
 
-Invitations expire after 7 days; inviting an address that already has a pending invitation renews it. Sessions last 7 days (sliding), password reset links 1 hour, email confirmation links 24 hours.
+Invitations expire after 7 days; inviting an address that already has a pending invitation renews it. Creating or renewing an invitation answers `201` with `emailSent: false` when the address's or the client's email budget (see [Rate limits](#rate-limits)) is spent: the invitation is saved but no email goes out, and a renewal then keeps the token of the link that was already emailed. Accepting an invitation as someone who is already a member of the organization keeps their current role (the invitation's role is not applied) and marks the invitation accepted; the audit event `invitation.accepted` records `joined: false`. Sessions last 7 days (sliding), password reset links 1 hour, email confirmation links 24 hours.
 
 ### Health
 

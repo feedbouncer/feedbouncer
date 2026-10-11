@@ -231,6 +231,16 @@ describe('accept', () => {
       [orgId, admin.userId],
     );
     expect(rows[0].role).toBe('admin');
+    const inv = await api.pool.query(
+      'SELECT status FROM invitation WHERE organization_id = $1 AND email = $2',
+      [orgId, admin.email],
+    );
+    expect(inv.rows[0].status).toBe('accepted');
+    const audit = await api.pool.query(
+      "SELECT details FROM audit_event WHERE organization_id = $1 AND action = 'invitation.accepted'",
+      [orgId],
+    );
+    expect(audit.rows.map((r) => r.details)).toEqual([{ joined: false, role: 'admin' }]);
   });
 
   it('requires the matching email without revealing the invited address', async () => {
