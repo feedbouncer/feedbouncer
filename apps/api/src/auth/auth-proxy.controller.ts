@@ -58,7 +58,8 @@ export class AuthProxyController {
     const web = this.deps.env.publicWebUrl.origin;
     const url = new URL(req.url, web);
     const sub = url.pathname.slice('/api/auth'.length);
-    const kind = ROUTES[`${req.method} ${sub}`];
+    const route = `${req.method} ${sub}`; // an allowlisted pattern: never a token or query
+    const kind = ROUTES[route];
     if (!kind) throw notFound();
 
     const input: Record<string, unknown> =
@@ -143,6 +144,12 @@ export class AuthProxyController {
     const upstream = await (kind === 'delete-user' ? runAccountDeletion(call) : call());
     for (const c of upstream.headers.getSetCookie()) void reply.header('set-cookie', c);
     const s = upstream.status;
+    // Better Auth answered with an error we do not expect: log the route and
+    // status only (never the body, which may echo request data), then fail.
+    const upstreamFailed = (): ApiError => {
+      this.deps.log.error('auth upstream failed', { route, status: s });
+      return new ApiError(500, 'internal_error');
+    };
 
     switch (kind) {
       case 'sign-in':
@@ -150,17 +157,17 @@ export class AuthProxyController {
           await this.limits.recordLoginSuccess(email!, req.ip);
           return send(reply, 200, OK);
         }
-        if (s >= 500) throw new ApiError(500, 'internal_error');
+        if (s >= 500) throw upstreamFailed();
         throw new ApiError(401, 'invalid_credentials'); // the attempt was counted before the check
       case 'sign-out':
       case 'email-send':
         // Never reveal whether a session or address exists; an upstream
         // failure says nothing about either.
-        if (s >= 500) throw new ApiError(500, 'internal_error');
+        if (s >= 500) throw upstreamFailed();
         return send(reply, 200, OK);
       case 'reset-password':
         if (s === 200) return send(reply, 200, OK);
-        if (s >= 500) throw new ApiError(500, 'internal_error');
+        if (s >= 500) throw upstreamFailed();
         throw new ApiError(400, 'invalid_or_expired_token');
       case 'change-password':
       case 'delete-user':
@@ -177,8 +184,9 @@ export class AuthProxyController {
             : new ApiError(503, 'temporarily_unavailable');
         }
         if (s === 400 || s === 401) throw new ApiError(401, 'invalid_credentials');
-        throw new ApiError(500, 'internal_error');
+        throw upstreamFailed();
       case 'verify-email': {
+        if (s >= 500) this.deps.log.error('auth upstream failed', { route, status: s });
         const ok =
           s >= 300 && s < 400 && !(upstream.headers.get('location') ?? '').includes('error=');
         return redirect(reply, ok ? '/verified' : '/verified?error=invalid_token');

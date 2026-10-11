@@ -112,6 +112,56 @@ describe('upstream failures', () => {
       spy.mockRestore();
     }
   });
+
+  it.each([
+    ['POST /sign-in/email', { email: 'upl@x.test', password: 'a secret password 1' }, {}],
+    ['POST /sign-out', {}, {}],
+    ['POST /request-password-reset', { email: 'upl@x.test' }, {}],
+    ['POST /reset-password', { token: 'tok-SECRET-1', newPassword: 'a secret password 2' }, {}],
+    ['GET /verify-email', undefined, { query: '?token=tok-SECRET-2' }],
+  ])('logs one redacted line when Better Auth fails on %s', async (route, body, opts) => {
+    const spy = vi
+      .spyOn(api.app.get<Auth>(AUTH), 'handler')
+      .mockResolvedValueOnce(new Response('{"secret":"x"}', { status: 502 }));
+    const before = api.logLines.length;
+    try {
+      const [method, path] = route.split(' ') as [string, string];
+      const q = (opts as { query?: string }).query ?? '';
+      await api.req(method, `/api/auth${path}${q}`, { body });
+    } finally {
+      spy.mockRestore();
+    }
+    const lines = api.logLines.slice(before).filter((l) => l.includes('auth upstream failed'));
+    expect(lines).toHaveLength(1);
+    const line = JSON.parse(lines[0]!);
+    expect(line).toMatchObject({ level: 'error', route, status: 502 });
+    expect(lines[0]).not.toMatch(/SECRET|secret password|upl@x\.test|"secret"/);
+  });
+
+  it.each(['POST /change-password', 'POST /delete-user'])(
+    'logs one redacted line when Better Auth fails on %s',
+    async (route) => {
+      const u = await signUpAndVerify(api, `uplc-${route.length}@x.test`);
+      const cookie = await login(api, u.email);
+      const spy = vi
+        .spyOn(api.app.get<Auth>(AUTH), 'handler')
+        .mockResolvedValueOnce(new Response('{}', { status: 500 }));
+      const before = api.logLines.length;
+      try {
+        const r = await api.req('POST', `/api/auth${route.slice(5)}`, {
+          cookie,
+          body: { currentPassword: PASSWORD, password: PASSWORD, newPassword: 'x SECRET y z 12' },
+        });
+        expect(r.status).toBe(500);
+      } finally {
+        spy.mockRestore();
+      }
+      const lines = api.logLines.slice(before).filter((l) => l.includes('auth upstream failed'));
+      expect(lines).toHaveLength(1);
+      expect(JSON.parse(lines[0]!)).toMatchObject({ route, status: 500 });
+      expect(lines[0]).not.toMatch(/SECRET|uplc/);
+    },
+  );
 });
 
 describe('delete account', () => {
