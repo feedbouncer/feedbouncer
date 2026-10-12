@@ -160,14 +160,20 @@ export class ConnectionClient {
     try {
       return await this.#attempt(priority, op);
     } catch (err) {
-      const ce = toConnectorError(err);
-      if (ce !== err)
-        this.d.log.warn('connector threw a non-ConnectorError', {
-          platform: this.platform,
-          errorName: err instanceof Error ? err.name : 'NonError',
-        });
-      throw ce;
+      throw this.#replace(err);
     }
+  }
+
+  /** Foreign errors are replaced, never wrapped; only the error name is logged. */
+  #replace(err: unknown): ConnectorError {
+    const ce = toConnectorError(err);
+    if (ce !== err)
+      this.d.log.warn('connector threw a non-ConnectorError', {
+        platform: this.platform,
+        connectionId: this.scope.connectionId,
+        errorName: err instanceof Error ? err.name : 'NonError',
+      });
+    return ce;
   }
 
   async #attempt<T>(priority: Priority, op: (ctx: CallContext) => Promise<T>): Promise<T> {
@@ -198,7 +204,7 @@ export class ConnectionClient {
       try {
         return await op(this.#ctx(rec, token));
       } catch (err) {
-        const ce = toConnectorError(err);
+        const ce = this.#replace(err);
         if (ce.kind === 'rate_limited') {
           const retryAfterMs = ce.retryAfterMs ?? policy.defaultRetryAfterMs;
           await this.d.budget.applyPlatformHint(this.platform, this.scope.connectionId, policy, {

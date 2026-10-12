@@ -26,6 +26,7 @@ let listComments: Mock<Connector['listComments']>;
 let refreshTokens: Mock<Connector['refreshTokens']>;
 let directory: MemoryConnectionDirectory;
 let runtime: ConnectorRuntime;
+let lines: string[];
 
 beforeEach(async () => {
   act = vi.fn(async () => ({ status: 'applied', platformActionId: 'pa1' }));
@@ -66,7 +67,8 @@ beforeEach(async () => {
   const vault = new MemoryCredentialVault();
   await vault.writeAccessToken(scope, { value: new Secret('access-1'), expiresAt: null });
   await vault.writeRefreshToken(scope, { value: new Secret('refresh-1'), expiresAt: null });
-  const log = createLogger('t', 'error', () => undefined);
+  lines = [];
+  const log = createLogger('t', 'debug', (l) => lines.push(l));
   const clock = { now: () => Date.now() };
   const http = () => ({
     request: async () => {
@@ -290,5 +292,33 @@ describe('ConnectionClient edge cases', () => {
       status: 'failed',
       error: { code: 'invalid_connector_output' },
     });
+  });
+});
+
+describe('replaced connector errors', () => {
+  const replacedLogs = () => lines.filter((l) => l.includes('non-ConnectorError'));
+
+  it('logs only the error name, once, when a read throws a foreign error', async () => {
+    listComments.mockRejectedValueOnce(new TypeError('boom SENTINEL'));
+    const c = await runtime.connect(scope);
+    const err = await c
+      .listComments({ sourceExternalId: 's1', cursor: null })
+      .catch((e: unknown) => e);
+    expect(err).toMatchObject({ kind: 'permanent', code: 'connector_failure' });
+    expect(JSON.stringify(err)).not.toContain('SENTINEL');
+    expect(replacedLogs()).toHaveLength(1);
+    expect(replacedLogs()[0]).toContain('TypeError');
+    expect(lines.join('\n')).not.toContain('SENTINEL');
+  });
+
+  it('logs only the error name, once, when act throws a foreign error', async () => {
+    act.mockRejectedValueOnce(new TypeError('boom SENTINEL'));
+    const c = await runtime.connect(scope);
+    const r = await c.act({ action: 'hide', target: ref });
+    expect(r).toMatchObject({ status: 'failed', error: { code: 'connector_failure' } });
+    expect(JSON.stringify(r)).not.toContain('SENTINEL');
+    expect(replacedLogs()).toHaveLength(1);
+    expect(replacedLogs()[0]).toContain('TypeError');
+    expect(lines.join('\n')).not.toContain('SENTINEL');
   });
 });
