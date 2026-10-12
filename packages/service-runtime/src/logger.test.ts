@@ -160,3 +160,72 @@ describe('errorFields', () => {
     expect(errorFields('boom')).toEqual({ error: 'NonError', errorCode: null, errorMessage: null });
   });
 });
+
+describe('field-name redaction', () => {
+  it('redacts values of secret-named fields regardless of type or content', () => {
+    const lines: string[] = [];
+    const log = createLogger('t', 'debug', (l) => lines.push(l));
+    log.info('x', {
+      accessToken: 'plain-looking-value-1',
+      refresh_token: 'plain-looking-value-2',
+      webhookSecret: 'plain-looking-value-3',
+      password: 'plain-looking-value-4',
+      authorization: 'Bearer plain-looking-value-5',
+      apiKey: 'plain-looking-value-6',
+      FB_ENCRYPTION_KEYS: 'k1:plain-looking-value-7',
+      cookie: 'sid=plain-looking-value-8',
+      credential: 12345,
+      keyId: 'k2026a',
+      connectionId: 'c-1',
+    });
+    const parsed = JSON.parse(lines[0]!);
+    for (const v of ['1', '2', '3', '4', '5', '6', '7', '8']) {
+      expect(lines[0]).not.toContain(`plain-looking-value-${v}`);
+    }
+    expect(parsed.credential).toBe('[redacted]');
+    expect(parsed.keyId).toBe('k2026a');
+    expect(parsed.connectionId).toBe('c-1');
+  });
+
+  it('does not redact harmless fields that merely contain a secret-looking fragment', () => {
+    const lines: string[] = [];
+    const log = createLogger('t', 'debug', (l) => lines.push(l));
+    log.info('x', {
+      bypass: true,
+      passCount: 3,
+      tokenExpiresAt: '2026-10-11T00:00:00Z',
+      credentialKind: 'oauth',
+      secretLength: 32,
+      compass: 'north',
+    });
+    expect(JSON.parse(lines[0]!)).toMatchObject({
+      bypass: true,
+      passCount: 3,
+      tokenExpiresAt: '2026-10-11T00:00:00Z',
+      credentialKind: 'oauth',
+      secretLength: 32,
+      compass: 'north',
+    });
+  });
+
+  it('redacts secret-named fields in every casing style', () => {
+    const lines: string[] = [];
+    const log = createLogger('t', 'debug', (l) => lines.push(l));
+    log.info('x', {
+      'x-api-key': 'v1',
+      APIKey: 'v2',
+      db_password: 'v3',
+      privateKey: 'v4',
+      accesstoken: 'v5',
+      tokenValue: 'v6',
+      Passwd: 'v7',
+    });
+    for (const v of ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7']) {
+      expect(lines[0]).not.toContain(`"${v}"`);
+    }
+  });
+
+  it('redacts FB_ENCRYPTION_KEYS=... pairs inside messages', () => {
+    expect(redact('bad config FB_ENCRYPTION_KEYS=k1:QUJD')).not.toContain('QUJD');
+  });
+});

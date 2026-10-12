@@ -9,7 +9,8 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createPool } from '@feedbouncer/db';
 import { migratedDb } from '@feedbouncer/db/testing';
 import { extractFirstUrl, MemoryMailer } from '@feedbouncer/mailer/testing';
-import { createLogger } from '@feedbouncer/service-runtime';
+import { testKeyring } from '@feedbouncer/secrets/testing';
+import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { buildApp } from '../app.factory.js';
 import type { AppDeps } from '../deps.js';
 import type { ApiEnv } from '../env.js';
@@ -52,15 +53,17 @@ export async function startTestApi(overrides: Partial<ApiEnv> = {}): Promise<Tes
   }
   const db = await migratedDb();
   const env: ApiEnv = {
+    appEnv: 'test',
     databaseUrl: db.db.url,
     redisUrl: new URL(redisRaw),
     port: 0,
     logLevel: 'error',
-    authSecret: 'test-only-auth-secret-0123456789abcdef',
+    authSecret: new Secret('test-only-auth-secret-0123456789abcdef'),
     publicWebUrl: new URL(WEB),
     smtpUrl: new URL('smtp://127.0.0.1:1'),
     mailFrom: 'FeedBouncer <no-reply@localhost>',
     trustProxyHops: 0,
+    encryption: testKeyring(),
     ...overrides,
   };
   const logLines: string[] = [];

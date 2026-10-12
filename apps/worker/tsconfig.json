@@ -4,6 +4,7 @@
   "include": ["src"],
   "references": [
     { "path": "../../packages/service-runtime/tsconfig.build.json" },
-    { "path": "../../packages/db/tsconfig.build.json" }
+    { "path": "../../packages/db/tsconfig.build.json" },
+    { "path": "../../packages/secrets/tsconfig.build.json" }
   ]
 }

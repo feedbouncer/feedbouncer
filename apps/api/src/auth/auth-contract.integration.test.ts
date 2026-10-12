@@ -207,7 +207,7 @@ describe('Better Auth on our schema', () => {
       await signUp('c12@x.test');
       const { token } = await signIn('c12@x.test');
       const stored = await storedToken('c12@x.test');
-      const secret = api.deps.env.authSecret;
+      const secret = api.deps.env.authSecret.reveal();
       const forge = async (v: string) =>
         `${SESSION_COOKIE}=${encodeURIComponent(`${v}.${await makeSignature(v, secret)}`)}`;
       // Control: signing the issued token this way does authenticate.

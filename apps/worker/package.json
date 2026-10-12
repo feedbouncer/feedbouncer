@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@feedbouncer/db": "workspace:*",
+    "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
     "bullmq": "6.3.12",
     "ioredis": "5.11.1"

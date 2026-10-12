@@ -18,6 +18,7 @@
     "@feedbouncer/authz": "workspace:*",
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/mailer": "workspace:*",
+    "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
     "@nestjs/common": "12.1.2",
     "@nestjs/core": "12.1.2",

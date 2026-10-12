@@ -3,10 +3,13 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { Worker } from 'bullmq';
 import { Redis } from 'ioredis';
 import { createPool, runJobOnce } from '@feedbouncer/db';
+import { reportKeyCoverage } from '@feedbouncer/secrets';
 import {
   EnvError,
   createLogger,
   errorFields,
+  installCrashHandlers,
+  logConfigurationLoaded,
   onShutdown,
   startHealthServer,
   waitUntil,
@@ -16,14 +19,18 @@ import { SYSTEM_QUEUE, createProcessor } from './processor.js';
 import { reportStartupFailure } from './startup.js';
 
 let env: WorkerEnv;
+const configWarnings: string[] = [];
 try {
-  env = loadWorkerEnv(process.env);
+  env = loadWorkerEnv(process.env, { warn: (m) => configWarnings.push(m) });
 } catch (err) {
   process.stderr.write(`${err instanceof EnvError ? err.message : 'Invalid configuration'}\n`);
   process.exit(1);
 }
 
 const log = createLogger('worker', env.logLevel);
+installCrashHandlers(log);
+for (const w of configWarnings) log.warn(w, { appEnv: env.appEnv });
+logConfigurationLoaded(log, env);
 try {
   const workerId = hostname();
   const pool = createPool(env.databaseUrl, {
@@ -76,6 +83,8 @@ try {
     onRetry: (attempt, err) =>
       log.warn('waiting for postgres/redis', { attempt, ...errorFields(err) }),
   });
+
+  await reportKeyCoverage(pool, env.encryption, log);
 
   worker.run().catch((err: unknown) => {
     log.error('worker stopped', errorFields(err));
