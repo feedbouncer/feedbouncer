@@ -21,6 +21,8 @@ let queues: QueueSet;
 let redis: TestRedis;
 let metrics: JobMetrics;
 let ledger: PgJobLedger;
+let jobsRegistry: JobRegistry;
+let connectorsRegistry: ConnectorRegistry;
 let t: JobsTenant;
 let u: JobsTenant;
 const scope = (x: JobsTenant) => ({
@@ -57,6 +59,8 @@ beforeAll(async () => {
     externalRef: (p) => p.ref,
     handle: async () => ({}),
   });
+  jobsRegistry = jobs;
+  connectorsRegistry = connectors;
   ledger = new PgJobLedger(pool);
   queues = new QueueSet({ connection: redis.connection, prefix: redis.prefix });
   metrics = new JobMetrics(createLogger('t', 'error', () => {}));
@@ -104,7 +108,12 @@ describe('JobProducer.enqueue', () => {
       type: 'echo',
       payload: { ref: 'race-1' },
     } as const;
+    const q = queues.queue('facebook');
+    const jobIds = async () => new Set((await q.getJobs()).map((j) => j.id));
+    const before = await jobIds();
     const results = await Promise.all(Array.from({ length: 10 }, () => producer.enqueue(req)));
+    const added = [...(await jobIds())].filter((id) => !before.has(id));
+    expect(added).toEqual([results[0]!.jobId]);
     expect(results.filter((r) => r.status === 'enqueued')).toHaveLength(1);
     expect(new Set(results.map((r) => r.ledgerId)).size).toBe(1);
     const n = await pool.query('SELECT count(*)::int AS n FROM job_ledger WHERE id = $1', [
@@ -260,7 +269,7 @@ describe('JobProducer.reconcile and ledger lifetime', () => {
     expect(metrics.count('requeued', 'facebook')).toBeGreaterThanOrEqual(1);
   });
 
-  it('keeps the row past the dedup window by the retry horizon', async () => {
+  it('expires the row one dedup window after enqueue', async () => {
     const r = await producer.enqueue({
       scope: scope(t),
       platform: 'facebook',
@@ -271,6 +280,44 @@ describe('JobProducer.reconcile and ledger lifetime', () => {
       'SELECT extract(epoch FROM expires_at - now()) AS s FROM job_ledger WHERE id = $1',
       [r.ledgerId],
     );
-    expect(Number(rows[0].s)).toBeGreaterThan(86_400 + 86_400);
+    expect(Number(rows[0].s)).toBeGreaterThan(86_400 - 60);
+    expect(Number(rows[0].s)).toBeLessThanOrEqual(86_400);
+  });
+
+  it('keeps the row queued when the queue add fails, and a retry repairs it', async () => {
+    const real = queues.add.bind(queues);
+    let failures = 1;
+    const flaky = Object.assign(Object.create(queues) as QueueSet, {
+      add: async (...a: Parameters<QueueSet['add']>) => {
+        if (failures-- > 0) throw new Error('queue unavailable');
+        return real(...a);
+      },
+    });
+    const p = new JobProducer({
+      ledger,
+      jobs: jobsRegistry,
+      connectors: connectorsRegistry,
+      queues: flaky,
+      metrics,
+      dedupWindowMs: 86_400_000,
+    });
+    const req = {
+      scope: scope(t),
+      platform: 'facebook',
+      type: 'echo',
+      payload: { ref: 'atomic-1', body: 'secret-body-text' },
+    } as const;
+    const err = await p.enqueue(req).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).not.toContain('secret-body-text');
+    const rows = await pool.query(
+      "SELECT id, state FROM job_ledger WHERE organization_id = $1 AND payload->>'ref' = 'atomic-1'",
+      [t.organizationId],
+    );
+    expect(rows.rows).toHaveLength(1);
+    expect(rows.rows[0].state).toBe('queued');
+    const again = await p.enqueue(req);
+    expect(again).toMatchObject({ status: 'deduplicated', ledgerId: rows.rows[0].id });
+    expect(await queues.queue('facebook').getJob(again.jobId)).toBeDefined();
   });
 });

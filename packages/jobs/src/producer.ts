@@ -6,12 +6,6 @@ import { deriveIdempotencyKey, bullJobId, UUID } from './keys.js';
 import type { DlqFilter, LedgerState, PgJobLedger, Requeued } from './ledger.js';
 import type { JobMetrics } from './metrics.js';
 import { assertSafePayload } from './payload.js';
-import {
-  DEFAULT_RETRY_POLICY,
-  DEFAULT_TIMEOUT_MS,
-  resolvePolicy,
-  retryHorizonMs,
-} from './policy.js';
 import type { QueueSet } from './queues.js';
 
 export interface EnqueueRequest {
@@ -69,18 +63,13 @@ export class JobProducer {
         : { externalRef: def.externalRef(parsed.data) }),
     } as Parameters<typeof deriveIdempotencyKey>[0]);
 
-    // The row has to outlive the dedup window and the longest the job can stay queued.
-    const horizon = retryHorizonMs(
-      resolvePolicy(DEFAULT_RETRY_POLICY, def.policy),
-      def.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-    );
     const res = await ledger.insert({
       scope,
       platform,
       jobType: type,
       idempotencyKey: key,
       payloadJson,
-      ttlMs: this.d.dedupWindowMs + horizon,
+      ttlMs: this.d.dedupWindowMs,
     });
     if (res.status === 'no_connection') throw new JobEnqueueError('connection_not_found');
 
