@@ -30,6 +30,11 @@ export interface PlatformDriver {
   ): Promise<{ headers: Record<string, string>; rawBody: Buffer }>;
 }
 
+/**
+ * `stack` must be assembled over a port set whose `faults.failNextAccessWrite`
+ * really makes the next access-token write throw once; the suite asserts the
+ * rotation-safety scenario unconditionally.
+ */
 export interface ConformanceHarness {
   readonly connector: Connector;
   readonly driver: PlatformDriver;
@@ -196,7 +201,6 @@ export function runConnectorConformance(
       });
 
       it('survives a failed access-token write after the platform rotated the refresh token', async () => {
-        if (!h.stack.faults) return; // the port set offers no fault injection
         const { src } = await target();
         await h.driver.expireAccessTokens();
         vi.advanceTimersByTime(HOUR_MS);

@@ -52,8 +52,12 @@ export interface StackPorts {
   budget: RateBudget;
   secrets: WebhookSecretSource;
   actor: OAuthActor;
-  /** Makes the next access-token write throw once (rotation-safety scenario). */
-  faults?: { failNextAccessWrite(): void };
+  /**
+   * Required: makes the next access-token write throw once. The rotation-safety
+   * scenario (Review Focus 4) depends on it, so a port set without it cannot be
+   * assembled. The Pg run wraps its vault in a decorator that throws once.
+   */
+  faults: { failNextAccessWrite(): void };
 }
 export interface Stack extends StackPorts {
   registry: ConnectorRegistry;
