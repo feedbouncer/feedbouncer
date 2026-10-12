@@ -45,6 +45,14 @@ afterAll(async () => {
   resetTracingForTests();
 });
 
+async function until(what: string, check: () => Promise<boolean>, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await check())) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((r) => setTimeout(r, 25));
+  }
+}
+
 it('webhook -> enqueue -> run (retry) -> moderation.apply share one trace; duplicates do not double count', async () => {
   // 1. A signed-webhook platform for the intake side (app-level secret, so connectionId is null).
   const redirectUri = 'https://app.feedbouncer.test/oauth/callback';
@@ -144,6 +152,26 @@ it('webhook -> enqueue -> run (retry) -> moderation.apply share one trace; dupli
   const workers = await h.workers();
   try {
     await h.waitFor(ledgerIds[0]!, ['completed'], 20_000);
+    // Telemetry is emitted around the ledger transition, so wait for each signal explicitly
+    // instead of relying on close() to drain the in-flight job.
+    await until('attempt-2 job.run span, job.completed line and completed metric', async () => {
+      const ended = exporter
+        .getFinishedSpans()
+        .some(
+          (s) =>
+            s.name === 'job.run' &&
+            s.attributes['feedbouncer.job.attempt'] === 2 &&
+            s.attributes['feedbouncer.job.outcome'] === 'completed',
+        );
+      const logged = h.lines.some((l) => {
+        const o = JSON.parse(l) as Record<string, unknown>;
+        return o.msg === 'job.completed' && o.job_id === ledgerIds[0];
+      });
+      const counted = /feedbouncer_jobs_total\{[^}]*outcome="completed"[^}]*\} 1\n/.test(
+        await metrics.registry.metrics(),
+      );
+      return ended && logged && counted;
+    });
   } finally {
     await workers.close();
   }

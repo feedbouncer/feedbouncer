@@ -49,6 +49,32 @@ describe('redact', () => {
     expect(redact('the basic plan is fine')).toBe('the basic plan is fine');
   });
 
+  it('redacts a bearer token with any characters, in every header form', () => {
+    const odd = 'ab%2Fcd*ef:gh!ij$kl';
+    expect(redact(`Authorization: Bearer ${odd} then`)).toBe(
+      'Authorization: Bearer [redacted] then',
+    );
+    expect(redact(`got bearer ${odd}`)).toBe('got bearer [redacted]');
+    expect(redact('Authorization: Token tok_0123456789 ok')).toBe(
+      'Authorization: Token [redacted] ok',
+    );
+    const digest = redact('Authorization: Digest username="bob", realm="r", response="deadbeef"');
+    expect(digest).toBe('Authorization: Digest [redacted]');
+    expect(redact('Proxy-Authorization: Basic dXNlcjpwYXNz')).toBe(
+      'Proxy-Authorization: Basic [redacted]',
+    );
+    expect(redact('Authorization: rawcredential123 failed here')).not.toContain('rawcredential123');
+    expect(redact('Authorization: MyScheme mycredential456')).not.toContain('mycredential456');
+    expect(redact('{"authorization":"Bearer sekrit-v4lue"}')).toBe(
+      '{"authorization":"Bearer [redacted]"}',
+    );
+    const escaped = redact(String.raw`{\"authorization\":\"Bearer sekrit-v4lue%21\"}`);
+    expect(escaped).not.toContain('sekrit');
+    expect(
+      redact('x'.repeat(50_000) + ' authorization: ' + 'a '.repeat(20_000)).length,
+    ).toBeGreaterThan(0);
+  });
+
   it('redacts the whole userinfo when the password contains @', () => {
     expect(redact('postgres://u:p@ss@db/x')).toBe('postgres://[redacted]@db/x');
   });

@@ -4,10 +4,16 @@
 const TOKEN = /\S+/g;
 const SECRET_PAIR =
   /(password|passwd|pwd|secret|token|apikey|api_key|encryption_keys?)(["']?\s*[=:]\s*)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s&,;'"]+)/gi;
-// An HTTP credential header ("Authorization: Bearer abc"): the scheme word is
-// not a secret, the credential after it is. A bare "Bearer <token>" is covered too.
-const AUTH_HEADER = /(authorization["']?\s*[:=]\s*["']?(?:bearer|basic)\s+)[^\s,;'"]+/gi;
-const BEARER = /\b(bearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi;
+// An HTTP credential header ("Authorization: Bearer abc", "Proxy-Authorization: ...",
+// and their JSON-escaped forms). A known scheme word stays readable and the
+// credential after it is masked; "Digest" carries a parameter list, so the rest
+// of the line goes. With no known scheme the whole value is the secret: it is
+// masked together with one following word, because over-redaction is preferred
+// to leaking. Every class below is a single run, so scanning stays linear.
+const AUTH_HEADER =
+  /((?:proxy-)?authorization(?:\\?["'])?\s*[:=]\s*(?:\\?["'])?)(?:(digest)[ \t]+[^\r\n]+|(bearer|basic|token|negotiate|ntlm|apikey)\s+[^\s,;'"\\]+|[^\s,;'"\\]+(?:[ \t]+[^\s,;'"\\]+)?)/gi;
+// A bare "Bearer <token>" outside a header; the length guard keeps prose readable.
+const BEARER = /\b(bearer\s+)[^\s,;'"\\]{8,}/gi;
 
 // A field whose NAME looks secret is redacted whatever its value, so a caller
 // cannot leak a token by logging it under a descriptive key.
@@ -52,7 +58,9 @@ function redactToken(token: string): string {
 export function redact(text: string): string {
   return text
     .replace(TOKEN, redactToken)
-    .replace(AUTH_HEADER, '$1[redacted]')
+    .replace(AUTH_HEADER, (_m, prefix: string, digest?: string, scheme?: string) =>
+      digest ? `${prefix}${digest} [redacted]` : `${prefix}${scheme ? `${scheme} ` : ''}[redacted]`,
+    )
     .replace(BEARER, '$1[redacted]')
     .replace(SECRET_PAIR, (_m, key: string, sep: string, value: string) => {
       const quote = value.startsWith('"') || value.startsWith("'") ? value[0] : '';

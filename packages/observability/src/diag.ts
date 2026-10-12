@@ -1,7 +1,8 @@
 import type { DiagLogger } from '@opentelemetry/api';
 import { redact, type Logger } from '@feedbouncer/service-runtime';
 
-// redact() has no pattern for a bare bearer credential, so scrub it here.
+// redact() masks bearer credentials of 8 or more characters; this additionally
+// scrubs short bearer tokens.
 const BEARER = /\b(bearer\s+)\S+/gi;
 
 export function diagToLogger(log: Logger, now: () => number = Date.now): DiagLogger {
