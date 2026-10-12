@@ -1,0 +1,46 @@
+{
+  "name": "@feedbouncer/observability",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "@feedbouncer/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "@feedbouncer/source": "./src/testing/index.ts",
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build tsconfig.build.json",
+    "lint": "eslint .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore --ignore-unknown",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
+    "typecheck": "tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@feedbouncer/connectors": "workspace:*",
+    "@feedbouncer/jobs": "workspace:*",
+    "@feedbouncer/service-runtime": "workspace:*",
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/context-async-hooks": "2.12.0",
+    "@opentelemetry/core": "2.12.0",
+    "@opentelemetry/exporter-trace-otlp-http": "0.223.0",
+    "@opentelemetry/resources": "2.12.0",
+    "@opentelemetry/sdk-trace-base": "2.12.0",
+    "@prometheus-io/client": "0.16.1",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@feedbouncer/db": "workspace:*",
+    "@feedbouncer/secrets": "workspace:*",
+    "@types/node": "24.13.6",
+    "@types/pg": "8.23.1"
+  }
+}
