@@ -198,14 +198,15 @@ const STALE_SQL = `
     SELECT id FROM job_ledger
      WHERE state = 'queued'
        AND (lease_expires_at IS NULL OR lease_expires_at < now())
-       AND COALESCE(next_run_at, updated_at) < now() - ($1::bigint * interval '1 millisecond')
+       AND GREATEST(COALESCE(next_run_at, updated_at), updated_at) < now() - ($1::bigint * interval '1 millisecond')
      ORDER BY updated_at LIMIT $2 FOR UPDATE SKIP LOCKED)
   RETURNING id, platform, job_type, idempotency_key`;
 
 const PURGE_SQL = `
   DELETE FROM job_ledger WHERE id IN (
     SELECT id FROM job_ledger WHERE state <> 'queued' AND expires_at < now()
-     ORDER BY expires_at LIMIT $1)`;
+     ORDER BY expires_at LIMIT $1 FOR UPDATE SKIP LOCKED)
+    AND state <> 'queued' AND expires_at < now()`;
 
 const GET_SQL = `
   SELECT ${ROW}, last_error_kind, last_error_code, result, dead_letter_reason, resolution
@@ -213,6 +214,14 @@ const GET_SQL = `
 
 const DLQ_STATES = ['dead_lettered', 'resolved'] as const;
 const MAX_LIMIT = 10_000;
+
+/** Millisecond inputs reach bigint columns: round up, refuse NaN, Infinity and negatives. */
+function ms(value: number, field: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new RangeError(`invalid duration: ${field}`);
+  }
+  return Math.ceil(value);
+}
 
 const bad = (field: string): never => {
   throw new RangeError(`invalid filter: ${field}`);
@@ -314,7 +323,7 @@ export class PgJobLedger implements JobLedgerPort {
       i.jobType,
       i.idempotencyKey,
       i.payloadJson,
-      i.ttlMs,
+      ms(i.ttlMs, 'ttlMs'),
     ];
     // The conflicting row can be purged between the two statements; one retry covers it.
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -336,7 +345,11 @@ export class PgJobLedger implements JobLedgerPort {
   }
 
   async claim(id: string, owner: string, leaseMs: number): Promise<ClaimResult> {
-    const claimed = await this.pool.query<BaseRecord>(CLAIM_SQL, [id, owner, leaseMs]);
+    const claimed = await this.pool.query<BaseRecord>(CLAIM_SQL, [
+      id,
+      owner,
+      ms(leaseMs, 'leaseMs'),
+    ]);
     if (claimed.rows[0]) return { status: 'claimed', row: toRow(claimed.rows[0]) };
     const probe = await this.pool.query<{ state: LedgerState; wait_ms: string }>(PROBE_SQL, [id]);
     const p = probe.rows[0];
@@ -356,12 +369,12 @@ export class PgJobLedger implements JobLedgerPort {
     f: { kind: string; code: string },
     delayMs: number,
   ): Promise<boolean> {
-    const r = await this.pool.query(RETRY_SQL, [id, owner, f.kind, f.code, delayMs]);
+    const r = await this.pool.query(RETRY_SQL, [id, owner, f.kind, f.code, ms(delayMs, 'delayMs')]);
     return r.rowCount === 1;
   }
 
   async recordDeferral(id: string, owner: string, code: string, delayMs: number): Promise<boolean> {
-    const r = await this.pool.query(DEFER_SQL, [id, owner, code, delayMs]);
+    const r = await this.pool.query(DEFER_SQL, [id, owner, code, ms(delayMs, 'delayMs')]);
     return r.rowCount === 1;
   }
 
@@ -374,7 +387,7 @@ export class PgJobLedger implements JobLedgerPort {
       d.errorKind,
       d.errorCode,
       d.countsAsFailure,
-      d.retentionMs,
+      ms(d.retentionMs, 'retentionMs'),
     ]);
     return r.rowCount === 1;
   }
@@ -382,7 +395,7 @@ export class PgJobLedger implements JobLedgerPort {
   async replay(filter: DlqFilter, dedupWindowMs: number): Promise<Requeued[]> {
     const { where, params } = buildFilter(filter, 3);
     const { rows } = await this.pool.query<RequeuedRecord>(REPLAY_SQL(where), [
-      dedupWindowMs,
+      ms(dedupWindowMs, 'dedupWindowMs'),
       filter.limit,
       ...params,
     ]);
@@ -418,7 +431,10 @@ export class PgJobLedger implements JobLedgerPort {
   }
 
   async staleQueued(staleAfterMs: number, limit: number): Promise<Requeued[]> {
-    const { rows } = await this.pool.query<RequeuedRecord>(STALE_SQL, [staleAfterMs, limit]);
+    const { rows } = await this.pool.query<RequeuedRecord>(STALE_SQL, [
+      ms(staleAfterMs, 'staleAfterMs'),
+      limit,
+    ]);
     return rows.map(toRequeued);
   }
 

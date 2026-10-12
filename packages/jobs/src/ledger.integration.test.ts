@@ -217,4 +217,68 @@ describe('sweeper queries', () => {
     expect(await ledger.purgeExpired(1_000)).toBeGreaterThanOrEqual(1);
     expect(await ledger.get(id)).toBeNull();
   });
+  it('never purges a row a concurrent replay has just re-queued', async () => {
+    const id = await add();
+    await claimed(id);
+    await ledger.deadLetter(id, 'w1', {
+      reason: 'non_retryable',
+      resolution: null,
+      errorKind: 'non_retryable',
+      errorCode: 'invalid_request',
+      countsAsFailure: true,
+      retentionMs: 1_000,
+    });
+    await pool.query(
+      "UPDATE job_ledger SET expires_at = now() - interval '1 second' WHERE id = $1",
+      [id],
+    );
+    // Stand in for a replay that has not committed yet: hold the row lock.
+    const c = await pool.connect();
+    try {
+      await c.query('BEGIN');
+      await c.query(
+        `UPDATE job_ledger SET state = 'queued', dead_letter_reason = NULL, dead_lettered_at = NULL,
+           resolution = NULL, expires_at = now() + interval '1 day' WHERE id = $1`,
+        [id],
+      );
+      const purge = ledger.purgeExpired(1_000);
+      await sleep(300);
+      await c.query('COMMIT');
+      await purge;
+    } finally {
+      c.release();
+    }
+    expect(await ledger.get(id)).toMatchObject({ state: 'queued' });
+  });
+  it('returns a queued row with a past next_run_at once per stale window', async () => {
+    const id = await add();
+    await claimed(id);
+    await ledger.recordRetry(id, 'w1', { kind: 'retryable', code: 'timeout' }, 0);
+    await pool.query(
+      "UPDATE job_ledger SET next_run_at = now() - interval '1 hour' WHERE id = $1",
+      [id],
+    );
+    await sleep(50);
+    expect((await ledger.staleQueued(10, 1_000)).map((s) => s.id)).toContain(id);
+    expect((await ledger.staleQueued(10_000, 1_000)).map((s) => s.id)).not.toContain(id);
+  });
+});
+
+describe('numeric inputs', () => {
+  it('rounds fractional delays up and rejects non-finite or negative values', async () => {
+    const id = await add();
+    await claimed(id);
+    expect(await ledger.recordDeferral(id, 'w1', 'throttled', 1500.5)).toBe(true);
+    expect((await ledger.get(id))?.deferredMs).toBe(1501);
+    await sleep(1_100);
+    await claimed(id);
+    expect(await ledger.recordRetry(id, 'w1', { kind: 'retryable', code: 'timeout' }, 10.2)).toBe(
+      true,
+    );
+    await expect(ledger.claim(id, 'w', Number.NaN)).rejects.toThrow(RangeError);
+    await expect(
+      ledger.recordRetry(id, 'w1', { kind: 'retryable', code: 'x' }, -1),
+    ).rejects.toThrow(RangeError);
+    await expect(ledger.staleQueued(Number.POSITIVE_INFINITY, 10)).rejects.toThrow(RangeError);
+  });
 });
