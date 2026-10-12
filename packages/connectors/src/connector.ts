@@ -34,6 +34,7 @@ export interface CallContext {
   readonly externalAccountId: string;
   readonly http: SafeHttp;
   readonly signal: AbortSignal;
+  /** Best-effort: never rejects; if the budget store is down the report is logged and dropped. */
   reportQuota(q: { remaining: number; resetAt: Date }): Promise<void>;
 }
 

@@ -2,6 +2,10 @@
 // #call: connection status check -> budget -> access token -> connector op
 // (with timeout) -> one refresh-and-retry on a rejected token -> platform
 // rate hints fed back into the budget. Output is validated before return.
+// Failures are attributed: a foreign error from the connector is replaced by
+// permanent/connector_failure; a foreign error from a port (directory, vault,
+// lock, budget store) is an outage, reported as transient/storage_unavailable
+// so the caller retries instead of dropping the work.
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger, Secret } from '@feedbouncer/service-runtime';
 import type { RateBudget } from './budget.js';
@@ -52,13 +56,31 @@ export class ConnectorRuntime {
   constructor(private readonly d: RuntimeDeps) {}
 
   async connect(scope: ConnectionScope): Promise<ConnectionClient> {
-    const rec = await this.d.directory.load(scope);
+    const rec = await viaPort(this.d.log, { connectionId: scope.connectionId }, () =>
+      this.d.directory.load(scope),
+    );
     if (!rec) throw new ConnectorError('not_found', 'connection_not_found');
     return new ConnectionClient(this.d, this.d.registry.require(rec.platform), scope);
   }
 }
 
 const invalidRequest = () => new ConnectorError('permanent', 'invalid_request');
+const errorName = (err: unknown) => (err instanceof Error ? err.name : 'NonError');
+
+/** Runs a port call; a foreign error is an outage, logged by name only. */
+async function viaPort<T>(
+  log: Logger,
+  fields: Record<string, unknown>,
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof ConnectorError) throw err;
+    log.warn('connection storage unavailable', { ...fields, errorName: errorName(err) });
+    throw new ConnectorError('transient', 'storage_unavailable');
+  }
+}
 
 export class ConnectionClient {
   readonly platform: Platform;
@@ -157,28 +179,27 @@ export class ConnectionClient {
     }
   }
 
-  async #call<T>(priority: Priority, op: (ctx: CallContext) => Promise<T>): Promise<T> {
-    try {
-      return await this.#attempt(priority, op);
-    } catch (err) {
-      throw this.#replace(err);
-    }
-  }
-
   /** Foreign errors are replaced, never wrapped; only the error name is logged. */
   #replace(err: unknown): ConnectorError {
     const ce = toConnectorError(err);
     if (ce !== err)
       this.d.log.warn('connector threw a non-ConnectorError', {
-        platform: this.platform,
-        connectionId: this.scope.connectionId,
-        errorName: err instanceof Error ? err.name : 'NonError',
+        ...this.#ids(),
+        errorName: errorName(err),
       });
     return ce;
   }
 
-  async #attempt<T>(priority: Priority, op: (ctx: CallContext) => Promise<T>): Promise<T> {
-    const rec = await this.d.directory.load(this.scope);
+  #ids() {
+    return { platform: this.platform, connectionId: this.scope.connectionId };
+  }
+
+  #port<T>(fn: () => Promise<T>): Promise<T> {
+    return viaPort(this.d.log, this.#ids(), fn);
+  }
+
+  async #call<T>(priority: Priority, op: (ctx: CallContext) => Promise<T>): Promise<T> {
+    const rec = await this.#port(() => this.d.directory.load(this.scope));
     if (!rec) throw new ConnectorError('not_found', 'connection_not_found');
     if (rec.status === 'revoked')
       // terminal: cannot be fixed by re-authorizing
@@ -188,22 +209,19 @@ export class ConnectionClient {
     if (rec.status !== 'active') throw new ConnectorError('permanent', 'connection_inactive');
 
     const policy = this.capabilities.rateLimit;
+    const key = scopeKey(this.scope);
     let rejected: Secret | undefined;
     for (let attempt = 0; attempt < 2; attempt++) {
-      const decision = await this.d.budget.acquire(
-        this.platform,
-        scopeKey(this.scope),
-        policy,
-        priority,
+      const decision = await this.#port(() =>
+        this.d.budget.acquire(this.platform, key, policy, priority),
       );
       if (!decision.granted)
         throw new ConnectorError('rate_limited', 'budget_exhausted', {
           retryAfterMs: decision.retryAfterMs,
         });
-      const token = await this.d.tokens.accessToken(
-        this.connector,
-        this.scope,
-        rejected ? { rejected } : {},
+      // TokenManager maps connector refresh failures itself; anything foreign is a port failure.
+      const token = await this.#port(() =>
+        this.d.tokens.accessToken(this.connector, this.scope, rejected ? { rejected } : {}),
       );
       try {
         return await op(this.#ctx(rec, token));
@@ -211,9 +229,9 @@ export class ConnectionClient {
         const ce = this.#replace(err);
         if (ce.kind === 'rate_limited') {
           const retryAfterMs = ce.retryAfterMs ?? policy.defaultRetryAfterMs;
-          await this.d.budget.applyPlatformHint(this.platform, scopeKey(this.scope), policy, {
-            retryAfterMs,
-          });
+          await this.#port(() =>
+            this.d.budget.applyPlatformHint(this.platform, key, policy, { retryAfterMs }),
+          );
           throw new ConnectorError('rate_limited', ce.code, { retryAfterMs });
         }
         if (ce.kind === 'auth_expired' && !ce.reauthorize) {
@@ -221,7 +239,9 @@ export class ConnectionClient {
             rejected = token;
             continue;
           }
-          await this.d.directory.markReauthRequired(this.scope, 'oauth_access_rejected');
+          await this.#port(() =>
+            this.d.directory.markReauthRequired(this.scope, 'oauth_access_rejected'),
+          );
           throw new ConnectorError('auth_expired', 'oauth_access_rejected', { reauthorize: true });
         }
         throw ce;
@@ -237,14 +257,23 @@ export class ConnectionClient {
       externalAccountId: rec.externalAccountId,
       http: this.d.http(this.connector),
       signal: AbortSignal.timeout(this.d.callTimeoutMs ?? 15_000),
-      reportQuota: (q) =>
-        this.d.budget.applyQuotaReport(
-          this.platform,
-          scopeKey(this.scope),
-          policy,
-          q,
-          this.d.clock.now(),
-        ),
+      // Best-effort: a quota report never fails the connector's call.
+      reportQuota: async (q) => {
+        try {
+          await this.d.budget.applyQuotaReport(
+            this.platform,
+            scopeKey(this.scope),
+            policy,
+            q,
+            this.d.clock.now(),
+          );
+        } catch (err) {
+          this.d.log.warn('quota report not applied', {
+            ...this.#ids(),
+            errorName: errorName(err),
+          });
+        }
+      },
     };
   }
 }

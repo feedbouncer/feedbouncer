@@ -28,6 +28,7 @@ let directory: MemoryConnectionDirectory;
 let runtime: ConnectorRuntime;
 let lines: string[];
 let budget: ReturnType<typeof memoryBudget>;
+let vault: MemoryCredentialVault;
 
 beforeEach(async () => {
   act = vi.fn(async () => ({ status: 'applied', platformActionId: 'pa1' }));
@@ -65,7 +66,7 @@ beforeEach(async () => {
   registry.register(connector);
   directory = new MemoryConnectionDirectory();
   directory.seed({ scope, platform: 'youtube', externalAccountId: 'chan', status: 'active' });
-  const vault = new MemoryCredentialVault();
+  vault = new MemoryCredentialVault();
   await vault.writeAccessToken(scope, { value: new Secret('access-1'), expiresAt: null });
   await vault.writeRefreshToken(scope, { value: new Secret('refresh-1'), expiresAt: null });
   lines = [];
@@ -330,6 +331,92 @@ describe('replaced connector errors', () => {
     expect(JSON.stringify(r)).not.toContain('SENTINEL');
     expect(replacedLogs()).toHaveLength(1);
     expect(replacedLogs()[0]).toContain('TypeError');
+    expect(lines.join('\n')).not.toContain('SENTINEL');
+  });
+});
+
+describe('storage failures', () => {
+  const outage = () => new Error('connection terminated SENTINEL');
+  const storageLogs = () => lines.filter((l) => l.includes('storage unavailable'));
+
+  it('a directory outage during act is transient, logged by name only, and a retry succeeds', async () => {
+    const c = await runtime.connect(scope);
+    vi.spyOn(directory, 'load').mockRejectedValueOnce(outage());
+    const r = await c.act({ action: 'hide', target: ref });
+    expect(r).toMatchObject({
+      status: 'failed',
+      error: { kind: 'transient', code: 'storage_unavailable' },
+    });
+    expect(act).not.toHaveBeenCalled();
+    expect(storageLogs()).toHaveLength(1);
+    expect(storageLogs()[0]).toContain('"errorName":"Error"');
+    expect(lines.join('\n')).not.toContain('SENTINEL');
+    expect(lines.join('\n')).not.toContain('non-ConnectorError');
+    expect((await c.act({ action: 'hide', target: ref })).status).toBe('applied');
+  });
+
+  it('a vault read outage on a read is transient', async () => {
+    const c = await runtime.connect(scope);
+    vi.spyOn(vault, 'readTokens').mockRejectedValueOnce(outage());
+    await expect(c.listComments({ sourceExternalId: 's1', cursor: null })).rejects.toMatchObject({
+      kind: 'transient',
+      code: 'storage_unavailable',
+    });
+    expect(listComments).not.toHaveBeenCalled();
+  });
+
+  it('a vault write outage after a refresh is transient', async () => {
+    act.mockRejectedValueOnce(new ConnectorError('auth_expired', 'token_rejected'));
+    vault.failNextWrite('access');
+    const c = await runtime.connect(scope);
+    expect(await c.act({ action: 'hide', target: ref })).toMatchObject({
+      status: 'failed',
+      error: { kind: 'transient', code: 'storage_unavailable' },
+    });
+  });
+
+  it('a failure to flag reauthorization is transient', async () => {
+    act.mockRejectedValue(new ConnectorError('auth_expired', 'token_rejected'));
+    vi.spyOn(directory, 'markReauthRequired').mockRejectedValueOnce(outage());
+    const c = await runtime.connect(scope);
+    expect(await c.act({ action: 'hide', target: ref })).toMatchObject({
+      status: 'failed',
+      error: { kind: 'transient', code: 'storage_unavailable' },
+    });
+  });
+
+  it('connect() reports a directory outage as transient', async () => {
+    vi.spyOn(directory, 'load').mockRejectedValueOnce(outage());
+    await expect(runtime.connect(scope)).rejects.toMatchObject({
+      kind: 'transient',
+      code: 'storage_unavailable',
+    });
+  });
+
+  it('a connector error is still replaced as permanent connector_failure', async () => {
+    refreshTokens.mockRejectedValueOnce(new Error('platform said SENTINEL'));
+    act.mockRejectedValueOnce(new ConnectorError('auth_expired', 'token_rejected'));
+    const c = await runtime.connect(scope);
+    expect(await c.act({ action: 'hide', target: ref })).toMatchObject({
+      status: 'failed',
+      error: { kind: 'permanent', code: 'connector_failure' },
+    });
+  });
+});
+
+describe('reportQuota', () => {
+  it('is best-effort: a budget store failure never reaches the connector', async () => {
+    vi.spyOn(budget, 'applyQuotaReport').mockRejectedValueOnce(new Error('redis down SENTINEL'));
+    listComments.mockImplementationOnce(async (ctx) => {
+      await ctx.reportQuota({ remaining: 0, resetAt: new Date(Date.now() + 60_000) });
+      return { items: [comment], nextCursor: null };
+    });
+    const c = await runtime.connect(scope);
+    const page = await c.listComments({ sourceExternalId: 's1', cursor: null });
+    expect(page.items).toHaveLength(1);
+    const logged = lines.filter((l) => l.includes('quota report'));
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toContain('"errorName":"Error"');
     expect(lines.join('\n')).not.toContain('SENTINEL');
   });
 });

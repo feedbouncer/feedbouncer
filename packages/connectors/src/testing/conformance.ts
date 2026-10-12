@@ -6,7 +6,7 @@ import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Connector } from '../connector.js';
 import { isSuccessEquivalent, type ConnectionClient } from '../runtime.js';
 import { INVERSE_ACTION, MODERATION_ACTIONS, type NormalizedComment } from '../types.js';
-import { assembleStack, type Stack } from './runtime.js';
+import { assembleStack, type Stack, type StackPorts } from './runtime.js';
 
 /** Async mirror of the platform test controls. */
 export interface PlatformDriver {
@@ -113,12 +113,33 @@ export function runConnectorConformance(
       const ids = await h.driver.seedComments(account, src, n);
       return { src, ids };
     };
-    /** The same connection and ports, with the connector's hooks partly replaced. */
-    const withHooks = async (hooks: Partial<Connector>) => {
-      const stack = assembleStack({ ...h.connector, ...hooks }, h.stack, h.stack.redirectUri, {
-        clock: h.stack.clock,
-      });
+    /** The same connection and ports, with the connector's hooks (or some ports) partly replaced. */
+    const withHooks = async (hooks: Partial<Connector>, ports: Partial<StackPorts> = {}) => {
+      const stack = assembleStack(
+        { ...h.connector, ...hooks },
+        { ...h.stack, ...ports },
+        h.stack.redirectUri,
+        { clock: h.stack.clock },
+      );
       return { client: await stack.runtime.connect(scope), lines: stack.lines };
+    };
+    /** Wraps a port so that, once armed, the next call to `method` rejects like a storage outage. */
+    const outageOnce = <T extends object>(port: T, method: keyof T & string) => {
+      let armed = false;
+      const wrapped = new Proxy(port, {
+        get(target, prop) {
+          const v: unknown = Reflect.get(target, prop);
+          if (typeof v !== 'function') return v;
+          return (...args: unknown[]): unknown => {
+            if (prop === method && armed) {
+              armed = false;
+              return Promise.reject(new Error('simulated storage outage'));
+            }
+            return (v as (...a: unknown[]) => unknown).apply(target, args);
+          };
+        },
+      });
+      return { wrapped, arm: () => void (armed = true) };
     };
     const goodComment = (src: string): NormalizedComment => ({
       externalId: 'c-good',
@@ -246,7 +267,10 @@ export function runConnectorConformance(
         const client = await h.stack.runtime.connect(scope);
         h.stack.faults.failNextAccessWrite();
         const ref = { sourceExternalId: src, externalId: 'c-000001' };
-        await expect(client.getComment(ref)).rejects.toMatchObject({ kind: 'permanent' });
+        await expect(client.getComment(ref)).rejects.toMatchObject({
+          kind: 'transient',
+          code: 'storage_unavailable',
+        });
         expect(await client.getComment(ref)).toMatchObject({ externalId: 'c-000001' });
         expect((await h.stack.directory.load(scope))?.status).toBe('active');
       });
@@ -443,6 +467,32 @@ export function runConnectorConformance(
         });
         expect(r.status).toBe('not_found');
         expect(isSuccessEquivalent(r)).toBe(true);
+      });
+    });
+
+    describe('storage outages', () => {
+      it('a failed directory or vault read during act is transient, and a retry succeeds', async () => {
+        for (const port of ['directory', 'vault'] as const) {
+          const { src, ids } = await target();
+          const req = {
+            action: 'hide' as const,
+            target: { sourceExternalId: src, externalId: ids[0]! },
+          };
+          const outage =
+            port === 'directory'
+              ? outageOnce(h.stack.directory, 'load')
+              : outageOnce(h.stack.vault, 'readTokens');
+          const { client } = await withHooks({}, { [port]: outage.wrapped });
+          const acts = await h.driver.calls('act');
+          outage.arm();
+          expect(await client.act(req)).toMatchObject({
+            status: 'failed',
+            error: { kind: 'transient', code: 'storage_unavailable' },
+          });
+          expect(await h.driver.calls('act')).toBe(acts);
+          expect((await client.act(req)).status).toBe('applied');
+          expect(await h.driver.commentState(src, ids[0]!)).toBe('hidden');
+        }
       });
     });
 

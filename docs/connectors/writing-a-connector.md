@@ -211,7 +211,9 @@ optional and tied to the `listSources` capability.
   delivered through that signal; the runtime does not race your operation.
 - Call `ctx.reportQuota({ remaining, resetAt })` when the platform returns
   quota headers. A report lowers the local budget to the platform's number;
-  `remaining <= 0` defers further calls until `resetAt`.
+  `remaining <= 0` defers further calls until `resetAt` (at most 24 hours).
+  Reporting is best-effort: it never rejects, even when the budget store is
+  down, so it cannot fail your call.
 
 Everything returned is validated by strict zod schemas. Unknown keys, ids over
 255 characters or with control characters, non-https URLs, bodies over
