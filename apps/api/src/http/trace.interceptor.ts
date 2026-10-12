@@ -58,17 +58,25 @@ export class TraceInterceptor implements NestInterceptor {
               inner = next.handle().subscribe({
                 next: (v) => subscriber.next(v),
                 error: (e: unknown) => {
-                  const status = statusOf(e);
-                  setSpanAttributes(span, { 'http.response.status_code': status });
-                  if (status >= 500) markSpanError(span, e);
+                  try {
+                    const status = statusOf(e);
+                    setSpanAttributes(span, { 'http.response.status_code': status });
+                    if (status >= 500) markSpanError(span, e);
+                  } catch {
+                    // Span bookkeeping must never stop the error reaching the client.
+                  }
                   subscriber.error(e);
                   finish();
                 },
                 complete: () => {
-                  setSpanAttributes(span, {
-                    'http.response.status_code': http.getResponse<{ statusCode: number }>()
-                      .statusCode,
-                  });
+                  try {
+                    setSpanAttributes(span, {
+                      'http.response.status_code': http.getResponse<{ statusCode: number }>()
+                        .statusCode,
+                    });
+                  } catch {
+                    // Span bookkeeping must never stop the response completing.
+                  }
                   subscriber.complete();
                   finish();
                 },

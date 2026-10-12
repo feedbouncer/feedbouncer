@@ -1,6 +1,6 @@
 import { createHash, createHmac } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { Secret, createLogger } from '@feedbouncer/service-runtime';
+import { Secret, createLogger, type Logger } from '@feedbouncer/service-runtime';
 import type { Connector, InboundEvent } from './connector.js';
 import { MemoryDeliveryLedger, StaticWebhookSecrets } from './memory.js';
 import { ConnectorRegistry } from './registry.js';
@@ -76,7 +76,7 @@ function signed(body: object, opts: { secret?: string; ts?: number } = {}): Inbo
   };
 }
 
-function gate(secretSource: 'app' | 'connection' = 'app', timestamped = true) {
+function gate(secretSource: 'app' | 'connection' = 'app', timestamped = true, log?: Logger) {
   const registry = new ConnectorRegistry();
   registry.register(connector(secretSource, timestamped));
   const lines: string[] = [];
@@ -98,7 +98,7 @@ function gate(secretSource: 'app' | 'connection' = 'app', timestamped = true) {
     secrets,
     ledger: new MemoryDeliveryLedger(),
     clock: { now: () => NOW },
-    log: createLogger('test', 'debug', (l) => lines.push(l)),
+    log: log ?? createLogger('test', 'debug', (l) => lines.push(l)),
   });
   return { g, lines };
 }
@@ -221,6 +221,25 @@ describe('WebhookGate', () => {
     expect(got.map((e) => e.externalAccountId)).toEqual(['acct-y']);
     const warning = lines.find((l) => l.includes('another account dropped'));
     expect(warning).toContain('"connectionId":"conn-y"');
+  });
+
+  it('a throwing logger does not reject a valid delivery with dropped events', async () => {
+    const boom = () => {
+      throw new Error('logger down');
+    };
+    const log = { debug: boom, info: boom, warn: boom, error: boom } as unknown as Logger;
+    const { g } = gate('connection', true, log);
+    const req = {
+      ...signed(
+        { events: [{ account: 'acct-y' }, { account: 'acct-x' }] },
+        { secret: 'conn-y-secret' },
+      ),
+      connectionId: 'conn-y',
+    };
+    expect(await g.handle(req, async () => undefined)).toEqual({
+      status: 'accepted',
+      eventCount: 1,
+    });
   });
 
   it('rejects connection-scoped deliveries for unknown connections like any other failure', async () => {

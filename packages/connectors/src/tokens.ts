@@ -48,11 +48,16 @@ export function normalizeTokenSet(
     throw new ConnectorError('permanent', 'invalid_connector_output');
   const expiry = (d: unknown): Date | null => {
     if (validDate(d)) return d;
-    if (d != null)
-      log.warn('connector returned an unusable token expiry', {
-        ...fields,
-        code: 'invalid_token_expiry',
-      });
+    if (d != null) {
+      try {
+        log.warn('connector returned an unusable token expiry', {
+          ...fields,
+          code: 'invalid_token_expiry',
+        });
+      } catch {
+        /* a logger failure must not reject a refresh */
+      }
+    }
     return null;
   };
   return {
@@ -101,10 +106,14 @@ export class TokenManager {
     return p;
   }
 
-  /** Informational lines must never abort a refresh or reject a waiter. */
-  #safeInfo(msg: string, fields: Readonly<Record<string, string | number | boolean | null>>): void {
+  /** Log lines must never abort a refresh, reject a waiter or replace a ConnectorError. */
+  #safeInfo(
+    msg: string,
+    fields: Readonly<Record<string, string | number | boolean | null>>,
+    level: 'info' | 'warn' = 'info',
+  ): void {
     try {
-      this.d.log.info(msg, fields);
+      this.d.log[level](msg, fields);
     } catch {
       /* a logger failure must not surface */
     }
@@ -146,7 +155,11 @@ export class TokenManager {
     } catch (err) {
       const ce = toConnectorError(err);
       if (ce.kind === 'auth_expired') return this.#reauth(scope, 'oauth_refresh_rejected');
-      this.d.log.warn('token refresh failed', { ...ids(scope), kind: ce.kind, errorCode: ce.code });
+      this.#safeInfo(
+        'token refresh failed',
+        { ...ids(scope), kind: ce.kind, errorCode: ce.code },
+        'warn',
+      );
       throw ce;
     }
     if (tokens.refreshToken)
@@ -167,7 +180,11 @@ export class TokenManager {
 
   async #reauth(scope: ConnectionScope, reason: ReauthReason): Promise<never> {
     const newlyFlagged = await this.d.directory.markReauthRequired(scope, reason);
-    this.d.log.warn('connection requires reauthorization', { ...ids(scope), reason, newlyFlagged });
+    this.#safeInfo(
+      'connection requires reauthorization',
+      { ...ids(scope), reason, newlyFlagged },
+      'warn',
+    );
     throw new ConnectorError('auth_expired', reason, { reauthorize: true });
   }
 }

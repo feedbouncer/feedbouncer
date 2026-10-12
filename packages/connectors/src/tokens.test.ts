@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import { Secret, createLogger } from '@feedbouncer/service-runtime';
+import { Secret, createLogger, type Logger } from '@feedbouncer/service-runtime';
 import type { Connector, TokenSet } from './connector.js';
 import { ConnectorError } from './errors.js';
 import { MemoryConnectionDirectory, MemoryCredentialVault, MemoryRefreshLock } from './memory.js';
 import type { TokenRecord } from './ports.js';
-import { TokenManager } from './tokens.js';
+import { TokenManager, normalizeTokenSet } from './tokens.js';
 
 const NOW = Date.parse('2026-10-12T10:00:00Z');
 
@@ -37,6 +37,7 @@ function setup(
     directory: MemoryConnectionDirectory;
     lock: MemoryRefreshLock;
   },
+  log?: Logger,
 ) {
   const vault = shared?.vault ?? new MemoryCredentialVault();
   const directory = shared?.directory ?? new MemoryConnectionDirectory();
@@ -55,7 +56,7 @@ function setup(
     directory,
     lock,
     clock: { now: () => NOW },
-    log: createLogger('t', 'debug', (l) => lines.push(l)),
+    log: log ?? createLogger('t', 'debug', (l) => lines.push(l)),
     oauthContext: () => ({
       http: {
         request: async () => {
@@ -263,6 +264,51 @@ describe('TokenManager', () => {
     expect((await s.directory.load(scope))?.status).toBe('reconnect_required');
     expect(s.directory.statusReason('c1')).toBe('oauth_refresh_rejected');
     expect(s.refreshTokens).toHaveBeenCalledTimes(1);
+  });
+
+  it('a throwing logger never replaces the ConnectorError of a failed refresh', async () => {
+    const boom = () => {
+      throw new Error('logger down');
+    };
+    const log = { debug: boom, info: boom, warn: boom, error: boom } as unknown as Logger;
+    const rejected = setup(
+      async () => {
+        throw new ConnectorError('auth_expired', 'invalid_grant');
+      },
+      undefined,
+      undefined,
+      log,
+    );
+    await rejected.vault.writeRefreshToken(scope, { value: new Secret('r'), expiresAt: null });
+    await expect(rejected.tm.accessToken(rejected.connector, scope)).rejects.toMatchObject({
+      kind: 'auth_expired',
+      reauthorize: true,
+    });
+    const failed = setup(
+      async () => {
+        throw new ConnectorError('transient', 'timeout');
+      },
+      undefined,
+      undefined,
+      log,
+    );
+    await failed.vault.writeRefreshToken(scope, { value: new Secret('r'), expiresAt: null });
+    await expect(failed.tm.accessToken(failed.connector, scope)).rejects.toMatchObject({
+      kind: 'transient',
+      code: 'timeout',
+    });
+    expect(
+      normalizeTokenSet(
+        {
+          accessToken: new Secret('a'),
+          accessTokenExpiresAt: 'not-a-date',
+          refreshToken: null,
+          scopes: [],
+        },
+        log,
+        {},
+      ).accessTokenExpiresAt,
+    ).toBeNull();
   });
 
   it('transient refresh failures do not flag the connection', async () => {

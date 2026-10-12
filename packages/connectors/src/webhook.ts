@@ -287,7 +287,7 @@ export class WebhookGate {
     if (boundAccount !== null) {
       const kept = events.filter((e) => e.externalAccountId === boundAccount);
       if (kept.length !== events.length)
-        this.d.log.warn('webhook events for another account dropped', {
+        this.#safeLog('webhook events for another account dropped', {
           platform,
           connectionId,
           dropped: events.length - kept.length,
