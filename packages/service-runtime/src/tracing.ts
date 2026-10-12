@@ -70,7 +70,11 @@ export async function withSpan<T>(
     try {
       return await fn(span);
     } catch (err) {
-      if (!opts.isControlFlow?.(err)) markSpanError(span, err);
+      try {
+        if (!opts.isControlFlow?.(err)) markSpanError(span, err);
+      } catch {
+        // Span bookkeeping must never replace the original error.
+      }
       throw err;
     } finally {
       span.end();

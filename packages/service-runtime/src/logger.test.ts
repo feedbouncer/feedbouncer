@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { withLogContext } from './log-context.js';
 import { createLogger, errorFields, isSecretField, redact } from './logger.js';
 
 describe('createLogger', () => {
@@ -73,6 +74,37 @@ describe('redact', () => {
     expect(
       redact('x'.repeat(50_000) + ' authorization: ' + 'a '.repeat(20_000)).length,
     ).toBeGreaterThan(0);
+  });
+
+  it('masks multi-word and parameterised authorization values', () => {
+    const aws = redact(
+      'authorization: AWS4-HMAC-SHA256 Credential=AKIA/x, SignedHeaders=host, Signature=deadbeef',
+    );
+    expect(aws).not.toMatch(/AKIA|SignedHeaders|deadbeef/);
+    const oauth = redact(
+      'Authorization: OAuth oauth_consumer_key="k", oauth_signature="SECRETSIG"',
+    );
+    expect(oauth).not.toMatch(/SECRETSIG|oauth_consumer_key/);
+    const quoted = redact('Authorization: Bearer "abc def ghi"');
+    expect(quoted).toBe('Authorization: Bearer [redacted]');
+    const arr = redact("authorization: [ 'Bearer abc' ]");
+    expect(arr).not.toContain('abc');
+    expect(arr).toContain('Bearer [redacted]');
+  });
+
+  it('stays bounded on 200KB adversarial input', () => {
+    const inputs = [
+      'authorization: ' + 'a '.repeat(100_000),
+      'authorization:' + ' '.repeat(200_000) + 'x',
+      'Authorization: Bearer '.repeat(9_000),
+      'authorization: [ "' + 'a'.repeat(200_000),
+    ];
+    const start = performance.now();
+    for (const input of inputs) {
+      const out = redact(input);
+      expect(out.length).toBeLessThanOrEqual(input.length + 64);
+    }
+    expect(performance.now() - start).toBeLessThan(5_000);
   });
 
   it('redacts the whole userinfo when the password contains @', () => {
@@ -314,4 +346,39 @@ it('errorFields carries a stable code and class', () => {
     errorClass: 'retryable',
   });
   expect(errorFields(new Error('x')).errorClass).toBeNull();
+});
+
+describe('correlation keys', () => {
+  const hostile = 'a"}\n{"level":"error';
+
+  it('bound context wins over caller fields and spoofed span ids', () => {
+    const lines: string[] = [];
+    const log = createLogger('api', 'info', (l) => lines.push(l));
+    withLogContext({ tenant_id: 'org-1' }, () =>
+      log.info('x', { tenant_id: hostile, trace_id: 'spoof', job_id: 'j-9' }),
+    );
+    expect(lines[0]!.includes('\n')).toBe(false);
+    const o = JSON.parse(lines[0]!);
+    expect(o.tenant_id).toBe('org-1');
+    expect(o.trace_id).toBe('spoof'); // no active span: a safe caller id is kept
+    expect(o.job_id).toBe('j-9');
+    expect(o.level).toBe('info');
+  });
+
+  it('bound context overrides even a safe caller value', () => {
+    const lines: string[] = [];
+    const log = createLogger('api', 'info', (l) => lines.push(l));
+    withLogContext({ tenant_id: 'org-1' }, () => log.info('x', { tenant_id: 'org-2' }));
+    expect(JSON.parse(lines[0]!).tenant_id).toBe('org-1');
+  });
+
+  it('outside a context drops hostile caller ids and keeps safe ones', () => {
+    const lines: string[] = [];
+    const log = createLogger('api', 'info', (l) => lines.push(l));
+    log.info('x', { tenant_id: hostile, trace_id: 'bad id', request_id: 'req-1' });
+    const o = JSON.parse(lines[0]!);
+    expect(o).not.toHaveProperty('tenant_id');
+    expect(o).not.toHaveProperty('trace_id');
+    expect(o.request_id).toBe('req-1');
+  });
 });

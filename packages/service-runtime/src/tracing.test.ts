@@ -119,3 +119,28 @@ it('control-flow errors do not mark the span', async () => {
   ).rejects.toBeInstanceOf(Flow);
   expect(exporter.getFinishedSpans()[0]!.status.code).toBe(0);
 });
+
+it('a span id logged by the caller cannot override the active span', async () => {
+  const lines: string[] = [];
+  const log = createLogger('worker', 'info', (l) => lines.push(l));
+  await withSpan('s', {}, async () => log.info('x', { trace_id: 'spoof', span_id: 'spoof' }));
+  const o = JSON.parse(lines[0]!);
+  const span = exporter.getFinishedSpans()[0]!;
+  expect(o.trace_id).toBe(span.spanContext().traceId);
+  expect(o.span_id).toBe(span.spanContext().spanId);
+});
+
+it('a throwing error getter never replaces the original error', async () => {
+  const err = new Error('boom');
+  Object.defineProperty(err, 'code', {
+    get() {
+      throw new Error('getter exploded');
+    },
+  });
+  await expect(
+    withSpan('s', {}, async () => {
+      throw err;
+    }),
+  ).rejects.toBe(err);
+  expect(exporter.getFinishedSpans()).toHaveLength(1);
+});

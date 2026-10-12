@@ -4,14 +4,17 @@
 const TOKEN = /\S+/g;
 const SECRET_PAIR =
   /(password|passwd|pwd|secret|token|apikey|api_key|encryption_keys?)(["']?\s*[=:]\s*)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s&,;'"]+)/gi;
-// An HTTP credential header ("Authorization: Bearer abc", "Proxy-Authorization: ...",
-// and their JSON-escaped forms). A known scheme word stays readable and the
-// credential after it is masked; "Digest" carries a parameter list, so the rest
-// of the line goes. With no known scheme the whole value is the secret: it is
-// masked together with one following word, because over-redaction is preferred
-// to leaking. Every class below is a single run, so scanning stays linear.
+// An HTTP credential header ("Authorization: ...", "Proxy-Authorization: ...",
+// their JSON-escaped forms and a one-element array form). A known single-token
+// scheme (bearer, basic, token, negotiate, ntlm, apikey) stays readable and the
+// one credential after it (a quoted string, or a run up to whitespace, comma,
+// semicolon or quote) is masked. "Digest" and every other scheme carry
+// parameter lists, so everything after the colon (or after "Digest") up to the
+// end of the line is masked and the unknown scheme word goes with it. Over-
+// redaction is preferred to leaking. Every class is a single run, so scanning
+// stays linear.
 const AUTH_HEADER =
-  /((?:proxy-)?authorization(?:\\?["'])?\s*[:=]\s*(?:\\?["'])?)(?:(digest)[ \t]+[^\r\n]+|(bearer|basic|token|negotiate|ntlm|apikey)\s+[^\s,;'"\\]+|[^\s,;'"\\]+(?:[ \t]+[^\s,;'"\\]+)?)/gi;
+  /((?:proxy-)?authorization(?:\\?["'])?\s*[:=]\s*(?:\[\s*)?(?:\\?["'])?)(?:(digest)([ \t]+)[^\r\n]+|(bearer|basic|token|negotiate|ntlm|apikey)([ \t]+)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;'"\\]+)|[^\r\n]+)/gi;
 // A bare "Bearer <token>" outside a header; the length guard keeps prose readable.
 const BEARER = /\b(bearer\s+)[^\s,;'"\\]{8,}/gi;
 
@@ -58,8 +61,12 @@ function redactToken(token: string): string {
 export function redact(text: string): string {
   return text
     .replace(TOKEN, redactToken)
-    .replace(AUTH_HEADER, (_m, prefix: string, digest?: string, scheme?: string) =>
-      digest ? `${prefix}${digest} [redacted]` : `${prefix}${scheme ? `${scheme} ` : ''}[redacted]`,
+    .replace(
+      AUTH_HEADER,
+      (_m, prefix: string, digest?: string, _digestWs?: string, scheme?: string) =>
+        digest
+          ? `${prefix}${digest} [redacted]`
+          : `${prefix}${scheme ? `${scheme} ` : ''}[redacted]`,
     )
     .replace(BEARER, '$1[redacted]')
     .replace(SECRET_PAIR, (_m, key: string, sep: string, value: string) => {

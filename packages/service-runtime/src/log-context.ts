@@ -11,7 +11,7 @@ export const CORRELATION_FIELDS = [
 export type CorrelationField = (typeof CORRELATION_FIELDS)[number];
 export type LogContext = Partial<Readonly<Record<CorrelationField, string>>>;
 
-const SAFE_ID = /^[A-Za-z0-9._:-]{1,128}$/;
+export const SAFE_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const store = new AsyncLocalStorage<LogContext>();
 
 export function withLogContext<T>(ctx: LogContext, fn: () => T): T {

@@ -1,11 +1,14 @@
 // Structured logger (JSON lines on stdout) with correlation context.
 import { errorClassOf } from './error-class.js';
-import { currentLogContext } from './log-context.js';
+import { CORRELATION_FIELDS, SAFE_ID, currentLogContext } from './log-context.js';
 import { isSecretField, redact } from './redaction.js';
 import { currentTraceIds } from './tracing.js';
 export { isSecretField, redact } from './redaction.js';
 
 const RESERVED = new Set(['time', 'level', 'service', 'msg']);
+// Bound context and the active span own these keys; a caller value is only a
+// fallback, and only when it is a safe id.
+const CORRELATION_KEYS = new Set<string>([...CORRELATION_FIELDS, 'trace_id', 'span_id']);
 
 export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
@@ -47,6 +50,7 @@ export function createLogger(
         const safe: Record<string, string | number | boolean | null> = {};
         for (const [k, v] of Object.entries(fields)) {
           if (RESERVED.has(k)) continue;
+          if (CORRELATION_KEYS.has(k) && !(typeof v === 'string' && SAFE_ID.test(v))) continue;
           safe[k] = isSecretField(k) ? '[redacted]' : typeof v === 'string' ? redact(v) : v;
         }
         write(
@@ -55,9 +59,9 @@ export function createLogger(
             level: lvl,
             service,
             msg: redact(msg),
+            ...safe,
             ...currentLogContext(),
             ...(currentTraceIds() ?? {}),
-            ...safe,
           }),
         );
       } catch {
