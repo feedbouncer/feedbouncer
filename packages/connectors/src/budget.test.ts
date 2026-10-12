@@ -102,4 +102,45 @@ describe('RateBudget', () => {
       ConnectorError,
     );
   });
+
+  it('clamps platform blocks to at most 24 hours', async () => {
+    const blocks: number[] = [];
+    const recording: BudgetLimiter = {
+      consume: async () => undefined,
+      reward: async () => undefined,
+      penalty: async () => undefined,
+      block: async (_key, secs) => void blocks.push(secs),
+      get: async () => null,
+    };
+    const b = new RateBudget(() => recording);
+    const yearMs = 365 * 86_400_000;
+    await b.applyQuotaReport(
+      'facebook',
+      'c1',
+      policy,
+      { remaining: 0, resetAt: new Date(Date.now() + yearMs) },
+      Date.now(),
+    );
+    await b.applyPlatformHint('facebook', 'c1', policy, { retryAfterMs: yearMs });
+    await b.applyPlatformHint('facebook', 'c1', policy, { retryAfterMs: Number.POSITIVE_INFINITY });
+    await b.applyPlatformHint('facebook', 'c1', policy, { retryAfterMs: Number.NaN });
+    await b.applyPlatformHint('facebook', 'c1', policy, { retryAfterMs: -5_000 });
+    expect(blocks).toEqual([86_400, 86_400, 86_400, 1, 1]);
+  });
+
+  it('a quota report a year out blocks the account for at most 24 hours', async () => {
+    const b = memoryBudget();
+    await b.applyQuotaReport(
+      'facebook',
+      'c1',
+      policy,
+      { remaining: 0, resetAt: new Date(Date.now() + 365 * 86_400_000) },
+      Date.now(),
+    );
+    const d = await b.acquire('facebook', 'c1', policy, 'urgent');
+    expect(d).toMatchObject({ granted: false });
+    if (!d.granted) expect(d.retryAfterMs).toBeLessThanOrEqual(86_400_000);
+    vi.advanceTimersByTime(86_400_000 + 1);
+    expect((await b.acquire('facebook', 'c1', policy, 'urgent')).granted).toBe(true);
+  });
 });

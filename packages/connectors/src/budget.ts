@@ -4,7 +4,8 @@
 // "bulk" (reads, `points - urgentReservePoints`). Bulk takes from both, urgent
 // only from shared, so reads can never consume the urgent reserve. Platform
 // hints (Retry-After, quota reports) override the local estimate via block()
-// and penalty(). Store errors fail closed as transient (defer, never bypass).
+// (clamped to 1 s..24 h) and penalty(). Store errors fail closed as transient
+// (defer, never bypass).
 import type { Redis } from 'ioredis';
 import { RateLimiterMemory, RateLimiterRedis, RateLimiterRes } from 'rate-limiter-flexible';
 import { ConnectorError } from './errors.js';
@@ -27,6 +28,10 @@ export type BudgetDecision =
   | { readonly granted: false; readonly retryAfterMs: number };
 
 const unavailable = () => new ConnectorError('transient', 'budget_store_unavailable');
+/** A platform hint can defer a connection by at most a day. */
+const MAX_BLOCK_SEC = 86_400;
+const blockSeconds = (ms: number) =>
+  Math.min(Math.max(1, Math.ceil(ms / 1000) || 1), MAX_BLOCK_SEC);
 
 async function take(l: BudgetLimiter, key: string): Promise<BudgetDecision> {
   try {
@@ -89,9 +94,8 @@ export class RateBudget {
     policy: RateLimitPolicy,
     hint: { retryAfterMs: number },
   ): Promise<void> {
-    const secs = Math.max(1, Math.ceil(hint.retryAfterMs / 1000));
     try {
-      await this.#pair(platform, policy).shared.block(key, secs);
+      await this.#pair(platform, policy).shared.block(key, blockSeconds(hint.retryAfterMs));
     } catch {
       throw unavailable();
     }
