@@ -112,6 +112,12 @@ export async function createPgHarness(flavor: 'push' | 'poll'): Promise<Conforma
     applicationName: 'connectors-conformance',
     onIdleError: () => {},
   });
+  // Refresh-lock sessions get their own small pool, never the data pool.
+  const lockPool = createPool(db.db.url, {
+    applicationName: 'connectors-conformance-lock',
+    max: 4,
+    onIdleError: () => {},
+  });
   const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
   redis.on('error', () => {});
   const budgetPrefix = `fb:test:${randomUUID()}`;
@@ -143,7 +149,7 @@ export async function createPgHarness(flavor: 'push' | 'poll'): Promise<Conforma
     {
       directory: new PgConnectionDirectory(pool),
       vault,
-      lock: new PgRefreshLock(pool),
+      lock: new PgRefreshLock(lockPool),
       states: new PgOAuthStateStore(pool, keys),
       memberships: new GrantingMembershipReader(pool),
       ledger: new PgDeliveryLedger(pool, `conformance-${label}`),
@@ -172,7 +178,7 @@ export async function createPgHarness(flavor: 'push' | 'poll'): Promise<Conforma
       const leftovers = await redis.keys(`${budgetPrefix}:*`).catch(() => []);
       if (leftovers.length) await redis.del(...leftovers).catch(() => undefined);
       redis.disconnect();
-      await pool.end();
+      await Promise.all([pool.end(), lockPool.end()]);
     },
   };
 }

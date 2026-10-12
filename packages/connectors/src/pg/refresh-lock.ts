@@ -1,6 +1,11 @@
 // Session-level advisory lock on a dedicated client: no transaction is held
 // open during the HTTP refresh, and a crashed process's session ends, which
-// releases the lock. Key: (0x46420001, hashtext(org/brand/connection)); hash
+// releases the lock.
+//
+// The pool passed in MUST be a small pool used only for these lock sessions,
+// never the data pool: a refresh holds one lock client for its whole duration
+// (including polling) while the work inside needs data-pool clients, so a
+// shared pool saturates under concurrent refreshes and loses rotated tokens. Key: (0x46420001, hashtext(org/brand/connection)); hash
 // collisions only cause extra serialization.
 import type pg from 'pg';
 import type { ConnectionScope } from '@feedbouncer/secrets';
@@ -18,7 +23,12 @@ export class PgRefreshLock implements RefreshLock {
 
   async run<T>(scope: ConnectionScope, fn: () => Promise<T>): Promise<T> {
     const key = scopeKey(scope);
-    const client = await this.pool.connect();
+    let client: pg.PoolClient;
+    try {
+      client = await this.pool.connect();
+    } catch {
+      throw new ConnectorError('transient', 'refresh_lock_unavailable');
+    }
     let broken = false;
     try {
       const deadline = Date.now() + (this.opts.timeoutMs ?? 30_000);

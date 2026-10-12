@@ -103,8 +103,10 @@ describe('tenant isolation (every adapter)', () => {
   it('PgConnectionDirectory.activate cannot touch another tenant', async () => {
     const t = await seedTenant(h.c, 'activate-iso');
     await h.c.query("UPDATE connection SET status = 'error' WHERE id = $1", [t.connectionId]);
-    await dir.activate({ ...scopeOf(t), organizationId: b.organizationId }, b.userId);
-    await dir.activate({ ...scopeOf(t), brandId: b.brandId }, b.userId);
+    expect(await dir.activate({ ...scopeOf(t), organizationId: b.organizationId }, b.userId)).toBe(
+      false,
+    );
+    expect(await dir.activate({ ...scopeOf(t), brandId: b.brandId }, b.userId)).toBe(false);
     expect(await statusOf(t.connectionId)).toBe('error');
   });
 
@@ -291,7 +293,7 @@ describe('PgConnectionDirectory', () => {
       ])
     ).rows[0];
     expect(row).toMatchObject({ status_reason: 'oauth_pending', granted_scopes: ['read'] });
-    await dir.activate(r.scope, a.userId);
+    expect(await dir.activate(r.scope, a.userId)).toBe(true);
     expect((await dir.load(r.scope))?.status).toBe('active');
     const audit = await h.c.query(
       `SELECT actor_user_id, details FROM audit_event
@@ -309,7 +311,7 @@ describe('PgConnectionDirectory', () => {
     await h.c.query("UPDATE connection SET status = 'paused' WHERE id = $1", [
       r.scope.connectionId,
     ]);
-    await dir.activate(r.scope, a.userId);
+    expect(await dir.activate(r.scope, a.userId)).toBe(false);
     expect(await statusOf(r.scope.connectionId)).toBe('paused');
   });
 
@@ -318,7 +320,7 @@ describe('PgConnectionDirectory', () => {
     await h.c.query("UPDATE connection SET status = 'revoked' WHERE id = $1", [
       r.scope.connectionId,
     ]);
-    await dir.activate(r.scope, a.userId);
+    expect(await dir.activate(r.scope, a.userId)).toBe(false);
     expect(await statusOf(r.scope.connectionId)).toBe('revoked');
     const audit = await h.c.query(
       "SELECT 1 FROM audit_event WHERE subject_id = $1 AND action = 'connection.authorized'",
@@ -330,7 +332,7 @@ describe('PgConnectionDirectory', () => {
   it('activate recovers connections that are in error', async () => {
     const r = await upsert(a, 'page-error');
     await h.c.query("UPDATE connection SET status = 'error' WHERE id = $1", [r.scope.connectionId]);
-    await dir.activate(r.scope, a.userId);
+    expect(await dir.activate(r.scope, a.userId)).toBe(true);
     expect(await statusOf(r.scope.connectionId)).toBe('active');
   });
 
@@ -412,6 +414,46 @@ describe('PgRefreshLock', () => {
     ).rejects.toThrow('boom');
     expect(await l2.run(scopeOf(a), async () => 'ok')).toBe('ok');
     await pool2.end();
+  });
+
+  it('completes more concurrent refreshes than the data pool has clients (dedicated lock pool)', async () => {
+    const dataPool = createPool(h.db.url, {
+      applicationName: 'data-2',
+      max: 2,
+      onIdleError: () => {},
+    });
+    const lockPool = createPool(h.db.url, {
+      applicationName: 'lock-4',
+      max: 4,
+      onIdleError: () => {},
+    });
+    const lock = new PgRefreshLock(lockPool, { timeoutMs: 10_000 });
+    const scopes = Array.from({ length: 8 }, () => ({
+      organizationId: a.organizationId,
+      brandId: a.brandId,
+      connectionId: randomUUID(),
+    }));
+    // Like a refresh: hold the lock, then need several data-pool clients in sequence.
+    const refresh = (s: ConnectionScope) =>
+      lock.run(s, async () => {
+        await sleep(100);
+        await dataPool.query('SELECT 1');
+        await dataPool.query('SELECT 1');
+        return 'done';
+      });
+    expect(await Promise.all(scopes.map(refresh))).toEqual(scopes.map(() => 'done'));
+    await Promise.all([dataPool.end(), lockPool.end()]);
+  });
+
+  it('reports an unavailable lock pool as transient', async () => {
+    const broken = createPool(new URL('postgresql://x:y@127.0.0.1:1/none'), {
+      applicationName: 'broken',
+      onIdleError: () => {},
+    });
+    await expect(
+      new PgRefreshLock(broken).run(scopeOf(a), async () => 'never'),
+    ).rejects.toMatchObject({ kind: 'transient', code: 'refresh_lock_unavailable' });
+    await broken.end();
   });
 
   it('does not make different connections wait for each other', async () => {
