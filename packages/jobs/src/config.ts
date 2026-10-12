@@ -31,10 +31,11 @@ export interface JobsConfig {
 }
 
 export function loadJobsConfig(env: Env): JobsConfig {
-  const prefix = readString(env, 'JOB_QUEUE_PREFIX', { fallback: 'fb', maxLength: 64 });
-  if (!QUEUE_PREFIX.test(prefix)) {
-    throw new EnvError('JOB_QUEUE_PREFIX must match ^[a-z][a-z0-9-]{0,31}$');
-  }
+  const prefix = readString(env, 'JOB_QUEUE_PREFIX', {
+    fallback: 'fb',
+    maxLength: 32,
+    pattern: QUEUE_PREFIX,
+  });
 
   const base = readInt(env, 'JOB_CONCURRENCY', { min: 0, max: 64, fallback: 2 });
   const concurrency = Object.fromEntries(

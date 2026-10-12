@@ -82,7 +82,6 @@ export interface Requeued {
   readonly platform: Platform;
   readonly jobType: string;
   readonly idempotencyKey: string;
-  readonly delayMs: number;
 }
 
 export interface DeadLetterInput {
@@ -318,7 +317,6 @@ const toRequeued = (r: RequeuedRecord): Requeued => ({
   platform: r.platform,
   jobType: r.job_type,
   idempotencyKey: r.idempotency_key,
-  delayMs: 0,
 });
 
 export class PgJobLedger implements JobLedgerPort {

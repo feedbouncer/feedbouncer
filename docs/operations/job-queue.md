@@ -50,8 +50,8 @@ exceed the backoff cap) and does not use up an attempt. It is dead-lettered with
 | ------------------------------- | --------------------------------------------- | -------------------------------------------------- |
 | Transient                       | 5xx, network error, timeout, unexpected error | Retry with backoff; DLQ `retries_exhausted`        |
 | Rate limited                    | 429, platform quota                           | Defer by `retry-after`; DLQ `rate_limit_exhausted` |
-| Credential expired              | `auth_expired` after the one refresh attempt  | DLQ `needs_reconnection`, no retries               |
-| Non-retryable                   | other 4xx, malformed response, unsupported    | DLQ `non_retryable`                                |
+| Credential expired, fixable by reconnecting | `auth_expired` after the one refresh attempt  | DLQ `needs_reconnection`, no retries   |
+| Non-retryable                   | other 4xx, malformed response, unsupported, a revoked connection (reconnecting can't fix it) | DLQ `non_retryable` |
 | Target gone                     | 404 on a replayed job                         | Row becomes `resolved` (`target_gone`)             |
 | Invalid job                     | payload fails its schema, unknown job type    | DLQ `invalid_job`                                  |
 | Poison job (crashes the worker) | process dies mid-run, repeatedly              | DLQ `stall_limit_exceeded` after `maxAttempts`     |

@@ -50,18 +50,11 @@ export class QueueSet {
     return q;
   }
 
-  async add(
-    p: Platform,
-    jobType: string,
-    ledgerId: string,
-    key: string,
-    delayMs?: number,
-  ): Promise<void> {
+  async add(p: Platform, jobType: string, ledgerId: string, key: string): Promise<void> {
     const data: QueueJobData = { v: 1, ledgerId };
     const added = this.queue(p).add(jobType, data, {
       ...JOB_ADD_OPTIONS,
       jobId: bullJobId(key),
-      ...(delayMs ? { delay: delayMs } : {}),
     });
     // BullMQ waits for the connection before the first command, so an outage
     // at startup would otherwise block the caller indefinitely. A late add is
