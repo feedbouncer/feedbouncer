@@ -74,6 +74,9 @@ export interface DlqFilter {
   readonly limit: number;
 }
 
+/** Replay always targets dead-lettered rows, so it takes no `states`. */
+export type ReplayFilter = Omit<DlqFilter, 'states'>;
+
 export interface Requeued {
   readonly id: string;
   readonly platform: Platform;
@@ -392,7 +395,7 @@ export class PgJobLedger implements JobLedgerPort {
     return r.rowCount === 1;
   }
 
-  async replay(filter: DlqFilter, dedupWindowMs: number): Promise<Requeued[]> {
+  async replay(filter: ReplayFilter, dedupWindowMs: number): Promise<Requeued[]> {
     const { where, params } = buildFilter(filter, 3);
     const { rows } = await this.pool.query<RequeuedRecord>(REPLAY_SQL(where), [
       ms(dedupWindowMs, 'dedupWindowMs'),

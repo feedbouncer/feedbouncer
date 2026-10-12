@@ -23,7 +23,8 @@
     "db:rollback": "pnpm --dir packages/db run migrate:down",
     "db:migration:new": "pnpm --dir packages/db run migrate:new",
     "db:status": "pnpm --dir packages/db run migrate:status",
-    "secrets": "pnpm --dir packages/secrets run --silent cli"
+    "secrets": "pnpm --dir packages/secrets run --silent cli",
+    "jobs": "pnpm --dir packages/jobs run --silent cli"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

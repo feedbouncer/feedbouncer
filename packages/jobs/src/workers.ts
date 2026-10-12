@@ -24,8 +24,6 @@ export interface JobWorkersDeps {
   readonly workerId: string;
   readonly log: Logger;
   readonly metrics: JobMetrics;
-  /** Tests only. */
-  readonly afterComplete?: (ledgerId: string) => Promise<void>;
 }
 
 export class JobWorkers {
@@ -55,7 +53,6 @@ export class JobWorkers {
           workerId: d.workerId,
           dlqRetentionMs: d.config.dlqRetentionMs,
           policyFor: policyResolver(d.config, d.jobs, p),
-          ...(d.afterComplete ? { afterComplete: d.afterComplete } : {}),
         }),
         {
           connection: d.connection,

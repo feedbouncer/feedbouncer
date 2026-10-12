@@ -39,8 +39,6 @@ export interface RunnerDeps {
   readonly metrics: JobMetrics;
   readonly random?: () => number;
   readonly now?: () => number;
-  /** Test seam: runs after the completion commit, before returning to BullMQ. */
-  readonly afterComplete?: (ledgerId: string) => Promise<void>;
 }
 
 const JobData = z.strictObject({ v: z.literal(1), ledgerId: z.string().regex(UUID) });
@@ -192,7 +190,6 @@ export function createJobProcessor(
     // It sits outside the try: the row is settled, so a failure here must not
     // be classified as a handler failure.
     d.metrics.record('completed', base);
-    await d.afterComplete?.(ledgerId);
     return 'processed';
   };
 }

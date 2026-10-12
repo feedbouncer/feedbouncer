@@ -3,7 +3,7 @@ import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { JobRegistry } from './definition.js';
 import { JobEnqueueError } from './errors.js';
 import { deriveIdempotencyKey, bullJobId, UUID } from './keys.js';
-import type { DlqFilter, LedgerState, PgJobLedger, Requeued } from './ledger.js';
+import type { LedgerState, PgJobLedger, ReplayFilter, Requeued } from './ledger.js';
 import type { JobMetrics } from './metrics.js';
 import { assertSafePayload } from './payload.js';
 import type { QueueSet } from './queues.js';
@@ -85,7 +85,7 @@ export class JobProducer {
     return { status: 'deduplicated', ledgerId: res.id, jobId, state: res.state };
   }
 
-  async replay(filter: DlqFilter): Promise<Requeued[]> {
+  async replay(filter: ReplayFilter): Promise<Requeued[]> {
     const rows = await this.d.ledger.replay(filter, this.d.dedupWindowMs);
     for (const r of rows) {
       await this.d.queues.add(r.platform, r.jobType, r.id, r.idempotencyKey);
