@@ -13,6 +13,18 @@ export async function startMetricsServer(o: {
     o.log.info('telemetry.metrics_disabled');
     return null;
   }
+  let inflight: Promise<string> | null = null;
+  const collect = (): Promise<string> => {
+    if (!inflight) {
+      const p = Promise.resolve().then(() => o.registry.metrics());
+      inflight = p;
+      const reset = (): void => {
+        if (inflight === p) inflight = null;
+      };
+      p.then(reset, reset);
+    }
+    return inflight;
+  };
   const server = createServer((req, res) => {
     const path = (req.url ?? '').split('?')[0];
     if (path !== '/metrics') {
@@ -23,7 +35,7 @@ export async function startMetricsServer(o: {
       res.writeHead(405, { allow: 'GET, HEAD' }).end();
       return;
     }
-    o.registry.metrics().then(
+    collect().then(
       (body) => {
         res.writeHead(200, {
           'content-type': o.registry.contentType,
@@ -39,6 +51,9 @@ export async function startMetricsServer(o: {
   });
   server.requestTimeout = 5_000;
   server.headersTimeout = 5_000;
+  server.keepAliveTimeout = 5_000;
+  server.maxConnections = 64;
+  server.maxRequestsPerSocket = 100;
   try {
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
@@ -55,6 +70,13 @@ export async function startMetricsServer(o: {
     });
     return null;
   }
+  server.on('error', (err) => {
+    try {
+      o.log.warn('telemetry.metrics_server_error', errorFields(err));
+    } catch {
+      // telemetry never throws
+    }
+  });
   const port = (server.address() as { port: number }).port;
   o.log.info('telemetry.metrics_ready', { host: o.host, port });
   return {
