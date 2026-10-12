@@ -151,6 +151,47 @@ describe('JobWorkers', () => {
     expect(snap.deduplicated).toBeGreaterThanOrEqual(1);
     expect(snap.completed).toBeGreaterThanOrEqual(1);
   });
+
+  it('logs every counter per platform in job.stats', async () => {
+    const w = await h.workers();
+    const r = await enqueue('stats', ['transient', 'rate:200', 'ok']);
+    await h.waitFor(r.ledgerId, ['completed']);
+    await w.sweep();
+    const stats = h.lines
+      .map((l) => JSON.parse(l) as Record<string, unknown>)
+      .filter((l) => l.msg === 'job.stats')
+      .at(-1);
+    expect(stats).toMatchObject({
+      facebook_enqueued: 1,
+      facebook_retried: 1,
+      facebook_deferred: 1,
+      facebook_completed: 1,
+    });
+  });
+
+  it('checks the dedup window for platforms that have no consumer here', async () => {
+    const config = {
+      ...h.config,
+      concurrency: { ...h.config.concurrency, youtube: 0 },
+      platformPolicies: { youtube: { maxDeferredMs: 500_000_000 } },
+    };
+    await expect(h.workers({ config })).rejects.toThrow('JOB_DEDUP_WINDOW_DAYS must cover');
+  });
+
+  it('close() waits for an in-flight sweep', async () => {
+    let finished = false;
+    const producer = Object.create(h.producer) as typeof h.producer;
+    producer.reconcile = async (...a) => {
+      await new Promise((r) => setTimeout(r, 300));
+      const n = await h.producer.reconcile(...a);
+      finished = true;
+      return n;
+    };
+    const w = await h.workers({ producer });
+    await w.close();
+    expect(finished).toBe(true);
+    expect(h.lines.join('\n')).not.toContain('job sweep failed');
+  });
 });
 
 describe('producer connection', () => {

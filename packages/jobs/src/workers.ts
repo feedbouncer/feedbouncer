@@ -8,7 +8,7 @@ import type { Logger } from '@feedbouncer/service-runtime';
 import { assertDedupWindow, policyResolver, type JobsConfig } from './config.js';
 import type { JobRegistry } from './definition.js';
 import type { PgJobLedger } from './ledger.js';
-import type { JobMetrics } from './metrics.js';
+import { JOB_EVENTS, type JobMetrics } from './metrics.js';
 import type { JobProducer } from './producer.js';
 import { queueName } from './queues.js';
 import { createJobProcessor } from './runner.js';
@@ -31,14 +31,17 @@ export interface JobWorkersDeps {
 export class JobWorkers {
   readonly #workers = new Map<Platform, Worker>();
   #timer: NodeJS.Timeout | undefined;
-  #sweeping = false;
+  #inflight: Promise<void> | undefined;
 
   constructor(private readonly d: JobWorkersDeps) {}
 
   async start(): Promise<void> {
     const { d } = this;
-    const platforms = d.connectors.platforms().filter((p) => d.config.concurrency[p] > 0);
-    assertDedupWindow(d.config, d.jobs, platforms);
+    // Rows for a platform this process does not consume are still enqueued
+    // under the same dedup window, so the check covers every registered one.
+    const registered = d.connectors.platforms();
+    assertDedupWindow(d.config, d.jobs, registered);
+    const platforms = registered.filter((p) => d.config.concurrency[p] > 0);
 
     for (const p of platforms) {
       const w = new Worker(
@@ -92,25 +95,30 @@ export class JobWorkers {
     return [...this.#workers.values()].every((w) => w.isRunning());
   }
 
-  async sweep(): Promise<void> {
-    if (this.#sweeping) return;
-    this.#sweeping = true;
+  sweep(): Promise<void> {
+    // A sweep that overlaps a running one shares its outcome instead of
+    // starting a second pass.
+    this.#inflight ??= this.#sweepOnce().finally(() => {
+      this.#inflight = undefined;
+    });
+    return this.#inflight;
+  }
+
+  async #sweepOnce(): Promise<void> {
     try {
       const requeued = await this.d.producer.reconcile(this.d.config.staleAfterMs, 500);
       const purged = await this.d.ledger.purgeExpired(1_000);
       this.d.log.info('job.stats', { requeued, purged, ...this.#counts() });
     } catch (e) {
       this.d.log.error('job sweep failed', { errorName: e instanceof Error ? e.name : 'NonError' });
-    } finally {
-      this.#sweeping = false;
     }
   }
 
+  /** Every JobMetrics counter, flattened to `<platform>_<event>`. */
   #counts(): Record<string, number> {
     const out: Record<string, number> = {};
-    for (const [platform, c] of Object.entries(this.d.metrics.snapshot())) {
-      out[`${platform}_completed`] = c.completed;
-      out[`${platform}_dead_lettered`] = c.dead_lettered;
+    for (const [platform, counts] of Object.entries(this.d.metrics.snapshot())) {
+      for (const event of JOB_EVENTS) out[`${platform}_${event}`] = counts[event];
     }
     return out;
   }
@@ -118,6 +126,8 @@ export class JobWorkers {
   async close(): Promise<void> {
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = undefined;
+    // Let a running sweep finish before callers close the pool and queues.
+    await this.#inflight;
     const all = [...this.#workers.values()];
     this.#workers.clear();
     await Promise.all(all.map((w) => w.close()));
