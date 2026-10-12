@@ -41,6 +41,7 @@
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@types/node": "24.13.6",
-    "@types/pg": "8.23.1"
+    "@types/pg": "8.23.1",
+    "zod": "4.6.5"
   }
 }

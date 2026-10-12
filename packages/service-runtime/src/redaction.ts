@@ -4,6 +4,10 @@
 const TOKEN = /\S+/g;
 const SECRET_PAIR =
   /(password|passwd|pwd|secret|token|apikey|api_key|encryption_keys?)(["']?\s*[=:]\s*)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s&,;'"]+)/gi;
+// An HTTP credential header ("Authorization: Bearer abc"): the scheme word is
+// not a secret, the credential after it is. A bare "Bearer <token>" is covered too.
+const AUTH_HEADER = /(authorization["']?\s*[:=]\s*["']?(?:bearer|basic)\s+)[^\s,;'"]+/gi;
+const BEARER = /\b(bearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi;
 
 // A field whose NAME looks secret is redacted whatever its value, so a caller
 // cannot leak a token by logging it under a descriptive key.
@@ -48,6 +52,8 @@ function redactToken(token: string): string {
 export function redact(text: string): string {
   return text
     .replace(TOKEN, redactToken)
+    .replace(AUTH_HEADER, '$1[redacted]')
+    .replace(BEARER, '$1[redacted]')
     .replace(SECRET_PAIR, (_m, key: string, sep: string, value: string) => {
       const quote = value.startsWith('"') || value.startsWith("'") ? value[0] : '';
       return `${key}${sep}${quote}[redacted]${quote}`;

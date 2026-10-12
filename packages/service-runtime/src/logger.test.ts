@@ -40,6 +40,15 @@ describe('redact', () => {
     expect(redact('no url here')).toBe('no url here');
   });
 
+  it('redacts credentials in Authorization headers and bearer tokens', () => {
+    expect(redact('failed Authorization: Bearer SENTINEL-BEARER now')).toBe(
+      'failed Authorization: Bearer [redacted] now',
+    );
+    expect(redact('authorization=Basic dXNlcjpwYXNz')).toBe('authorization=Basic [redacted]');
+    expect(redact('sent bearer abcdef0123456789')).toBe('sent bearer [redacted]');
+    expect(redact('the basic plan is fine')).toBe('the basic plan is fine');
+  });
+
   it('redacts the whole userinfo when the password contains @', () => {
     expect(redact('postgres://u:p@ss@db/x')).toBe('postgres://[redacted]@db/x');
   });

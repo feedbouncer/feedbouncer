@@ -247,6 +247,10 @@ jobs:
         run: pnpm turbo run build --filter=@feedbouncer/jobs...
       - name: Job queue integration tests (Postgres + Redis - retries, DLQ, idempotency, crash, isolation)
         run: pnpm --filter @feedbouncer/jobs test:integration
+      - name: Build observability and dependencies
+        run: pnpm turbo run build --filter=@feedbouncer/observability...
+      - name: Observability integration tests
+        run: pnpm --filter @feedbouncer/observability test:integration
 
   compose-smoke:
     name: Compose smoke
