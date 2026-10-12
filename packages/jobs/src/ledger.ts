@@ -178,37 +178,44 @@ const DEAD_LETTER_SQL = `
     expires_at = GREATEST(expires_at, now() + ($8::bigint * interval '1 millisecond'))
   WHERE id = $1 AND lease_owner = $2 AND state = 'queued'`;
 
+// MATERIALIZED, as in STALE_SQL, so LIMIT holds.
 // `where` comes only from buildFilter(): positional placeholders, never values.
 const REPLAY_SQL = (where: string) => `
+  WITH picked AS MATERIALIZED (
+    SELECT id FROM job_ledger WHERE state = 'dead_lettered'${where}
+     ORDER BY dead_lettered_at, id LIMIT $2 FOR UPDATE SKIP LOCKED)
   UPDATE job_ledger SET state = 'queued', replays = replays + 1,
     failures = 0, crashes = 0, deferrals = 0, deferred_ms = 0,
     dead_letter_reason = NULL, dead_lettered_at = NULL, resolution = NULL, next_run_at = NULL,
     expires_at = GREATEST(expires_at, now() + ($1::bigint * interval '1 millisecond'))
-  WHERE id IN (SELECT id FROM job_ledger WHERE state = 'dead_lettered'${where}
-               ORDER BY dead_lettered_at LIMIT $2 FOR UPDATE SKIP LOCKED)
-    AND state = 'dead_lettered'
+  WHERE id IN (SELECT id FROM picked)
   RETURNING id, platform, job_type, idempotency_key`;
 
-const LIST_SQL = (where: string, limitParam: number) => `
+// 'oldest' is the order replay takes rows in, so a dry run previews what replay will touch.
+const LIST_SQL = (where: string, limitParam: number, order: 'ASC' | 'DESC') => `
   SELECT ${ROW}, dead_letter_reason, resolution, last_error_kind, last_error_code,
          first_failed_at, last_failed_at, dead_lettered_at, created_at
     FROM job_ledger WHERE state = ANY($1::text[])${where}
-   ORDER BY dead_lettered_at DESC, id LIMIT $${limitParam}`;
+   ORDER BY dead_lettered_at ${order}, id LIMIT $${limitParam}`;
 
+// MATERIALIZED: without it the planner may re-run the LIMITed subquery and touch more than $n rows.
 const STALE_SQL = `
-  UPDATE job_ledger SET updated_at = now()
-  WHERE id IN (
+  WITH picked AS MATERIALIZED (
     SELECT id FROM job_ledger
      WHERE state = 'queued'
        AND (lease_expires_at IS NULL OR lease_expires_at < now())
        AND GREATEST(COALESCE(next_run_at, updated_at), updated_at) < now() - ($1::bigint * interval '1 millisecond')
      ORDER BY updated_at LIMIT $2 FOR UPDATE SKIP LOCKED)
+  UPDATE job_ledger SET updated_at = now()
+  WHERE id IN (SELECT id FROM picked)
   RETURNING id, platform, job_type, idempotency_key`;
 
 const PURGE_SQL = `
-  DELETE FROM job_ledger WHERE id IN (
+  WITH picked AS MATERIALIZED (
     SELECT id FROM job_ledger WHERE state <> 'queued' AND expires_at < now()
      ORDER BY expires_at LIMIT $1 FOR UPDATE SKIP LOCKED)
+  DELETE FROM job_ledger
+  WHERE id IN (SELECT id FROM picked)
     AND state <> 'queued' AND expires_at < now()`;
 
 const GET_SQL = `
@@ -405,7 +412,10 @@ export class PgJobLedger implements JobLedgerPort {
     return rows.map(toRequeued);
   }
 
-  async listDeadLetters(filter: DlqFilter): Promise<DeadLetterRow[]> {
+  async listDeadLetters(
+    filter: DlqFilter,
+    order: 'newest' | 'oldest' = 'newest',
+  ): Promise<DeadLetterRow[]> {
     const { where, params } = buildFilter(filter, 2);
     const states = filter.states ?? ['dead_lettered'];
     const { rows } = await this.pool.query<
@@ -419,7 +429,11 @@ export class PgJobLedger implements JobLedgerPort {
         dead_lettered_at: Date;
         created_at: Date;
       }
-    >(LIST_SQL(where, 2 + params.length), [states, ...params, filter.limit]);
+    >(LIST_SQL(where, 2 + params.length, order === 'oldest' ? 'ASC' : 'DESC'), [
+      states,
+      ...params,
+      filter.limit,
+    ]);
     return rows.map((r) => ({
       ...toRow(r),
       reason: r.dead_letter_reason,

@@ -77,6 +77,7 @@ pnpm jobs dlq list --show-payload        # payloads may contain comment text
 pnpm jobs dlq replay --id <uuid> --id <uuid>
 
 # Bulk replay needs --platform and --yes; preview first with --dry-run
+# (the preview lists the oldest rows first, the order replay takes them in)
 pnpm jobs dlq replay --platform facebook --reason needs_reconnection --dry-run
 pnpm jobs dlq replay --platform facebook --reason needs_reconnection --yes
 ```
@@ -102,9 +103,12 @@ What to do per reason:
 
 ## Retention and the dedupe window
 
-- `JOB_DLQ_RETENTION_DAYS` (default 14): how long a dead-lettered or resolved row is kept.
+- `JOB_DLQ_RETENTION_DAYS` (default 14): the minimum time a dead-lettered or resolved row
+  is kept, counted from when it was dead-lettered.
 - `JOB_DEDUP_WINDOW_DAYS` (default 30): how long a row, and therefore its idempotency key,
-  lives. While the row exists, the same logical job cannot run again.
+  lives, counted from enqueue. While the row exists, the same logical job cannot run again.
+- A row is purged at the later of the two. With the defaults a job that is dead-lettered
+  soon after enqueue is kept for about 30 days, not 14.
 - Startup fails if the window is shorter than the longest retry period plus DLQ
   retention for any registered platform and job type. Too short and a replay could find
   its row purged, or a duplicate could slip in; too long only grows storage.
@@ -127,6 +131,10 @@ Keep the container's `stop_grace_period` above the longest handler timeout plus 
 A crash between a successful platform call and recording the result re-runs the
 handler, so handlers must be safe to repeat. See the contributor guide.
 
+A handler that ignores its abort signal is parked once its timeout passes: the worker
+frees the slot but keeps the job's lease until the handler returns, then records the retry.
+A retry never overlaps the original run unless the lease itself expires first.
+
 ## Observability
 
 Structured log events, each with `platform`, `jobType` and `ledgerId`:
@@ -140,6 +148,7 @@ event, named `<platform>_<event>` (for example `facebook_dead_lettered`).
 
 ## Privacy
 
-Payloads can contain comment text. They expire with the row and never contain
+Payloads can contain comment text. They are kept for the lifetime of the row (see
+[Retention](#retention-and-the-dedupe-window)) and never contain
 credentials: enqueue rejects secret-like fields, and only error kinds and codes are
 stored or logged. Erasing a comment does not yet scrub it from `job_ledger`.

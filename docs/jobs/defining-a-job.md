@@ -52,7 +52,8 @@ export const hideComment = (runtime: ConnectorRuntime): JobDefinition<z.infer<ty
   done" as success (`requireActionSuccess` maps `already_absent` for you). A crash after
   the result is recorded is fully covered.
 - **Pass `ctx.signal`** to every outbound call; it aborts at the job's `timeoutMs`
-  (default 60 s, range 1-600 s).
+  (default 60 s, range 1-600 s). A handler that ignores it keeps running, and its retry
+  waits until it returns or its lease (timeout + 30 s) expires.
 - **Fail with a classified error.** Throw `ConnectorError` (the connector framework's
   kinds) or `JobError('retryable' | 'non_retryable', code)`. Anything else is treated as a
   retryable `unexpected_error`. Messages are never stored; only kind and code are.

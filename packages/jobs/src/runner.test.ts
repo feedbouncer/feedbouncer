@@ -189,10 +189,24 @@ describe('createJobProcessor', () => {
     expect(s.ledger.calls).toEqual(['dlq:non_retryable:target_gone']);
   });
 
-  it('times out a handler that ignores its signal and treats it as retryable', async () => {
+  it('parks a handler that ignores its signal and keeps its lease', async () => {
     const s = setup({ status: 'claimed', row: row() }, () => new Promise(() => {}));
+    const { j, moved } = job();
+    await expect(s.run(j)).rejects.toBeInstanceOf(DelayedError);
+    expect(moved).toHaveLength(1);
+    expect(s.ledger.calls).toEqual([]);
+  }, 5_000);
+
+  it('records the retry only once the timed-out handler has settled', async () => {
+    let finish!: () => void;
+    const s = setup(
+      { status: 'claimed', row: row() },
+      () => new Promise<void>((resolve) => (finish = resolve)),
+    );
     await expect(s.run(job().j)).rejects.toBeInstanceOf(DelayedError);
-    expect(s.ledger.calls).toEqual(['retry']);
+    expect(s.ledger.calls).toEqual([]);
+    finish();
+    await vi.waitFor(() => expect(s.ledger.calls).toEqual(['retry']));
   }, 5_000);
 
   it('never logs a foreign error message', async () => {

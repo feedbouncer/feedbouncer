@@ -2,11 +2,10 @@
 // disposition. Codes are snake_case only; a foreign error's message is never
 // read (it can embed a token-bearing URL), only its name for timeouts.
 import { ConnectorError, isSuccessEquivalent, type ActionResult } from '@feedbouncer/connectors';
-import { backoffDelayMs, type RetryPolicy } from './policy.js';
+import { SNAKE_CASE } from './keys.js';
+import { backoffDelayMs, unit, type RetryPolicy } from './policy.js';
 
 export type JobResult = Readonly<Record<string, string | number | boolean | null>>;
-
-const CODE = /^[a-z][a-z0-9_]{0,62}$/;
 
 export class JobError extends Error {
   override name = 'JobError';
@@ -15,7 +14,7 @@ export class JobError extends Error {
     readonly kind: 'retryable' | 'non_retryable',
     code: string,
   ) {
-    const safe = CODE.test(code) ? code : 'unspecified';
+    const safe = SNAKE_CASE.test(code) ? code : 'unspecified';
     super(`${kind}: ${safe}`);
     this.code = safe;
   }
@@ -97,8 +96,6 @@ const deadLetter = (
   countsAsFailure = true,
   resolution: string | null = null,
 ): Disposition => ({ type: 'dead_letter', reason, countsAsFailure, resolution });
-
-const unit = (r: number) => (Number.isFinite(r) ? Math.min(Math.max(r, 0), 0.999999) : 0);
 
 export function decide(
   f: FailureClass,

@@ -43,7 +43,8 @@ export function resolvePolicy(
   return validatePolicy(Object.assign({}, base, ...overrides.filter(Boolean)));
 }
 
-const unit = (r: number) => (Number.isFinite(r) ? Math.min(Math.max(r, 0), 0.999999) : 0);
+/** Clamps a random draw to [0, 1). */
+export const unit = (r: number) => (Number.isFinite(r) ? Math.min(Math.max(r, 0), 0.999999) : 0);
 
 /** failureNumber is 1 for the first failure. Equal jitter: [exp/2, exp]. */
 export function backoffDelayMs(

@@ -11,7 +11,13 @@ import { z } from 'zod';
 import type { Platform } from '@feedbouncer/connectors';
 import type { Logger } from '@feedbouncer/service-runtime';
 import type { JobRegistry } from './definition.js';
-import { classifyFailure, decide, type DeadLetterReason } from './failure.js';
+import {
+  classifyFailure,
+  decide,
+  type DeadLetterReason,
+  type Disposition,
+  type FailureClass,
+} from './failure.js';
 import { UUID } from './keys.js';
 import type { JobLedgerPort, LedgerRow } from './ledger.js';
 import type { JobMetrics } from './metrics.js';
@@ -102,7 +108,7 @@ export function createJobProcessor(
       errorCode: string,
       countsAsFailure: boolean,
       resolution: string | null,
-    ): Promise<RunOutcome> => {
+    ): Promise<boolean> => {
       const ok = await d.ledger.deadLetter(ledgerId, owner, {
         reason,
         resolution,
@@ -111,27 +117,69 @@ export function createJobProcessor(
         countsAsFailure,
         retentionMs: d.dlqRetentionMs,
       });
-      if (!ok) return lostLease();
-      d.metrics.record('dead_lettered', { ...base, reason, code: errorCode });
+      if (ok) d.metrics.record('dead_lettered', { ...base, reason, code: errorCode });
+      return ok;
+    };
+
+    const rejectJob = async (
+      reason: DeadLetterReason,
+      errorKind: string,
+      errorCode: string,
+    ): Promise<RunOutcome> => {
+      if (!(await deadLetter(reason, errorKind, errorCode, false, null))) return lostLease();
       throw new UnrecoverableError(`dead_lettered: ${reason}`);
     };
 
+    // Writes the verdict on a failed run. False means the lease was lost.
+    const recordFailure = async (
+      f: FailureClass,
+      disp: Disposition,
+      errorName: string,
+    ): Promise<boolean> => {
+      if (disp.type === 'dead_letter') {
+        return deadLetter(disp.reason, f.kind, f.code, disp.countsAsFailure, disp.resolution);
+      }
+      if (disp.type === 'retry') {
+        const ok = await d.ledger.recordRetry(
+          ledgerId,
+          owner,
+          { kind: f.kind, code: f.code },
+          disp.delayMs,
+        );
+        if (ok) {
+          d.metrics.record('retried', {
+            ...base,
+            code: f.code,
+            attempt: row.failures + 1,
+            delayMs: disp.delayMs,
+            errorName,
+          });
+        }
+        return ok;
+      }
+      const ok = await d.ledger.recordDeferral(ledgerId, owner, f.code, disp.delayMs);
+      if (ok) d.metrics.record('deferred', { ...base, code: f.code, delayMs: disp.delayMs });
+      return ok;
+    };
+
     if (row.platform !== d.platform || row.jobType !== job.name) {
-      return deadLetter('invalid_job', 'invalid', 'queue_mismatch', false, null);
+      return rejectJob('invalid_job', 'invalid', 'queue_mismatch');
     }
 
     const policy = d.policyFor(row.jobType);
     if (row.failures + row.crashes >= policy.maxAttempts) {
-      return deadLetter('stall_limit_exceeded', 'stalled', 'worker_crashed', false, null);
+      return rejectJob('stall_limit_exceeded', 'stalled', 'worker_crashed');
     }
 
     const payload = def.payload.safeParse(row.payload);
     if (!payload.success) {
-      return deadLetter('invalid_job', 'invalid', 'invalid_payload', false, null);
+      return rejectJob('invalid_job', 'invalid', 'invalid_payload');
     }
 
     const timeoutMs = def.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const signal = AbortSignal.timeout(timeoutMs);
+    let handlerRunning = true;
+    let handlerSettled: Promise<void> = Promise.resolve();
     try {
       // The handler is raced against the signal so one that ignores it still
       // frees the slot; that is what bounds worker.close().
@@ -152,6 +200,10 @@ export function createJobProcessor(
           },
           payload.data,
         ))();
+      const markSettled = () => {
+        handlerRunning = false;
+      };
+      handlerSettled = run.then(markSettled, markSettled);
       const result = validateJobResult(await Promise.race([run, aborted]));
       const ok = await d.ledger.complete(ledgerId, owner, JSON.stringify(result));
       if (!ok) return lostLease();
@@ -160,28 +212,26 @@ export function createJobProcessor(
       const f = classifyFailure(err);
       const disp = decide(f, row, policy, random);
 
-      if (disp.type === 'dead_letter') {
-        return deadLetter(disp.reason, f.kind, f.code, disp.countsAsFailure, disp.resolution);
+      if (handlerRunning) {
+        // The handler ignored its abort signal and is still running. Its lease
+        // is kept until it settles, so a retry cannot overlap it: the verdict
+        // is written then, and meanwhile redeliveries find the row busy. If it
+        // never settles the lease expires and the stall counters take over.
+        void handlerSettled
+          .then(() => recordFailure(f, disp, errorName))
+          .catch((e: unknown) =>
+            d.log.error('job.record_failed', {
+              ...base,
+              errorName: e instanceof Error ? e.name : 'NonError',
+            }),
+          );
+        const parkMs = disp.type === 'dead_letter' ? policy.baseDelayMs : disp.delayMs;
+        await job.moveToDelayed(now() + parkMs, token);
+        throw new DelayedError();
       }
-      if (disp.type === 'retry') {
-        const ok = await d.ledger.recordRetry(
-          ledgerId,
-          owner,
-          { kind: f.kind, code: f.code },
-          disp.delayMs,
-        );
-        if (!ok) return lostLease();
-        d.metrics.record('retried', {
-          ...base,
-          code: f.code,
-          attempt: row.failures + 1,
-          delayMs: disp.delayMs,
-          errorName,
-        });
-      } else {
-        const ok = await d.ledger.recordDeferral(ledgerId, owner, f.code, disp.delayMs);
-        if (!ok) return lostLease();
-        d.metrics.record('deferred', { ...base, code: f.code, delayMs: disp.delayMs });
+      if (!(await recordFailure(f, disp, errorName))) return lostLease();
+      if (disp.type === 'dead_letter') {
+        throw new UnrecoverableError(`dead_lettered: ${disp.reason}`);
       }
       await job.moveToDelayed(now() + disp.delayMs, token);
       throw new DelayedError();

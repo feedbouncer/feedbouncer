@@ -1,9 +1,16 @@
 import { hostname } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { Worker } from 'bullmq';
-import { Redis } from 'ioredis';
 import { createPool, runJobOnce } from '@feedbouncer/db';
-import { JobMetrics, JobProducer, JobWorkers, PgJobLedger, QueueSet } from '@feedbouncer/jobs';
+import {
+  JobMetrics,
+  JobProducer,
+  JobWorkers,
+  PgJobLedger,
+  QueueSet,
+  createProducerConnection,
+  createWorkerConnection,
+} from '@feedbouncer/jobs';
 import { reportKeyCoverage } from '@feedbouncer/secrets';
 import {
   EnvError,
@@ -35,19 +42,26 @@ for (const w of configWarnings) log.warn(w, { appEnv: env.appEnv });
 logConfigurationLoaded(log, env);
 try {
   const workerId = hostname();
+  const connectors = buildConnectorRegistry();
+  const jobs = buildJobRegistry();
+  // One Postgres client per concurrent job on a registered platform, capped.
+  const jobConsumerConnections = Math.min(
+    32,
+    connectors.platforms().reduce((sum, p) => sum + env.jobs.concurrency[p], 0),
+  );
   const pool = createPool(env.databaseUrl, {
     applicationName: 'feedbouncer-worker',
-    max:
-      env.concurrency +
-      2 +
-      Math.min(
-        32,
-        Object.values(env.jobs.concurrency).reduce((a, b) => a + b, 0),
-      ),
+    max: env.concurrency + 2 + jobConsumerConnections,
     onIdleError: (err) => log.warn('postgres idle client error', errorFields(err)),
   });
-  const redis = new Redis(env.redisUrl.href, { maxRetriesPerRequest: null });
-  redis.on('error', (err) => log.warn('redis connection error', errorFields(err)));
+  const redis = createWorkerConnection(env.redisUrl.href);
+  const producerRedis = createProducerConnection(env.redisUrl.href);
+  for (const [name, client] of [
+    ['redis', redis],
+    ['redis producer', producerRedis],
+  ] as const) {
+    client.on('error', (err) => log.warn(`${name} connection error`, errorFields(err)));
+  }
 
   const worker = new Worker(
     SYSTEM_QUEUE,
@@ -63,11 +77,9 @@ try {
     log.error('job failed', { jobId: job?.id ?? null, ...errorFields(err) }),
   );
   worker.on('error', (err) => log.error('worker error', errorFields(err)));
-  const connectors = buildConnectorRegistry();
-  const jobs = buildJobRegistry();
   const metrics = new JobMetrics(log);
   const ledger = new PgJobLedger(pool);
-  const queues = new QueueSet({ connection: redis, prefix: env.jobs.prefix });
+  const queues = new QueueSet({ connection: producerRedis, prefix: env.jobs.prefix });
   const producer = new JobProducer({
     ledger,
     jobs,
@@ -109,7 +121,7 @@ try {
     await Promise.all([worker.close(), jobWorkers.close()]);
     await queues.close();
     await health.close();
-    await Promise.allSettled([pool.end(), redis.quit()]);
+    await Promise.allSettled([pool.end(), redis.quit(), producerRedis.quit()]);
   }, log);
 
   await waitUntil(() => Promise.all([pool.query('SELECT 1'), redis.ping()]), {

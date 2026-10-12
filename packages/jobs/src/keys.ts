@@ -5,6 +5,9 @@ import { JobEnqueueError } from './errors.js';
 
 export const EXTERNAL_REF = /^[A-Za-z0-9._:@/-]{1,256}$/;
 export const CALLER_KEY = /^[\x21-\x7e]{1,256}$/;
+/** Codes and job type names: lower snake case, at most 63 chars. */
+export const SNAKE_CASE = /^[a-z][a-z0-9_]{0,62}$/;
+
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 type KeyInput = { scope: ConnectionScope; platform: Platform; type: string } & (

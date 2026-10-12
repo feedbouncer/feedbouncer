@@ -54,6 +54,11 @@ describe('parseDlqArgs', () => {
     });
   });
 
+  it('rejects list-only flags on replay', () => {
+    expect(() => parseDlqArgs(['replay', '--id', ORG, '--state', 'resolved'])).toThrow('list only');
+    expect(() => parseDlqArgs(['replay', '--id', ORG, '--show-payload'])).toThrow('list only');
+  });
+
   it('never puts states on a replay filter', () => {
     const cmd = parseDlqArgs(['replay', '--platform', 'facebook', '--yes']);
     expect(cmd.filter).not.toHaveProperty('states');
@@ -115,11 +120,10 @@ describe('runDlq', () => {
     );
     expect(code).toBe(0);
     expect(producer.replay).not.toHaveBeenCalled();
-    expect(ledger.listDeadLetters).toHaveBeenCalledWith({
-      platform: 'facebook',
-      limit: 10,
-      states: ['dead_lettered'],
-    });
+    expect(ledger.listDeadLetters).toHaveBeenCalledWith(
+      { platform: 'facebook', limit: 10, states: ['dead_lettered'] },
+      'oldest',
+    );
     expect(lines.at(-1)).toBe('{"wouldReplay":1}');
   });
 

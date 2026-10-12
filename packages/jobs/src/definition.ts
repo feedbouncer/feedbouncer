@@ -3,6 +3,7 @@ import { isPlatform, type Platform } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
 import type { JobResult } from './failure.js';
+import { SNAKE_CASE } from './keys.js';
 import { DEFAULT_RETRY_POLICY, resolvePolicy, type RetryPolicy } from './policy.js';
 
 export type { JobResult } from './failure.js';
@@ -35,8 +36,6 @@ export interface JobDefinition<P> {
   readonly handle: (ctx: JobContext, payload: P) => Promise<JobResult>;
 }
 
-const TYPE = /^[a-z][a-z0-9_]{0,62}$/;
-
 export class JobRegistry {
   readonly #byType = new Map<string, JobDefinition<unknown>>();
 
@@ -44,7 +43,7 @@ export class JobRegistry {
     const fail = (f: string): never => {
       throw new TypeError(`Invalid job definition: ${f}`);
     };
-    if (!TYPE.test(def.type)) fail('type');
+    if (!SNAKE_CASE.test(def.type)) fail('type');
     if (
       def.platforms !== 'all' &&
       (def.platforms.length === 0 || !def.platforms.every(isPlatform))

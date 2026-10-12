@@ -184,6 +184,28 @@ describe('failure bookkeeping and DLQ', () => {
     expect(await ledger.get(id)).toMatchObject({ state: 'resolved', resolution: 'target_gone' });
     expect(await ledger.replay({ ids: [id], limit: 10 }, 1_000)).toEqual([]);
   });
+  it('lists oldest-first on request, in the order replay takes rows', async () => {
+    const ids = [await add(), await add(), await add()];
+    for (const id of ids) {
+      await claimed(id);
+      await ledger.deadLetter(id, 'w1', {
+        reason: 'non_retryable',
+        resolution: null,
+        errorKind: 'non_retryable',
+        errorCode: 'invalid_request',
+        countsAsFailure: true,
+        retentionMs: 1_000,
+      });
+      await sleep(5);
+    }
+    const filter = { organizationId: t.organizationId, ids, limit: 2 };
+    const oldest = await ledger.listDeadLetters(filter, 'oldest');
+    expect(oldest.map((r) => r.id)).toEqual(ids.slice(0, 2));
+    const newest = await ledger.listDeadLetters(filter);
+    expect(newest.map((r) => r.id)).toEqual([ids[2], ids[1]]);
+    const replayed = await ledger.replay(filter, 1_000);
+    expect(replayed.map((r) => r.id).sort()).toEqual(ids.slice(0, 2).sort());
+  });
   it('rejects invalid filter values without echoing them', async () => {
     await expect(
       ledger.listDeadLetters({ organizationId: "x' OR 1=1 --", limit: 10 }),

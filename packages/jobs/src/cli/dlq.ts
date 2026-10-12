@@ -84,6 +84,9 @@ export function parseDlqArgs(argv: readonly string[]): DlqCommand {
     };
   }
 
+  if (values.state !== undefined || values['show-payload'] === true) {
+    throw new UsageError('--state and --show-payload apply to list only');
+  }
   const ids = values.id ?? [];
   if (!ids.every((i) => UUID.test(i))) invalid('id');
   if (ids.length === 0) {
@@ -127,7 +130,7 @@ export interface DlqDeps {
   readonly out: (line: string) => void;
 }
 
-function describe(row: DeadLetterRow, showPayload: boolean): Record<string, unknown> {
+function formatRow(row: DeadLetterRow, showPayload: boolean): Record<string, unknown> {
   return {
     id: row.id,
     organizationId: row.scope?.organizationId,
@@ -156,13 +159,16 @@ export async function runDlq(cmd: DlqCommand, deps: DlqDeps): Promise<number> {
   const { ledger, producer, out } = deps;
   if (cmd.cmd === 'list') {
     for (const row of await ledger.listDeadLetters(cmd.filter)) {
-      out(JSON.stringify(describe(row, cmd.showPayload)));
+      out(JSON.stringify(formatRow(row, cmd.showPayload)));
     }
     return 0;
   }
   if (cmd.dryRun) {
-    const rows = await ledger.listDeadLetters({ ...cmd.filter, states: ['dead_lettered'] });
-    for (const row of rows) out(JSON.stringify(describe(row, false)));
+    const rows = await ledger.listDeadLetters(
+      { ...cmd.filter, states: ['dead_lettered'] },
+      'oldest',
+    );
+    for (const row of rows) out(JSON.stringify(formatRow(row, false)));
     out(JSON.stringify({ wouldReplay: rows.length }));
     return 0;
   }
