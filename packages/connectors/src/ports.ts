@@ -25,7 +25,12 @@ export interface ConnectionDirectory {
     displayName: string | null;
     grantedScopes: readonly string[];
   }): Promise<{ scope: ConnectionScope; created: boolean }>;
-  activate(scope: ConnectionScope, actorUserId: string): Promise<void>;
+  /**
+   * Moves a pending, errored or already-active connection to active. Paused and
+   * revoked connections never activate: `revoked` is terminal for the framework.
+   * Resolves true only when the row ended up active.
+   */
+  activate(scope: ConnectionScope, actorUserId: string): Promise<boolean>;
 }
 export interface TokenRecord {
   readonly value: Secret;

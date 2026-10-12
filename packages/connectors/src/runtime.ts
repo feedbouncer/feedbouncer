@@ -180,7 +180,10 @@ export class ConnectionClient {
   async #attempt<T>(priority: Priority, op: (ctx: CallContext) => Promise<T>): Promise<T> {
     const rec = await this.d.directory.load(this.scope);
     if (!rec) throw new ConnectorError('not_found', 'connection_not_found');
-    if (rec.status === 'reconnect_required' || rec.status === 'revoked')
+    if (rec.status === 'revoked')
+      // terminal: cannot be fixed by re-authorizing
+      throw new ConnectorError('auth_expired', 'connection_revoked', { reauthorize: false });
+    if (rec.status === 'reconnect_required')
       throw new ConnectorError('auth_expired', 'reauthorization_required', { reauthorize: true });
     if (rec.status !== 'active') throw new ConnectorError('permanent', 'connection_inactive');
 

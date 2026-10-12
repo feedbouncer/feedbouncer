@@ -267,12 +267,12 @@ describe('ConnectionClient edge cases', () => {
     });
   });
 
-  it('revoked connections require reauthorization without platform calls', async () => {
+  it('revoked connections are terminal: auth_expired, not reauthorizable, no platform calls', async () => {
     directory.seed({ scope, platform: 'youtube', externalAccountId: 'chan', status: 'revoked' });
     const c = await runtime.connect(scope);
     await expect(c.listComments({ sourceExternalId: 's1', cursor: null })).rejects.toMatchObject({
       kind: 'auth_expired',
-      reauthorize: true,
+      reauthorize: false,
     });
     expect(listComments).not.toHaveBeenCalled();
   });

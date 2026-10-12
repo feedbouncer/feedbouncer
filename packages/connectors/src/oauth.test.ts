@@ -266,6 +266,81 @@ describe('OAuthFlow.complete', () => {
     ).toEqual({ ok: false, reason: 'account_mismatch' });
   });
 
+  describe('revoked connections are terminal', () => {
+    const connect = async () => {
+      const first = await flow.start(alice, 'youtube');
+      const done = await flow.complete(alice, 'youtube', {
+        state: stateOf(first.authorizationUrl),
+        code: 'c',
+      });
+      if (!done.ok) throw new Error('setup');
+      const scope = { organizationId: 'o1', brandId: 'b1', connectionId: done.connectionId };
+      return { scope, rec: (await directory.load(scope))! };
+    };
+
+    it('stores nothing and reports connection_inactive when reconnecting a revoked connection', async () => {
+      const { scope, rec } = await connect();
+      directory.seed({ ...rec, status: 'revoked' });
+      const before = await vault.readTokens(scope);
+      exchange.mockResolvedValueOnce({
+        tokens: {
+          accessToken: new Secret('access-NEW'),
+          accessTokenExpiresAt: null,
+          refreshToken: new Secret('refresh-NEW'),
+          refreshTokenExpiresAt: null,
+          scopes: [],
+        },
+        account: { externalAccountId: 'chan-1', displayName: null },
+      });
+      const again = await flow.start(alice, 'youtube', {
+        reconnectConnectionId: scope.connectionId,
+      });
+      expect(
+        await flow.complete(alice, 'youtube', {
+          state: stateOf(again.authorizationUrl),
+          code: 'c',
+        }),
+      ).toEqual({ ok: false, reason: 'connection_inactive' });
+      expect(await vault.readTokens(scope)).toEqual(before);
+      expect((await directory.load(scope))?.status).toBe('revoked');
+    });
+
+    it('stores nothing when a fresh authorization lands on a revoked connection', async () => {
+      const { scope, rec } = await connect();
+      directory.seed({ ...rec, status: 'revoked' });
+      const before = await vault.readTokens(scope);
+      exchange.mockResolvedValueOnce({
+        tokens: {
+          accessToken: new Secret('access-NEW'),
+          accessTokenExpiresAt: null,
+          refreshToken: null,
+          refreshTokenExpiresAt: null,
+          scopes: [],
+        },
+        account: { externalAccountId: 'chan-1', displayName: null },
+      });
+      const again = await flow.start(alice, 'youtube');
+      expect(
+        await flow.complete(alice, 'youtube', {
+          state: stateOf(again.authorizationUrl),
+          code: 'c',
+        }),
+      ).toEqual({ ok: false, reason: 'connection_inactive' });
+      expect(await vault.readTokens(scope)).toEqual(before);
+    });
+
+    it('never reports ok when activation did not take effect', async () => {
+      vi.spyOn(directory, 'activate').mockResolvedValue(false);
+      const first = await flow.start(alice, 'youtube');
+      expect(
+        await flow.complete(alice, 'youtube', {
+          state: stateOf(first.authorizationUrl),
+          code: 'c',
+        }),
+      ).toEqual({ ok: false, reason: 'connection_inactive' });
+    });
+  });
+
   it('rejects codes with control characters or excessive length', async () => {
     for (const code of ['a\nb', 'x'.repeat(2049), '']) {
       const { authorizationUrl } = await flow.start(alice, 'youtube');

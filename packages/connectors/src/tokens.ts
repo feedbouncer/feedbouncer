@@ -63,8 +63,12 @@ export class TokenManager {
     scope: ConnectionScope,
     rejected: Secret | undefined,
   ): Promise<Secret> {
-    if ((await this.d.directory.load(scope))?.status !== 'active')
-      throw new ConnectorError('auth_expired', 'connection_inactive', { reauthorize: true });
+    const status = (await this.d.directory.load(scope))?.status;
+    if (status !== 'active')
+      // revoked is terminal: re-authorizing cannot fix it, so do not invite it.
+      throw new ConnectorError('auth_expired', 'connection_inactive', {
+        reauthorize: status !== 'revoked',
+      });
     const { access, refresh } = await this.d.vault.readTokens(scope);
     if (access && this.#usable(access, rejected)) return access.value;
     const refreshExpired =

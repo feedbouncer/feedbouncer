@@ -47,7 +47,13 @@ export type OAuthCompletion =
   | { readonly ok: true; readonly connectionId: string; readonly created: boolean }
   | {
       readonly ok: false;
-      readonly reason: 'rejected' | 'denied' | 'account_mismatch' | 'platform_error';
+      readonly reason:
+        | 'rejected'
+        | 'denied'
+        | 'account_mismatch'
+        | 'platform_error'
+        /** The connection is revoked (terminal) or could not be activated; nothing was stored. */
+        | 'connection_inactive';
     };
 
 export interface OAuthFlowDeps {
@@ -115,6 +121,17 @@ export class OAuthFlow {
     return { authorizationUrl: url };
   }
 
+  #inactive(
+    ids: { organizationId: string; brandId: string; platform: Platform },
+    connectionId: string,
+  ): OAuthCompletion {
+    this.d.log.warn('oauth completion refused: connection is not activatable', {
+      ...ids,
+      connectionId,
+    });
+    return { ok: false, reason: 'connection_inactive' };
+  }
+
   async complete(
     actor: OAuthActor,
     platform: Platform,
@@ -169,6 +186,7 @@ export class OAuthFlow {
       });
       if (!rec || rec.externalAccountId !== account.data)
         return { ok: false, reason: 'account_mismatch' };
+      if (rec.status === 'revoked') return this.#inactive(ids, pending.reconnectConnectionId);
     }
     const { scope, created } = await this.d.directory.upsertPending({
       organizationId: actor.organizationId,
@@ -178,6 +196,9 @@ export class OAuthFlow {
       displayName,
       grantedScopes: result.tokens.scopes.slice(0, 100),
     });
+    // A revoked connection is terminal: storing tokens on it would be a dead end.
+    if ((await this.d.directory.load(scope))?.status === 'revoked')
+      return this.#inactive(ids, scope.connectionId);
     if (result.tokens.refreshToken)
       await this.d.vault.writeRefreshToken(scope, {
         value: result.tokens.refreshToken,
@@ -187,7 +208,8 @@ export class OAuthFlow {
       value: result.tokens.accessToken,
       expiresAt: result.tokens.accessTokenExpiresAt,
     });
-    await this.d.directory.activate(scope, actor.userId);
+    if (!(await this.d.directory.activate(scope, actor.userId)))
+      return this.#inactive(ids, scope.connectionId);
     this.d.log.info('connection authorized', { ...ids, connectionId: scope.connectionId, created });
     return { ok: true, connectionId: scope.connectionId, created };
   }

@@ -71,8 +71,8 @@ export class PgConnectionDirectory implements ConnectionDirectory {
   }
 
   /** Only pending, errored or already-active connections activate; paused and revoked ones never do. */
-  async activate(scope: ConnectionScope, actorUserId: string): Promise<void> {
-    await withTransaction(this.pool, async (c) => {
+  async activate(scope: ConnectionScope, actorUserId: string): Promise<boolean> {
+    return withTransaction(this.pool, async (c) => {
       const r = await c.query<{ platform: string }>(
         `UPDATE connection SET status = 'active', status_reason = NULL
           WHERE id = $3 AND organization_id = $1 AND brand_id = $2
@@ -80,12 +80,13 @@ export class PgConnectionDirectory implements ConnectionDirectory {
         RETURNING platform`,
         [scope.organizationId, scope.brandId, scope.connectionId],
       );
-      if (r.rowCount !== 1) return;
+      if (r.rowCount !== 1) return false;
       await c.query(
         `INSERT INTO audit_event (organization_id, brand_id, actor_type, actor_user_id, action, subject_type, subject_id, details)
          VALUES ($1, $2, 'user', $4, 'connection.authorized', 'connection', $3, jsonb_build_object('platform', $5::text))`,
         [scope.organizationId, scope.brandId, scope.connectionId, actorUserId, r.rows[0]!.platform],
       );
+      return true;
     });
   }
 }

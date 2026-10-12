@@ -60,7 +60,7 @@ describe('memory adapters', () => {
     expect(a.created).toBe(true);
     expect(b).toEqual({ scope: a.scope, created: false });
     expect((await d.load(a.scope))?.status).toBe('reconnect_required');
-    await d.activate(a.scope, 'u1');
+    expect(await d.activate(a.scope, 'u1')).toBe(true);
     expect((await d.load(a.scope))?.status).toBe('active');
   });
 
@@ -69,7 +69,7 @@ describe('memory adapters', () => {
     for (const status of ['paused', 'revoked'] as const) {
       const sc = { organizationId: 'o1', brandId: 'b1', connectionId: `c-${status}` };
       d.seed({ scope: sc, platform: 'facebook', externalAccountId: status, status });
-      await d.activate(sc, 'u1');
+      expect(await d.activate(sc, 'u1')).toBe(false);
       expect((await d.load(sc))?.status).toBe(status);
     }
   });
