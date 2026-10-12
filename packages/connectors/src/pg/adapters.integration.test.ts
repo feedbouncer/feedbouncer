@@ -306,6 +306,32 @@ describe('PgConnectionDirectory', () => {
     expect((await upsert(a, 'page-new', 'Renamed')).created).toBe(false);
   });
 
+  it.each(['paused', 'revoked'])(
+    'upsertPending leaves the name and scopes of a %s connection untouched',
+    async (status) => {
+      const r = await upsert(a, `page-meta-${status}`, 'Original');
+      await h.c.query('UPDATE connection SET status = $2 WHERE id = $1', [
+        r.scope.connectionId,
+        status,
+      ]);
+      const again = await dir.upsertPending({
+        organizationId: a.organizationId,
+        brandId: a.brandId,
+        platform: 'facebook',
+        externalAccountId: `page-meta-${status}`,
+        displayName: 'Changed',
+        grantedScopes: ['write'],
+      });
+      expect(again.scope.connectionId).toBe(r.scope.connectionId);
+      const row = (
+        await h.c.query('SELECT display_name, granted_scopes FROM connection WHERE id = $1', [
+          r.scope.connectionId,
+        ])
+      ).rows[0];
+      expect(row).toEqual({ display_name: 'Original', granted_scopes: ['read'] });
+    },
+  );
+
   it('activate does not resurrect a paused connection', async () => {
     const r = await upsert(a, 'page-paused');
     await h.c.query("UPDATE connection SET status = 'paused' WHERE id = $1", [
@@ -491,6 +517,19 @@ describe('PgDeliveryLedger', () => {
     ).rejects.toThrow('deliver failed');
     expect(await ledger.once('webhook:facebook', failing, work)).toBe('processed');
     expect(runs).toBe(2);
+  });
+
+  it('holds no transaction while the delivery work runs', async () => {
+    const key = `${a.connectionId}:sha256:${'12'.repeat(32)}`;
+    let openWhileRunning = -1;
+    await ledger.once('webhook:facebook', key, async () => {
+      const r = await h.c.query(
+        `SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE state = 'idle in transaction' AND datname = current_database()`,
+      );
+      openWhileRunning = r.rows[0].n;
+    });
+    expect(openWhileRunning).toBe(0);
   });
 
   it('keeps namespaces apart and runs concurrent duplicates once', async () => {

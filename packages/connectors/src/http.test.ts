@@ -12,7 +12,7 @@ const kindOf = (fn: () => unknown) => {
   return 'ok';
 };
 
-describe('assertAllowedUrl (Review Focus 2)', () => {
+describe('assertAllowedUrl', () => {
   it('accepts https on an allowed host', () => {
     expect(assertAllowedUrl('https://graph.example.test/v1/c?after=x', HOSTS).hostname).toBe(
       'graph.example.test',

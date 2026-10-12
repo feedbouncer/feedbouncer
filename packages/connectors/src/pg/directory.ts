@@ -50,7 +50,10 @@ export class PgConnectionDirectory implements ConnectionDirectory {
       `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, display_name, granted_scopes, status, status_reason)
        VALUES ($1, $2, $3, $4, $5, $6::text[], 'reconnect_required', 'oauth_pending')
        ON CONFLICT (brand_id, platform, external_account_id) DO UPDATE
-          SET display_name = EXCLUDED.display_name, granted_scopes = EXCLUDED.granted_scopes
+          SET display_name = CASE WHEN connection.status IN ('paused', 'revoked')
+                                  THEN connection.display_name ELSE EXCLUDED.display_name END,
+              granted_scopes = CASE WHEN connection.status IN ('paused', 'revoked')
+                                    THEN connection.granted_scopes ELSE EXCLUDED.granted_scopes END
         WHERE connection.organization_id = EXCLUDED.organization_id
        RETURNING id, (xmax = 0) AS created`,
       [

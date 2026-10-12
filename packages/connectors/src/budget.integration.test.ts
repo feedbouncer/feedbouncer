@@ -52,8 +52,10 @@ describe('redisBudget', () => {
     const c = key('org-1', 'brand-1', randomUUID());
     const first = redisBudget(redis, prefix);
     for (let i = 0; i < policy.points; i++) await first.acquire('facebook', c, policy, 'urgent');
-    const second = redisBudget(new Redis(process.env.REDIS_URL!), prefix);
-    const d = await second.acquire('facebook', c, policy, 'urgent');
+    const secondClient = new Redis(process.env.REDIS_URL!, { maxRetriesPerRequest: 1 });
+    const d = await redisBudget(secondClient, prefix)
+      .acquire('facebook', c, policy, 'urgent')
+      .finally(() => secondClient.disconnect());
     expect(d.granted).toBe(false);
     expect(d).toMatchObject({ retryAfterMs: expect.any(Number) });
   });

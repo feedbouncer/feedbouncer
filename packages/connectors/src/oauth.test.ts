@@ -199,7 +199,7 @@ describe('OAuthFlow.complete', () => {
     expect(await flow.complete(alice, 'youtube', q)).toEqual({ ok: false, reason: 'rejected' });
   });
 
-  it('rejects a callback in another user session without consuming the state (Review Focus 3)', async () => {
+  it('rejects a callback in another user session without consuming the state', async () => {
     const { authorizationUrl } = await flow.start(alice, 'youtube');
     const q = { state: stateOf(authorizationUrl), code: 'c' };
     expect(await flow.complete({ ...alice, userId: 'mallory' }, 'youtube', q)).toEqual({

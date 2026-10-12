@@ -228,7 +228,7 @@ describe('TokenManager', () => {
     },
   );
 
-  it('persists a rotated refresh token before the access token (Review Focus 4)', async () => {
+  it('persists a rotated refresh token before the access token', async () => {
     const s = setup(async (rt) => tokens(Number(rt.reveal().split('-')[1]) + 1));
     await s.vault.writeRefreshToken(scope, { value: new Secret('refresh-0'), expiresAt: null });
     s.vault.failNextWrite('access');

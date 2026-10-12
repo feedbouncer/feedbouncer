@@ -203,7 +203,7 @@ describe('WebhookGate', () => {
     ).toBe('accepted');
   });
 
-  it('drops events for other accounts under a connection-scoped secret (Review Focus 1)', async () => {
+  it('drops events for other accounts under a connection-scoped secret', async () => {
     const { g, lines } = gate('connection');
     const req = {
       ...signed(

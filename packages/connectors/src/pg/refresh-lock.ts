@@ -5,7 +5,9 @@
 // The pool passed in MUST be a small pool used only for these lock sessions,
 // never the data pool: a refresh holds one lock client for its whole duration
 // (including polling) while the work inside needs data-pool clients, so a
-// shared pool saturates under concurrent refreshes and loses rotated tokens. Key: (0x46420001, hashtext(org/brand/connection)); hash
+// shared pool saturates under concurrent refreshes and loses rotated tokens.
+//
+// Key: (0x46420001, hashtext(org/brand/connection)); hash
 // collisions only cause extra serialization.
 import type pg from 'pg';
 import type { ConnectionScope } from '@feedbouncer/secrets';
