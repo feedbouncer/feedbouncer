@@ -51,6 +51,18 @@ describe('loadWorkerEnv', () => {
   it('fails fast on an invalid job setting', () => {
     expect(() => load({ ...base, JOB_MAX_ATTEMPTS: '0' })).toThrow(/JOB_MAX_ATTEMPTS/);
   });
+  it('loads telemetry config with the worker metrics port default', () => {
+    expect(load(base).telemetry.metrics.port).toBe(9465);
+    expect(load(base).telemetry.metrics.host).toBe('127.0.0.1');
+  });
+  it('rejects an invalid OTEL_TRACES_EXPORTER', () => {
+    expect(() => load({ ...base, OTEL_TRACES_EXPORTER: 'bogus' })).toThrow(/OTEL_TRACES_EXPORTER/);
+  });
+  it('never reads OTLP headers into config', () => {
+    const env = load({ ...base, OTEL_EXPORTER_OTLP_HEADERS: 'authorization=Bearer s3cret' });
+    expect(JSON.stringify(env)).not.toContain('s3cret');
+    expect(inspect(env, { depth: 10 })).not.toContain('s3cret');
+  });
   it('bounds WORKER_CONCURRENCY', () => {
     expect(() => load({ ...base, WORKER_CONCURRENCY: '0' })).toThrow(/WORKER_CONCURRENCY/);
     expect(() => load({ ...base, WORKER_CONCURRENCY: '65' })).toThrow(/WORKER_CONCURRENCY/);

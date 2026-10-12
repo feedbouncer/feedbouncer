@@ -11,6 +11,7 @@ import {
   createProducerConnection,
   createWorkerConnection,
 } from '@feedbouncer/jobs';
+import { startMetricsServer } from '@feedbouncer/observability';
 import { reportKeyCoverage } from '@feedbouncer/secrets';
 import {
   createLogger,
@@ -26,6 +27,7 @@ import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
 import { buildConnectorRegistry, buildJobRegistry } from './registries.js';
 import { reportStartupFailure } from './startup.js';
+import { buildWorkerTelemetry } from './telemetry.js';
 
 let env: WorkerEnv;
 const configWarnings: string[] = [];
@@ -54,6 +56,12 @@ try {
     max: env.concurrency + 2 + jobConsumerConnections,
     onIdleError: (err) => log.warn('postgres idle client error', errorFields(err)),
   });
+  const ledger = new PgJobLedger(pool);
+  // Tracing registers its global provider here, before any span-producing code
+  // (queues, workers, connectors) is constructed.
+  const telemetry = buildWorkerTelemetry({ env, pool, ledger, log });
+  // When ConnectorRuntime is constructed here, pass observer: telemetry.connectorObserver,
+  // sync: telemetry.sync.
   const redis = createWorkerConnection(env.redisUrl.href);
   const producerRedis = createProducerConnection(env.redisUrl.href);
   for (const [name, client] of [
@@ -77,8 +85,7 @@ try {
     log.error('job failed', { jobId: job?.id ?? null, ...errorFields(err) }),
   );
   worker.on('error', (err) => log.error('worker error', errorFields(err)));
-  const metrics = new JobMetrics(log);
-  const ledger = new PgJobLedger(pool);
+  const metrics = new JobMetrics(log, telemetry.jobSink);
   const queues = new QueueSet({ connection: producerRedis, prefix: env.jobs.prefix });
   const producer = new JobProducer({
     ledger,
@@ -117,11 +124,20 @@ try {
       log.debug('health check failed', { check: name, ...errorFields(err) }),
   });
 
+  const metricsServer = await startMetricsServer({
+    host: env.telemetry.metrics.host,
+    port: env.telemetry.metrics.port,
+    registry: telemetry.metrics.registry,
+    log,
+  });
+
   onShutdown(async () => {
     await Promise.all([worker.close(), jobWorkers.close()]);
     await queues.close();
     await health.close();
     await Promise.allSettled([pool.end(), redis.quit(), producerRedis.quit()]);
+    await metricsServer?.close();
+    await telemetry.tracing.shutdown();
   }, log);
 
   await waitUntil(() => Promise.all([pool.query('SELECT 1'), redis.ping()]), {

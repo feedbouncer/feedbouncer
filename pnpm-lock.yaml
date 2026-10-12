@@ -263,6 +263,9 @@ importers:
       '@feedbouncer/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@feedbouncer/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@feedbouncer/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets
