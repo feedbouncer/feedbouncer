@@ -349,14 +349,18 @@ the budget does not see calls made for other accounts of the same app.
 
 Throw `ConnectorError(kind, code, opts)`. There are six kinds, and only these:
 
-| Kind           | Meaning                        | Typical HTTP                  | Framework reaction                                               |
-| -------------- | ------------------------------ | ----------------------------- | ---------------------------------------------------------------- |
-| `auth_expired` | Credential rejected or revoked | 401, `invalid_grant`          | One refresh-and-retry, then the connection needs reauthorization |
-| `rate_limited` | Throttled                      | 429, platform quota errors    | Budget blocked for `retryAfterMs`, caller defers                 |
-| `not_found`    | Target is gone                 | 404, 410                      | Read returns `null`, action returns `not_found`                  |
-| `unsupported`  | Platform cannot do this        | 501, feature not available    | `unsupported` result                                             |
-| `transient`    | Retry may succeed              | 5xx, network, timeout         | Surfaced as retryable                                            |
-| `permanent`    | Retrying will not help         | other 4xx, malformed response | Surfaced as failed                                               |
+| Kind           | Meaning                        | Typical HTTP                  | Framework reaction                                               | Job queue outcome                                     |
+| -------------- | ------------------------------ | ----------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------- |
+| `auth_expired` | Credential rejected or revoked | 401, `invalid_grant`          | One refresh-and-retry, then the connection needs reauthorization | Dead-lettered as `needs_reconnection`, no retries     |
+| `rate_limited` | Throttled                      | 429, platform quota errors    | Budget blocked for `retryAfterMs`, caller defers                 | Deferred by at least `retryAfterMs`, no attempt used  |
+| `not_found`    | Target is gone                 | 404, 410                      | Read returns `null`, action returns `not_found`                  | Dead-lettered `non_retryable`; `resolved` on a replay |
+| `unsupported`  | Platform cannot do this        | 501, feature not available    | `unsupported` result                                             | Dead-lettered `non_retryable`                         |
+| `transient`    | Retry may succeed              | 5xx, network, timeout         | Surfaced as retryable                                            | Retried with backoff, then `retries_exhausted`        |
+| `permanent`    | Retrying will not help         | other 4xx, malformed response | Surfaced as failed                                               | Dead-lettered `non_retryable`                         |
+
+How the job queue treats these is described in
+[docs/operations/job-queue.md](../operations/job-queue.md#error-classes); to write a job
+that calls a connector, see [docs/jobs/defining-a-job.md](../jobs/defining-a-job.md).
 
 Rules:
 

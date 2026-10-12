@@ -196,6 +196,7 @@ services:
     # No ports: the worker is internal. Scale with --scale worker=N.
     volumes:
       - ./apps/worker/src:/repo/apps/worker/src:ro
+      - ./packages/authz/src:/repo/packages/authz/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro

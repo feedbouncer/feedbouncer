@@ -1,0 +1,145 @@
+# Job queue operations
+
+The worker runs platform work (moderation actions, reads) through one queue per
+platform. Postgres (`job_ledger`) holds the state of every job; Redis (BullMQ)
+only carries a pointer `{ v: 1, ledgerId }`. Comment text never sits in Redis.
+
+For how to write a job, see [docs/jobs/defining-a-job.md](../jobs/defining-a-job.md).
+
+## Queues
+
+- Queue name: `platform-<platform>` under the Redis key prefix `JOB_QUEUE_PREFIX` (default `fb`).
+- One consumer per platform registered in the worker's `ConnectorRegistry`
+  (`apps/worker/src/registries.ts`). Registering a connector provisions its queue.
+  A deployment with no connectors registered runs no platform queues; the worker logs
+  `job consumers ready` with `platforms: none`.
+- Platforms are isolated: each has its own BullMQ worker and concurrency, so a stalled
+  or failing platform does not delay another.
+- Concurrency: `JOB_CONCURRENCY` (default 2), overridden per platform by
+  `JOB_CONCURRENCY_<PLATFORM>` (for example `JOB_CONCURRENCY_FACEBOOK`). `0` means this
+  process does not consume that platform's queue.
+
+## Retry policy
+
+| Setting                             | Default         | Env                   |
+| ----------------------------------- | --------------- | --------------------- |
+| `maxAttempts` (failures, crashes)   | 8               | `JOB_MAX_ATTEMPTS`    |
+| Backoff base delay                  | 5 s             | `JOB_BACKOFF_BASE_MS` |
+| Backoff cap                         | 15 min          | `JOB_BACKOFF_MAX_MS`  |
+| Jitter                              | equal (50-100%) | none                  |
+| Rate-limit deferrals (not failures) | 100             | code only             |
+| Total time deferred by rate limits  | 24 h            | code only             |
+| Handler timeout                     | 60 s            | per job type, in code |
+| Worker lease                        | timeout + 30 s  | derived               |
+
+Overrides apply in this order, later wins: environment default, per-platform policy
+(`JobsConfig.platformPolicies`), per job type (`JobDefinition.policy`). Every resolved
+policy is validated, and a bad value fails the worker at startup.
+
+Backoff before retry `n` is `min(cap, base * 2^(n-1))`, then jittered into the upper
+half: `[exp/2, exp]`. With the defaults the delays are about 2.5-5 s, 5-10 s, 10-20 s,
+20-40 s, and so on, up to 7.5-15 min.
+
+A rate-limited job waits at least the platform's `retry-after` (the platform hint may
+exceed the backoff cap) and does not use up an attempt. It is dead-lettered with
+`rate_limit_exhausted` only when the deferral count or total deferred time is exceeded.
+
+## Error classes
+
+| Class                           | Examples                                      | Outcome                                            |
+| ------------------------------- | --------------------------------------------- | -------------------------------------------------- |
+| Transient                       | 5xx, network error, timeout, unexpected error | Retry with backoff; DLQ `retries_exhausted`        |
+| Rate limited                    | 429, platform quota                           | Defer by `retry-after`; DLQ `rate_limit_exhausted` |
+| Credential expired              | `auth_expired` after the one refresh attempt  | DLQ `needs_reconnection`, no retries               |
+| Non-retryable                   | other 4xx, malformed response, unsupported    | DLQ `non_retryable`                                |
+| Target gone                     | 404 on a replayed job                         | Row becomes `resolved` (`target_gone`)             |
+| Invalid job                     | payload fails its schema, unknown job type    | DLQ `invalid_job`                                  |
+| Poison job (crashes the worker) | process dies mid-run, repeatedly              | DLQ `stall_limit_exceeded` after `maxAttempts`     |
+
+## Dead-letter queue
+
+The DLQ is the set of `job_ledger` rows in state `dead_lettered`, so retention and the
+dedup window cannot drift apart. Each entry keeps the payload, platform, tenant, job
+type, idempotency key, attempt counters, timestamps and the final error kind and code
+(never the raw error message).
+
+Commands (run from the repository root with `DATABASE_URL` and `REDIS_URL` set, or the
+`*_FILE` variants):
+
+```bash
+# List (one JSON object per line; default state dead_lettered, default limit 50)
+pnpm jobs dlq list --platform facebook --reason needs_reconnection --limit 20
+pnpm jobs dlq list --organization <uuid> --since 2026-10-01T00:00:00Z
+pnpm jobs dlq list --state resolved
+pnpm jobs dlq list --show-payload        # payloads may contain comment text
+
+# Replay one or more entries by id
+pnpm jobs dlq replay --id <uuid> --id <uuid>
+
+# Bulk replay needs --platform and --yes; preview first with --dry-run
+pnpm jobs dlq replay --platform facebook --reason needs_reconnection --dry-run
+pnpm jobs dlq replay --platform facebook --reason needs_reconnection --yes
+```
+
+Filters: `--platform`, `--organization` (limits the command to one tenant), `--reason`,
+`--since` (ISO date), `--limit` (list 1-500, replay 1-10000). Replay prints
+`{"replayed": <n>}` and resets the attempt counters. It reuses the original idempotency
+key, so replaying the same entry twice, even at once, enqueues it once.
+
+Errors go to stderr as `jobs dlq: <message>` (exit 1; exit 2 for a usage error). A
+rejected filter value is never echoed.
+
+What to do per reason:
+
+| Reason                                      | Action                                                                                   |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `needs_reconnection`                        | Reconnect the account in the app, then replay with `--reason needs_reconnection`.        |
+| `retries_exhausted`, `rate_limit_exhausted` | Usually a platform outage or quota. Bulk replay once the platform has recovered.         |
+| `stall_limit_exceeded`                      | Poison job. Inspect with `--show-payload` and fix the handler before replaying.          |
+| `invalid_job`                               | Code or data bug. Fix, then replay; replaying unchanged fails the same way.              |
+| `non_retryable`                             | The platform refused the action. Check the error code; replay only if the cause changed. |
+| `resolved` (`target_gone`)                  | No action: the comment is gone, so there is nothing left to do.                          |
+
+## Retention and the dedupe window
+
+- `JOB_DLQ_RETENTION_DAYS` (default 14): how long a dead-lettered or resolved row is kept.
+- `JOB_DEDUP_WINDOW_DAYS` (default 30): how long a row, and therefore its idempotency key,
+  lives. While the row exists, the same logical job cannot run again.
+- Startup fails if the window is shorter than the longest retry period plus DLQ
+  retention for any registered platform and job type. Too short and a replay could find
+  its row purged, or a duplicate could slip in; too long only grows storage.
+- `queued` rows are never purged. The sweeper purges expired settled rows, up to 1,000
+  per sweep, once a minute.
+
+## Redis loss
+
+If Redis restarts and loses its data, only pointers are lost. The sweeper re-adds
+`queued` rows that have been idle for `staleAfterMs` (5 min). The BullMQ job id derives
+from the idempotency key, so re-adding a job that still exists is harmless.
+
+## Shutdown
+
+On `SIGTERM` the worker stops taking jobs and waits for in-flight handlers (bounded by
+their timeouts). Scheduled retries live in Redis and Postgres and survive a restart.
+Keep the container's `stop_grace_period` above the longest handler timeout plus margin
+(`compose.yaml` uses 100 s).
+
+A crash between a successful platform call and recording the result re-runs the
+handler, so handlers must be safe to repeat. See the contributor guide.
+
+## Observability
+
+Structured log events, each with `platform`, `jobType` and `ledgerId`:
+
+`job.enqueued`, `job.deduplicated`, `job.completed`, `job.retried`, `job.deferred`,
+`job.dead_lettered` (adds `reason`, `code`), `job.replayed`, `job.duplicate_delivery`,
+`job.requeued`.
+
+Once a minute `job.stats` logs `requeued`, `purged` and a counter per platform and
+event, named `<platform>_<event>` (for example `facebook_dead_lettered`).
+
+## Privacy
+
+Payloads can contain comment text. They expire with the row and never contain
+credentials: enqueue rejects secret-like fields, and only error kinds and codes are
+stored or logged. Erasing a comment does not yet scrub it from `job_ledger`.
