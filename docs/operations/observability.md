@@ -8,11 +8,11 @@ is off by default and the metrics listeners bind to loopback unless you change t
 
 ## Overview
 
-| Question                                                | Signal                                                                                         |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| What happened to this request, webhook or job?          | [Logs](#logs) filtered by `trace_id`, `job_id` or `request_id`; [traces](#traces) if enabled   |
-| Is this connection healthy, and if not, why?            | [Connector health](#connector-health): API endpoint, or the `feedbouncer_connector_*` gauges   |
-| Is the system keeping up (queues, retries, API latency)? | [Metrics](#metrics): `feedbouncer_queue_*`, `feedbouncer_jobs_total`, `feedbouncer_http_*`     |
+| Question                                                 | Signal                                                                                       |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| What happened to this request, webhook or job?           | [Logs](#logs) filtered by `trace_id`, `job_id` or `request_id`; [traces](#traces) if enabled |
+| Is this connection healthy, and if not, why?             | [Connector health](#connector-health): API endpoint, or the `feedbouncer_connector_*` gauges |
+| Is the system keeping up (queues, retries, API latency)? | [Metrics](#metrics): `feedbouncer_queue_*`, `feedbouncer_jobs_total`, `feedbouncer_http_*`   |
 
 Defaults: logs always on (JSON on stdout), traces `none`, metrics served on `127.0.0.1`
 only. A bare `docker compose up` needs no extra configuration.
@@ -25,12 +25,12 @@ keep human-readable output.
 
 ### Core keys
 
-| Key       | Meaning                                                                  |
-| --------- | ------------------------------------------------------------------------ |
-| `time`    | The timestamp, ISO-8601 in UTC with milliseconds.                        |
-| `level`   | `debug`, `info`, `warn` or `error`.                                      |
-| `service` | `api` or `worker`.                                                       |
-| `msg`     | The message: a short event name (`job.completed`) or a short sentence.   |
+| Key       | Meaning                                                                |
+| --------- | ---------------------------------------------------------------------- |
+| `time`    | The timestamp, ISO-8601 in UTC with milliseconds.                      |
+| `level`   | `debug`, `info`, `warn` or `error`.                                    |
+| `service` | `api` or `worker`.                                                     |
+| `msg`     | The message: a short event name (`job.completed`) or a short sentence. |
 
 Callers cannot override these four keys. Other fields are additive: older camelCase
 fields such as `platform`, `jobType`, `ledgerId`, `organizationId` and `connectionId` are
@@ -41,16 +41,16 @@ still present on the lines that already carried them.
 Correlation keys are snake_case and are attached automatically to every line written while
 the work is in scope. A value that is not a safe identifier is dropped, never logged.
 
-| Key              | Present when                                                                              |
-| ---------------- | ----------------------------------------------------------------------------------------- |
-| `tenant_id`      | An authenticated API request or a job is in scope (the organization id).                  |
-| `brand_id`       | A job is running (the brand the job belongs to).                                          |
-| `connector_id`   | A connection is known: its id, taken from a verified webhook delivery or a job.           |
+| Key              | Present when                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `tenant_id`      | An authenticated API request or a job is in scope (the organization id).                   |
+| `brand_id`       | A job is running (the brand the job belongs to).                                           |
+| `connector_id`   | A connection is known: its id, taken from a verified webhook delivery or a job.            |
 | `connector_type` | The platform (`facebook`, `youtube`, ...); `unknown` for a webhook to an unknown platform. |
-| `job_id`         | A job is running or being enqueued: the `job_ledger` row id.                              |
-| `request_id`     | An API request is in scope.                                                               |
-| `trace_id`       | A span is active (32 hex characters).                                                     |
-| `span_id`        | A span is active (16 hex characters).                                                     |
+| `job_id`         | A job is running or being enqueued: the `job_ledger` row id.                               |
+| `request_id`     | An API request is in scope.                                                                |
+| `trace_id`       | A span is active (32 hex characters).                                                      |
+| `span_id`        | A span is active (16 hex characters).                                                      |
 
 Unauthenticated or rejected webhooks never carry `connector_id`: the id a caller sends is
 not trusted until the signature has been verified.
@@ -63,8 +63,8 @@ of `retryable`, `rate_limited`, `non_retryable`, `needs_reconnection` or `null`.
 
 ### Configuration
 
-| Variable    | Default | Meaning                                                      |
-| ----------- | ------- | ------------------------------------------------------------ |
+| Variable    | Default | Meaning                                                                                  |
+| ----------- | ------- | ---------------------------------------------------------------------------------------- |
 | `LOG_LEVEL` | `info`  | `debug`, `info`, `warn` or `error`. An invalid value fails startup with a clear message. |
 
 ### Recipes
@@ -82,19 +82,19 @@ docker compose logs worker --no-log-prefix | jq -c 'select(.connector_id == "<co
 
 ### Notable events
 
-| `msg`                                                        | Level   | Meaning                                                                   |
-| ------------------------------------------------------------ | ------- | ------------------------------------------------------------------------- |
-| `job.enqueued`, `job.deduplicated`, `job.completed`          | info    | Job lifecycle. See [job-queue.md](job-queue.md#observability).            |
-| `job.retried`, `job.deferred`                                | warn    | An attempt failed and will be retried, or the job was pushed back.        |
-| `job.dead_lettered`                                          | error   | The job reached the dead-letter queue (adds `reason`, `code`).            |
-| `job.replayed`, `job.requeued`, `job.duplicate_delivery`     | info    | Operator replay, sweeper re-add, or a queue redelivery that was skipped.  |
-| `job.trace_started`                                          | debug   | The job row had no valid trace context, so a new trace was started.       |
-| `job.lost_lease`, `job.missing`, `job.invalid_data`          | warn/error | A job could not be run as delivered.                                   |
-| `duplicate webhook delivery skipped`                         | info    | A redelivered webhook was recognized and not processed again.             |
-| `webhook rejected`                                           | warn    | A delivery failed verification (adds `check`, never the payload).         |
-| `token refresh joined`, `token refresh reused`               | info    | A concurrent refresh was shared in-process or across processes.           |
-| `access token refreshed`, `token refresh failed`             | info/warn | A token refresh finished.                                               |
-| `telemetry.*`                                                | varies  | The telemetry layer itself, for example `telemetry.metrics_ready`, `telemetry.tracing_ready`, `telemetry.collect_failed`, `telemetry.exporter_problem`, `telemetry.shutdown_timeout`. |
+| `msg`                                                    | Level      | Meaning                                                                                                                                                                               |
+| -------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `job.enqueued`, `job.deduplicated`, `job.completed`      | info       | Job lifecycle. See [job-queue.md](job-queue.md#observability).                                                                                                                        |
+| `job.retried`, `job.deferred`                            | warn       | An attempt failed and will be retried, or the job was pushed back.                                                                                                                    |
+| `job.dead_lettered`                                      | error      | The job reached the dead-letter queue (adds `reason`, `code`).                                                                                                                        |
+| `job.replayed`, `job.requeued`, `job.duplicate_delivery` | info       | Operator replay, sweeper re-add, or a queue redelivery that was skipped.                                                                                                              |
+| `job.trace_started`                                      | debug      | The job row had no valid trace context, so a new trace was started.                                                                                                                   |
+| `job.lost_lease`, `job.missing`, `job.invalid_data`      | warn/error | A job could not be run as delivered.                                                                                                                                                  |
+| `duplicate webhook delivery skipped`                     | info       | A redelivered webhook was recognized and not processed again.                                                                                                                         |
+| `webhook rejected`                                       | warn       | A delivery failed verification (adds `check`, never the payload).                                                                                                                     |
+| `token refresh joined`, `token refresh reused`           | info       | A concurrent refresh was shared in-process or across processes.                                                                                                                       |
+| `access token refreshed`, `token refresh failed`         | info/warn  | A token refresh finished.                                                                                                                                                             |
+| `telemetry.*`                                            | varies     | The telemetry layer itself, for example `telemetry.metrics_ready`, `telemetry.tracing_ready`, `telemetry.collect_failed`, `telemetry.exporter_problem`, `telemetry.shutdown_timeout`. |
 
 The worker's periodic sweep also logs `job.stats` with the requeued and purged counts and per-platform event counters.
 
@@ -110,14 +110,14 @@ OTEL_EXPORTER_OTLP_ENDPOINT=https://collector.internal:4318
 OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer <token>   # secret
 ```
 
-| Variable                          | Default                    | Meaning                                                                                                   |
-| --------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `OTEL_TRACES_EXPORTER`            | `none`                     | `none` or `otlp`. The default is `none`, a deliberate deviation from the OpenTelemetry default: with `none` no exporter is constructed and nothing is sent. |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`     | unset                      | OTLP/HTTP collector base URL. `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is also honored.                        |
-| `OTEL_EXPORTER_OTLP_HEADERS`      | unset                      | Comma-separated `key=value` headers for the exporter. Put credentials here, never in the URL.              |
-| `OTEL_SERVICE_NAME`               | `feedbouncer-api` / `feedbouncer-worker` | Lowercase letters, digits and `-`, up to 64 characters.                                      |
-| `OTEL_SDK_DISABLED`               | `false`                    | `true` forces the exporter off regardless of `OTEL_TRACES_EXPORTER`.                                       |
-| `TELEMETRY_SHUTDOWN_TIMEOUT_MS`   | `5000`                     | 100 to 30000. Bounds exporter timeouts and the flush on shutdown.                                          |
+| Variable                        | Default                                  | Meaning                                                                                                                                                     |
+| ------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OTEL_TRACES_EXPORTER`          | `none`                                   | `none` or `otlp`. The default is `none`, a deliberate deviation from the OpenTelemetry default: with `none` no exporter is constructed and nothing is sent. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`   | unset                                    | OTLP/HTTP collector base URL. `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is also honored.                                                                         |
+| `OTEL_EXPORTER_OTLP_HEADERS`    | unset                                    | Comma-separated `key=value` headers for the exporter. Put credentials here, never in the URL.                                                               |
+| `OTEL_SERVICE_NAME`             | `feedbouncer-api` / `feedbouncer-worker` | Starts with a lowercase letter, then lowercase letters, digits and `-`; up to 64 characters.                                                                |
+| `OTEL_SDK_DISABLED`             | `false`                                  | `true` forces the exporter off regardless of `OTEL_TRACES_EXPORTER`.                                                                                        |
+| `TELEMETRY_SHUTDOWN_TIMEOUT_MS` | `5000`                                   | 100 to 30000. Bounds exporter timeouts and the flush on shutdown.                                                                                           |
 
 The SDK also reads the standard `OTEL_BSP_*` batch settings. A URL with credentials in it
 (`https://user:pass@collector`) is rejected at startup, and the error does not echo the
@@ -127,14 +127,14 @@ configuration summary.
 
 ### Span catalogue
 
-| Span                          | Kind     | Where                                   | Notes                                                                                  |
-| ----------------------------- | -------- | --------------------------------------- | -------------------------------------------------------------------------------------- |
-| `webhook.receive`             | server   | Webhook gate (intake)                   | A new root for every delivery. `feedbouncer.webhook.outcome`: `accepted`, `duplicate`, `rejected`. |
-| `job.enqueue`                 | internal | Job producer                            | Child of the active span; records `feedbouncer.job.deduplicated`.                       |
-| `job.run`                     | internal | Job runner, one per attempt             | `feedbouncer.job.attempt` is 1 for the first try. Retries are sibling spans in one trace. |
-| `connector.<operation>`       | client   | Platform calls                          | `<operation>` is `list_sources`, `list_comments`, `get_comment` or `act`.                |
-| `moderation.apply`            | internal | `ConnectionClient.act`                  | Carries `feedbouncer.action` and `feedbouncer.action.status`.                           |
-| `HTTP <method> <route>`       | server   | API requests                            | A new root per request; `<route>` is the route pattern, never the raw path.              |
+| Span                    | Kind     | Where                       | Notes                                                                                              |
+| ----------------------- | -------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
+| `webhook.receive`       | server   | Webhook gate (intake)       | A new root for every delivery. `feedbouncer.webhook.outcome`: `accepted`, `duplicate`, `rejected`. |
+| `job.enqueue`           | producer | Job producer                | Child of the active span; records `feedbouncer.job.deduplicated`.                                  |
+| `job.run`               | consumer | Job runner, one per attempt | `feedbouncer.job.attempt` is 1 for the first try. Retries are sibling spans in one trace.          |
+| `connector.<operation>` | client   | Platform calls              | `<operation>` is `list_sources`, `list_comments`, `get_comment` or `act`.                          |
+| `moderation.apply`      | internal | `ConnectionClient.act`      | Carries `feedbouncer.action` and `feedbouncer.action.status`.                                      |
+| `HTTP <method> <route>` | server   | API requests                | A new root per request; `<route>` is the route pattern, never the raw path.                        |
 
 Failed spans carry `feedbouncer.error.code` and `feedbouncer.error.class`, and the span
 status message is the code. Exceptions are never recorded on spans, so error messages and
@@ -171,51 +171,58 @@ so the decision appears between the job and the action.
 
 ### Endpoints
 
-| Process | Default address         | Serves                                                                                              |
-| ------- | ----------------------- | --------------------------------------------------------------------------------------------------- |
-| API     | `127.0.0.1:9464/metrics` | HTTP request metrics, webhook metrics (once the intake route lands), default process metrics.      |
+| Process | Default address          | Serves                                                                                                                        |
+| ------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| API     | `127.0.0.1:9464/metrics` | HTTP request metrics, webhook metrics (once the intake route lands), default process metrics.                                 |
 | Worker  | `127.0.0.1:9465/metrics` | Job counters, queue wait, connector-call metrics, the per-connection health gauges and queue gauges, default process metrics. |
 
-| Variable                  | Default                     | Meaning                                                                                  |
-| ------------------------- | --------------------------- | ---------------------------------------------------------------------------------------- |
-| `METRICS_HOST`            | `127.0.0.1`                 | Interface the listener binds to.                                                         |
-| `METRICS_PORT`            | `9464` (api), `9465` (worker) | `0` disables the listener.                                                             |
-| `METRICS_MAX_CONNECTIONS` | `1000`                      | 1 to 100000. Cap on per-connection series; see [cardinality](#cardinality).               |
+| Variable                  | Default                       | Meaning                                                                     |
+| ------------------------- | ----------------------------- | --------------------------------------------------------------------------- |
+| `METRICS_HOST`            | `127.0.0.1`                   | Interface the listener binds to.                                            |
+| `METRICS_PORT`            | `9464` (api), `9465` (worker) | `0` disables the listener.                                                  |
+| `METRICS_MAX_CONNECTIONS` | `1000`                        | 1 to 100000. Cap on per-connection series; see [cardinality](#cardinality). |
 
 `/metrics` has no authentication. Loopback is the default for that reason. To scrape from
 another container you must set `METRICS_HOST` deliberately (the compose file sets
 `0.0.0.0` for the api and worker containers, and publishes neither port to the host).
 Anyone who can reach the port can read it, so keep it on a private network and do not
-publish it. The listener only answers `GET` and `HEAD` on `/metrics`. A port conflict is
+publish it. A `compose.override.yaml` that adds `ports:` for 9464 or 9465 publishes an
+unauthenticated endpoint, so do not do that outside a throwaway machine. The listener only answers `GET` and `HEAD` on `/metrics`. A port conflict is
 logged as `telemetry.metrics_server_failed` and the process keeps running without metrics.
+
+`compose.yaml` forwards only `OTEL_TRACES_EXPORTER`, `OTEL_EXPORTER_OTLP_ENDPOINT` and
+`METRICS_HOST`. `METRICS_PORT`, `OTEL_SERVICE_NAME`, `OTEL_SDK_DISABLED`,
+`OTEL_EXPORTER_OTLP_HEADERS`, `METRICS_MAX_CONNECTIONS`, `TELEMETRY_SHUTDOWN_TIMEOUT_MS` and
+the `CONNECTOR_*` thresholds are not passed through: set them in a `compose.override.yaml`
+(under `environment:` of `api` and `worker`) when running with compose.
 
 Default process metrics (`process_*`, `nodejs_*`) come from the Prometheus client and
 carry a `service` label (`api` or `worker`).
 
 ### Reference
 
-| Metric                                              | Type      | Labels                              | Served by | Meaning                                                                                       |
-| --------------------------------------------------- | --------- | ----------------------------------- | --------- | --------------------------------------------------------------------------------------------- |
-| `feedbouncer_jobs_total`                            | counter   | `queue`, `job_type`, `outcome`      | worker    | Job events. `outcome` is `enqueued`, `deduplicated`, `completed`, `retried`, `deferred`, `dead_lettered`, `replayed`, `duplicate_delivery`, `requeued`. |
-| `feedbouncer_queue_wait_seconds`                    | histogram | `queue`                             | worker    | Time between a job becoming due and a worker claiming it.                                     |
-| `feedbouncer_queue_depth`                           | gauge     | `queue`                             | worker    | Queued (not yet completed) jobs per queue, counted from the ledger.                           |
-| `feedbouncer_queue_oldest_age_seconds`              | gauge     | `queue`                             | worker    | Age of the oldest queued job per queue.                                                       |
-| `feedbouncer_connector_api_calls_total`             | counter   | `platform`, `operation`, `outcome`  | worker    | Platform API calls. `outcome` is `ok` or the error kind: `auth_expired`, `rate_limited`, `not_found`, `unsupported`, `transient`, `permanent`. |
-| `feedbouncer_connector_api_call_duration_seconds`   | histogram | `platform`, `operation`             | worker    | Platform call latency, including the single token-refresh retry.                              |
-| `feedbouncer_webhook_deliveries_total`              | counter   | `platform`, `outcome`               | api       | Webhook deliveries: `accepted`, `duplicate`, `rejected`. An unknown platform is `unknown`.    |
-| `feedbouncer_webhook_events_total`                  | counter   | `platform`                          | api       | Events in accepted (non-duplicate) deliveries.                                                |
-| `feedbouncer_webhook_event_delay_seconds`           | histogram | `platform`                          | api       | Platform event time to our receipt. Negative skew is clamped to 0.                            |
-| `feedbouncer_http_requests_total`                   | counter   | `method`, `route`, `status_class`   | api       | API requests by route pattern and status class (`2xx`, `4xx`, ...). Unmatched paths are `route="unmatched"`. |
-| `feedbouncer_http_request_duration_seconds`         | histogram | `method`, `route`                   | api       | API request duration.                                                                         |
-| `feedbouncer_connector_health_status`               | gauge     | `connection_id`, `platform`, `status` | worker  | `1` for the connection's current state, `0` for the other four.                               |
-| `feedbouncer_connector_last_success_timestamp_seconds` | gauge  | `connection_id`, `platform`         | worker    | Unix time of the last successful sync. Absent before the first sync.                          |
-| `feedbouncer_connector_sync_staleness_seconds`      | gauge     | `connection_id`, `platform`         | worker    | Seconds since the last successful sync. Absent while pending first sync.                      |
-| `feedbouncer_connector_ingest_lag_seconds`          | gauge     | `connection_id`, `platform`         | worker    | Age of the oldest queued job for the connection; `0` when none.                               |
-| `feedbouncer_connector_consecutive_failures`        | gauge     | `connection_id`, `platform`         | worker    | Platform call failures since the last success.                                                |
-| `feedbouncer_connector_last_error_info`             | gauge     | `connection_id`, `platform`, `error_code` | worker | Last error code seen for the connection (value always `1`). Absent when none.            |
-| `feedbouncer_connector_series_truncated`            | gauge     | none                                | worker    | `1` when more connections exist than `METRICS_MAX_CONNECTIONS`.                               |
-| `feedbouncer_telemetry_collect_errors_total`        | counter   | `collector`                         | worker, api | Scrape-time collectors that failed (`connector_health`, `queues`); their gauges are omitted.  |
-| `feedbouncer_telemetry_negative_lag_total`          | counter   | `source`                            | api       | Lag samples clamped because the source timestamp was ahead of our clock (`webhook_event`).    |
+| Metric                                                 | Type      | Labels                                    | Served by | Meaning                                                                                                                                                 |
+| ------------------------------------------------------ | --------- | ----------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `feedbouncer_jobs_total`                               | counter   | `queue`, `job_type`, `outcome`            | worker    | Job events. `outcome` is `enqueued`, `deduplicated`, `completed`, `retried`, `deferred`, `dead_lettered`, `replayed`, `duplicate_delivery`, `requeued`. |
+| `feedbouncer_queue_wait_seconds`                       | histogram | `queue`                                   | worker    | Time between a job becoming due and a worker claiming it.                                                                                               |
+| `feedbouncer_queue_depth`                              | gauge     | `queue`                                   | worker    | Queued (not yet completed) jobs per queue, counted from the ledger.                                                                                     |
+| `feedbouncer_queue_oldest_age_seconds`                 | gauge     | `queue`                                   | worker    | Age of the oldest queued job per queue.                                                                                                                 |
+| `feedbouncer_connector_api_calls_total`                | counter   | `platform`, `operation`, `outcome`        | worker    | Platform API calls. `outcome` is `ok` or the error kind: `auth_expired`, `rate_limited`, `not_found`, `unsupported`, `transient`, `permanent`.          |
+| `feedbouncer_connector_api_call_duration_seconds`      | histogram | `platform`, `operation`                   | worker    | Platform call latency, including the single token-refresh retry.                                                                                        |
+| `feedbouncer_webhook_deliveries_total`                 | counter   | `platform`, `outcome`                     | api       | Webhook deliveries: `accepted`, `duplicate`, `rejected`. An unknown platform is `unknown`.                                                              |
+| `feedbouncer_webhook_events_total`                     | counter   | `platform`                                | api       | Events in accepted (non-duplicate) deliveries.                                                                                                          |
+| `feedbouncer_webhook_event_delay_seconds`              | histogram | `platform`                                | api       | Platform event time to our receipt. Negative skew is clamped to 0.                                                                                      |
+| `feedbouncer_http_requests_total`                      | counter   | `method`, `route`, `status_class`         | api       | API requests by route pattern and status class (`2xx`, `4xx`, ...). Unmatched paths are `route="unmatched"`.                                            |
+| `feedbouncer_http_request_duration_seconds`            | histogram | `method`, `route`                         | api       | API request duration.                                                                                                                                   |
+| `feedbouncer_connector_health_status`                  | gauge     | `connection_id`, `platform`, `status`     | worker    | `1` for the connection's current state, `0` for the other four.                                                                                         |
+| `feedbouncer_connector_last_success_timestamp_seconds` | gauge     | `connection_id`, `platform`               | worker    | Unix time of the last successful sync. Absent before the first sync.                                                                                    |
+| `feedbouncer_connector_sync_staleness_seconds`         | gauge     | `connection_id`, `platform`               | worker    | Seconds since the last successful sync. Absent while pending first sync.                                                                                |
+| `feedbouncer_connector_ingest_lag_seconds`             | gauge     | `connection_id`, `platform`               | worker    | Age of the oldest queued job for the connection; `0` when none.                                                                                         |
+| `feedbouncer_connector_consecutive_failures`           | gauge     | `connection_id`, `platform`               | worker    | Platform call failures since the last success.                                                                                                          |
+| `feedbouncer_connector_last_error_info`                | gauge     | `connection_id`, `platform`, `error_code` | worker    | Last error code seen for the connection (value always `1`). Absent when none.                                                                           |
+| `feedbouncer_connector_series_truncated`               | gauge     | none                                      | worker    | `1` when more connections exist than `METRICS_MAX_CONNECTIONS`.                                                                                         |
+| `feedbouncer_telemetry_collect_errors_total`           | counter   | `collector`                               | worker    | Scrape-time collectors that failed (`connector_health`, `queues`); their gauges are omitted.                                                            |
+| `feedbouncer_telemetry_negative_lag_total`             | counter   | `source`                                  | api       | Lag samples clamped because the source timestamp was ahead of our clock (`webhook_event`).                                                              |
 
 Histogram buckets: call and request durations use 0.01 s to 30 s; queue wait and event
 delay use 0.1 s to 6 h.
@@ -223,8 +230,9 @@ delay use 0.1 s to 6 h.
 ### Cardinality
 
 Allowed label names are `platform`, `queue`, `job_type`, `operation`, `outcome`, `status`,
-`reason`, `error_code`, `method`, `route`, `status_class`, `collector`, `source`,
-`service` and `connection_id`.
+`error_code`, `method`, `route`, `status_class`, `collector`, `source`,
+`service` and `connection_id`. (`reason` is reserved by the allow-list but no metric uses
+it today.)
 
 - `connection_id` appears only on the per-connection gauges. They are capped at
   `METRICS_MAX_CONNECTIONS` connections (selected in id order), and
@@ -237,11 +245,11 @@ Allowed label names are `platform`, `queue`, `job_type`, `operation`, `outcome`,
 
 ### Reading the job metrics
 
-| You want                | Query                                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------------- |
-| Jobs that succeeded     | `outcome="completed"`                                                                       |
-| Failed attempts         | `outcome="retried"` plus `outcome="dead_lettered"`                                          |
-| Jobs dead-lettered      | `outcome="dead_lettered"`, counted once when the ledger write commits                       |
+| You want            | Query                                                                 |
+| ------------------- | --------------------------------------------------------------------- |
+| Jobs that succeeded | `outcome="completed"`                                                 |
+| Failed attempts     | `outcome="retried"` plus `outcome="dead_lettered"`                    |
+| Jobs dead-lettered  | `outcome="dead_lettered"`, counted once when the ledger write commits |
 
 ### Restarts and replicas
 
@@ -273,40 +281,40 @@ Each connection has one of five states. The state is derived from the connection
 its stored token expiry, its recorded sync outcome and the age of its oldest queued job.
 Rules are evaluated in order and the first match wins.
 
-| # | Connection facts                                                         | State                | Reason                         |
-| - | ------------------------------------------------------------------------ | -------------------- | ------------------------------ |
-| 1 | Status `paused` or `revoked`                                             | `disabled`           | `paused` or `revoked`          |
-| 2 | Status `reconnect_required` (this includes `oauth_pending`)              | `needs_reconnection` | the stored reason              |
-| 3 | Access token expired, and the refresh token is missing or expired        | `needs_reconnection` | `token_expired`                |
-| 4 | Status `error`                                                           | `degraded`           | the stored reason, or `connection_error` |
-| 5 | Never synced and failures at or above `CONNECTOR_FAILURES_DEGRADED`      | `degraded`           | `recent_failures`              |
-| 6 | Never synced and older than `CONNECTOR_FIRST_SYNC_GRACE_SECONDS`         | `degraded`           | `first_sync_overdue`           |
-| 7 | Never synced otherwise                                                   | `pending_first_sync` | `pending_first_sync`           |
-| 8 | Consecutive failures at or above `CONNECTOR_FAILURES_DEGRADED`           | `degraded`           | `recent_failures`              |
-| 9 | Staleness above the stale threshold                                      | `degraded`           | `sync_stale`                   |
-| 10 | Ingest lag above `CONNECTOR_LAG_DEGRADED_SECONDS`                       | `degraded`           | `ingest_lag`                   |
-| 11 | Otherwise                                                               | `healthy`            | `ok`                           |
+| #   | Connection facts                                                                    | State                | Reason                                   |
+| --- | ----------------------------------------------------------------------------------- | -------------------- | ---------------------------------------- |
+| 1   | Status `paused` or `revoked`                                                        | `disabled`           | `paused` or `revoked`                    |
+| 2   | Status `reconnect_required` (this includes `oauth_pending`)                         | `needs_reconnection` | the stored reason                        |
+| 3   | An access token exists and has expired, and the refresh token is missing or expired | `needs_reconnection` | `token_expired`                          |
+| 4   | Status `error`                                                                      | `degraded`           | the stored reason, or `connection_error` |
+| 5   | Never synced and failures at or above `CONNECTOR_FAILURES_DEGRADED`                 | `degraded`           | `recent_failures`                        |
+| 6   | Never synced and older than `CONNECTOR_FIRST_SYNC_GRACE_SECONDS`                    | `degraded`           | `first_sync_overdue`                     |
+| 7   | Never synced otherwise                                                              | `pending_first_sync` | `pending_first_sync`                     |
+| 8   | Consecutive failures at or above `CONNECTOR_FAILURES_DEGRADED`                      | `degraded`           | `recent_failures`                        |
+| 9   | Staleness above the stale threshold                                                 | `degraded`           | `sync_stale`                             |
+| 10  | Ingest lag above `CONNECTOR_LAG_DEGRADED_SECONDS`                                   | `degraded`           | `ingest_lag`                             |
+| 11  | Otherwise                                                                           | `healthy`            | `ok`                                     |
 
 A transient authentication failure (`auth_expired` without a reauthorization requirement)
 only increments the failure count, so it shows as `degraded` and not `needs_reconnection`.
 
 ### States and recovery
 
-| State                | Meaning                                              | What to do                                                                                      |
-| -------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `healthy`            | Recent successful sync, no failure streak, no backlog. | Nothing.                                                                                       |
-| `pending_first_sync` | Connected, no successful read or webhook yet.        | Wait. After `CONNECTOR_FIRST_SYNC_GRACE_SECONDS` it becomes `degraded` with `first_sync_overdue`. |
-| `degraded`           | Working but not keeping up. Check `reason`.          | See the reason table below.                                                                     |
-| `needs_reconnection` | The platform credentials are no longer usable.       | Reconnect from the brand's connections page. Reasons: `oauth_refresh_rejected`, `oauth_access_rejected`, `oauth_not_refreshable`, `token_expired`, `oauth_pending`, `reconnect_required`. |
-| `disabled`           | A user paused or revoked the connection.             | Nothing to fix; resume or reconnect it deliberately.                                            |
+| State                | Meaning                                                | What to do                                                                                                                                                                                |
+| -------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `healthy`            | Recent successful sync, no failure streak, no backlog. | Nothing.                                                                                                                                                                                  |
+| `pending_first_sync` | Connected, no successful read or webhook yet.          | Wait. After `CONNECTOR_FIRST_SYNC_GRACE_SECONDS` it becomes `degraded` with `first_sync_overdue`.                                                                                         |
+| `degraded`           | Working but not keeping up. Check `reason`.            | See the reason table below.                                                                                                                                                               |
+| `needs_reconnection` | The platform credentials are no longer usable.         | Reconnect from the brand's connections page. Reasons: `oauth_refresh_rejected`, `oauth_access_rejected`, `oauth_not_refreshable`, `token_expired`, `oauth_pending`, `reconnect_required`. |
+| `disabled`           | A user paused or revoked the connection.               | Nothing to fix; resume or reconnect it deliberately.                                                                                                                                      |
 
-| Degraded reason      | What to check                                                                                                       |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `sync_stale`         | Worker logs for the connector: `jq 'select(.connector_id == "<id>")'`. Is the poll running, are calls failing?       |
+| Degraded reason      | What to check                                                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `sync_stale`         | Worker logs for the connector: `jq 'select(.connector_id == "<id>")'`. Is the poll running, are calls failing?                           |
 | `ingest_lag`         | Queue depth and age (`feedbouncer_queue_depth`, `feedbouncer_queue_oldest_age_seconds`) and the dead-letter queue: `pnpm jobs dlq list`. |
-| `recent_failures`    | `lastErrorCode` in the API response; look it up in [Errors](../connectors/writing-a-connector.md#errors).           |
-| `first_sync_overdue` | Confirm the poll job or webhook subscription exists and the worker is consuming that platform's queue.              |
-| `connection_error`   | The connection is in an error status without a recorded reason; check worker logs around the last failure.          |
+| `recent_failures`    | `lastErrorCode` in the API response; look it up in [Errors](../connectors/writing-a-connector.md#errors).                                |
+| `first_sync_overdue` | Confirm the poll job or webhook subscription exists and the worker is consuming that platform's queue.                                   |
+| `connection_error`   | The connection is in an error status without a recorded reason; check worker logs around the last failure.                               |
 
 ### API
 
@@ -338,18 +346,23 @@ organization's brand both return `404` with the same body. A member gets `403`, 
 }
 ```
 
-`reason` is limited to a fixed vocabulary; a stored free-form reason is never echoed.
-The endpoint returns codes only, never error messages.
+`reason` is limited to a fixed vocabulary: `ok`, `pending_first_sync`, `recent_failures`,
+`first_sync_overdue`, `sync_stale`, `ingest_lag`, `token_expired`, `paused`, `revoked`,
+`connection_error`, `reconnect_required`, `oauth_pending`, `oauth_refresh_rejected`,
+`oauth_access_rejected`, `oauth_not_refreshable` and `credential_unavailable` (the stored
+credentials could not be read). A stored free-form reason is never echoed. The endpoint
+returns codes only, never error messages, and at most 500 connections per brand, ordered
+oldest first.
 
 ### Thresholds
 
-| Variable                                    | Default | Range            | Meaning                                                              |
-| ------------------------------------------- | ------- | ---------------- | -------------------------------------------------------------------- |
-| `CONNECTOR_STALE_AFTER_SECONDS`             | `3600`  | 60 to 2592000    | Time since the last successful sync before `sync_stale`.             |
-| `CONNECTOR_STALE_AFTER_SECONDS_<PLATFORM>`  | the value above | 60 to 2592000 | Per-platform override, for example `CONNECTOR_STALE_AFTER_SECONDS_FACEBOOK`. |
-| `CONNECTOR_LAG_DEGRADED_SECONDS`            | `900`   | 60 to 604800     | Age of the oldest queued job before `ingest_lag`.                    |
-| `CONNECTOR_FAILURES_DEGRADED`               | `3`     | 1 to 100         | Consecutive failures before `recent_failures`.                       |
-| `CONNECTOR_FIRST_SYNC_GRACE_SECONDS`        | `3600`  | 60 to 604800     | How long a new connection may stay `pending_first_sync`.             |
+| Variable                                   | Default         | Range         | Meaning                                                                      |
+| ------------------------------------------ | --------------- | ------------- | ---------------------------------------------------------------------------- |
+| `CONNECTOR_STALE_AFTER_SECONDS`            | `3600`          | 60 to 2592000 | Time since the last successful sync before `sync_stale`.                     |
+| `CONNECTOR_STALE_AFTER_SECONDS_<PLATFORM>` | the value above | 60 to 2592000 | Per-platform override, for example `CONNECTOR_STALE_AFTER_SECONDS_FACEBOOK`. |
+| `CONNECTOR_LAG_DEGRADED_SECONDS`           | `900`           | 60 to 604800  | Age of the oldest queued job before `ingest_lag`.                            |
+| `CONNECTOR_FAILURES_DEGRADED`              | `3`             | 1 to 100      | Consecutive failures before `recent_failures`.                               |
+| `CONNECTOR_FIRST_SYNC_GRACE_SECONDS`       | `3600`          | 60 to 604800  | How long a new connection may stay `pending_first_sync`.                     |
 
 Out-of-range values fail startup with a message naming the variable.
 
