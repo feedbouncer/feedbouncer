@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import type { Connector } from './connector.js';
 import {
@@ -277,11 +278,16 @@ describe('OAuthFlow.complete', () => {
       const scope = { organizationId: 'o1', brandId: 'b1', connectionId: done.connectionId };
       return { scope, rec: (await directory.load(scope))! };
     };
+    /** Token values as text: toEqual cannot see inside a Secret. */
+    const stored = async (scope: ConnectionScope) => {
+      const t = await vault.readTokens(scope);
+      return { access: t.access?.value.reveal(), refresh: t.refresh?.value.reveal() };
+    };
 
     it('stores nothing and reports connection_inactive when reconnecting a revoked connection', async () => {
       const { scope, rec } = await connect();
       directory.seed({ ...rec, status: 'revoked' });
-      const before = await vault.readTokens(scope);
+      const before = await stored(scope);
       exchange.mockResolvedValueOnce({
         tokens: {
           accessToken: new Secret('access-NEW'),
@@ -301,14 +307,14 @@ describe('OAuthFlow.complete', () => {
           code: 'c',
         }),
       ).toEqual({ ok: false, reason: 'connection_inactive' });
-      expect(await vault.readTokens(scope)).toEqual(before);
+      expect(await stored(scope)).toEqual(before);
       expect((await directory.load(scope))?.status).toBe('revoked');
     });
 
     it('stores nothing when a fresh authorization lands on a revoked connection', async () => {
       const { scope, rec } = await connect();
       directory.seed({ ...rec, status: 'revoked' });
-      const before = await vault.readTokens(scope);
+      const before = await stored(scope);
       exchange.mockResolvedValueOnce({
         tokens: {
           accessToken: new Secret('access-NEW'),
@@ -326,8 +332,40 @@ describe('OAuthFlow.complete', () => {
           code: 'c',
         }),
       ).toEqual({ ok: false, reason: 'connection_inactive' });
-      expect(await vault.readTokens(scope)).toEqual(before);
+      expect(await stored(scope)).toEqual(before);
     });
+
+    it.each([false, true])(
+      'stores no tokens when authorizing a paused connection (reconnect: %s)',
+      async (reconnect) => {
+        const { scope, rec } = await connect();
+        directory.seed({ ...rec, status: 'paused' });
+        const before = await stored(scope);
+        exchange.mockResolvedValueOnce({
+          tokens: {
+            accessToken: new Secret('access-NEW'),
+            accessTokenExpiresAt: null,
+            refreshToken: new Secret('refresh-NEW'),
+            refreshTokenExpiresAt: null,
+            scopes: [],
+          },
+          account: { externalAccountId: 'chan-1', displayName: null },
+        });
+        const again = await flow.start(
+          alice,
+          'youtube',
+          reconnect ? { reconnectConnectionId: scope.connectionId } : {},
+        );
+        expect(
+          await flow.complete(alice, 'youtube', {
+            state: stateOf(again.authorizationUrl),
+            code: 'c',
+          }),
+        ).toEqual({ ok: false, reason: 'connection_inactive' });
+        expect(await stored(scope)).toEqual(before);
+        expect((await directory.load(scope))?.status).toBe('paused');
+      },
+    );
 
     it('never reports ok when activation did not take effect', async () => {
       vi.spyOn(directory, 'activate').mockResolvedValue(false);
@@ -404,6 +442,33 @@ describe('OAuthFlow.complete', () => {
       ).toEqual({ ok: false, reason: 'rejected' });
     }
     expect(exchange).not.toHaveBeenCalled();
+  });
+
+  it('a malformed code does not burn the pending state', async () => {
+    const { authorizationUrl } = await flow.start(alice, 'youtube');
+    const state = stateOf(authorizationUrl);
+    for (const code of ['a\nb', 'x'.repeat(2049), '', undefined, 42])
+      expect(await flow.complete(alice, 'youtube', { state, code })).toEqual({
+        ok: false,
+        reason: 'rejected',
+      });
+    expect(exchange).not.toHaveBeenCalled();
+    expect(await flow.complete(alice, 'youtube', { state, code: 'good-code' })).toMatchObject({
+      ok: true,
+    });
+  });
+
+  it('a provider error is reported as denied even without a code', async () => {
+    const { authorizationUrl } = await flow.start(alice, 'youtube');
+    const state = stateOf(authorizationUrl);
+    expect(await flow.complete(alice, 'youtube', { state, error: 'access_denied' })).toEqual({
+      ok: false,
+      reason: 'denied',
+    });
+    expect(await flow.complete(alice, 'youtube', { state, code: 'good-code' })).toEqual({
+      ok: false,
+      reason: 'rejected',
+    });
   });
 
   it('refuses a non-manager completing a callback', async () => {

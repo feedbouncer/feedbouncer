@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import type { CredentialStore } from '@feedbouncer/secrets';
+import { CredentialUnreadableError, type CredentialStore } from '@feedbouncer/secrets';
 import type { Secret } from '@feedbouncer/service-runtime';
 import type { WebhookSecretSource } from '../ports.js';
 import type { Platform } from '../types.js';
@@ -41,7 +41,11 @@ export class PgWebhookSecrets implements WebhookSecretSource {
         { organizationId: row.organization_id, brandId: row.brand_id, connectionId },
         'webhook_secret',
       )
-      .catch(() => null); // unreadable credential: same opaque outcome as no secret
+      .catch((err: unknown) => {
+        // unreadable credential: same opaque outcome as no secret; anything else is an outage
+        if (err instanceof CredentialUnreadableError) return null;
+        throw err;
+      });
     return cred ? { secret: cred.value, externalAccountId: row.external_account_id } : null;
   }
 }

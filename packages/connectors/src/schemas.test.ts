@@ -49,8 +49,12 @@ describe('comment boundary schema', () => {
     expect(invalid(raw)).toEqual(INVALID);
   });
 
-  it('replaces NUL characters in bodies', () => {
+  it('replaces NUL characters in bodies and author names', () => {
     expect(parseComment({ ...good, body: 'a\u0000b' }).body).toBe('a�b');
+    expect(
+      parseComment({ ...good, author: { ...good.author, displayName: 'D\u0000a' } }).author
+        ?.displayName,
+    ).toBe('D\uFFFDa');
   });
 
   it('does not echo the rejected input in the error', () => {

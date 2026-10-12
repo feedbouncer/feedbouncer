@@ -151,11 +151,12 @@ What the framework does around it:
   `oauth_pkce_verifier` kind.
 - A callback from another session is rejected without consuming the real
   user's state. Replays, unknown or expired state, and a missing or malformed
-  code all produce the same opaque `rejected`.
+  code all produce the same opaque `rejected`. A malformed code is refused
+  before the state is consumed, so the user can still finish.
 - `OAuthFlow.complete` returns typed non-ok results (`denied`,
   `account_mismatch`, `platform_error`, `connection_inactive`). A `revoked`
-  connection is terminal: it is never reactivated, and the result is
-  `connection_inactive`.
+  connection is terminal: it is never reactivated. A `revoked` or `paused`
+  connection gets `connection_inactive` and no tokens are stored.
 
 ## Token refresh
 
@@ -190,6 +191,12 @@ The framework guarantees, so you do not implement any of it:
   small window between the platform's answer and that first commit cannot be
   closed.
 - Refresh refuses connections that are not `active`.
+- Every `TokenSet` (from `exchangeCode` too) is checked before anything is
+  stored. Tokens must be `Secret`s and `scopes` at most 100 strings of up to
+  256 characters without control characters; otherwise the call fails with
+  `permanent` / `invalid_connector_output`. An invalid expiry is stored as
+  `null` (unknown) instead of failing, so a rotated refresh token is never
+  lost.
 - Access tokens count as expired 120 seconds before `accessTokenExpiresAt`.
 
 ## Reading
@@ -361,9 +368,14 @@ Rules:
 - If you throw something that is not a `ConnectorError`, the framework
   replaces it with `permanent` / `connector_failure` and logs only
   `err.name`. Map errors instead of relying on that.
-- A `revoked` connection is terminal: runtime calls and token refresh report
-  `auth_expired` with `reauthorize: false`. `reconnect_required` and `error`
-  report `reauthorize: true`.
+- A failure of the framework's own storage (connection directory, vault,
+  refresh lock, budget store) is never blamed on your connector: the call
+  reports `transient` / `storage_unavailable`, so the caller retries.
+- The connection status is checked before every call. `revoked` is terminal:
+  `auth_expired` / `connection_revoked` with `reauthorize: false`.
+  `reconnect_required` reports `auth_expired` / `reauthorization_required`
+  with `reauthorize: true`. `error` and `paused` report `permanent` /
+  `connection_inactive`.
 
 ```ts from=reference/connector.ts
 if (err.status === 401) throw new ConnectorError('auth_expired', 'token_rejected');

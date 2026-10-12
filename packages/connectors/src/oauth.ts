@@ -53,7 +53,10 @@ export type OAuthCompletion =
         | 'denied'
         | 'account_mismatch'
         | 'platform_error'
-        /** The connection is revoked (terminal) or could not be activated; nothing was stored. */
+        /**
+         * The connection is revoked (terminal) or paused, so no tokens were stored;
+         * or activation itself was refused (tokens written, connection not active).
+         */
         | 'connection_inactive';
     };
 
@@ -141,6 +144,10 @@ export class OAuthFlow {
     if (!(await this.#canManage(actor))) return REJECTED;
     const state = query.state;
     if (typeof state !== 'string' || !STATE_PATTERN.test(state)) return REJECTED;
+    const code =
+      typeof query.code === 'string' && CODE_PATTERN.test(query.code) ? query.code : null;
+    // Checked before consume, so a malformed code cannot burn the pending state.
+    if (query.error === undefined && code === null) return REJECTED;
     const pending = await this.d.states.consume(hashState(state), {
       organizationId: actor.organizationId,
       brandId: actor.brandId,
@@ -149,12 +156,11 @@ export class OAuthFlow {
     });
     if (!pending || pending.expiresAt.getTime() <= this.d.clock.now()) return REJECTED;
     const ids = { organizationId: actor.organizationId, brandId: actor.brandId, platform };
-    if (query.error !== undefined) {
+    // code is null here only when the provider reported an error
+    if (query.error !== undefined || code === null) {
       this.d.log.info('oauth authorization denied by user', ids);
       return { ok: false, reason: 'denied' };
     }
-    const code = query.code;
-    if (typeof code !== 'string' || !CODE_PATTERN.test(code)) return REJECTED;
 
     const connector = this.d.registry.require(platform);
     let tokens: TokenSet;
@@ -198,9 +204,9 @@ export class OAuthFlow {
       displayName,
       grantedScopes: tokens.scopes,
     });
-    // A revoked connection is terminal: storing tokens on it would be a dead end.
-    if ((await this.d.directory.load(scope))?.status === 'revoked')
-      return this.#inactive(ids, scope.connectionId);
+    // activate() refuses revoked (terminal) and paused rows: check first, so no tokens are stored.
+    const status = (await this.d.directory.load(scope))?.status;
+    if (status === 'revoked' || status === 'paused') return this.#inactive(ids, scope.connectionId);
     if (tokens.refreshToken)
       await this.d.vault.writeRefreshToken(scope, {
         value: tokens.refreshToken,

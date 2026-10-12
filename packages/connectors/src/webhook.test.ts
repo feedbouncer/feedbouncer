@@ -204,7 +204,7 @@ describe('WebhookGate', () => {
   });
 
   it('drops events for other accounts under a connection-scoped secret (Review Focus 1)', async () => {
-    const { g } = gate('connection');
+    const { g, lines } = gate('connection');
     const req = {
       ...signed(
         { events: [{ account: 'acct-y' }, { account: 'acct-x' }] },
@@ -219,6 +219,8 @@ describe('WebhookGate', () => {
       }),
     ).toEqual({ status: 'accepted', eventCount: 1 });
     expect(got.map((e) => e.externalAccountId)).toEqual(['acct-y']);
+    const warning = lines.find((l) => l.includes('another account dropped'));
+    expect(warning).toContain('"connectionId":"conn-y"');
   });
 
   it('rejects connection-scoped deliveries for unknown connections like any other failure', async () => {

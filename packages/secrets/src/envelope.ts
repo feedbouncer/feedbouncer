@@ -47,7 +47,7 @@ function assertContext(c: EnvelopeContext): void {
     throw new TypeError('Envelope context ids must be strings without NUL characters.');
   }
   if (!(ENVELOPE_KINDS as readonly string[]).includes(c.kind)) {
-    throw new TypeError('Envelope context has an unknown credential kind.');
+    throw new TypeError('Envelope context has an unknown envelope kind.');
   }
 }
 

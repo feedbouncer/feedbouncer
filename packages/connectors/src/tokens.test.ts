@@ -210,6 +210,24 @@ describe('TokenManager', () => {
     expect(s.refreshTokens).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['paused', false],
+    ['error', true],
+  ] as const)(
+    'a %s connection is refused without a platform call (reauthorize: %s)',
+    async (status, reauthorize) => {
+      const s = setup(async () => tokens(1));
+      s.directory.seed({ scope, platform: 'facebook', externalAccountId: 'p1', status });
+      await s.vault.writeRefreshToken(scope, { value: new Secret('refresh-0'), expiresAt: null });
+      await expect(s.tm.accessToken(s.connector, scope)).rejects.toMatchObject({
+        kind: 'auth_expired',
+        code: 'connection_inactive',
+        reauthorize,
+      });
+      expect(s.refreshTokens).not.toHaveBeenCalled();
+    },
+  );
+
   it('persists a rotated refresh token before the access token (Review Focus 4)', async () => {
     const s = setup(async (rt) => tokens(Number(rt.reveal().split('-')[1]) + 1));
     await s.vault.writeRefreshToken(scope, { value: new Secret('refresh-0'), expiresAt: null });

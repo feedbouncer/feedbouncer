@@ -156,6 +156,7 @@ export class WebhookGate {
       if (kept.length !== events.length)
         this.d.log.warn('webhook events for another account dropped', {
           platform,
+          connectionId,
           dropped: events.length - kept.length,
         });
       events = kept;

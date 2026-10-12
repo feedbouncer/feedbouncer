@@ -163,7 +163,8 @@ export class InMemoryPlatform {
     accountId: string,
     commentId: string,
     sourceId: string,
-    opts: { deliveryId?: string; tsSec?: number } = {},
+    /** `deliveryHeader` sets the UNSIGNED decoy header, used to prove replays are deduped on the signed body. */
+    opts: { deliveryHeader?: string; tsSec?: number } = {},
   ): { headers: Record<string, string>; rawBody: Buffer } {
     if (!this.opts.webhookSecret) throw new Error('this platform does not sign webhooks');
     const ts = opts.tsSec ?? Math.floor(this.opts.clock.now() / 1000);
@@ -181,7 +182,7 @@ export class InMemoryPlatform {
       headers: {
         'x-ref-signature': `sha256=${mac}`,
         'x-ref-timestamp': String(ts),
-        'x-ref-delivery': opts.deliveryId ?? randomBytes(8).toString('hex'),
+        'x-ref-delivery': opts.deliveryHeader ?? randomBytes(8).toString('hex'),
       },
       rawBody,
     };

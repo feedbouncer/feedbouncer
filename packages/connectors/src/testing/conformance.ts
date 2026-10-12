@@ -26,7 +26,8 @@ export interface PlatformDriver {
     accountId: string,
     commentId: string,
     sourceId: string,
-    opts?: { deliveryId?: string; tsSec?: number },
+    /** Sets the UNSIGNED delivery-id decoy header, used to prove replays are deduped on the signed body. */
+    opts?: { deliveryHeader?: string; tsSec?: number },
   ): Promise<{ headers: Record<string, string>; rawBody: Buffer }>;
 }
 
@@ -40,12 +41,15 @@ export interface ConformanceHarness {
   readonly driver: PlatformDriver;
   readonly stack: Stack;
   /**
+   * Required with `realTime`: shifts the stack clock forward, so token expiry is
+   * observable without waiting.
+   */
+  skipClock?(ms: number): void;
+  /**
    * An existing user (member of the actor's organization) and brand (of the same
    * organization) used as impostors. The defaults are fine for memory ports;
    * a database-backed harness must provision real rows (uuid columns).
    */
-  /** Real-time harnesses: shifts the stack clock forward, so token expiry is observable without waiting. */
-  skipClock?(ms: number): void;
   readonly impostors?: { readonly userId: string; readonly brandId: string };
   cleanup?(): Promise<void>;
 }
@@ -54,7 +58,7 @@ export interface ConformanceOptions {
   /**
    * Skips fake timers. Needed when time lives outside the process (Redis TTLs,
    * Postgres clock). The suite then waits in real time, and the harness must
-   * assemble the stack with `stateTtlMs: REAL_TIME_STATE_TTL_MS`.
+   * assemble the stack with `stateTtlMs: REAL_TIME_STATE_TTL_MS` and provide `skipClock`.
    */
   readonly realTime?: boolean;
 }
@@ -86,7 +90,7 @@ export function runConnectorConformance(
 
     /** Moves the framework clock forward so stored tokens look expired (a real-time harness offsets its own clock). */
     const skipAhead = (ms: number) => {
-      if (realTime) h.skipClock?.(ms);
+      if (realTime) h.skipClock!(ms);
       else vi.advanceTimersByTime(ms);
     };
 
@@ -157,6 +161,8 @@ export function runConnectorConformance(
       if (!realTime)
         vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: START });
       h = await makeHarness();
+      if (realTime && !h.skipClock)
+        throw new Error('A real-time conformance harness must implement skipClock().');
       account = await h.driver.createAccount();
       const { code, state } = await begin();
       const done = await h.stack.oauth.complete(h.stack.actor, h.connector.platform, {
@@ -587,7 +593,7 @@ export function runConnectorConformance(
         const send = (d: { headers: Record<string, string>; rawBody: Buffer }) =>
           h.stack.webhooks.handle({ platform, connectionId: null, ...d }, deliver);
 
-        const ok = await h.driver.signedDelivery(account, id, src, { deliveryId: 'dlv-1' });
+        const ok = await h.driver.signedDelivery(account, id, src, { deliveryHeader: 'dlv-1' });
         expect(await send(ok)).toEqual({ status: 'accepted', eventCount: 1 });
         expect(await send(ok)).toEqual({ status: 'duplicate' });
         // a different (unsigned) delivery id header does not make a replay new

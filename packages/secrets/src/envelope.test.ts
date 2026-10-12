@@ -224,6 +224,8 @@ describe('envelope v1', () => {
           const err = await run().catch((e: unknown) => e);
           expect(err).toBeInstanceOf(TypeError);
           expect((err as Error).message).not.toContain('bogus-kind');
+          if (c.kind !== ctx.kind)
+            expect((err as Error).message).toBe('Envelope context has an unknown envelope kind.');
         }
       }
     });

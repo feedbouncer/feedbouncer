@@ -10,10 +10,16 @@ const NO_CONTROL = /^[^\u0000-\u001f\u007f]+$/;
 export const externalIdSchema = z.string().min(1).max(255).regex(NO_CONTROL);
 export const cursorSchema = z.string().min(1).max(2048).regex(NO_CONTROL).nullable();
 const httpsUrl = z.url({ protocol: /^https$/ }).max(2048);
+/** Postgres text cannot hold NUL, so it becomes U+FFFD. */
+const text = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .transform((s) => s.replaceAll('\u0000', '\uFFFD'));
 
 const authorSchema = z.strictObject({
   externalId: externalIdSchema,
-  displayName: z.string().max(500).nullable(),
+  displayName: text(500).nullable(),
   profileUrl: httpsUrl.nullable(),
 });
 
@@ -23,10 +29,7 @@ export const commentSchema = z
     sourceExternalId: externalIdSchema,
     parentExternalId: externalIdSchema.nullable(),
     author: authorSchema.nullable(),
-    body: z
-      .string()
-      .max(100_000)
-      .transform((s) => s.replaceAll('\u0000', '�')),
+    body: text(100_000),
     postedAt: z.date(),
     platformState: z.enum(['visible', 'hidden', 'deleted']),
     permalink: httpsUrl.nullable(),
