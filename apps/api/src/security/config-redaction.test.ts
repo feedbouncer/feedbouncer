@@ -9,6 +9,7 @@ const AUTH = 'sentinel-auth-secret-0123456789abcdef-XYZ';
 const DB_PW = 'sentinel-db-password-123';
 const REDIS_PW = 'sentinel-redis-password-456';
 const SMTP_PW = 'sentinel-smtp-password-789';
+const OTLP = 'sentinel-otlp';
 
 function load() {
   const entry = randomKeyEntry('k1');
@@ -23,6 +24,8 @@ function load() {
       SMTP_URL: `smtp://mail:${SMTP_PW}@mail:25`,
       FB_ENCRYPTION_KEYS: entry,
       FB_ENCRYPTION_ACTIVE_KEY_ID: 'k1',
+      OTEL_EXPORTER_OTLP_HEADERS: `authorization=Bearer ${OTLP}`,
+      OTEL_EXPORTER_OTLP_ENDPOINT: 'https://collector.example.com:4318',
     },
     { warn: () => {} },
   );
@@ -49,7 +52,7 @@ it('a whole-config dump contains no auth secret or connection passwords', () => 
     `${inspect(env)}`,
   ];
   for (const out of dumps) {
-    for (const s of [AUTH, DB_PW, REDIS_PW, SMTP_PW]) expect(out).not.toContain(s);
+    for (const s of [AUTH, DB_PW, REDIS_PW, SMTP_PW, OTLP]) expect(out).not.toContain(s);
   }
 });
 

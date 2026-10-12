@@ -9,6 +9,8 @@ import { SessionGuard } from './auth/session.guard.js';
 import { SignUpController } from './auth/sign-up.controller.js';
 import { BrandsController } from './brands/brands.controller.js';
 import { BrandsService } from './brands/brands.service.js';
+import { ConnectionHealthController } from './connections/connection-health.controller.js';
+import { ConnectionHealthService } from './connections/connection-health.service.js';
 import { HealthController } from './http/health.controller.js';
 import {
   InvitationsController,
@@ -39,6 +41,7 @@ export class AppModule {
         OrgsListController,
         OrgController,
         BrandsController,
+        ConnectionHealthController,
         MembersController,
         OrgInvitationsController,
         InvitationsController,
@@ -49,6 +52,7 @@ export class AppModule {
         OrgAccessGuard,
         OrgsService,
         BrandsService,
+        ConnectionHealthService,
         MembersService,
         InvitationsService,
         { provide: DEPS, useValue: deps },

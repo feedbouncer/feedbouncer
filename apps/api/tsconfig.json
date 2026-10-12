@@ -12,6 +12,9 @@
     { "path": "../../packages/service-runtime/tsconfig.build.json" },
     { "path": "../../packages/db/tsconfig.build.json" },
     { "path": "../../packages/mailer/tsconfig.build.json" },
-    { "path": "../../packages/secrets/tsconfig.build.json" }
+    { "path": "../../packages/secrets/tsconfig.build.json" },
+    { "path": "../../packages/connectors/tsconfig.build.json" },
+    { "path": "../../packages/jobs/tsconfig.build.json" },
+    { "path": "../../packages/observability/tsconfig.build.json" }
   ]
 }

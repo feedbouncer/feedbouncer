@@ -1,6 +1,7 @@
 import type pg from 'pg';
 import type { Redis } from 'ioredis';
 import type { Mailer } from '@feedbouncer/mailer';
+import type { FbMetrics, HealthReader } from '@feedbouncer/observability';
 import type { Logger } from '@feedbouncer/service-runtime';
 import type { ApiEnv } from './env.js';
 
@@ -11,6 +12,8 @@ export interface AppDeps {
   readonly redis: Redis;
   readonly mailer: Mailer;
   readonly log: Logger;
+  readonly metrics: FbMetrics;
+  readonly health: HealthReader;
   /** Prepended to every Redis key the API writes, so tests can isolate and clean up. */
   readonly redisKeyPrefix: string;
 }

@@ -145,6 +145,9 @@ services:
       - ./packages/db/src:/repo/packages/db/src:ro
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
       - ./packages/secrets/src:/repo/packages/secrets/src:ro
+      - ./packages/connectors/src:/repo/packages/connectors/src:ro
+      - ./packages/jobs/src:/repo/packages/jobs/src:ro
+      - ./packages/observability/src:/repo/packages/observability/src:ro
     depends_on:
       postgres:
         condition: service_healthy

@@ -5,6 +5,7 @@ import { AppModule } from './app.module.js';
 import { ApiError, ApiErrorFilter, errorBody } from './http/errors.js';
 import { isTrustedOrigin } from './http/origin.guard.js';
 import { registerRequestLog } from './http/request-log.js';
+import { TraceInterceptor } from './http/trace.interceptor.js';
 import { trustProxyHops } from './http/trust-proxy.js';
 import type { AppDeps } from './deps.js';
 
@@ -42,7 +43,8 @@ export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
     reply.header('x-content-type-options', 'nosniff');
     reply.header('cache-control', reply.getHeader('cache-control') ?? 'no-store');
   });
-  registerRequestLog(fastify, deps.log);
+  registerRequestLog(fastify, deps.log, deps.metrics);
+  app.useGlobalInterceptors(new TraceInterceptor());
   app.useGlobalFilters(new ApiErrorFilter(deps.log));
   await app.init();
   return app;

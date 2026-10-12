@@ -33,6 +33,23 @@ function messageOf(fn: () => unknown): string {
 }
 
 describe('loadApiEnv', () => {
+  it('loads telemetry and health policy with the api metrics port default', () => {
+    const env = load(base);
+    expect(env.telemetry.metrics.port).toBe(9464);
+    expect(env.telemetry.metrics.host).toBe('127.0.0.1');
+    expect(env.telemetry.traces.exporter).toBe('none');
+    expect(env.health.failuresDegraded).toBe(3);
+  });
+
+  it('rejects an invalid OTEL_TRACES_EXPORTER', () => {
+    expect(() => load({ ...base, OTEL_TRACES_EXPORTER: 'jaeger' })).toThrow(/OTEL_TRACES_EXPORTER/);
+  });
+
+  it('does not serialise OTLP headers', () => {
+    const env = load({ ...base, OTEL_EXPORTER_OTLP_HEADERS: 'authorization=Bearer sentinel-otlp' });
+    expect(JSON.stringify(env)).not.toContain('sentinel-otlp');
+  });
+
   it('loads defaults for optional values', () => {
     const env = load(base);
     expect(env.port).toBe(3001);
