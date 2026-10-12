@@ -91,7 +91,7 @@ export class TokenManager {
     const key = scopeKey(scope);
     const existing = this.#inflight.get(key);
     if (existing) {
-      this.d.log.info('token refresh joined', { ...ids(scope), waiter: 'in_process' });
+      this.#safeInfo('token refresh joined', { ...ids(scope), waiter: 'in_process' });
       return existing;
     }
     const p = this.d.lock
@@ -99,6 +99,15 @@ export class TokenManager {
       .finally(() => this.#inflight.delete(key));
     this.#inflight.set(key, p);
     return p;
+  }
+
+  /** Informational lines must never abort a refresh or reject a waiter. */
+  #safeInfo(msg: string, fields: Readonly<Record<string, string | number | boolean | null>>): void {
+    try {
+      this.d.log.info(msg, fields);
+    } catch {
+      /* a logger failure must not surface */
+    }
   }
 
   #usable(t: TokenRecord, rejected: Secret | undefined): boolean {
@@ -119,7 +128,7 @@ export class TokenManager {
       });
     const { access, refresh } = await this.d.vault.readTokens(scope);
     if (access && this.#usable(access, rejected)) {
-      this.d.log.info('token refresh reused', { ...ids(scope), waiter: 'cross_process' });
+      this.#safeInfo('token refresh reused', { ...ids(scope), waiter: 'cross_process' });
       return access.value;
     }
     const refreshExpired =
@@ -149,7 +158,7 @@ export class TokenManager {
       value: tokens.accessToken,
       expiresAt: tokens.accessTokenExpiresAt,
     });
-    this.d.log.info('access token refreshed', {
+    this.#safeInfo('access token refreshed', {
       ...ids(scope),
       rotated: tokens.refreshToken !== null,
     });

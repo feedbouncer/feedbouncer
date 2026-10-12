@@ -102,87 +102,87 @@ export class WebhookGate {
     deliver: (d: VerifiedDelivery) => Promise<void>,
   ): Promise<WebhookOutcome> {
     const platform: Platform | 'unknown' = isPlatform(req.platform) ? req.platform : 'unknown';
-    const connectionId =
-      typeof req.connectionId === 'string' && CONNECTION_ID.test(req.connectionId)
-        ? req.connectionId
-        : undefined;
-    return withLogContext(
-      { connector_type: platform, ...(connectionId ? { connector_id: connectionId } : {}) },
-      () =>
-        withSpan(
-          'webhook.receive',
-          {
-            kind: SpanKind.SERVER,
-            root: true,
-            attributes: {
-              'feedbouncer.platform': platform,
-              'feedbouncer.connector.id': connectionId ?? null,
-            },
-          },
-          async (span) => {
-            let delays: number[] = [];
-            let skews = 0;
-            // Only a delivery the gate verified may be attributed to a connection: an
-            // app-secret delivery carries a caller-chosen connectionId that proves nothing.
-            let verifiedConnectionId: string | null = null;
-            const outcome = await this.#handleInner(req, async (d) => {
-              verifiedConnectionId = d.connectionId;
-              const now = this.d.clock.now();
-              for (const ev of d.events) {
-                const { lagMs, skewMs } = clampLag(ev.occurredAt.getTime(), now);
-                delays.push(lagMs);
-                if (skewMs > 0) skews++;
-              }
-              await deliver(d);
-            });
-            if (outcome.status !== 'accepted') {
-              delays = [];
-              skews = 0;
+    // The request's connection id is unauthenticated: it is bound to logs and spans
+    // only after verification, from the verified delivery (see #handleInner).
+    return withLogContext({ connector_type: platform }, () =>
+      withSpan(
+        'webhook.receive',
+        {
+          kind: SpanKind.SERVER,
+          root: true,
+          attributes: { 'feedbouncer.platform': platform },
+        },
+        async (span) => {
+          let delays: number[] = [];
+          let skews = 0;
+          // Only a delivery the gate verified may be attributed to a connection: an
+          // app-secret delivery carries a caller-chosen connectionId that proves nothing.
+          let verifiedConnectionId: string | null = null;
+          const onVerified = (d: VerifiedDelivery) => {
+            verifiedConnectionId = d.connectionId;
+            setSpanAttributes(span, { 'feedbouncer.connector.id': d.connectionId });
+          };
+          const outcome = await this.#handleInner(req, onVerified, async (d) => {
+            const now = this.d.clock.now();
+            for (const ev of d.events) {
+              const { lagMs, skewMs } = clampLag(ev.occurredAt.getTime(), now);
+              delays.push(lagMs);
+              if (skewMs > 0) skews++;
             }
-            if (skews > 0)
-              this.#safeLog('telemetry.negative_lag', {
-                source: 'webhook_event',
-                platform,
-                count: skews,
-              });
-            setSpanAttributes(span, {
-              'feedbouncer.webhook.outcome': outcome.status,
-              'feedbouncer.webhook.events': outcome.status === 'accepted' ? outcome.eventCount : 0,
+            await deliver(d);
+          });
+          if (outcome.status !== 'accepted') {
+            delays = [];
+            skews = 0;
+          }
+          if (skews > 0)
+            this.#safeLog('telemetry.negative_lag', {
+              source: 'webhook_event',
+              platform,
+              count: skews,
             });
+          setSpanAttributes(span, {
+            'feedbouncer.webhook.outcome': outcome.status,
+            'feedbouncer.webhook.events': outcome.status === 'accepted' ? outcome.eventCount : 0,
+          });
+          try {
+            this.d.observer?.onDelivery({
+              platform,
+              outcome: outcome.status,
+              eventCount: outcome.status === 'accepted' ? outcome.eventCount : 0,
+              eventDelaysMs: delays,
+              negativeSkews: skews,
+            });
+          } catch {
+            /* telemetry never fails intake */
+          }
+          const syncId: string | null = verifiedConnectionId;
+          if (outcome.status === 'accepted' && syncId !== null && this.d.sync) {
+            const warn = (err: unknown) =>
+              this.#safeLog('telemetry.sync_record_failed', {
+                platform,
+                connectionId: syncId,
+                error: err instanceof Error ? err.name : 'NonError',
+              });
             try {
-              this.d.observer?.onDelivery({
-                platform,
-                outcome: outcome.status,
-                eventCount: outcome.status === 'accepted' ? outcome.eventCount : 0,
-                eventDelaysMs: delays,
-                negativeSkews: skews,
-              });
-            } catch {
-              /* telemetry never fails intake */
+              void this.d.sync.success(syncId, 'webhook').catch(warn);
+            } catch (err) {
+              warn(err);
             }
-            const syncId: string | null = verifiedConnectionId;
-            if (outcome.status === 'accepted' && syncId !== null && this.d.sync) {
-              const warn = (err: unknown) =>
-                this.#safeLog('telemetry.sync_record_failed', {
-                  platform,
-                  connectionId: syncId,
-                  error: err instanceof Error ? err.name : 'NonError',
-                });
-              try {
-                void this.d.sync.success(syncId, 'webhook').catch(warn);
-              } catch (err) {
-                warn(err);
-              }
-            }
-            return outcome;
-          },
-        ),
+          }
+          return outcome;
+        },
+      ),
     );
   }
 
-  #safeLog(msg: string, fields: Readonly<Record<string, string | number | boolean | null>>): void {
+  #safeLog(
+    msg: string,
+    fields: Readonly<Record<string, string | number | boolean | null>>,
+    level: 'info' | 'warn' = 'warn',
+  ): void {
     try {
-      this.d.log.warn(msg, fields);
+      this.d.log[level](msg, fields);
     } catch {
       /* a logger failure must not surface */
     }
@@ -190,27 +190,43 @@ export class WebhookGate {
 
   async #handleInner(
     req: InboundWebhook,
+    onVerified: (d: VerifiedDelivery) => void,
     deliver: (d: VerifiedDelivery) => Promise<void>,
   ): Promise<WebhookOutcome> {
     const v = await this.#verify(req);
     if (!v.ok) {
-      this.d.log.warn('webhook rejected', {
+      this.#safeLog('webhook rejected', {
         platform: isPlatform(req.platform) ? req.platform : 'unknown',
         check: v.check,
       });
       return REJECTED;
     }
     const { delivery } = v;
-    const outcome = await this.d.ledger.once(
-      `webhook:${delivery.platform}`,
-      delivery.deliveryKey,
-      () => deliver(delivery),
-    );
-    if (outcome === 'duplicate') {
-      this.d.log.info('duplicate webhook delivery skipped', { platform: delivery.platform });
-      return { status: 'duplicate' };
+    try {
+      onVerified(delivery);
+    } catch {
+      /* telemetry never fails intake */
     }
-    return { status: 'accepted', eventCount: delivery.events.length };
+    // From here on, logs are attributed to the verified connection, if there is one.
+    return withLogContext(
+      delivery.connectionId !== null ? { connector_id: delivery.connectionId } : {},
+      async (): Promise<WebhookOutcome> => {
+        const outcome = await this.d.ledger.once(
+          `webhook:${delivery.platform}`,
+          delivery.deliveryKey,
+          () => deliver(delivery),
+        );
+        if (outcome === 'duplicate') {
+          this.#safeLog(
+            'duplicate webhook delivery skipped',
+            { platform: delivery.platform },
+            'info',
+          );
+          return { status: 'duplicate' };
+        }
+        return { status: 'accepted', eventCount: delivery.events.length };
+      },
+    );
   }
 
   async #verify(req: InboundWebhook): Promise<Verified> {
