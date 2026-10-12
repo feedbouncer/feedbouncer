@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import type { Connector, InboundEvent } from './connector.js';
@@ -50,7 +50,6 @@ function connector(secretSource: 'app' | 'connection', timestamped = true): Conn
           ts === null ? body : Buffer.concat([Buffer.from(`${ts}.`), body]),
       },
       toleranceSec: timestamped ? 300 : 0,
-      deliveryId: (h) => h('x-ref-delivery'),
       parse: (body) =>
         (JSON.parse(body.toString('utf8')) as { events: { account: string }[] }).events.map((e) =>
           event(e.account),
@@ -59,10 +58,7 @@ function connector(secretSource: 'app' | 'connection', timestamped = true): Conn
   };
 }
 
-function signed(
-  body: object,
-  opts: { secret?: string; ts?: number; delivery?: string } = {},
-): InboundWebhook {
+function signed(body: object, opts: { secret?: string; ts?: number } = {}): InboundWebhook {
   const raw = Buffer.from(JSON.stringify(body));
   const ts = String(Math.floor((opts.ts ?? NOW) / 1000));
   const sig = createHmac('sha256', opts.secret ?? APP_SECRET)
@@ -75,7 +71,7 @@ function signed(
     headers: {
       'x-ref-signature': `sha256=${sig}`,
       'x-ref-timestamp': ts,
-      'x-ref-delivery': opts.delivery ?? 'd-1',
+      'x-ref-delivery': 'd-1',
     },
   };
 }
@@ -113,9 +109,7 @@ describe('WebhookGate', () => {
     const { g } = gate();
     const deliver = vi.fn(async () => undefined);
     expect(await g.handle(signed(body), deliver)).toEqual({ status: 'accepted', eventCount: 1 });
-    expect(deliver).toHaveBeenCalledWith(
-      expect.objectContaining({ platform: 'facebook', deliveryKey: 'd-1' }),
-    );
+    expect(deliver).toHaveBeenCalledWith(expect.objectContaining({ platform: 'facebook' }));
   });
 
   it('processes duplicate deliveries once', async () => {
@@ -194,7 +188,7 @@ describe('WebhookGate', () => {
     expect(
       (
         await g.handle(
-          signed(body, { ts: NOW - 299_000, delivery: 'd-old' }),
+          signed({ events: [{ account: 'acct-old' }] }, { ts: NOW - 299_000 }),
           async () => undefined,
         )
       ).status,
@@ -202,7 +196,7 @@ describe('WebhookGate', () => {
     expect(
       (
         await g.handle(
-          signed(body, { ts: NOW + 299_000, delivery: 'd-new' }),
+          signed({ events: [{ account: 'acct-new' }] }, { ts: NOW + 299_000 }),
           async () => undefined,
         )
       ).status,
@@ -285,15 +279,46 @@ describe('WebhookGate', () => {
     expect(got).toBeNull();
   });
 
-  it('falls back to a body hash when the platform sends no delivery id', async () => {
-    const { g } = gate();
-    const req = signed(body);
-    const headers = { ...req.headers };
-    delete (headers as Record<string, unknown>)['x-ref-delivery'];
-    let key = '';
-    await g.handle({ ...req, headers }, async (d) => {
-      key = d.deliveryKey;
+  describe('dedupe key', () => {
+    it('keys on the signed body only: a changed delivery-id header is a duplicate', async () => {
+      const { g } = gate();
+      const deliver = vi.fn(async () => undefined);
+      const req = signed(body);
+      await g.handle(req, deliver);
+      const replay = { ...req, headers: { ...req.headers, 'x-ref-delivery': 'attacker-1' } };
+      expect(await g.handle(replay, deliver)).toEqual({ status: 'duplicate' });
+      expect(deliver).toHaveBeenCalledTimes(1);
     });
-    expect(key).toMatch(/^sha256:[0-9a-f]{64}$/);
+
+    it('treats a replay with the delivery-id header absent as a duplicate', async () => {
+      const { g } = gate();
+      const deliver = vi.fn(async () => undefined);
+      const req = signed(body);
+      await g.handle(req, deliver);
+      const headers = { ...req.headers };
+      delete (headers as Record<string, unknown>)['x-ref-delivery'];
+      expect(await g.handle({ ...req, headers }, deliver)).toEqual({ status: 'duplicate' });
+      expect(deliver).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses sha256 of the raw body as the delivery key', async () => {
+      const { g } = gate();
+      const req = signed(body);
+      let key = '';
+      await g.handle(req, async (d) => {
+        key = d.deliveryKey;
+      });
+      expect(key).toBe(`sha256:${createHash('sha256').update(req.rawBody).digest('hex')}`);
+    });
+
+    it('does not let a forged request consume the key of the valid one', async () => {
+      const { g } = gate();
+      const deliver = vi.fn(async () => undefined);
+      expect(await g.handle(signed(body, { secret: 'nope' }), deliver)).toEqual({
+        status: 'rejected',
+      });
+      expect(await g.handle(signed(body), deliver)).toEqual({ status: 'accepted', eventCount: 1 });
+      expect(deliver).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -58,7 +58,6 @@ export interface WebhookSpec {
     signedPayload(rawBody: Buffer, timestamp: string | null): Buffer;
   };
   readonly toleranceSec: number;
-  deliveryId(headers: (name: string) => string | null): string | null;
   /** Receives only bodies whose signature already verified. */
   parse(rawBody: Buffer): readonly InboundEvent[];
 }

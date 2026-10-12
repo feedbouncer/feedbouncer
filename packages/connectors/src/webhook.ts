@@ -1,7 +1,7 @@
 // Authenticates inbound platform webhooks before anything reaches the core.
 // Order: platform -> body size -> signature header -> timestamp window ->
 // secret -> HMAC over the RAW body (constant-time) -> parse -> tenant binding
-// -> dedupe. Every failure returns the same frozen REJECTED value; the reason
+// -> dedupe (keyed on sha256 of the signed body only). Every failure returns the same frozen REJECTED value; the reason
 // is logged as a check name only (never header values, digests or secrets).
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { Logger, Secret } from '@feedbouncer/service-runtime';
@@ -31,7 +31,6 @@ export type WebhookOutcome =
 
 const REJECTED: WebhookOutcome = Object.freeze({ status: 'rejected' });
 const DIGEST_BYTES = 32;
-const DELIVERY_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const CONNECTION_ID = /^[A-Za-z0-9-]{1,64}$/;
 
 type Verified = { ok: true; delivery: VerifiedDelivery } | { ok: false; check: string };
@@ -162,11 +161,8 @@ export class WebhookGate {
       events = kept;
     }
 
-    const id = spec.deliveryId(header);
-    const base =
-      id !== null && DELIVERY_ID.test(id)
-        ? id
-        : `sha256:${createHash('sha256').update(req.rawBody).digest('hex')}`;
+    // Only signed input may influence the key: headers outside the HMAC are attacker-controlled.
+    const base = `sha256:${createHash('sha256').update(req.rawBody).digest('hex')}`;
     const deliveryKey = connectionId === null ? base : `${connectionId}:${base}`;
     return { ok: true, delivery: { platform, connectionId, deliveryKey, events } };
   }
