@@ -5,3 +5,5 @@ export * from './clock.js';
 export * from './connector.js';
 export * from './registry.js';
 export * from './http.js';
+export * from './ports.js';
+export * from './memory.js';
