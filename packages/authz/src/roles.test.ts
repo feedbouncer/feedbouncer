@@ -19,6 +19,7 @@ const MATRIX: Record<Capability, Record<Role, boolean>> = {
   'member.remove': { owner: true, admin: true, member: false },
   'member.change_role': { owner: true, admin: true, member: false },
   'invitation.read': { owner: true, admin: true, member: false },
+  'connection.manage': { owner: true, admin: true, member: false },
   'org.update': { owner: true, admin: true, member: false },
   'org.transfer_ownership': { owner: true, admin: false, member: false },
   'org.delete': { owner: true, admin: false, member: false },
@@ -84,5 +85,13 @@ describe('invitations', () => {
       reason: 'cannot_act_on_owner',
     });
     expect(canManageInvitation('admin', 'member')).toEqual({ ok: true });
+  });
+});
+
+describe('connection.manage', () => {
+  it('connection.manage is for owners and admins', () => {
+    expect(can('owner', 'connection.manage')).toBe(true);
+    expect(can('admin', 'connection.manage')).toBe(true);
+    expect(can('member', 'connection.manage')).toBe(false);
   });
 });
