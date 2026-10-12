@@ -36,6 +36,23 @@ Operators: key removal and pending OAuth flows are covered in
 | `src/testing/`     | `./testing` export: `runConnectorConformance`, `PlatformDriver`, in-memory stack and harness                   |
 | `src/index.ts`     | Public exports                                                                                                 |
 
+## Observability
+
+The framework is instrumented at its choke points and stays free of any metrics or
+tracing backend:
+
+- `WebhookGate.handle` opens the `webhook.receive` root span and reports each delivery
+  through a `WebhookObserver` (outcome, event count, event delay).
+- `ConnectionClient` opens a `connector.<operation>` span per platform call and
+  `moderation.apply` for actions, and reports each call through a `ConnectorCallObserver`.
+- Read successes, accepted webhooks and failures are reported to a `SyncRecorder`;
+  `PgSyncRecorder` stores them in `connection_sync`, which drives connector health.
+- Span attributes are restricted to an allowlist and redacted; error spans carry codes, never messages.
+  Telemetry callbacks that throw are swallowed and never fail the call.
+
+The Prometheus and OpenTelemetry wiring lives in `@feedbouncer/observability`. Operator
+reference: [docs/operations/observability.md](../../docs/operations/observability.md).
+
 ## Tests
 
 ```bash
