@@ -29,13 +29,13 @@
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
+    "ioredis": "5.11.1",
     "pg": "8.23.1",
     "rate-limiter-flexible": "11.2.1",
     "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/node": "24.13.6",
-    "@types/pg": "8.23.1",
-    "ioredis": "5.11.1"
+    "@types/pg": "8.23.1"
   }
 }

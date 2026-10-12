@@ -52,4 +52,9 @@ CREATE INDEX oauth_state_expires_at_idx ON oauth_state (expires_at);
 CREATE TRIGGER oauth_state_set_updated_at_trg BEFORE UPDATE ON oauth_state
   FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
 
+-- Webhook dedupe claims (packages/connectors/src/pg/ledger.ts): a claim is only
+-- final once completed_at is set; an unfinished claim can be taken over after
+-- its lease, so a crashed worker does not swallow the platform's retry.
+ALTER TABLE processed_job ADD COLUMN completed_at timestamptz(3);
+
 COMMIT;

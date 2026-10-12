@@ -21,6 +21,8 @@ export class PgOAuthStateStore implements OAuthStateStore {
 
   async save(stateHash: Buffer, p: PendingAuthorization): Promise<void> {
     const { blob } = await seal(this.keys, p.codeVerifier, ctx(p));
+    // Abandoned flows are removed here, on the way in, so no scheduler is needed.
+    await this.pool.query('DELETE FROM oauth_state WHERE expires_at < now()');
     await this.pool.query(
       `INSERT INTO oauth_state (id, organization_id, brand_id, platform, initiated_by_user_id, reconnect_connection_id,
                                 state_hash, encrypted_pkce_verifier, redirect_uri, scopes, expires_at)
@@ -81,10 +83,5 @@ export class PgOAuthStateStore implements OAuthStateStore {
       if (err instanceof CredentialUnreadableError) return null; // key removed mid-flow: fail closed
       throw err;
     }
-  }
-
-  async sweepExpired(): Promise<number> {
-    const r = await this.pool.query('DELETE FROM oauth_state WHERE expires_at < now()');
-    return r.rowCount ?? 0;
   }
 }

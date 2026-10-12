@@ -212,7 +212,7 @@ describe('tenant isolation (every adapter)', () => {
     expect(await states.consume(hash, bindingOf(a))).toBeNull(); // consumed either way
   });
 
-  it('PgOAuthStateStore.sweepExpired removes only expired rows', async () => {
+  it('PgOAuthStateStore.save removes expired rows and keeps live ones', async () => {
     const live = randomBytes(32);
     const old = randomBytes(32);
     await states.save(live, pending(a));
@@ -222,7 +222,9 @@ describe('tenant isolation (every adapter)', () => {
               expires_at = now() - interval '90 minutes' WHERE state_hash = $1`,
       [old],
     );
-    expect(await states.sweepExpired()).toBeGreaterThanOrEqual(1);
+    await states.save(randomBytes(32), pending(a));
+    const expired = await h.c.query('SELECT 1 FROM oauth_state WHERE state_hash = $1', [old]);
+    expect(expired.rowCount).toBe(0);
     expect(await states.consume(old, bindingOf(a))).toBeNull();
     expect(await states.consume(live, bindingOf(a))).not.toBeNull();
   });
@@ -532,20 +534,50 @@ describe('PgDeliveryLedger', () => {
     expect(openWhileRunning).toBe(0);
   });
 
-  it('keeps namespaces apart and runs concurrent duplicates once', async () => {
+  it('keeps namespaces apart and refuses a delivery that is still in flight', async () => {
     const key = `${b.connectionId}:sha256:${'ef'.repeat(32)}`;
     let runs = 0;
     const work = async () => {
       runs++;
       await sleep(30);
     };
-    const out = await Promise.all([
+    const out = await Promise.allSettled([
       ledger.once('webhook:facebook', key, work),
       ledger.once('webhook:facebook', key, work),
       ledger.once('webhook:youtube', key, work),
     ]);
-    expect(out.filter((o) => o === 'processed')).toHaveLength(2);
+    expect(out.filter((o) => o.status === 'fulfilled')).toHaveLength(2);
+    expect(out.filter((o) => o.status === 'rejected')).toHaveLength(1);
     expect(runs).toBe(2);
+    expect(await ledger.once('webhook:facebook', key, work)).toBe('duplicate');
+  });
+
+  it('lets a retry take over a claim whose worker crashed, once the lease lapsed', async () => {
+    const key = `${a.connectionId}:sha256:${'a1'.repeat(32)}`;
+    await h.c.query(
+      `INSERT INTO processed_job (queue, job_id, processed_by, first_processed_at)
+       VALUES ('webhook:facebook', $1, 'crashed-worker', now() - interval '1 hour')`,
+      [key],
+    );
+    let runs = 0;
+    const work = async () => {
+      runs++;
+    };
+    expect(await ledger.once('webhook:facebook', key, work)).toBe('processed');
+    expect(runs).toBe(1);
+    expect(await ledger.once('webhook:facebook', key, work)).toBe('duplicate');
+    expect(runs).toBe(1);
+  });
+
+  it('does not take over a claim whose lease is still running', async () => {
+    const key = `${a.connectionId}:sha256:${'b2'.repeat(32)}`;
+    await h.c.query(
+      `INSERT INTO processed_job (queue, job_id, processed_by) VALUES ('webhook:facebook', $1, 'other-worker')`,
+      [key],
+    );
+    await expect(ledger.once('webhook:facebook', key, async () => undefined)).rejects.toThrow(
+      /still being processed/,
+    );
   });
 });
 
