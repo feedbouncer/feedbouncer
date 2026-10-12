@@ -423,6 +423,9 @@ importers:
       '@feedbouncer/connectors':
         specifier: workspace:*
         version: link:../connectors
+      '@feedbouncer/db':
+        specifier: workspace:*
+        version: link:../db
       '@feedbouncer/jobs':
         specifier: workspace:*
         version: link:../jobs
@@ -454,9 +457,6 @@ importers:
         specifier: 8.23.1
         version: 8.23.1
     devDependencies:
-      '@feedbouncer/db':
-        specifier: workspace:*
-        version: link:../db
       '@feedbouncer/secrets':
         specifier: workspace:*
         version: link:../secrets

@@ -1,10 +1,10 @@
 import type pg from 'pg';
 import type { Platform } from '@feedbouncer/connectors';
+import { boundedQuery } from '@feedbouncer/db';
 import type { ErrorClass } from '@feedbouncer/service-runtime';
 import { deriveConnectionHealth, type ConnectionHealth, type HealthPolicy } from './derive.js';
 
-/** @internal */
-export const HEALTH_SQL_FOR_TESTS = `
+export const HEALTH_SQL = `
   SELECT c.id, c.organization_id, c.brand_id, c.platform, c.status, c.status_reason, c.created_at,
          s.last_success_at, s.last_failure_at, s.last_error_code, s.last_error_class,
          COALESCE(s.consecutive_failures, 0) AS consecutive_failures,
@@ -52,51 +52,6 @@ export interface PgHealthReaderOptions {
 
 const FOR_BRAND_LIMIT = 500;
 
-/**
- * Runs one read-only statement with a server-side statement_timeout (so a stuck
- * query is cancelled by Postgres, not just abandoned) and a client-side bound
- * that also covers waiting for a pooled connection.
- */
-export async function boundedQuery<R extends pg.QueryResultRow>(
-  pool: pg.Pool,
-  text: string,
-  values: readonly unknown[],
-  timeoutMs: number,
-): Promise<R[]> {
-  const run = async (): Promise<R[]> => {
-    const client = await pool.connect();
-    let broken = false;
-    try {
-      await client.query('BEGIN READ ONLY');
-      await client.query("SELECT set_config('statement_timeout', $1, true)", [String(timeoutMs)]);
-      const { rows } = await client.query<R>(text, [...values]);
-      await client.query('COMMIT');
-      return rows;
-    } catch (err) {
-      broken = true;
-      throw err;
-    } finally {
-      // An errored connection is destroyed rather than returned to the pool.
-      client.release(broken ? true : undefined);
-    }
-  };
-  let timer: NodeJS.Timeout | undefined;
-  const bound = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`health query exceeded ${timeoutMs}ms`)),
-      timeoutMs + 1_000,
-    );
-    timer.unref();
-  });
-  const work = run();
-  work.catch(() => {}); // the loser of the race must not become an unhandled rejection
-  try {
-    return await Promise.race([work, bound]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 export class PgHealthReader implements HealthReader {
   readonly #timeoutMs: number;
   constructor(
@@ -136,7 +91,7 @@ export class PgHealthReader implements HealthReader {
   async forBrand(organizationId: string, brandId: string): Promise<ConnectionHealth[]> {
     const rows = await boundedQuery<Rec>(
       this.pool,
-      `${HEALTH_SQL_FOR_TESTS} WHERE c.organization_id = $1::uuid AND c.brand_id = $2::uuid ORDER BY c.created_at, c.id LIMIT ${FOR_BRAND_LIMIT}`,
+      `${HEALTH_SQL} WHERE c.organization_id = $1::uuid AND c.brand_id = $2::uuid ORDER BY c.created_at, c.id LIMIT ${FOR_BRAND_LIMIT}`,
       [organizationId, brandId],
       this.#timeoutMs,
     );
@@ -148,7 +103,7 @@ export class PgHealthReader implements HealthReader {
       throw new RangeError('limit must be a positive integer');
     const rows = await boundedQuery<Rec>(
       this.pool,
-      `${HEALTH_SQL_FOR_TESTS} ORDER BY c.id LIMIT $1`,
+      `${HEALTH_SQL} ORDER BY c.id LIMIT $1`,
       [limit + 1],
       this.#timeoutMs,
     );

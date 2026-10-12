@@ -4,9 +4,10 @@
 // lease owner + state, so a worker that lost its lease cannot change the row.
 import type pg from 'pg';
 import { isPlatform, type Platform } from '@feedbouncer/connectors';
+import { boundedQuery } from '@feedbouncer/db';
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import { DEAD_LETTER_REASONS, type DeadLetterReason } from './failure.js';
 import { TRACEPARENT } from '@feedbouncer/service-runtime';
+import { DEAD_LETTER_REASONS, type DeadLetterReason } from './failure.js';
 import { UUID } from './keys.js';
 
 export type LedgerState = 'queued' | 'completed' | 'dead_lettered' | 'resolved';
@@ -415,28 +416,16 @@ export class PgJobLedger implements JobLedgerPort {
 
   /** Read-only snapshot for scrape-time gauges; statement_timeout bounds a stuck query server-side. */
   async queueStats(timeoutMs = 5_000): Promise<QueueStat[]> {
-    const client = await this.pool.connect();
-    let broken = false;
-    try {
-      await client.query('BEGIN READ ONLY');
-      await client.query("SELECT set_config('statement_timeout', $1, true)", [String(timeoutMs)]);
-      const { rows } = await client.query<{
-        platform: Platform;
-        depth: number;
-        oldest_ms: string | number;
-      }>(QUEUE_STATS_SQL);
-      await client.query('COMMIT');
-      return rows.map((r) => ({
-        platform: r.platform,
-        depth: r.depth,
-        oldestAgeMs: Number(r.oldest_ms),
-      }));
-    } catch (err) {
-      broken = true;
-      throw err;
-    } finally {
-      client.release(broken ? true : undefined);
-    }
+    const rows = await boundedQuery<{
+      platform: Platform;
+      depth: number;
+      oldest_ms: string | number;
+    }>(this.pool, QUEUE_STATS_SQL, [], timeoutMs);
+    return rows.map((r) => ({
+      platform: r.platform,
+      depth: r.depth,
+      oldestAgeMs: Number(r.oldest_ms),
+    }));
   }
 
   async complete(id: string, owner: string, resultJson: string): Promise<boolean> {

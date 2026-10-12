@@ -15,8 +15,8 @@ const SECRET_PAIR =
 // stays linear.
 const AUTH_HEADER =
   /((?:proxy-)?authorization(?:\\?["'])?\s*[:=]\s*(?:\[\s*)?(?:\\?["'])?)(?:(digest)([ \t]+)[^\r\n]+|(bearer|basic|token|negotiate|ntlm|apikey)([ \t]+)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;'"\\]+)|[^\r\n]+)/gi;
-// A bare "Bearer <token>" outside a header; the length guard keeps prose readable.
-const BEARER = /\b(bearer\s+)[^\s,;'"\\]{8,}/gi;
+// A bare "Bearer <token>" outside a header.
+const BEARER = /\b(bearer\s+)[^\s,;'"\\]+/gi;
 
 // A field whose NAME looks secret is redacted whatever its value, so a caller
 // cannot leak a token by logging it under a descriptive key.

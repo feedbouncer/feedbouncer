@@ -4,7 +4,7 @@ import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { PgJobLedger } from '@feedbouncer/jobs';
 import { loadHealthPolicy } from './policy.js';
-import { boundedQuery, HEALTH_SQL_FOR_TESTS, PgHealthReader } from './pg-reader.js';
+import { HEALTH_SQL, PgHealthReader } from './pg-reader.js';
 
 let h: Awaited<ReturnType<typeof migratedDb>>;
 let pool: pg.Pool;
@@ -80,15 +80,7 @@ describe('PgHealthReader', () => {
   });
 
   it('never selects encrypted_value', () => {
-    expect(HEALTH_SQL_FOR_TESTS).not.toContain('encrypted_value');
-  });
-
-  it('a slow statement is cancelled by the statement timeout and the pool stays usable', async () => {
-    await expect(boundedQuery(pool, 'SELECT pg_sleep(5)', [], 200)).rejects.toThrow(
-      /statement timeout/,
-    );
-    const rows = await boundedQuery<{ n: number }>(pool, 'SELECT 1 AS n', [], 1000);
-    expect(rows).toEqual([{ n: 1 }]);
+    expect(HEALTH_SQL).not.toContain('encrypted_value');
   });
 
   it('queueStats runs through the same bounded read-only path', async () => {

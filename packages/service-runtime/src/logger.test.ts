@@ -47,6 +47,7 @@ describe('redact', () => {
     );
     expect(redact('authorization=Basic dXNlcjpwYXNz')).toBe('authorization=Basic [redacted]');
     expect(redact('sent bearer abcdef0123456789')).toBe('sent bearer [redacted]');
+    expect(redact('sent bearer s3cr3t')).toBe('sent bearer [redacted]');
     expect(redact('the basic plan is fine')).toBe('the basic plan is fine');
   });
 

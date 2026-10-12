@@ -10,7 +10,7 @@ import {
   ParentBasedSampler,
   type SpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
-import { errorFields, type Logger } from '@feedbouncer/service-runtime';
+import { errorFields, TimeoutError, withTimeout, type Logger } from '@feedbouncer/service-runtime';
 import type { TelemetryConfig } from './config.js';
 import { diagToLogger } from './diag.js';
 
@@ -26,18 +26,11 @@ const bounded = async (
   log: Logger,
   what: string,
 ): Promise<void> => {
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<'timeout'>((r) => {
-    timer = setTimeout(() => r('timeout'), ms);
-    timer.unref();
-  });
   try {
-    const r = await Promise.race([p.then(() => 'ok' as const), timeout]);
-    if (r === 'timeout') log.warn('telemetry.shutdown_timeout', { what, ms });
+    await withTimeout(p, ms, what);
   } catch (err) {
-    log.warn('telemetry.shutdown_failed', { what, ...errorFields(err) });
-  } finally {
-    clearTimeout(timer);
+    if (err instanceof TimeoutError) log.warn('telemetry.shutdown_timeout', { what, ms });
+    else log.warn('telemetry.shutdown_failed', { what, ...errorFields(err) });
   }
 };
 

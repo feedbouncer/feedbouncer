@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@feedbouncer/connectors": "workspace:*",
+    "@feedbouncer/db": "workspace:*",
     "@feedbouncer/jobs": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
     "@opentelemetry/api": "1.9.1",
@@ -38,7 +39,6 @@
     "pg": "8.23.1"
   },
   "devDependencies": {
-    "@feedbouncer/db": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@types/node": "24.13.6",
     "@types/pg": "8.23.1",
