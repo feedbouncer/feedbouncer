@@ -167,3 +167,10 @@ test('the guide does not describe behaviour that was removed', () => {
   assert.ok(!/`deliveryId`/.test(text), 'WebhookSpec has no deliveryId');
   assert.ok(!/process\.env\.[A-Z]/.test(text.replace(/never[^\n]*process\.env[^\n]*/gi, '')));
 });
+
+test('the guide states the exact error code pattern from errors.ts', () => {
+  const src = readFileSync(join(SRC, 'errors.ts'), 'utf8');
+  const m = src.match(/const CODE = \/(.+)\/;/);
+  assert.ok(m, 'could not find CODE in errors.ts');
+  assert.ok(md(GUIDE).includes(`\`${m[1]}\``), `guide must contain \`${m[1]}\` verbatim`);
+});

@@ -351,8 +351,8 @@ Throw `ConnectorError(kind, code, opts)`. There are six kinds, and only these:
 
 Rules:
 
-- `code` is snake*case and matches `^[a-z]a-z0-9*]{0,62}$`. Anything else is
-replaced by `unspecified`.
+- `code` is lowercase `snake_case` and matches `^[a-z][a-z0-9_]{0,62}$`.
+  Anything else is replaced by `unspecified`.
 - The message is built from the kind and code only. Never put a response body,
   URL, header or token into an error, and never `catch` and re-wrap a foreign
   error with its message.
