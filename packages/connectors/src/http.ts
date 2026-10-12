@@ -55,6 +55,15 @@ async function readCapped(res: Response, max: number): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+/** Maps any foreign failure to a ConnectorError without retaining its message. */
+function transportError(err: unknown, signal: AbortSignal): ConnectorError {
+  if (err instanceof ConnectorError) return err;
+  const timedOut =
+    signal.aborted ||
+    (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError'));
+  return new ConnectorError('transient', timedOut ? 'timeout' : 'network_error');
+}
+
 export function createSafeHttp(opts: {
   allowedHosts: readonly string[];
   fetch?: typeof fetch;
@@ -75,12 +84,15 @@ export function createSafeHttp(opts: {
           signal,
         });
       } catch (err) {
-        if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
-          throw new ConnectorError('transient', 'timeout');
-        }
-        throw new ConnectorError('transient', 'network_error');
+        throw transportError(err, signal);
       }
-      return { status: res.status, headers: res.headers, body: await readCapped(res, max) };
+      let body: string;
+      try {
+        body = await readCapped(res, max);
+      } catch (err) {
+        throw transportError(err, signal);
+      }
+      return { status: res.status, headers: res.headers, body };
     },
   };
 }

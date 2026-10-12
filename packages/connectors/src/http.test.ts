@@ -112,6 +112,47 @@ describe('createSafeHttp', () => {
   });
 });
 
+describe('createSafeHttp body read failures', () => {
+  const GET = { method: 'GET', url: 'https://graph.example.test/' } as const;
+  const enc = new TextEncoder();
+
+  it('maps a mid-stream error to transient/network_error without leaking the message', async () => {
+    const fetch = async () =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            c.enqueue(enc.encode('partial'));
+            c.error(new TypeError('terminated https://graph.example.test/?access_token=SENTINEL'));
+          },
+        }),
+      );
+    const http = createSafeHttp({ allowedHosts: HOSTS, fetch: fetch as typeof globalThis.fetch });
+    const err = await http.request(GET, AbortSignal.timeout(1000)).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConnectorError);
+    expect(JSON.stringify(err) + String(err)).not.toContain('SENTINEL');
+    expect(err).toMatchObject({ kind: 'transient', code: 'network_error' });
+  });
+
+  it('maps a signal aborted mid-body to transient/timeout', async () => {
+    const ac = new AbortController();
+    const fetch = async () =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            c.enqueue(enc.encode('partial'));
+            ac.abort();
+            c.error(new DOMException('aborted', 'AbortError'));
+          },
+        }),
+      );
+    const http = createSafeHttp({ allowedHosts: HOSTS, fetch: fetch as typeof globalThis.fetch });
+    await expect(http.request(GET, ac.signal)).rejects.toMatchObject({
+      kind: 'transient',
+      code: 'timeout',
+    });
+  });
+});
+
 describe('parseRetryAfter', () => {
   const now = Date.parse('2026-10-12T00:00:00Z');
   it('parses delta seconds', () => expect(parseRetryAfter('30', now)).toBe(30_000));
