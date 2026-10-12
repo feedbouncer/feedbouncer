@@ -37,7 +37,7 @@ function fieldWords(name: string): string[] {
     .filter(Boolean);
 }
 
-function isSecretField(name: string): boolean {
+export function isSecretField(name: string): boolean {
   const words = fieldWords(name);
   return words.some((word, i) => {
     const pairWord = i + 1 < words.length ? word + words[i + 1] : '';

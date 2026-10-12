@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createLogger, errorFields, redact } from './logger.js';
+import { createLogger, errorFields, isSecretField, redact } from './logger.js';
 
 describe('createLogger', () => {
   it('writes one JSON object per line with service, level, msg and time', () => {
@@ -228,4 +228,11 @@ describe('field-name redaction', () => {
   it('redacts FB_ENCRYPTION_KEYS=... pairs inside messages', () => {
     expect(redact('bad config FB_ENCRYPTION_KEYS=k1:QUJD')).not.toContain('QUJD');
   });
+});
+
+it('exports isSecretField with the logger rules', () => {
+  expect(isSecretField('accessToken')).toBe(true);
+  expect(isSecretField('refresh_token')).toBe(true);
+  expect(isSecretField('tokenExpiresAt')).toBe(false);
+  expect(isSecretField('commentId')).toBe(false);
 });
