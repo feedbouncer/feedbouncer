@@ -20,6 +20,5 @@ export function loadHealthPolicy(env: Env): HealthPolicy {
       max: 100,
       fallback: 3,
     }),
-    firstSyncGraceMs: sec('CONNECTOR_FIRST_SYNC_GRACE_SECONDS', 3600, 60, 604_800),
   };
 }

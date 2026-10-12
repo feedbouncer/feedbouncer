@@ -18,7 +18,6 @@ export const HEALTH_REASONS = [
   'ok',
   'pending_first_sync',
   'recent_failures',
-  'first_sync_overdue',
   'sync_stale',
   'ingest_lag',
   'token_expired',
@@ -35,7 +34,6 @@ export interface HealthPolicy {
   staleAfterMs(platform: Platform): number;
   readonly lagDegradedMs: number;
   readonly failuresDegraded: number;
-  readonly firstSyncGraceMs: number;
 }
 
 export interface ConnectionFacts {
@@ -79,7 +77,7 @@ const age = (t: Date | null, now: Date): number | null =>
 /**
  * Pure derivation; the first matching rule wins: disabled (paused or revoked), needs
  * reconnection (flagged, or tokens expired with no usable refresh), degraded (connection
- * error, repeated failures, overdue first sync, stale sync, ingest lag), then pending
+ * error, repeated failures, stale sync, ingest lag), then pending
  * first sync or healthy.
  */
 export function deriveConnectionHealth(
@@ -121,8 +119,6 @@ export function deriveConnectionHealth(
   const failing = f.consecutiveFailures >= p.failuresDegraded;
   if (f.lastSuccessAt === null) {
     if (failing) return rule('degraded', 'recent_failures');
-    if ((age(f.createdAt, now) ?? 0) > p.firstSyncGraceMs)
-      return rule('degraded', 'first_sync_overdue');
     return rule('pending_first_sync', 'pending_first_sync');
   }
   if (failing) return rule('degraded', 'recent_failures');

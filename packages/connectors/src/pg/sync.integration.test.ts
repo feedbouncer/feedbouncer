@@ -46,37 +46,37 @@ describe('PgSyncRecorder', () => {
       organization_id: orgId,
       brand_id: brandId,
     });
-    await rec.success(connectionId, 'read');
+    await rec.success(connectionId);
     r = await row(connectionId);
     expect(r.consecutive_failures).toBe(0);
     expect(r.last_error_code).toBe('upstream_5xx'); // last error is kept for display
     const first = r.last_success_at;
     expect(first).not.toBeNull();
     t = 5_000;
-    await rec.success(connectionId, 'read');
+    await rec.success(connectionId);
     expect((await row(connectionId)).last_success_at).toEqual(first);
     t = 20_000;
     await new Promise((res) => setTimeout(res, 5));
-    await rec.success(connectionId, 'read');
+    await rec.success(connectionId);
     expect((await row(connectionId)).last_success_at.getTime()).toBeGreaterThan(first.getTime());
   });
 
   it('a failure re-opens the coalescing window', async () => {
     let t = 0;
     const rec = new PgSyncRecorder(pool, { coalesceMs: 10_000, now: () => t });
-    await rec.success(connectionId, 'read');
+    await rec.success(connectionId);
     t = 1_000;
     await rec.failure(connectionId, { code: 'timeout', errorClass: 'retryable' });
     t = 2_000;
-    await rec.success(connectionId, 'read');
+    await rec.success(connectionId);
     expect((await row(connectionId)).consecutive_failures).toBe(0);
   });
 
   it('ignores unknown or non-uuid connection ids', async () => {
     const rec = new PgSyncRecorder(pool);
     const ghost = '00000000-0000-4000-8000-000000000000';
-    await expect(rec.success('not-a-uuid', 'webhook')).resolves.toBeUndefined();
-    await expect(rec.success(ghost, 'webhook')).resolves.toBeUndefined();
+    await expect(rec.success('not-a-uuid')).resolves.toBeUndefined();
+    await expect(rec.success(ghost)).resolves.toBeUndefined();
     await expect(
       rec.failure(ghost, { code: 'timeout', errorClass: 'retryable' }),
     ).resolves.toBeUndefined();
@@ -97,7 +97,7 @@ describe('PgSyncRecorder', () => {
   it('keeps state per connection', async () => {
     const rec = new PgSyncRecorder(pool);
     await rec.failure(connectionId, { code: 'timeout', errorClass: 'retryable' });
-    await rec.success(otherId, 'webhook');
+    await rec.success(otherId);
     expect((await row(otherId)).consecutive_failures).toBe(0);
     expect((await row(connectionId)).consecutive_failures).toBe(1);
   });

@@ -9,7 +9,6 @@ describe('loadHealthPolicy', () => {
     expect(p).toMatchObject({
       lagDegradedMs: 900_000,
       failuresDegraded: 3,
-      firstSyncGraceMs: 3_600_000,
     });
   });
   it('the global staleness value is the per-platform default', () => {

@@ -288,12 +288,11 @@ Rules are evaluated in order and the first match wins.
 | 3   | An access token exists and has expired, and the refresh token is missing or expired | `needs_reconnection` | `token_expired`                          |
 | 4   | Status `error`                                                                      | `degraded`           | the stored reason, or `connection_error` |
 | 5   | Never synced and failures at or above `CONNECTOR_FAILURES_DEGRADED`                 | `degraded`           | `recent_failures`                        |
-| 6   | Never synced and older than `CONNECTOR_FIRST_SYNC_GRACE_SECONDS`                    | `degraded`           | `first_sync_overdue`                     |
-| 7   | Never synced otherwise                                                              | `pending_first_sync` | `pending_first_sync`                     |
-| 8   | Consecutive failures at or above `CONNECTOR_FAILURES_DEGRADED`                      | `degraded`           | `recent_failures`                        |
-| 9   | Staleness above the stale threshold                                                 | `degraded`           | `sync_stale`                             |
-| 10  | Ingest lag above `CONNECTOR_LAG_DEGRADED_SECONDS`                                   | `degraded`           | `ingest_lag`                             |
-| 11  | Otherwise                                                                           | `healthy`            | `ok`                                     |
+| 6   | Never synced otherwise                                                              | `pending_first_sync` | `pending_first_sync`                     |
+| 7   | Consecutive failures at or above `CONNECTOR_FAILURES_DEGRADED`                      | `degraded`           | `recent_failures`                        |
+| 8   | Staleness above the stale threshold                                                 | `degraded`           | `sync_stale`                             |
+| 9   | Ingest lag above `CONNECTOR_LAG_DEGRADED_SECONDS`                                   | `degraded`           | `ingest_lag`                             |
+| 10  | Otherwise                                                                           | `healthy`            | `ok`                                     |
 
 A transient authentication failure (`auth_expired` without a reauthorization requirement)
 only increments the failure count, so it shows as `degraded` and not `needs_reconnection`.
@@ -303,18 +302,17 @@ only increments the failure count, so it shows as `degraded` and not `needs_reco
 | State                | Meaning                                                | What to do                                                                                                                                                                                |
 | -------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `healthy`            | Recent successful sync, no failure streak, no backlog. | Nothing.                                                                                                                                                                                  |
-| `pending_first_sync` | Connected, no successful read or webhook yet.          | Wait. After `CONNECTOR_FIRST_SYNC_GRACE_SECONDS` it becomes `degraded` with `first_sync_overdue`.                                                                                         |
+| `pending_first_sync` | Connected, no successful read or webhook yet.          | Wait. It stays in this state until a sync outcome is recorded; there is no overdue timeout.                                                                                               |
 | `degraded`           | Working but not keeping up. Check `reason`.            | See the reason table below.                                                                                                                                                               |
 | `needs_reconnection` | The platform credentials are no longer usable.         | Reconnect from the brand's connections page. Reasons: `oauth_refresh_rejected`, `oauth_access_rejected`, `oauth_not_refreshable`, `token_expired`, `oauth_pending`, `reconnect_required`. |
 | `disabled`           | A user paused or revoked the connection.               | Nothing to fix; resume or reconnect it deliberately.                                                                                                                                      |
 
-| Degraded reason      | What to check                                                                                                                            |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `sync_stale`         | Worker logs for the connector: `jq 'select(.connector_id == "<id>")'`. Is the poll running, are calls failing?                           |
-| `ingest_lag`         | Queue depth and age (`feedbouncer_queue_depth`, `feedbouncer_queue_oldest_age_seconds`) and the dead-letter queue: `pnpm jobs dlq list`. |
-| `recent_failures`    | `lastErrorCode` in the API response; look it up in [Errors](../connectors/writing-a-connector.md#errors).                                |
-| `first_sync_overdue` | Confirm the poll job or webhook subscription exists and the worker is consuming that platform's queue.                                   |
-| `connection_error`   | The connection is in an error status without a recorded reason; check worker logs around the last failure.                               |
+| Degraded reason    | What to check                                                                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `sync_stale`       | Worker logs for the connector: `jq 'select(.connector_id == "<id>")'`. Is the poll running, are calls failing?                           |
+| `ingest_lag`       | Queue depth and age (`feedbouncer_queue_depth`, `feedbouncer_queue_oldest_age_seconds`) and the dead-letter queue: `pnpm jobs dlq list`. |
+| `recent_failures`  | `lastErrorCode` in the API response; look it up in [Errors](../connectors/writing-a-connector.md#errors).                                |
+| `connection_error` | The connection is in an error status without a recorded reason; check worker logs around the last failure.                               |
 
 ### API
 
@@ -347,7 +345,7 @@ organization's brand both return `404` with the same body. A member gets `403`, 
 ```
 
 `reason` is limited to a fixed vocabulary: `ok`, `pending_first_sync`, `recent_failures`,
-`first_sync_overdue`, `sync_stale`, `ingest_lag`, `token_expired`, `paused`, `revoked`,
+`sync_stale`, `ingest_lag`, `token_expired`, `paused`, `revoked`,
 `connection_error`, `reconnect_required`, `oauth_pending`, `oauth_refresh_rejected`,
 `oauth_access_rejected`, `oauth_not_refreshable` and `credential_unavailable` (the stored
 credentials could not be read). A stored free-form reason is never echoed. The endpoint
@@ -362,7 +360,6 @@ oldest first.
 | `CONNECTOR_STALE_AFTER_SECONDS_<PLATFORM>` | the value above | 60 to 2592000 | Per-platform override, for example `CONNECTOR_STALE_AFTER_SECONDS_FACEBOOK`. |
 | `CONNECTOR_LAG_DEGRADED_SECONDS`           | `900`           | 60 to 604800  | Age of the oldest queued job before `ingest_lag`.                            |
 | `CONNECTOR_FAILURES_DEGRADED`              | `3`             | 1 to 100      | Consecutive failures before `recent_failures`.                               |
-| `CONNECTOR_FIRST_SYNC_GRACE_SECONDS`       | `3600`          | 60 to 604800  | How long a new connection may stay `pending_first_sync`.                     |
 
 Out-of-range values fail startup with a message naming the variable.
 
@@ -381,6 +378,14 @@ reconciliation polling exists.
 
 ### Known limitations
 
+- Sync outcomes are written to `connection_sync` by `PgSyncRecorder`, which the API and
+  worker do not wire in yet: no process polls platforms or accepts attributed webhooks.
+  Until they do, every active connection reports `pending_first_sync`, and staleness and
+  failure rules never fire. `token_expired`, `disabled` and the stored-reason states still
+  work because they come from the connection row.
+- The connector-call metrics (`feedbouncer_connector_api_calls_total`,
+  `feedbouncer_connector_api_call_duration_seconds`) and webhook metrics
+  (`feedbouncer_webhook_*`) are registered but not yet emitted, for the same reason.
 - Webhooks verified with an app-level secret cannot be attributed to a connection at the
   gate, so they record no sync. The future per-event ingest job will record them.
 - Ingest lag is the age of the oldest `queued` `job_ledger` row for the connection, which

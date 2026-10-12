@@ -6,7 +6,7 @@
 // of the next success is not swallowed.
 import type pg from 'pg';
 import type { ErrorClass } from '@feedbouncer/service-runtime';
-import type { SyncRecorder, SyncSource } from '../ports.js';
+import type { SyncRecorder } from '../ports.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE = /^[a-z][a-z0-9_]{0,62}$/;
@@ -36,8 +36,7 @@ export class PgSyncRecorder implements SyncRecorder {
     this.#now = opts.now ?? Date.now;
   }
 
-  async success(connectionId: string, source: SyncSource): Promise<void> {
-    void source; // not stored: every source means the platform answered
+  async success(connectionId: string): Promise<void> {
     if (!UUID.test(connectionId)) return;
     const now = this.#now();
     const prev = this.#lastSuccess.get(connectionId);

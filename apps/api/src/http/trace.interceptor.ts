@@ -1,15 +1,32 @@
 import type { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
-import { Observable, type Subscription } from 'rxjs';
+import { defer, lastValueFrom, type Observable } from 'rxjs';
 import {
   SpanKind,
   currentTraceIds,
-  markSpanError,
   setSpanAttributes,
   withLogContext,
   withSpan,
 } from '@feedbouncer/service-runtime';
 import type { TracedRequest } from './traced-request.js';
+
+// Span bookkeeping must never change the response or replace the original error.
+type Span = Parameters<typeof setSpanAttributes>[0];
+const recordStatus = (span: Span, status: () => number): void => {
+  try {
+    setSpanAttributes(span, { 'http.response.status_code': status() });
+  } catch {
+    // Dropped on purpose.
+  }
+};
+
+const isClientError = (e: unknown): boolean => {
+  try {
+    return statusOf(e) < 500;
+  } catch {
+    return false;
+  }
+};
 
 const statusOf = (e: unknown): number => {
   const s =
@@ -32,13 +49,8 @@ export class TraceInterceptor implements NestInterceptor {
     const http = ctx.switchToHttp();
     const req = http.getRequest<TracedRequest>();
     const route = req.routeOptions.url ?? 'unmatched';
-    return new Observable((subscriber) => {
-      let inner: Subscription | undefined;
-      let finish!: () => void;
-      const finished = new Promise<void>((resolve) => {
-        finish = resolve;
-      });
-      void withLogContext(
+    return defer(() =>
+      withLogContext(
         { request_id: String(req.id), ...(req.org ? { tenant_id: req.org.organizationId } : {}) },
         () =>
           withSpan(
@@ -47,44 +59,21 @@ export class TraceInterceptor implements NestInterceptor {
               kind: SpanKind.SERVER,
               root: true,
               attributes: { 'http.request.method': req.method, 'http.route': route },
+              isControlFlow: (e) => isClientError(e),
             },
             async (span) => {
               req.fbTrace = currentTraceIds() ?? undefined;
-              inner = next.handle().subscribe({
-                next: (v) => subscriber.next(v),
-                error: (e: unknown) => {
-                  try {
-                    const status = statusOf(e);
-                    setSpanAttributes(span, { 'http.response.status_code': status });
-                    if (status >= 500) markSpanError(span, e);
-                  } catch {
-                    // Span bookkeeping must never stop the error reaching the client.
-                  }
-                  subscriber.error(e);
-                  finish();
-                },
-                complete: () => {
-                  try {
-                    setSpanAttributes(span, {
-                      'http.response.status_code': http.getResponse<{ statusCode: number }>()
-                        .statusCode,
-                    });
-                  } catch {
-                    // Span bookkeeping must never stop the response completing.
-                  }
-                  subscriber.complete();
-                  finish();
-                },
-              });
-              await finished;
+              try {
+                const value = await lastValueFrom(next.handle(), { defaultValue: undefined });
+                recordStatus(span, () => http.getResponse<{ statusCode: number }>().statusCode);
+                return value;
+              } catch (e) {
+                recordStatus(span, () => statusOf(e));
+                throw e;
+              }
             },
           ),
-      ).catch((e: unknown) => subscriber.error(e));
-      // A client that disconnects unsubscribes: end the span instead of leaking it.
-      return () => {
-        inner?.unsubscribe();
-        finish();
-      };
-    });
+      ),
+    );
   }
 }

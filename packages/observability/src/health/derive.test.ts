@@ -7,7 +7,6 @@ const policy: HealthPolicy = {
   staleAfterMs: () => 60 * 60_000,
   lagDegradedMs: 15 * 60_000,
   failuresDegraded: 3,
-  firstSyncGraceMs: 60 * 60_000,
 };
 const base: ConnectionFacts = {
   connectionId: 'c',
@@ -40,10 +39,10 @@ describe('deriveConnectionHealth', () => {
       status: 'pending_first_sync',
       stalenessMs: null,
     }));
-  it('a never-synced connection past the grace period is degraded', () =>
+  it('a connection with no recorded sync stays pending_first_sync however old it is', () =>
     expect(d({ createdAt: min(120), lastSuccessAt: null })).toMatchObject({
-      status: 'degraded',
-      reason: 'first_sync_overdue',
+      status: 'pending_first_sync',
+      reason: 'pending_first_sync',
     }));
   it('a never-synced connection failing repeatedly is degraded early', () =>
     expect(

@@ -42,7 +42,6 @@ test('every health state and env var is documented', () => {
     'CONNECTOR_STALE_AFTER_SECONDS',
     'CONNECTOR_LAG_DEGRADED_SECONDS',
     'CONNECTOR_FAILURES_DEGRADED',
-    'CONNECTOR_FIRST_SYNC_GRACE_SECONDS',
   ]) {
     assert.ok(doc.includes(`\`${v}\``), v);
   }
