@@ -6,7 +6,7 @@
 // before the access token, so a failure in between never leaves only a dead
 // refresh token. Rejected grants flag the connection once and stop.
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import type { Logger, Secret } from '@feedbouncer/service-runtime';
+import { Secret, type Logger } from '@feedbouncer/service-runtime';
 import type { Clock } from './clock.js';
 import type { Connector, OAuthContext, TokenSet } from './connector.js';
 import { ConnectorError, toConnectorError } from './errors.js';
@@ -18,6 +18,51 @@ import type {
   RefreshLock,
   TokenRecord,
 } from './ports.js';
+
+const MAX_SCOPES = 100;
+const SCOPE = /^[^\u0000-\u001f\u007f]{0,256}$/;
+const validDate = (d: unknown): d is Date => d instanceof Date && !Number.isNaN(d.getTime());
+
+/**
+ * Checks a TokenSet from exchangeCode/refreshTokens before anything is stored.
+ * Tokens must be Secrets and scopes bounded, else permanent/invalid_connector_output.
+ * An unusable expiry becomes null (unknown) instead of failing: the platform may
+ * already have rotated the refresh token, and losing the new one locks the
+ * connection out.
+ */
+export function normalizeTokenSet(
+  raw: unknown,
+  log: Logger,
+  fields: Readonly<Record<string, unknown>>,
+): TokenSet {
+  const t = (raw ?? {}) as Partial<Record<keyof TokenSet, unknown>>;
+  const refreshToken = t.refreshToken ?? null;
+  const scopes = t.scopes;
+  if (
+    !(t.accessToken instanceof Secret) ||
+    (refreshToken !== null && !(refreshToken instanceof Secret)) ||
+    !Array.isArray(scopes) ||
+    scopes.length > MAX_SCOPES ||
+    !scopes.every((x) => typeof x === 'string' && SCOPE.test(x))
+  )
+    throw new ConnectorError('permanent', 'invalid_connector_output');
+  const expiry = (d: unknown): Date | null => {
+    if (validDate(d)) return d;
+    if (d != null)
+      log.warn('connector returned an unusable token expiry', {
+        ...fields,
+        code: 'invalid_token_expiry',
+      });
+    return null;
+  };
+  return {
+    accessToken: t.accessToken,
+    accessTokenExpiresAt: expiry(t.accessTokenExpiresAt),
+    refreshToken,
+    refreshTokenExpiresAt: expiry(t.refreshTokenExpiresAt),
+    scopes: scopes as string[],
+  };
+}
 
 export interface TokenManagerDeps {
   vault: CredentialVault;
@@ -78,7 +123,11 @@ export class TokenManager {
 
     let tokens: TokenSet;
     try {
-      tokens = await connector.refreshTokens(refresh.value, this.d.oauthContext(connector));
+      tokens = normalizeTokenSet(
+        await connector.refreshTokens(refresh.value, this.d.oauthContext(connector)),
+        this.d.log,
+        ids(scope),
+      );
     } catch (err) {
       const ce = toConnectorError(err);
       if (ce.kind === 'auth_expired') return this.#reauth(scope, 'oauth_refresh_rejected');

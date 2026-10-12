@@ -341,6 +341,61 @@ describe('OAuthFlow.complete', () => {
     });
   });
 
+  it('stores the tokens with no expiry when the connector reports invalid expiries', async () => {
+    exchange.mockResolvedValueOnce({
+      tokens: {
+        accessToken: new Secret('access-SENTINEL'),
+        accessTokenExpiresAt: new Date(Number.NaN),
+        refreshToken: new Secret('refresh-SENTINEL'),
+        refreshTokenExpiresAt: 12345 as never,
+        scopes: ['comments'],
+      },
+      account: { externalAccountId: 'chan-1', displayName: 'Channel' },
+    });
+    const { authorizationUrl } = await flow.start(alice, 'youtube');
+    const res = await flow.complete(alice, 'youtube', {
+      state: stateOf(authorizationUrl),
+      code: 'auth-code',
+    });
+    expect(res).toMatchObject({ ok: true });
+    if (!res.ok) return;
+    const t = await vault.readTokens({
+      organizationId: 'o1',
+      brandId: 'b1',
+      connectionId: res.connectionId,
+    });
+    expect(t.refresh).toMatchObject({ expiresAt: null });
+    expect(t.access).toMatchObject({ expiresAt: null });
+    expect(lines.join('\n')).toContain('invalid_token_expiry');
+  });
+
+  it.each([
+    ['a plain-string access token', { accessToken: 'access-SENTINEL' }],
+    ['more than 100 scopes', { scopes: Array.from({ length: 101 }, (_, i) => `s${i}`) }],
+    ['a scope with a control character', { scopes: ['comments\u0000'] }],
+  ])('reports platform_error and stores nothing for %s', async (_, bad) => {
+    exchange.mockResolvedValueOnce({
+      tokens: {
+        accessToken: new Secret('access-1'),
+        accessTokenExpiresAt: null,
+        refreshToken: null,
+        refreshTokenExpiresAt: null,
+        scopes: ['comments'],
+        ...bad,
+      },
+      account: { externalAccountId: 'chan-1', displayName: 'Channel' },
+    });
+    const upsert = vi.spyOn(directory, 'upsertPending');
+    const writes = [vi.spyOn(vault, 'writeAccessToken'), vi.spyOn(vault, 'writeRefreshToken')];
+    const { authorizationUrl } = await flow.start(alice, 'youtube');
+    expect(
+      await flow.complete(alice, 'youtube', { state: stateOf(authorizationUrl), code: 'c' }),
+    ).toEqual({ ok: false, reason: 'platform_error' });
+    expect(upsert).not.toHaveBeenCalled();
+    for (const w of writes) expect(w).not.toHaveBeenCalled();
+    expect(lines.join('\n')).not.toContain('SENTINEL');
+  });
+
   it('rejects codes with control characters or excessive length', async () => {
     for (const code of ['a\nb', 'x'.repeat(2049), '']) {
       const { authorizationUrl } = await flow.start(alice, 'youtube');

@@ -275,6 +275,32 @@ export function runConnectorConformance(
         expect((await h.stack.directory.load(scope))?.status).toBe('active');
       });
 
+      it('stores a rotated refresh token even when the connector reports an invalid expiry', async () => {
+        const { src } = await target();
+        const ref = { sourceExternalId: src, externalId: 'c-000001' };
+        const { client } = await withHooks({
+          refreshTokens: async (rt, ctx) => ({
+            ...(await h.connector.refreshTokens(rt, ctx)),
+            refreshTokenExpiresAt: new Date(Number.NaN),
+          }),
+        });
+        const oldRefresh = (await h.stack.vault.readTokens(scope)).refresh?.value.reveal();
+        await h.driver.expireAccessTokens();
+        skipAhead(HOUR_MS);
+        expect(await client.getComment(ref)).toMatchObject({ externalId: 'c-000001' });
+        const { refresh } = await h.stack.vault.readTokens(scope);
+        expect(refresh?.expiresAt).toBeNull();
+        if (h.connector.capabilities.tokens.rotatesRefreshToken)
+          expect(refresh?.value.reveal()).not.toBe(oldRefresh);
+        // the stored refresh token still works for the next refresh
+        await h.driver.expireAccessTokens();
+        skipAhead(HOUR_MS);
+        const refreshes = await h.driver.calls('refresh');
+        const fresh = await h.stack.runtime.connect(scope);
+        expect(await fresh.getComment(ref)).toMatchObject({ externalId: 'c-000001' });
+        expect((await h.driver.calls('refresh')) - refreshes).toBe(1);
+      });
+
       it('marks the connection for reauthorization on revocation and stops', async () => {
         await h.driver.revokeGrant(account);
         await h.driver.expireAccessTokens();

@@ -1,11 +1,32 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import type { Connector, TokenSet } from './connector.js';
 import { ConnectorError } from './errors.js';
 import { MemoryConnectionDirectory, MemoryCredentialVault, MemoryRefreshLock } from './memory.js';
+import type { TokenRecord } from './ports.js';
 import { TokenManager } from './tokens.js';
 
 const NOW = Date.parse('2026-10-12T10:00:00Z');
+
+/** Rejects an invalid Date the way Postgres does. */
+class StrictVault extends MemoryCredentialVault {
+  #check(t: TokenRecord) {
+    if (
+      t.expiresAt !== null &&
+      !(t.expiresAt instanceof Date && !Number.isNaN(t.expiresAt.getTime()))
+    )
+      throw new Error('invalid input syntax for type timestamp');
+  }
+  override async writeRefreshToken(s: ConnectionScope, t: TokenRecord) {
+    this.#check(t);
+    return super.writeRefreshToken(s, t);
+  }
+  override async writeAccessToken(s: ConnectionScope, t: TokenRecord) {
+    this.#check(t);
+    return super.writeAccessToken(s, t);
+  }
+}
 const scope = { organizationId: 'o1', brandId: 'b1', connectionId: 'c1' };
 
 function setup(
@@ -249,5 +270,54 @@ describe('TokenManager', () => {
     await s.vault.writeRefreshToken(scope, { value: new Secret('refresh-0'), expiresAt: null });
     await s.tm.accessToken(s.connector, scope);
     expect(s.lines.join('\n')).not.toMatch(/access-1|refresh-0|refresh-1/);
+  });
+
+  it('stores a rotated refresh token even when the connector reports invalid expiries', async () => {
+    const s = setup(async (rt) => ({
+      ...tokens(Number(rt.reveal().split('-')[1]) + 1),
+      accessTokenExpiresAt: 'soon' as never,
+      refreshTokenExpiresAt: new Date(Number.NaN),
+    }));
+    const vault = new StrictVault();
+    const t = setup(s.refreshTokens, undefined, {
+      vault,
+      directory: s.directory,
+      lock: s.lock,
+    });
+    s.directory.seed({ scope, platform: 'facebook', externalAccountId: 'p1', status: 'active' });
+    await vault.writeRefreshToken(scope, { value: new Secret('refresh-0'), expiresAt: null });
+    expect((await t.tm.accessToken(t.connector, scope)).reveal()).toBe('access-1');
+    const stored = await vault.readTokens(scope);
+    expect(stored.refresh).toMatchObject({ expiresAt: null });
+    expect(stored.refresh?.value.reveal()).toBe('refresh-1');
+    expect(stored.access).toMatchObject({ expiresAt: null });
+    expect(t.lines.join('\n')).toContain('invalid_token_expiry');
+    const next = await t.tm.accessToken(t.connector, scope, { rejected: new Secret('access-1') });
+    expect(next.reveal()).toBe('access-2');
+    expect(s.refreshTokens.mock.calls.map(([rt]) => rt.reveal())).toEqual([
+      'refresh-0',
+      'refresh-1',
+    ]);
+  });
+
+  it.each([
+    ['a plain-string access token', { accessToken: 'access-SENTINEL' }],
+    ['a plain-string refresh token', { refreshToken: 'refresh-SENTINEL' }],
+    ['non-array scopes', { scopes: 'read write' }],
+    ['more than 100 scopes', { scopes: Array.from({ length: 101 }, (_, i) => `s${i}`) }],
+    ['an oversized scope', { scopes: ['x'.repeat(257)] }],
+    ['a scope with a control character', { scopes: ['read\nwrite'] }],
+    ['a non-string scope', { scopes: [42] }],
+  ])('rejects a token set with %s before any write', async (_, bad) => {
+    const s = setup(async () => ({ ...tokens(1), ...(bad as object) }) as TokenSet);
+    await s.vault.writeRefreshToken(scope, { value: new Secret('refresh-0'), expiresAt: null });
+    await expect(s.tm.accessToken(s.connector, scope)).rejects.toMatchObject({
+      kind: 'permanent',
+      code: 'invalid_connector_output',
+    });
+    const stored = await s.vault.readTokens(scope);
+    expect(stored.refresh?.value.reveal()).toBe('refresh-0');
+    expect(stored.access).toBeNull();
+    expect(s.lines.join('\n')).not.toContain('SENTINEL');
   });
 });

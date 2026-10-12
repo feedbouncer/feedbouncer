@@ -8,7 +8,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { can } from '@feedbouncer/authz';
 import { Secret, type Logger } from '@feedbouncer/service-runtime';
 import type { Clock } from './clock.js';
-import type { Connector } from './connector.js';
+import type { AuthorizedAccount, Connector, TokenSet } from './connector.js';
 import { toConnectorError } from './errors.js';
 import { assertAllowedUrl, type SafeHttp } from './http.js';
 import type {
@@ -19,6 +19,7 @@ import type {
 } from './ports.js';
 import type { ConnectorRegistry } from './registry.js';
 import { externalIdSchema } from './schemas.js';
+import { normalizeTokenSet } from './tokens.js';
 import type { Platform } from './types.js';
 
 export const STATE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -156,9 +157,10 @@ export class OAuthFlow {
     if (typeof code !== 'string' || !CODE_PATTERN.test(code)) return REJECTED;
 
     const connector = this.d.registry.require(platform);
-    let result;
+    let tokens: TokenSet;
+    let authorized: AuthorizedAccount;
     try {
-      result = await connector.exchangeCode(
+      const result = await connector.exchangeCode(
         { code: new Secret(code), codeVerifier: pending.codeVerifier },
         {
           http: this.d.http(connector),
@@ -166,16 +168,16 @@ export class OAuthFlow {
           redirectUri: pending.redirectUri,
         },
       );
+      tokens = normalizeTokenSet(result.tokens, this.d.log, ids);
+      authorized = result.account;
     } catch (err) {
       const ce = toConnectorError(err);
       this.d.log.warn('oauth code exchange failed', { ...ids, kind: ce.kind, errorCode: ce.code });
       return { ok: false, reason: 'platform_error' };
     }
-    const account = externalIdSchema.safeParse(result.account.externalAccountId);
+    const account = externalIdSchema.safeParse(authorized?.externalAccountId);
     const displayName =
-      typeof result.account.displayName === 'string'
-        ? result.account.displayName.slice(0, 500)
-        : null;
+      typeof authorized?.displayName === 'string' ? authorized.displayName.slice(0, 500) : null;
     if (!account.success) return { ok: false, reason: 'platform_error' };
 
     if (pending.reconnectConnectionId !== null) {
@@ -194,19 +196,19 @@ export class OAuthFlow {
       platform,
       externalAccountId: account.data,
       displayName,
-      grantedScopes: result.tokens.scopes.slice(0, 100),
+      grantedScopes: tokens.scopes,
     });
     // A revoked connection is terminal: storing tokens on it would be a dead end.
     if ((await this.d.directory.load(scope))?.status === 'revoked')
       return this.#inactive(ids, scope.connectionId);
-    if (result.tokens.refreshToken)
+    if (tokens.refreshToken)
       await this.d.vault.writeRefreshToken(scope, {
-        value: result.tokens.refreshToken,
-        expiresAt: result.tokens.refreshTokenExpiresAt,
+        value: tokens.refreshToken,
+        expiresAt: tokens.refreshTokenExpiresAt,
       });
     await this.d.vault.writeAccessToken(scope, {
-      value: result.tokens.accessToken,
-      expiresAt: result.tokens.accessTokenExpiresAt,
+      value: tokens.accessToken,
+      expiresAt: tokens.accessTokenExpiresAt,
     });
     if (!(await this.d.directory.activate(scope, actor.userId)))
       return this.#inactive(ids, scope.connectionId);
