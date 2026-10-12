@@ -1,6 +1,8 @@
 // The shared error taxonomy. Messages are built ONLY from the kind and a
 // validated snake_case code, so a ConnectorError can never carry a token,
 // URL or platform response text. Foreign errors are replaced, not wrapped.
+import type { ErrorClass } from '@feedbouncer/service-runtime';
+
 export const CONNECTOR_ERROR_KINDS = [
   'auth_expired',
   'rate_limited',
@@ -45,6 +47,20 @@ export class ConnectorError extends Error {
 
   get retryable(): boolean {
     return this.kind === 'transient' || this.kind === 'rate_limited';
+  }
+
+  /** The job-layer failure class; `classifyFailure` in the jobs package agrees with it. */
+  get errorClass(): ErrorClass {
+    switch (this.kind) {
+      case 'transient':
+        return 'retryable';
+      case 'rate_limited':
+        return 'rate_limited';
+      case 'auth_expired':
+        return this.reauthorize ? 'needs_reconnection' : 'non_retryable';
+      default:
+        return 'non_retryable';
+    }
   }
 
   info(): ConnectorErrorInfo {

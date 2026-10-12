@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ConnectorError } from '@feedbouncer/connectors';
+import { CONNECTOR_ERROR_KINDS, ConnectorError } from '@feedbouncer/connectors';
 import { DEFAULT_RETRY_POLICY } from './policy.js';
 import { JobError, classifyFailure, decide, requireActionSuccess } from './failure.js';
 
@@ -182,5 +182,15 @@ describe('requireActionSuccess', () => {
         error: { kind: 'rate_limited', code: 'throttled', retryAfterMs: 900, reauthorize: false },
       }),
     ).toThrow(expect.objectContaining({ kind: 'rate_limited', retryAfterMs: 900 }));
+  });
+});
+
+describe('classifyFailure and ConnectorError.errorClass', () => {
+  it('agree for every kind', () => {
+    for (const kind of CONNECTOR_ERROR_KINDS)
+      for (const reauthorize of [true, false]) {
+        const err = new ConnectorError(kind, 'some_code', { reauthorize });
+        expect(classifyFailure(err).kind).toBe(err.errorClass);
+      }
   });
 });

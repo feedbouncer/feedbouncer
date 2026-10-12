@@ -90,7 +90,10 @@ export class TokenManager {
     if (access && this.#usable(access, opts.rejected)) return access.value;
     const key = scopeKey(scope);
     const existing = this.#inflight.get(key);
-    if (existing) return existing;
+    if (existing) {
+      this.d.log.info('token refresh joined', { ...ids(scope), waiter: 'in_process' });
+      return existing;
+    }
     const p = this.d.lock
       .run(scope, () => this.#refreshLocked(connector, scope, opts.rejected))
       .finally(() => this.#inflight.delete(key));
@@ -115,7 +118,10 @@ export class TokenManager {
         reauthorize: status !== 'revoked' && status !== 'paused',
       });
     const { access, refresh } = await this.d.vault.readTokens(scope);
-    if (access && this.#usable(access, rejected)) return access.value;
+    if (access && this.#usable(access, rejected)) {
+      this.d.log.info('token refresh reused', { ...ids(scope), waiter: 'cross_process' });
+      return access.value;
+    }
     const refreshExpired =
       refresh?.expiresAt != null && refresh.expiresAt.getTime() <= this.d.clock.now();
     if (!connector.capabilities.tokens.refreshable || !refresh || refreshExpired)

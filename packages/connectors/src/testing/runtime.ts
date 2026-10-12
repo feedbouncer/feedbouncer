@@ -25,14 +25,15 @@ import type {
   MembershipReader,
   OAuthStateStore,
   RefreshLock,
+  SyncRecorder,
   WebhookSecretSource,
 } from '../ports.js';
 import { createReferenceConnector } from '../reference/connector.js';
 import { InMemoryPlatform } from '../reference/platform.js';
 import { ConnectorRegistry } from '../registry.js';
-import { ConnectorRuntime } from '../runtime.js';
+import { ConnectorRuntime, type ConnectorCallObserver } from '../runtime.js';
 import { TokenManager } from '../tokens.js';
-import { WebhookGate } from '../webhook.js';
+import { WebhookGate, type WebhookObserver } from '../webhook.js';
 import type { ConformanceHarness, PlatformDriver } from './conformance.js';
 
 export function capturingLogger(): { log: Logger; lines: string[] } {
@@ -81,7 +82,13 @@ export function assembleStack(
   connector: Connector,
   ports: StackPorts,
   redirectUri: string,
-  opts: { stateTtlMs?: number; clock?: Clock } = {},
+  opts: {
+    stateTtlMs?: number;
+    clock?: Clock;
+    observer?: ConnectorCallObserver;
+    webhookObserver?: WebhookObserver;
+    sync?: SyncRecorder;
+  } = {},
 ): Stack {
   const { log, lines } = capturingLogger();
   const clock = opts.clock ?? systemClock;
@@ -112,6 +119,8 @@ export function assembleStack(
       clock,
       log,
       http,
+      ...(opts.observer ? { observer: opts.observer } : {}),
+      ...(opts.sync ? { sync: opts.sync } : {}),
     }),
     oauth: new OAuthFlow({
       registry,
@@ -131,6 +140,8 @@ export function assembleStack(
       ledger: ports.ledger,
       clock,
       log,
+      ...(opts.webhookObserver ? { observer: opts.webhookObserver } : {}),
+      ...(opts.sync ? { sync: opts.sync } : {}),
     }),
   };
 }

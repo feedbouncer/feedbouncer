@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Role } from '@feedbouncer/authz';
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import type { Secret } from '@feedbouncer/service-runtime';
+import type { ErrorClass, Secret } from '@feedbouncer/service-runtime';
 import type {
   ConnectionDirectory,
   ConnectionRecord,
@@ -15,6 +15,8 @@ import type {
   ReauthReason,
   RefreshLock,
   StateBinding,
+  SyncRecorder,
+  SyncSource,
   TokenRecord,
   WebhookSecretSource,
 } from './ports.js';
@@ -214,5 +216,27 @@ export class StaticWebhookSecrets implements WebhookSecretSource {
     return e && e.platform === platform
       ? { secret: e.secret, externalAccountId: e.externalAccountId }
       : null;
+  }
+}
+
+/** Keeps every recorded sync outcome, for assertions. */
+export class MemorySyncRecorder implements SyncRecorder {
+  readonly events: Array<{
+    connectionId: string;
+    kind: 'success' | 'failure';
+    source?: SyncSource;
+    code?: string;
+    errorClass?: ErrorClass;
+  }> = [];
+
+  async success(connectionId: string, source: SyncSource): Promise<void> {
+    this.events.push({ connectionId, kind: 'success', source });
+  }
+
+  async failure(
+    connectionId: string,
+    f: { readonly code: string; readonly errorClass: ErrorClass },
+  ): Promise<void> {
+    this.events.push({ connectionId, kind: 'failure', code: f.code, errorClass: f.errorClass });
   }
 }

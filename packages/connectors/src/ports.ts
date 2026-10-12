@@ -1,6 +1,6 @@
 import type { Role } from '@feedbouncer/authz';
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import type { Secret } from '@feedbouncer/service-runtime';
+import type { ErrorClass, Secret } from '@feedbouncer/service-runtime';
 import type { Platform } from './types.js';
 
 export type ConnectionStatus = 'active' | 'paused' | 'revoked' | 'error' | 'reconnect_required';
@@ -86,3 +86,19 @@ export interface WebhookSecretSource {
     platform: Platform,
   ): Promise<{ secret: Secret; externalAccountId: string } | null>;
 }
+
+/** What a recorded sync outcome was derived from. */
+export type SyncSource = 'read' | 'webhook';
+
+/**
+ * Records per-connection sync health. Implementations may throw or reject;
+ * callers treat the recorder as best-effort telemetry and never fail work on it.
+ */
+export interface SyncRecorder {
+  success(connectionId: string, source: SyncSource): Promise<void>;
+  failure(
+    connectionId: string,
+    f: { readonly code: string; readonly errorClass: ErrorClass },
+  ): Promise<void>;
+}
+export const noopSyncRecorder: SyncRecorder = { success: async () => {}, failure: async () => {} };

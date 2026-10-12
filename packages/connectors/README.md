@@ -17,20 +17,21 @@ Operators: key removal and pending OAuth flows are covered in
 | File               | Responsibility                                                                                                 |
 | ------------------ | -------------------------------------------------------------------------------------------------------------- |
 | `src/types.ts`     | `PLATFORMS`, `MODERATION_ACTIONS`, `INVERSE_ACTION`, normalized types, `ConnectorCapabilities`, `ActionResult` |
-| `src/errors.ts`    | `ConnectorError`, `ConnectorErrorInfo`, `toConnectorError`                                                     |
+| `src/errors.ts`    | `ConnectorError` (with `errorClass`), `ConnectorErrorInfo`, `toConnectorError`                                 |
 | `src/schemas.ts`   | zod boundary schemas for everything a connector returns                                                        |
 | `src/clock.ts`     | `Clock`, `systemClock`                                                                                         |
 | `src/connector.ts` | The contract: `Connector`, `CallContext`, `OAuthContext`, `TokenSet`, `WebhookSpec`, `InboundEvent`            |
 | `src/registry.ts`  | `ConnectorRegistry`, `validateConnector`                                                                       |
 | `src/http.ts`      | `SafeHttp`, `createSafeHttp`, `assertAllowedUrl`, `parseRetryAfter`                                            |
 | `src/budget.ts`    | `RateBudget`, `memoryBudget`, `redisBudget`                                                                    |
-| `src/ports.ts`     | Storage port interfaces                                                                                        |
+| `src/ports.ts`     | Storage port interfaces, `SyncRecorder` (per-connection sync health hook)                                      |
 | `src/tokens.ts`    | `TokenManager`                                                                                                 |
 | `src/oauth.ts`     | `OAuthFlow`, `OAuthAccessDeniedError`, `newPkcePair`, `hashState`                                              |
-| `src/webhook.ts`   | `WebhookGate`, `WebhookOutcome`                                                                                |
-| `src/runtime.ts`   | `ConnectorRuntime`, `ConnectionClient`, `isSuccessEquivalent`                                                  |
-| `src/memory.ts`    | In-memory adapters for every port                                                                              |
+| `src/webhook.ts`   | `WebhookGate`, `WebhookOutcome`, `WebhookObserver` (intake span, delivery observer)                            |
+| `src/runtime.ts`   | `ConnectorRuntime`, `ConnectionClient`, `isSuccessEquivalent`, `ConnectorCallObserver` (call spans, outcomes)  |
+| `src/memory.ts`    | In-memory adapters for every port, `MemorySyncRecorder`                                                        |
 | `src/pg/*.ts`      | Postgres adapters: vault, directory, refresh lock, OAuth state, membership, delivery ledger, webhook secrets   |
+| `src/pg/sync.ts`   | `PgSyncRecorder`: writes `connection_sync`, copies tenant columns from the connection row, coalesces successes |
 | `src/reference/`   | `InMemoryPlatform` and `createReferenceConnector` (`push` and `poll` flavors)                                  |
 | `src/testing/`     | `./testing` export: `runConnectorConformance`, `PlatformDriver`, in-memory stack and harness                   |
 | `src/index.ts`     | Public exports                                                                                                 |
