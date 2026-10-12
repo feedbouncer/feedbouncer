@@ -14,6 +14,7 @@ import {
   type LogLevel,
   type SecretFileSystem,
 } from '@feedbouncer/service-runtime';
+import { loadJobsConfig, type JobsConfig } from '@feedbouncer/jobs';
 import { ENCRYPTION_FILE_VARS, loadEncryptionKeyring, type Keyring } from '@feedbouncer/secrets';
 
 export const WORKER_FILE_VARS = ['DATABASE_URL', 'REDIS_URL', ...ENCRYPTION_FILE_VARS] as const;
@@ -26,6 +27,7 @@ export interface WorkerEnv {
   readonly healthPort: number;
   readonly logLevel: LogLevel;
   readonly encryption: Keyring;
+  readonly jobs: JobsConfig;
 }
 
 /** The worker's single typed configuration layer. Call once, from main.ts. */
@@ -47,6 +49,7 @@ export function loadWorkerEnv(
     healthPort: readInt(env, 'HEALTH_PORT', { min: 1, max: 65_535, fallback: 3002 }),
     logLevel: readEnum(env, 'LOG_LEVEL', LOG_LEVELS, 'info'),
     encryption: loadEncryptionKeyring(env, appEnv, opts.warn),
+    jobs: loadJobsConfig(env),
   };
   // A whole-config dump (JSON, util.inspect) must never carry URL passwords or keys.
   return redactOnSerialize(config, {
@@ -55,5 +58,7 @@ export function loadWorkerEnv(
     healthPort: config.healthPort,
     logLevel: config.logLevel,
     activeKeyId: config.encryption.activeKeyId,
+    jobQueuePrefix: config.jobs.prefix,
+    jobDlqRetentionDays: config.jobs.dlqRetentionMs / 86_400_000,
   });
 }
