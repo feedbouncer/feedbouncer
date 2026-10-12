@@ -3,6 +3,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { Worker } from 'bullmq';
 import { Redis } from 'ioredis';
 import { createPool, runJobOnce } from '@feedbouncer/db';
+import { JobMetrics, JobProducer, JobWorkers, PgJobLedger, QueueSet } from '@feedbouncer/jobs';
 import { reportKeyCoverage } from '@feedbouncer/secrets';
 import {
   EnvError,
@@ -16,6 +17,7 @@ import {
 } from '@feedbouncer/service-runtime';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
+import { buildConnectorRegistry, buildJobRegistry } from './registries.js';
 import { reportStartupFailure } from './startup.js';
 
 let env: WorkerEnv;
@@ -35,7 +37,13 @@ try {
   const workerId = hostname();
   const pool = createPool(env.databaseUrl, {
     applicationName: 'feedbouncer-worker',
-    max: env.concurrency + 2,
+    max:
+      env.concurrency +
+      2 +
+      Math.min(
+        32,
+        Object.values(env.jobs.concurrency).reduce((a, b) => a + b, 0),
+      ),
     onIdleError: (err) => log.warn('postgres idle client error', errorFields(err)),
   });
   const redis = new Redis(env.redisUrl.href, { maxRetriesPerRequest: null });
@@ -55,6 +63,30 @@ try {
     log.error('job failed', { jobId: job?.id ?? null, ...errorFields(err) }),
   );
   worker.on('error', (err) => log.error('worker error', errorFields(err)));
+  const connectors = buildConnectorRegistry();
+  const jobs = buildJobRegistry();
+  const metrics = new JobMetrics(log);
+  const ledger = new PgJobLedger(pool);
+  const queues = new QueueSet({ connection: redis, prefix: env.jobs.prefix });
+  const producer = new JobProducer({
+    ledger,
+    jobs,
+    connectors,
+    queues,
+    metrics,
+    dedupWindowMs: env.jobs.dedupWindowMs,
+  });
+  const jobWorkers = new JobWorkers({
+    connection: redis,
+    ledger,
+    producer,
+    jobs,
+    connectors,
+    config: env.jobs,
+    workerId,
+    log,
+    metrics,
+  });
   const health = await startHealthServer({
     host: '127.0.0.1',
     port: env.healthPort,
@@ -65,13 +97,17 @@ try {
       consumer: async () => {
         if (!worker.isRunning()) throw new Error('consumer not running');
       },
+      jobs: async () => {
+        if (!jobWorkers.isRunning()) throw new Error('job consumers not running');
+      },
     },
     onFailure: (name, err) =>
       log.debug('health check failed', { check: name, ...errorFields(err) }),
   });
 
   onShutdown(async () => {
-    await worker.close();
+    await Promise.all([worker.close(), jobWorkers.close()]);
+    await queues.close();
     await health.close();
     await Promise.allSettled([pool.end(), redis.quit()]);
   }, log);
@@ -85,6 +121,9 @@ try {
   });
 
   await reportKeyCoverage(pool, env.encryption, log);
+
+  await jobWorkers.start();
+  log.info('job consumers ready', { platforms: jobWorkers.platforms().join(',') || 'none' });
 
   worker.run().catch((err: unknown) => {
     log.error('worker stopped', errorFields(err));

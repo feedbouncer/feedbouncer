@@ -182,9 +182,22 @@ services:
       <<: [*backend-env, *secrets-env]
       CHOKIDAR_USEPOLLING: '1'
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+      # Empty means "use the default" (see docs/operations/job-queue.md).
+      JOB_QUEUE_PREFIX: ${JOB_QUEUE_PREFIX:-}
+      JOB_CONCURRENCY: ${JOB_CONCURRENCY:-}
+      JOB_MAX_ATTEMPTS: ${JOB_MAX_ATTEMPTS:-}
+      JOB_BACKOFF_BASE_MS: ${JOB_BACKOFF_BASE_MS:-}
+      JOB_BACKOFF_MAX_MS: ${JOB_BACKOFF_MAX_MS:-}
+      JOB_DLQ_RETENTION_DAYS: ${JOB_DLQ_RETENTION_DAYS:-}
+      JOB_DEDUP_WINDOW_DAYS: ${JOB_DEDUP_WINDOW_DAYS:-}
+    # In-flight jobs finish on shutdown, bounded by the handler timeout (60 s default).
+    # Keep this above that timeout plus margin so a restart does not kill a job mid-effect.
+    stop_grace_period: 100s
     # No ports: the worker is internal. Scale with --scale worker=N.
     volumes:
       - ./apps/worker/src:/repo/apps/worker/src:ro
+      - ./packages/connectors/src:/repo/packages/connectors/src:ro
+      - ./packages/jobs/src:/repo/packages/jobs/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro
       - ./packages/secrets/src:/repo/packages/secrets/src:ro

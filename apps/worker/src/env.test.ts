@@ -38,6 +38,15 @@ describe('loadWorkerEnv', () => {
     });
     expect(load(base).encryption.activeKeyId).toBe('k1');
   });
+  it('loads job queue settings and keeps them in the redacted summary', () => {
+    const env = load({ ...base, JOB_CONCURRENCY_FACEBOOK: '3', JOB_DLQ_RETENTION_DAYS: '7' });
+    expect(env.jobs.concurrency.facebook).toBe(3);
+    expect(env.jobs.dlqRetentionMs).toBe(7 * 86_400_000);
+    expect(JSON.stringify(env)).toContain('"jobQueuePrefix":"fb"');
+  });
+  it('fails fast on an invalid job setting', () => {
+    expect(() => load({ ...base, JOB_MAX_ATTEMPTS: '0' })).toThrow(/JOB_MAX_ATTEMPTS/);
+  });
   it('bounds WORKER_CONCURRENCY', () => {
     expect(() => load({ ...base, WORKER_CONCURRENCY: '0' })).toThrow(/WORKER_CONCURRENCY/);
     expect(() => load({ ...base, WORKER_CONCURRENCY: '65' })).toThrow(/WORKER_CONCURRENCY/);

@@ -14,7 +14,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@feedbouncer/connectors": "workspace:*",
     "@feedbouncer/db": "workspace:*",
+    "@feedbouncer/jobs": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
     "bullmq": "6.3.12",

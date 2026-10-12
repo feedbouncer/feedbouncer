@@ -254,9 +254,15 @@ importers:
 
   apps/worker:
     dependencies:
+      '@feedbouncer/connectors':
+        specifier: workspace:*
+        version: link:../../packages/connectors
       '@feedbouncer/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@feedbouncer/jobs':
+        specifier: workspace:*
+        version: link:../../packages/jobs
       '@feedbouncer/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets
