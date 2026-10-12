@@ -10,6 +10,7 @@ import type { Logger, Secret } from '@feedbouncer/service-runtime';
 import type { Clock } from './clock.js';
 import type { Connector, OAuthContext, TokenSet } from './connector.js';
 import { ConnectorError, toConnectorError } from './errors.js';
+import { scopeKey } from './scope.js';
 import type {
   ConnectionDirectory,
   CredentialVault,
@@ -42,7 +43,7 @@ export class TokenManager {
   ): Promise<Secret> {
     const { access } = await this.d.vault.readTokens(scope);
     if (access && this.#usable(access, opts.rejected)) return access.value;
-    const key = scope.connectionId;
+    const key = scopeKey(scope);
     const existing = this.#inflight.get(key);
     if (existing) return existing;
     const p = this.d.lock
@@ -62,6 +63,8 @@ export class TokenManager {
     scope: ConnectionScope,
     rejected: Secret | undefined,
   ): Promise<Secret> {
+    if ((await this.d.directory.load(scope))?.status !== 'active')
+      throw new ConnectorError('auth_expired', 'connection_inactive', { reauthorize: true });
     const { access, refresh } = await this.d.vault.readTokens(scope);
     if (access && this.#usable(access, rejected)) return access.value;
     const refreshExpired =

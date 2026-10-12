@@ -18,14 +18,13 @@ import type {
   TokenRecord,
   WebhookSecretSource,
 } from './ports.js';
+import { scopeKey } from './scope.js';
 import type { Platform } from './types.js';
 
 const sameScope = (a: ConnectionScope, b: ConnectionScope) =>
   a.organizationId === b.organizationId &&
   a.brandId === b.brandId &&
   a.connectionId === b.connectionId;
-
-const scopeKey = (s: ConnectionScope) => `${s.organizationId}/${s.brandId}/${s.connectionId}`;
 
 export class MemoryConnectionDirectory implements ConnectionDirectory {
   readonly #rows = new Map<string, { rec: ConnectionRecord; reason: string | null }>();
