@@ -5,6 +5,7 @@ import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { Secret } from '@feedbouncer/service-runtime';
 import {
   CredentialStore,
+  flagReconnectRequired,
   markReconnectRequired,
   type ConnectionScope,
 } from './credential-store.js';
@@ -195,5 +196,38 @@ describe('markReconnectRequired', () => {
       a.connectionId,
     ]);
     expect(rows[0].status).not.toBe('reconnect_required');
+  });
+});
+
+describe('flagReconnectRequired', () => {
+  it('flags once with a custom reason and audits details', async () => {
+    const t = await seedTenant(h.c, 'oauth-flag');
+    const s = scopeOf(t);
+    const details = { reason: 'oauth_refresh_rejected' };
+    expect(await flagReconnectRequired(pool, s, 'oauth_refresh_rejected', details)).toBe(true);
+    expect(await flagReconnectRequired(pool, s, 'oauth_refresh_rejected', details)).toBe(false);
+    const c = await h.c.query('SELECT status, status_reason FROM connection WHERE id = $1', [
+      t.connectionId,
+    ]);
+    expect(c.rows[0]).toEqual({
+      status: 'reconnect_required',
+      status_reason: 'oauth_refresh_rejected',
+    });
+    const ev = await h.c.query(
+      "SELECT details FROM audit_event WHERE subject_id = $1 AND action = 'connection.reconnect_required'",
+      [t.connectionId],
+    );
+    expect(ev.rows[0].details).toEqual({
+      reason: 'oauth_refresh_rejected',
+      previousStatus: 'active',
+    });
+  });
+
+  it('refuses another tenant scope and bad reasons', async () => {
+    const other = { ...scopeOf(a), organizationId: b.organizationId };
+    expect(await flagReconnectRequired(pool, other, 'oauth_refresh_rejected', {})).toBe(false);
+    await expect(flagReconnectRequired(pool, scopeOf(a), 'Bad Reason', {})).rejects.toThrow(
+      TypeError,
+    );
   });
 });

@@ -16,10 +16,15 @@ const DEK = 32;
 export const CREDENTIAL_KINDS = ['access_token', 'refresh_token', 'webhook_secret'] as const;
 export type CredentialKind = (typeof CREDENTIAL_KINDS)[number];
 
+// Envelope-only kinds are sealed outside connection_secret (e.g. oauth_state).
+// connectionId in EnvelopeContext is the bound record id for those kinds.
+export const ENVELOPE_KINDS = [...CREDENTIAL_KINDS, 'oauth_pkce_verifier'] as const;
+export type EnvelopeKind = (typeof ENVELOPE_KINDS)[number];
+
 export interface EnvelopeContext {
   readonly organizationId: string;
   readonly connectionId: string;
-  readonly kind: CredentialKind;
+  readonly kind: EnvelopeKind;
 }
 
 interface ParsedEnvelope {
@@ -41,7 +46,7 @@ function assertContext(c: EnvelopeContext): void {
   ) {
     throw new TypeError('Envelope context ids must be strings without NUL characters.');
   }
-  if (!(CREDENTIAL_KINDS as readonly string[]).includes(c.kind)) {
+  if (!(ENVELOPE_KINDS as readonly string[]).includes(c.kind)) {
     throw new TypeError('Envelope context has an unknown credential kind.');
   }
 }

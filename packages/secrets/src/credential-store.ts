@@ -135,16 +135,20 @@ export class CredentialStore {
   }
 }
 
+const STATUS_REASON = /^[a-z][a-z_]{0,62}$/;
+
 /**
  * Flags the connection for reconnect and audits it, atomically and at most once.
- * The audit event records the status the connection had (previousStatus) so a
- * later recheck can restore exactly that status.
+ * Only active/paused/error connections are flagged. The audit event records the
+ * previous status so a later recheck can restore exactly that status.
  */
-export async function markReconnectRequired(
+export async function flagReconnectRequired(
   db: Queryable,
   scope: ConnectionScope,
-  err: CredentialUnreadableError,
+  statusReason: string,
+  details: Readonly<Record<string, string | null>>,
 ): Promise<boolean> {
+  if (!STATUS_REASON.test(statusReason)) throw new TypeError('Invalid status reason');
   const r = await db.query(
     `WITH prev AS (
        SELECT id, status FROM connection
@@ -158,17 +162,27 @@ export async function markReconnectRequired(
        RETURNING c.id, c.organization_id, c.brand_id, prev.status AS previous_status)
      INSERT INTO audit_event (organization_id, brand_id, actor_type, action, subject_type, subject_id, details)
      SELECT organization_id, brand_id, 'system', 'connection.reconnect_required', 'connection', id,
-            jsonb_build_object('reason', $5::text, 'keyId', $6::text, 'previousStatus', previous_status)
+            $5::jsonb || jsonb_build_object('previousStatus', previous_status)
        FROM flagged
      RETURNING id`,
     [
       scope.organizationId,
       scope.brandId,
       scope.connectionId,
-      `credential_${err.reason}`,
-      err.reason,
-      err.keyId,
+      statusReason,
+      JSON.stringify(details),
     ],
   );
   return (r.rowCount ?? 0) > 0;
+}
+
+export async function markReconnectRequired(
+  db: Queryable,
+  scope: ConnectionScope,
+  err: CredentialUnreadableError,
+): Promise<boolean> {
+  return flagReconnectRequired(db, scope, `credential_${err.reason}`, {
+    reason: err.reason,
+    keyId: err.keyId,
+  });
 }
