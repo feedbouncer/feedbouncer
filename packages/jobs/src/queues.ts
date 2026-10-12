@@ -23,15 +23,20 @@ export interface QueueJobData {
   readonly ledgerId: string;
 }
 
+/** Upper bound on one enqueue; covers a Redis that is down before the first connect. */
+export const ADD_TIMEOUT_MS = 5_000;
+
 export class QueueSet {
   readonly #queues = new Map<Platform, Queue>();
   readonly #connection: Redis;
   readonly #prefix: string;
+  readonly #addTimeoutMs: number;
 
-  constructor(o: { connection: Redis; prefix: string }) {
+  constructor(o: { connection: Redis; prefix: string; addTimeoutMs?: number }) {
     if (!QUEUE_PREFIX.test(o.prefix)) throw new RangeError('invalid queue prefix');
     this.#connection = o.connection;
     this.#prefix = o.prefix;
+    this.#addTimeoutMs = o.addTimeoutMs ?? ADD_TIMEOUT_MS;
   }
 
   queue(p: Platform): Queue {
@@ -53,11 +58,27 @@ export class QueueSet {
     delayMs?: number,
   ): Promise<void> {
     const data: QueueJobData = { v: 1, ledgerId };
-    await this.queue(p).add(jobType, data, {
+    const added = this.queue(p).add(jobType, data, {
       ...JOB_ADD_OPTIONS,
       jobId: bullJobId(key),
       ...(delayMs ? { delay: delayMs } : {}),
     });
+    // BullMQ waits for the connection before the first command, so an outage
+    // at startup would otherwise block the caller indefinitely. A late add is
+    // harmless: the job id is deterministic and the sweeper repairs gaps.
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('job queue unavailable: enqueue timed out')),
+        this.#addTimeoutMs,
+      );
+    });
+    added.catch(() => {});
+    try {
+      await Promise.race([added, timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async close(): Promise<void> {

@@ -9,3 +9,6 @@ export * from './queues.js';
 export * from './metrics.js';
 export * from './producer.js';
 export * from './runner.js';
+export * from './connections.js';
+export * from './config.js';
+export * from './workers.js';

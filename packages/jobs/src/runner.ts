@@ -5,6 +5,7 @@
 // job that will never succeed is dead-lettered and failed with
 // UnrecoverableError. Error messages from handlers are never read: only the
 // classified kind and code, plus the error name, reach logs and the ledger.
+import { randomUUID } from 'node:crypto';
 import { DelayedError, UnrecoverableError } from 'bullmq';
 import { z } from 'zod';
 import type { Platform } from '@feedbouncer/connectors';
@@ -63,9 +64,12 @@ export function createJobProcessor(
     const def = d.jobs.get(job.name);
     if (!def) return dropInvalid(job, 'unknown_type');
 
+    // The ledger guards writes by lease owner alone, so every delivery needs
+    // an owner no other concurrent delivery shares. The column holds 200 chars.
+    const owner = `${d.workerId.slice(0, 100)}:${d.platform}:${randomUUID()}`;
     const claim = await d.ledger.claim(
       ledgerId,
-      d.workerId,
+      owner,
       leaseMs(def.timeoutMs ?? DEFAULT_TIMEOUT_MS),
     );
     if (claim.status === 'missing') {
@@ -101,7 +105,7 @@ export function createJobProcessor(
       countsAsFailure: boolean,
       resolution: string | null,
     ): Promise<RunOutcome> => {
-      const ok = await d.ledger.deadLetter(ledgerId, d.workerId, {
+      const ok = await d.ledger.deadLetter(ledgerId, owner, {
         reason,
         resolution,
         errorKind,
@@ -151,7 +155,7 @@ export function createJobProcessor(
           payload.data,
         ))();
       const result = validateJobResult(await Promise.race([run, aborted]));
-      const ok = await d.ledger.complete(ledgerId, d.workerId, JSON.stringify(result));
+      const ok = await d.ledger.complete(ledgerId, owner, JSON.stringify(result));
       if (!ok) return lostLease();
     } catch (err) {
       const errorName = err instanceof Error ? err.name : 'NonError';
@@ -164,7 +168,7 @@ export function createJobProcessor(
       if (disp.type === 'retry') {
         const ok = await d.ledger.recordRetry(
           ledgerId,
-          d.workerId,
+          owner,
           { kind: f.kind, code: f.code },
           disp.delayMs,
         );
@@ -177,7 +181,7 @@ export function createJobProcessor(
           errorName,
         });
       } else {
-        const ok = await d.ledger.recordDeferral(ledgerId, d.workerId, f.code, disp.delayMs);
+        const ok = await d.ledger.recordDeferral(ledgerId, owner, f.code, disp.delayMs);
         if (!ok) return lostLease();
         d.metrics.record('deferred', { ...base, code: f.code, delayMs: disp.delayMs });
       }

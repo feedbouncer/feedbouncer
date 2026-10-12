@@ -83,6 +83,16 @@ function setup(claim: ClaimResult, handle: () => Promise<unknown>) {
 }
 
 describe('createJobProcessor', () => {
+  it('uses a distinct lease owner per delivery, the same one for every write', async () => {
+    const s = setup({ status: 'claimed', row: row() }, async () => ({ status: 'ok' }));
+    await Promise.all([s.run(job().j), s.run(job().j)]);
+    const claimed = vi.mocked(s.ledger.claim).mock.calls.map((c) => c[1]);
+    const completed = vi.mocked(s.ledger.complete).mock.calls.map((c) => c[1]);
+    expect(new Set(claimed).size).toBe(2);
+    expect(claimed.every((o) => o.startsWith('w1:facebook:'))).toBe(true);
+    expect(completed.sort()).toEqual([...claimed].sort());
+  });
+
   it('runs the handler and records completion', async () => {
     const s = setup({ status: 'claimed', row: row() }, async () => ({ status: 'ok' }));
     expect(await s.run(job().j)).toBe('processed');

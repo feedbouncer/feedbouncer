@@ -4,6 +4,7 @@ import { Redis } from 'ioredis';
 export interface TestRedis {
   readonly connection: Redis;
   readonly prefix: string;
+  readonly url: string;
   cleanup(): Promise<void>;
 }
 
@@ -17,6 +18,7 @@ export function testRedis(): TestRedis {
   return {
     connection,
     prefix,
+    url,
     async cleanup() {
       const keys = await connection.keys(`${prefix}:*`).catch(() => [] as string[]);
       if (keys.length) await connection.del(...keys).catch(() => 0);
