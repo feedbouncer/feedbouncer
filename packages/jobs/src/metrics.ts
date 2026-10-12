@@ -1,5 +1,5 @@
 import type { Platform } from '@feedbouncer/connectors';
-import type { LogFields, Logger } from '@feedbouncer/service-runtime';
+import { withLogContext, type LogFields, type Logger } from '@feedbouncer/service-runtime';
 
 export const JOB_EVENTS = [
   'enqueued',
@@ -29,11 +29,20 @@ const LEVEL: Record<JobEvent, 'info' | 'warn' | 'error'> = {
 const zeroCounts = (): Record<JobEvent, number> =>
   Object.fromEntries(JOB_EVENTS.map((e) => [e, 0])) as Record<JobEvent, number>;
 
+/** Receives every job event and queue wait; implementations must be cheap. Throws are swallowed. */
+export interface JobEventSink {
+  onEvent(event: JobEvent, platform: Platform, jobType: string): void;
+  onWait(platform: Platform, waitMs: number): void;
+}
+
 /** In-process counters plus structured log lines. Callers pass ids, codes and numbers, never payloads. */
 export class JobMetrics {
   readonly #counts = new Map<Platform, Record<JobEvent, number>>();
 
-  constructor(private readonly log: Logger) {}
+  constructor(
+    private readonly log: Logger,
+    private readonly sink?: JobEventSink,
+  ) {}
 
   record(
     event: JobEvent,
@@ -44,7 +53,31 @@ export class JobMetrics {
     this.#counts.set(f.platform, counts);
     const fields: Record<string, string | number | boolean | null> = {};
     for (const [k, v] of Object.entries(f)) if (v !== undefined) fields[k] = v;
-    this.log[LEVEL[event]](`job.${event}`, fields);
+    withLogContext(
+      { connector_type: f.platform, ...(f.ledgerId ? { job_id: f.ledgerId } : {}) },
+      () => this.log[LEVEL[event]](`job.${event}`, fields),
+    );
+    this.#guard(() => this.sink?.onEvent(event, f.platform, f.jobType));
+  }
+
+  observeWait(platform: Platform, waitMs: number): void {
+    this.#guard(() => this.sink?.onWait(platform, waitMs));
+  }
+
+  #warned = false;
+  #guard(fn: () => void): void {
+    try {
+      fn();
+    } catch {
+      // Telemetry never fails a job; say so once.
+      if (this.#warned) return;
+      this.#warned = true;
+      try {
+        this.log.warn('telemetry.job_sink_failed', {});
+      } catch {
+        // ignore
+      }
+    }
   }
 
   count(event: JobEvent, platform: Platform): number {

@@ -6,6 +6,7 @@ import type pg from 'pg';
 import { isPlatform, type Platform } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { DEAD_LETTER_REASONS, type DeadLetterReason } from './failure.js';
+import { TRACEPARENT } from '@feedbouncer/service-runtime';
 import { UUID } from './keys.js';
 
 export type LedgerState = 'queued' | 'completed' | 'dead_lettered' | 'resolved';
@@ -23,6 +24,8 @@ export interface LedgerRow {
   readonly deferrals: number;
   readonly deferredMs: number;
   readonly replays: number;
+  /** W3C traceparent written by our producer; null for rows from older producers. */
+  readonly traceContext: string | null;
 }
 
 export interface LedgerDetail extends LedgerRow {
@@ -45,7 +48,7 @@ export interface DeadLetterRow extends LedgerRow {
 }
 
 export type ClaimResult =
-  | { readonly status: 'claimed'; readonly row: LedgerRow }
+  | { readonly status: 'claimed'; readonly row: LedgerRow; readonly waitMs: number | null }
   | { readonly status: 'settled'; readonly state: Exclude<LedgerState, 'queued'> }
   | { readonly status: 'busy'; readonly retryInMs: number }
   | { readonly status: 'missing' };
@@ -57,6 +60,7 @@ export interface InsertInput {
   readonly idempotencyKey: string;
   readonly payloadJson: string;
   readonly ttlMs: number;
+  readonly traceContext: string | null;
 }
 
 export type InsertResult =
@@ -107,8 +111,25 @@ export interface JobLedgerPort {
   deadLetter(id: string, owner: string, d: DeadLetterInput): Promise<boolean>;
 }
 
-const ROW = `id, organization_id, brand_id, connection_id, platform, job_type, idempotency_key, payload,
-  state, failures, crashes, deferrals, deferred_ms, replays`;
+const ROW_COLS = [
+  'id',
+  'organization_id',
+  'brand_id',
+  'connection_id',
+  'platform',
+  'job_type',
+  'idempotency_key',
+  'payload',
+  'state',
+  'failures',
+  'crashes',
+  'deferrals',
+  'deferred_ms',
+  'replays',
+  'trace_context',
+] as const;
+const ROW = ROW_COLS.join(', ');
+const ROW_J = ROW_COLS.map((c) => `j.${c}`).join(', ');
 
 const INSERT_SQL = `
   WITH conn AS (
@@ -116,9 +137,9 @@ const INSERT_SQL = `
      WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND platform = $4),
   ins AS (
     INSERT INTO job_ledger (organization_id, brand_id, connection_id, platform, job_type,
-                            idempotency_key, payload, expires_at)
+                            idempotency_key, payload, expires_at, trace_context)
     SELECT organization_id, brand_id, id, platform, $5, $6, $7::jsonb,
-           now() + ($8::bigint * interval '1 millisecond')
+           now() + ($8::bigint * interval '1 millisecond'), $9::text
       FROM conn
     ON CONFLICT (organization_id, idempotency_key) DO NOTHING
     RETURNING id)
@@ -130,14 +151,20 @@ const EXISTING_SQL = `SELECT id, state FROM job_ledger WHERE organization_id = $
 // 1 s before next_run_at is refused (a crash between recordRetry and
 // moveToDelayed must not skip the backoff).
 const CLAIM_SQL = `
-  UPDATE job_ledger SET
-    crashes = crashes + CASE WHEN lease_owner IS NOT NULL THEN 1 ELSE 0 END,
+  UPDATE job_ledger j SET
+    crashes = j.crashes + CASE WHEN j.lease_owner IS NOT NULL THEN 1 ELSE 0 END,
     lease_owner = $2, lease_expires_at = now() + ($3::bigint * interval '1 millisecond'),
     next_run_at = NULL
-  WHERE id = $1 AND state = 'queued'
-    AND (lease_expires_at IS NULL OR lease_expires_at < now())
-    AND (next_run_at IS NULL OR next_run_at <= now() + interval '1 second')
-  RETURNING ${ROW}`;
+  FROM (SELECT id, next_run_at AS due_at FROM job_ledger WHERE id = $1) prev
+  WHERE j.id = $1 AND prev.id = j.id AND j.state = 'queued'
+    AND (j.lease_expires_at IS NULL OR j.lease_expires_at < now())
+    AND (j.next_run_at IS NULL OR j.next_run_at <= now() + interval '1 second')
+  RETURNING ${ROW_J},
+    CASE
+      WHEN prev.due_at IS NOT NULL THEN GREATEST(0, EXTRACT(EPOCH FROM (now() - prev.due_at)) * 1000)
+      WHEN j.failures = 0 AND j.crashes = 0 AND j.deferrals = 0 AND j.replays = 0
+        THEN GREATEST(0, EXTRACT(EPOCH FROM (now() - j.created_at)) * 1000)
+    END AS wait_ms`;
 
 const PROBE_SQL = `
   SELECT state,
@@ -282,6 +309,7 @@ interface BaseRecord {
   deferrals: number;
   deferred_ms: string | number;
   replays: number;
+  trace_context: string | null;
 }
 
 function toRow(r: BaseRecord): LedgerRow {
@@ -302,6 +330,7 @@ function toRow(r: BaseRecord): LedgerRow {
     deferrals: r.deferrals,
     deferredMs: Number(r.deferred_ms),
     replays: r.replays,
+    traceContext: r.trace_context,
   };
 }
 
@@ -319,6 +348,17 @@ const toRequeued = (r: RequeuedRecord): Requeued => ({
   idempotencyKey: r.idempotency_key,
 });
 
+export interface QueueStat {
+  readonly platform: Platform;
+  readonly depth: number;
+  readonly oldestAgeMs: number;
+}
+
+const QUEUE_STATS_SQL = `
+  SELECT platform, count(*)::int AS depth,
+         GREATEST(0, EXTRACT(EPOCH FROM (now() - min(created_at))) * 1000) AS oldest_ms
+    FROM job_ledger WHERE state = 'queued' GROUP BY platform`;
+
 export class PgJobLedger implements JobLedgerPort {
   constructor(private readonly pool: pg.Pool) {}
 
@@ -332,6 +372,7 @@ export class PgJobLedger implements JobLedgerPort {
       i.idempotencyKey,
       i.payloadJson,
       ms(i.ttlMs, 'ttlMs'),
+      i.traceContext !== null && TRACEPARENT.test(i.traceContext) ? i.traceContext : null,
     ];
     // The conflicting row can be purged between the two statements; one retry covers it.
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -353,17 +394,36 @@ export class PgJobLedger implements JobLedgerPort {
   }
 
   async claim(id: string, owner: string, leaseMs: number): Promise<ClaimResult> {
-    const claimed = await this.pool.query<BaseRecord>(CLAIM_SQL, [
-      id,
-      owner,
-      ms(leaseMs, 'leaseMs'),
-    ]);
-    if (claimed.rows[0]) return { status: 'claimed', row: toRow(claimed.rows[0]) };
+    const claimed = await this.pool.query<BaseRecord & { wait_ms: string | number | null }>(
+      CLAIM_SQL,
+      [id, owner, ms(leaseMs, 'leaseMs')],
+    );
+    const r = claimed.rows[0];
+    if (r) {
+      return {
+        status: 'claimed',
+        row: toRow(r),
+        waitMs: r.wait_ms === null ? null : Number(r.wait_ms),
+      };
+    }
     const probe = await this.pool.query<{ state: LedgerState; wait_ms: string }>(PROBE_SQL, [id]);
     const p = probe.rows[0];
     if (!p) return { status: 'missing' };
     if (p.state !== 'queued') return { status: 'settled', state: p.state };
     return { status: 'busy', retryInMs: Math.max(Number(p.wait_ms), 250) };
+  }
+
+  async queueStats(): Promise<QueueStat[]> {
+    const { rows } = await this.pool.query<{
+      platform: Platform;
+      depth: number;
+      oldest_ms: string | number;
+    }>(QUEUE_STATS_SQL);
+    return rows.map((r) => ({
+      platform: r.platform,
+      depth: r.depth,
+      oldestAgeMs: Number(r.oldest_ms),
+    }));
   }
 
   async complete(id: string, owner: string, resultJson: string): Promise<boolean> {
