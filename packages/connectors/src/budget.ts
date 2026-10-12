@@ -1,4 +1,5 @@
-// Per-connection request budget shared by reads and actions. Two counters
+// Per-connection request budget shared by reads and actions. The key is the
+// full tenant scope (scopeKey), never a bare connection id. Two counters
 // with rate-limiter-flexible: "shared" (all work, `points` per window) and
 // "bulk" (reads, `points - urgentReservePoints`). Bulk takes from both, urgent
 // only from shared, so reads can never consume the urgent reserve. Platform
@@ -68,30 +69,29 @@ export class RateBudget {
 
   async acquire(
     platform: Platform,
-    connectionId: string,
+    key: string,
     policy: RateLimitPolicy,
     priority: Priority,
   ): Promise<BudgetDecision> {
     const { shared, bulk } = this.#pair(platform, policy);
     if (priority === 'bulk') {
-      const b = await take(bulk, connectionId);
+      const b = await take(bulk, key);
       if (!b.granted) return b;
     }
-    const s = await take(shared, connectionId);
-    if (!s.granted && priority === 'bulk')
-      await bulk.reward(connectionId, 1).catch(() => undefined);
+    const s = await take(shared, key);
+    if (!s.granted && priority === 'bulk') await bulk.reward(key, 1).catch(() => undefined);
     return s;
   }
 
   async applyPlatformHint(
     platform: Platform,
-    connectionId: string,
+    key: string,
     policy: RateLimitPolicy,
     hint: { retryAfterMs: number },
   ): Promise<void> {
     const secs = Math.max(1, Math.ceil(hint.retryAfterMs / 1000));
     try {
-      await this.#pair(platform, policy).shared.block(connectionId, secs);
+      await this.#pair(platform, policy).shared.block(key, secs);
     } catch {
       throw unavailable();
     }
@@ -99,21 +99,21 @@ export class RateBudget {
 
   async applyQuotaReport(
     platform: Platform,
-    connectionId: string,
+    key: string,
     policy: RateLimitPolicy,
     q: { remaining: number; resetAt: Date },
     nowMs: number,
   ): Promise<void> {
     if (!Number.isFinite(q.remaining) || Number.isNaN(q.resetAt.getTime())) return;
     if (q.remaining <= 0)
-      return this.applyPlatformHint(platform, connectionId, policy, {
+      return this.applyPlatformHint(platform, key, policy, {
         retryAfterMs: q.resetAt.getTime() - nowMs,
       });
     const { shared } = this.#pair(platform, policy);
     try {
-      const res = await shared.get(connectionId);
+      const res = await shared.get(key);
       const local = res ? res.remainingPoints : policy.points;
-      if (q.remaining < local) await shared.penalty(connectionId, Math.floor(local - q.remaining));
+      if (q.remaining < local) await shared.penalty(key, Math.floor(local - q.remaining));
     } catch {
       throw unavailable();
     }

@@ -11,6 +11,7 @@ import { ConnectorError, toConnectorError } from './errors.js';
 import type { SafeHttp } from './http.js';
 import type { ConnectionDirectory, ConnectionRecord } from './ports.js';
 import type { ConnectorRegistry } from './registry.js';
+import { scopeKey } from './scope.js';
 import {
   actionRequestSchema,
   commentRefSchema,
@@ -188,7 +189,7 @@ export class ConnectionClient {
     for (let attempt = 0; attempt < 2; attempt++) {
       const decision = await this.d.budget.acquire(
         this.platform,
-        this.scope.connectionId,
+        scopeKey(this.scope),
         policy,
         priority,
       );
@@ -207,7 +208,7 @@ export class ConnectionClient {
         const ce = this.#replace(err);
         if (ce.kind === 'rate_limited') {
           const retryAfterMs = ce.retryAfterMs ?? policy.defaultRetryAfterMs;
-          await this.d.budget.applyPlatformHint(this.platform, this.scope.connectionId, policy, {
+          await this.d.budget.applyPlatformHint(this.platform, scopeKey(this.scope), policy, {
             retryAfterMs,
           });
           throw new ConnectorError('rate_limited', ce.code, { retryAfterMs });
@@ -236,7 +237,7 @@ export class ConnectionClient {
       reportQuota: (q) =>
         this.d.budget.applyQuotaReport(
           this.platform,
-          this.scope.connectionId,
+          scopeKey(this.scope),
           policy,
           q,
           this.d.clock.now(),

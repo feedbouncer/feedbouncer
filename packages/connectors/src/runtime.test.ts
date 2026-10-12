@@ -27,6 +27,7 @@ let refreshTokens: Mock<Connector['refreshTokens']>;
 let directory: MemoryConnectionDirectory;
 let runtime: ConnectorRuntime;
 let lines: string[];
+let budget: ReturnType<typeof memoryBudget>;
 
 beforeEach(async () => {
   act = vi.fn(async () => ({ status: 'applied', platformActionId: 'pa1' }));
@@ -68,6 +69,7 @@ beforeEach(async () => {
   await vault.writeAccessToken(scope, { value: new Secret('access-1'), expiresAt: null });
   await vault.writeRefreshToken(scope, { value: new Secret('refresh-1'), expiresAt: null });
   lines = [];
+  budget = memoryBudget();
   const log = createLogger('t', 'debug', (l) => lines.push(l));
   const clock = { now: () => Date.now() };
   const http = () => ({
@@ -91,10 +93,19 @@ beforeEach(async () => {
     registry,
     directory,
     tokens,
-    budget: memoryBudget(),
+    budget,
     clock,
     log,
     http,
+  });
+});
+
+describe('rate budget key', () => {
+  it('names the full tenancy scope, never the connection id alone', async () => {
+    const acquire = vi.spyOn(budget, 'acquire');
+    const c = await runtime.connect(scope);
+    await c.act({ action: 'hide', target: ref });
+    expect(acquire).toHaveBeenCalledWith('youtube', 'o1/b1/c1', expect.anything(), 'urgent');
   });
 });
 
