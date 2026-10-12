@@ -10,10 +10,12 @@ export interface ConnectionRecord {
   readonly externalAccountId: string;
   readonly status: ConnectionStatus;
 }
-export type ReauthReason =
-  | 'oauth_refresh_rejected'
-  | 'oauth_access_rejected'
-  | 'oauth_not_refreshable';
+export const REAUTH_REASONS = [
+  'oauth_refresh_rejected',
+  'oauth_access_rejected',
+  'oauth_not_refreshable',
+] as const;
+export type ReauthReason = (typeof REAUTH_REASONS)[number];
 export interface ConnectionDirectory {
   load(scope: ConnectionScope): Promise<ConnectionRecord | null>;
   markReauthRequired(scope: ConnectionScope, reason: ReauthReason): Promise<boolean>;

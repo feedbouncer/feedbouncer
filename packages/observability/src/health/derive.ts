@@ -1,4 +1,4 @@
-import type { Platform } from '@feedbouncer/connectors';
+import { REAUTH_REASONS, type Platform } from '@feedbouncer/connectors';
 import type { ErrorClass } from '@feedbouncer/service-runtime';
 
 export const HEALTH_STATUSES = [
@@ -9,6 +9,27 @@ export const HEALTH_STATUSES = [
   'disabled',
 ] as const;
 export type HealthStatus = (typeof HEALTH_STATUSES)[number];
+
+/**
+ * Every reason a connection can report: set by the rules in deriveConnectionHealth, or
+ * written to the connection's status reason by the connector framework.
+ */
+export const HEALTH_REASONS = [
+  'ok',
+  'pending_first_sync',
+  'recent_failures',
+  'first_sync_overdue',
+  'sync_stale',
+  'ingest_lag',
+  'token_expired',
+  'paused',
+  'revoked',
+  'connection_error',
+  'reconnect_required',
+  'oauth_pending',
+  ...REAUTH_REASONS,
+] as const;
+export type HealthReason = (typeof HEALTH_REASONS)[number];
 
 export interface HealthPolicy {
   staleAfterMs(platform: Platform): number;
@@ -55,7 +76,12 @@ export interface ConnectionHealth {
 const age = (t: Date | null, now: Date): number | null =>
   t === null ? null : Math.max(0, now.getTime() - t.getTime());
 
-/** Pure derivation; first matching rule wins (decision 7 of the observability plan). */
+/**
+ * Pure derivation; the first matching rule wins: disabled (paused or revoked), needs
+ * reconnection (flagged, or tokens expired with no usable refresh), degraded (connection
+ * error, repeated failures, overdue first sync, stale sync, ingest lag), then pending
+ * first sync or healthy.
+ */
 export function deriveConnectionHealth(
   f: ConnectionFacts,
   p: HealthPolicy,
@@ -77,9 +103,10 @@ export function deriveConnectionHealth(
     stalenessMs,
     ingestLagMs,
   });
+  const rule = (status: HealthStatus, reason: HealthReason) => out(status, reason);
   const expired = (t: Date | null) => t !== null && t.getTime() <= now.getTime();
 
-  if (f.status === 'paused' || f.status === 'revoked') return out('disabled', f.status);
+  if (f.status === 'paused' || f.status === 'revoked') return rule('disabled', f.status);
   if (f.status === 'reconnect_required') {
     return out('needs_reconnection', f.statusReason ?? 'reconnect_required');
   }
@@ -88,18 +115,18 @@ export function deriveConnectionHealth(
     expired(f.accessTokenExpiresAt) &&
     (!f.hasRefreshToken || expired(f.refreshTokenExpiresAt))
   ) {
-    return out('needs_reconnection', 'token_expired');
+    return rule('needs_reconnection', 'token_expired');
   }
   if (f.status === 'error') return out('degraded', f.statusReason ?? 'connection_error');
   const failing = f.consecutiveFailures >= p.failuresDegraded;
   if (f.lastSuccessAt === null) {
-    if (failing) return out('degraded', 'recent_failures');
+    if (failing) return rule('degraded', 'recent_failures');
     if ((age(f.createdAt, now) ?? 0) > p.firstSyncGraceMs)
-      return out('degraded', 'first_sync_overdue');
-    return out('pending_first_sync', 'pending_first_sync');
+      return rule('degraded', 'first_sync_overdue');
+    return rule('pending_first_sync', 'pending_first_sync');
   }
-  if (failing) return out('degraded', 'recent_failures');
-  if ((stalenessMs ?? 0) > p.staleAfterMs(f.platform)) return out('degraded', 'sync_stale');
-  if (ingestLagMs > p.lagDegradedMs) return out('degraded', 'ingest_lag');
-  return out('healthy', 'ok');
+  if (failing) return rule('degraded', 'recent_failures');
+  if ((stalenessMs ?? 0) > p.staleAfterMs(f.platform)) return rule('degraded', 'sync_stale');
+  if (ingestLagMs > p.lagDegradedMs) return rule('degraded', 'ingest_lag');
+  return rule('healthy', 'ok');
 }

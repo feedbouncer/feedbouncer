@@ -60,8 +60,6 @@ try {
   // Tracing registers its global provider here, before any span-producing code
   // (queues, workers, connectors) is constructed.
   const telemetry = buildWorkerTelemetry({ env, pool, ledger, log });
-  // When ConnectorRuntime is constructed here, pass observer: telemetry.connectorObserver,
-  // sync: telemetry.sync.
   const redis = createWorkerConnection(env.redisUrl.href);
   const producerRedis = createProducerConnection(env.redisUrl.href);
   for (const [name, client] of [

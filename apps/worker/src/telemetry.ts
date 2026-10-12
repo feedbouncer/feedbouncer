@@ -1,15 +1,9 @@
 import type { createPool } from '@feedbouncer/db';
-import {
-  PgSyncRecorder,
-  type ConnectorCallObserver,
-  type SyncRecorder,
-} from '@feedbouncer/connectors';
 import type { JobEventSink, PgJobLedger } from '@feedbouncer/jobs';
 import {
   PgHealthReader,
   createMetrics,
   initTracing,
-  promConnectorObserver,
   promJobSink,
   registerConnectorHealthMetrics,
   registerQueueMetrics,
@@ -23,8 +17,6 @@ export interface WorkerTelemetry {
   readonly tracing: TracingHandle;
   readonly metrics: FbMetrics;
   readonly jobSink: JobEventSink;
-  readonly connectorObserver: ConnectorCallObserver;
-  readonly sync: SyncRecorder;
 }
 
 /**
@@ -44,11 +36,5 @@ export function buildWorkerTelemetry(d: {
     log: d.log,
   });
   registerQueueMetrics(metrics, () => d.ledger.queueStats(), { log: d.log });
-  return {
-    tracing,
-    metrics,
-    jobSink: promJobSink(metrics),
-    connectorObserver: promConnectorObserver(metrics),
-    sync: new PgSyncRecorder(d.pool),
-  };
+  return { tracing, metrics, jobSink: promJobSink(metrics) };
 }

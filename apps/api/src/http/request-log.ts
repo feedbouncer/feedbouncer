@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { withLogContext, type Logger } from '@feedbouncer/service-runtime';
 import type { FbMetrics } from '@feedbouncer/observability';
+import type { TracedRequest } from './traced-request.js';
 
 // One line per request: method, route PATTERN, status, duration, request id.
 // Never request.url: paths and query strings can carry tokens and emails.
@@ -13,9 +14,7 @@ export function registerRequestLog(
 ): void {
   fastify.addHook('onResponse', async (request, reply) => {
     const route = request.routeOptions.url ?? 'unmatched';
-    const carrier = request as { fbTrace?: { trace_id: string; span_id: string } | undefined };
-    const trace = carrier.fbTrace;
-    const org = (request as { org?: { organizationId: string } }).org;
+    const { fbTrace: trace, org } = request as TracedRequest;
     // The log context drops values that are not safe ids, so a hostile id never
     // reaches the line as request_id.
     withLogContext(

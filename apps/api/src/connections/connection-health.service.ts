@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { HealthStatus } from '@feedbouncer/observability';
+import { HEALTH_REASONS, type HealthStatus } from '@feedbouncer/observability';
 import type { AppDeps } from '../deps.js';
 import { notFound } from '../http/errors.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
@@ -18,25 +18,8 @@ export interface ConnectionHealthView {
   ingestLagSeconds: number;
 }
 
-// Reasons derived by the health rules, plus the status reasons the framework
-// writes itself. Anything else (a stored free-form reason) is not echoed.
-const KNOWN_REASONS: ReadonlySet<string> = new Set([
-  'ok',
-  'pending_first_sync',
-  'recent_failures',
-  'first_sync_overdue',
-  'sync_stale',
-  'ingest_lag',
-  'token_expired',
-  'paused',
-  'revoked',
-  'connection_error',
-  'reconnect_required',
-  'oauth_pending',
-  'oauth_refresh_rejected',
-  'oauth_access_rejected',
-  'oauth_not_refreshable',
-]);
+// Anything outside the health vocabulary (a stored free-form reason) is not echoed.
+const KNOWN_REASONS: ReadonlySet<string> = new Set(HEALTH_REASONS);
 
 /** Maps a stored or derived reason to a bounded, non-sensitive vocabulary. */
 export function boundedReason(status: HealthStatus, raw: string): string {

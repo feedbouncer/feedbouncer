@@ -8,7 +8,7 @@ import { testWorkerEnv } from './testing/env-fixture.js';
 const log = createLogger('test', 'error', () => {});
 
 describe('buildWorkerTelemetry', () => {
-  it('registers health and queue gauges and job/connector sinks on one registry', async () => {
+  it('registers health and queue gauges and the job sink on one registry', async () => {
     const pool = {
       query: async () => {
         throw new Error('no db in unit test');

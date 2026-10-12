@@ -7,9 +7,8 @@ export async function startMetricsServer(o: {
   port: number;
   registry: Registry;
   log: Logger;
-  allowEphemeral?: boolean;
 }): Promise<RunningServer | null> {
-  if (o.port === 0 && !o.allowEphemeral) {
+  if (o.port === 0) {
     o.log.info('telemetry.metrics_disabled');
     return null;
   }
@@ -70,13 +69,7 @@ export async function startMetricsServer(o: {
     });
     return null;
   }
-  server.on('error', (err) => {
-    try {
-      o.log.warn('telemetry.metrics_server_error', errorFields(err));
-    } catch {
-      // telemetry never throws
-    }
-  });
+  server.on('error', (err) => o.log.warn('telemetry.metrics_server_error', errorFields(err)));
   const port = (server.address() as { port: number }).port;
   o.log.info('telemetry.metrics_ready', { host: o.host, port });
   return {

@@ -1,3 +1,4 @@
+import { createServer } from 'node:net';
 import { expect, it } from 'vitest';
 import { createLogger } from '@feedbouncer/service-runtime';
 import { createMetrics } from './metrics.js';
@@ -5,14 +6,23 @@ import { startMetricsServer } from './metrics-server.js';
 
 const log = createLogger('t', 'error', () => {});
 
+const freePort = (): Promise<number> =>
+  new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address() as { port: number };
+      probe.close(() => resolve(port));
+    });
+  });
+
 it('serves /metrics only', async () => {
   const m = createMetrics('api');
   const s = (await startMetricsServer({
     host: '127.0.0.1',
-    port: 0,
+    port: await freePort(),
     registry: m.registry,
     log,
-    allowEphemeral: true,
   }))!;
   const base = `http://127.0.0.1:${s.port}`;
   const ok = await fetch(`${base}/metrics`);
@@ -23,7 +33,7 @@ it('serves /metrics only', async () => {
   await s.close();
 });
 
-it('port 0 without allowEphemeral means disabled', async () => {
+it('port 0 means disabled', async () => {
   expect(
     await startMetricsServer({
       host: '127.0.0.1',
@@ -45,10 +55,9 @@ it('a failing collector yields 500 without detail and the server keeps serving',
   };
   const s = (await startMetricsServer({
     host: '127.0.0.1',
-    port: 0,
+    port: await freePort(),
     registry: broken as never,
     log,
-    allowEphemeral: true,
   }))!;
   const r = await fetch(`http://127.0.0.1:${s.port}/metrics`);
   expect(r.status).toBe(500);
@@ -60,10 +69,9 @@ it('a port conflict is logged and does not throw', async () => {
   const m = createMetrics('api');
   const a = (await startMetricsServer({
     host: '127.0.0.1',
-    port: 0,
+    port: await freePort(),
     registry: m.registry,
     log,
-    allowEphemeral: true,
   }))!;
   await expect(
     startMetricsServer({ host: '127.0.0.1', port: a.port, registry: m.registry, log }),
@@ -86,10 +94,9 @@ it('coalesces concurrent scrapes into one in-flight collection', async () => {
   };
   const s = (await startMetricsServer({
     host: '127.0.0.1',
-    port: 0,
+    port: await freePort(),
     registry: slow as never,
     log,
-    allowEphemeral: true,
   }))!;
   const url = `http://127.0.0.1:${s.port}/metrics`;
   const pending = Array.from({ length: 5 }, () => fetch(url));
@@ -118,10 +125,9 @@ it('keeps serving after a 500', async () => {
   };
   const s = (await startMetricsServer({
     host: '127.0.0.1',
-    port: 0,
+    port: await freePort(),
     registry: flaky as never,
     log,
-    allowEphemeral: true,
   }))!;
   const url = `http://127.0.0.1:${s.port}/metrics`;
   expect((await fetch(url)).status).toBe(500);
@@ -135,10 +141,9 @@ it('HEAD returns 200 with an empty body and query strings are served', async () 
   const m = createMetrics('api');
   const s = (await startMetricsServer({
     host: '127.0.0.1',
-    port: 0,
+    port: await freePort(),
     registry: m.registry,
     log,
-    allowEphemeral: true,
   }))!;
   const base = `http://127.0.0.1:${s.port}`;
   const head = await fetch(`${base}/metrics`, { method: 'HEAD' });

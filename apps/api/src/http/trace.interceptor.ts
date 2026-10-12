@@ -1,6 +1,5 @@
 import type { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
-import type { FastifyRequest } from 'fastify';
 import { Observable, type Subscription } from 'rxjs';
 import {
   SpanKind,
@@ -10,11 +9,7 @@ import {
   withLogContext,
   withSpan,
 } from '@feedbouncer/service-runtime';
-
-type TracedRequest = FastifyRequest & {
-  org?: { organizationId: string };
-  fbTrace?: { trace_id: string; span_id: string } | undefined;
-};
+import type { TracedRequest } from './traced-request.js';
 
 const statusOf = (e: unknown): number => {
   const s =
