@@ -29,6 +29,10 @@ function messageOf(fn: () => unknown): string {
 }
 
 describe('loadWorkerEnv', () => {
+  it('rejects an invalid LOG_LEVEL', () => {
+    expect(() => load({ ...base, LOG_LEVEL: 'verbose' })).toThrow(/LOG_LEVEL/);
+  });
+
   it('applies defaults', () => {
     expect(load(base)).toMatchObject({
       appEnv: 'production',

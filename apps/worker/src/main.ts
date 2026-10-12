@@ -13,7 +13,6 @@ import {
 } from '@feedbouncer/jobs';
 import { reportKeyCoverage } from '@feedbouncer/secrets';
 import {
-  EnvError,
   createLogger,
   errorFields,
   installCrashHandlers,
@@ -21,6 +20,7 @@ import {
   onShutdown,
   startHealthServer,
   waitUntil,
+  writeStartupConfigError,
 } from '@feedbouncer/service-runtime';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
@@ -32,7 +32,7 @@ const configWarnings: string[] = [];
 try {
   env = loadWorkerEnv(process.env, { warn: (m) => configWarnings.push(m) });
 } catch (err) {
-  process.stderr.write(`${err instanceof EnvError ? err.message : 'Invalid configuration'}\n`);
+  writeStartupConfigError('worker', err);
   process.exit(1);
 }
 

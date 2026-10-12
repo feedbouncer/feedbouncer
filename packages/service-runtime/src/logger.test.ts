@@ -154,10 +154,16 @@ describe('errorFields', () => {
       error: 'Error',
       errorCode: 'ECONNREFUSED',
       errorMessage: 'connect to postgresql://[redacted]@h/db failed',
+      errorClass: null,
     });
   });
   it('handles non-Error throws', () => {
-    expect(errorFields('boom')).toEqual({ error: 'NonError', errorCode: null, errorMessage: null });
+    expect(errorFields('boom')).toEqual({
+      error: 'NonError',
+      errorCode: null,
+      errorMessage: null,
+      errorClass: null,
+    });
   });
 });
 
@@ -235,4 +241,42 @@ it('exports isSecretField with the logger rules', () => {
   expect(isSecretField('refresh_token')).toBe(true);
   expect(isSecretField('tokenExpiresAt')).toBe(false);
   expect(isSecretField('commentId')).toBe(false);
+});
+
+it('core keys cannot be overridden', () => {
+  const lines: string[] = [];
+  const log = createLogger('api', 'info', (l) => lines.push(l));
+  log.info('real', {
+    msg: 'fake',
+    level: 'debug',
+    service: 'x',
+    time: 'then',
+    tenant_id: 'a"}\n{"level":"error',
+  });
+  expect(lines).toHaveLength(1);
+  expect(lines[0]!.includes('\n')).toBe(false);
+  const o = JSON.parse(lines[0]!);
+  expect(o).toMatchObject({ msg: 'real', level: 'info', service: 'api' });
+  expect(o.time).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+});
+
+it('a throwing sink never throws to the caller', () => {
+  const log = createLogger('api', 'info', () => {
+    throw new Error('EPIPE');
+  });
+  expect(() => log.error('x')).not.toThrow();
+});
+
+it('errorFields carries a stable code and class', () => {
+  const e = Object.assign(new Error('boom password=hunter2'), {
+    code: 'upstream_5xx',
+    errorClass: 'retryable',
+  });
+  expect(errorFields(e)).toEqual({
+    error: 'Error',
+    errorCode: 'upstream_5xx',
+    errorMessage: 'boom password=[redacted]',
+    errorClass: 'retryable',
+  });
+  expect(errorFields(new Error('x')).errorClass).toBeNull();
 });

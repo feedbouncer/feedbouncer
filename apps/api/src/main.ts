@@ -5,12 +5,12 @@ import { createPool } from '@feedbouncer/db';
 import { createSmtpMailer } from '@feedbouncer/mailer';
 import { reportKeyCoverage } from '@feedbouncer/secrets';
 import {
-  EnvError,
   createLogger,
   errorFields,
   installCrashHandlers,
   logConfigurationLoaded,
   onShutdown,
+  writeStartupConfigError,
 } from '@feedbouncer/service-runtime';
 import { buildApp } from './app.factory.js';
 import { loadApiEnv, type ApiEnv } from './env.js';
@@ -20,7 +20,7 @@ const configWarnings: string[] = [];
 try {
   env = loadApiEnv(process.env, { warn: (m) => configWarnings.push(m) });
 } catch (err) {
-  process.stderr.write(`${err instanceof EnvError ? err.message : 'Invalid configuration'}\n`);
+  writeStartupConfigError('api', err);
   process.exit(1);
 }
 

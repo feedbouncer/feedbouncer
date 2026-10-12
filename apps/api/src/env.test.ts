@@ -46,6 +46,10 @@ describe('loadApiEnv', () => {
     expect(env.trustProxyHops).toBe(0);
   });
 
+  it('rejects an invalid LOG_LEVEL', () => {
+    expect(() => load({ ...base, LOG_LEVEL: 'verbose' })).toThrow(/LOG_LEVEL/);
+  });
+
   it('fails naming REDIS_URL, without leaking DATABASE_URL credentials', () => {
     expect(messageOf(() => load(without('REDIS_URL')))).toMatch(/REDIS_URL is not set/);
     expect(messageOf(() => load(without('REDIS_URL')))).not.toContain('dev-only-pw');
