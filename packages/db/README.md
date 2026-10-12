@@ -140,6 +140,7 @@ so the database refuses cross-tenant links.
 | `rule`              | A brand's moderation rule: conditions, action, mode, priority, `enabled`.                                                                      | `organization_id`, `brand_id`          | none                                        |
 | `decision`          | One append-only moderation outcome for a comment, with actor, reason and optional classifier fields.                                           | `organization_id`, `brand_id`          | none (`id`)                                 |
 | `audit_event`       | Append-only record of significant changes.                                                                                                     | `organization_id`, optional brand      | none (`id`)                                 |
+| `job_ledger`        | One row per logical platform job: payload, state, retry counters, lease, effect record, DLQ metadata (packages/jobs).                          | org, brand, connection                 | `(organization_id, idempotency_key)`        |
 | `processed_job`     | Idempotency ledger for background jobs (system table, no tenant).                                                                              | none                                   | `(queue, job_id)`                           |
 
 `connection.granted_scopes` holds the OAuth scopes the platform granted (at most
@@ -229,6 +230,26 @@ is archived. Brand names are unique per organization among active brands
 (`archived_at IS NULL`), compared case-insensitively after trimming whitespace
 (`lower(btrim(name))`), so an archived brand's name can be reused.
 
+### Job ledger
+
+`job_ledger` holds one row per logical platform job (`@feedbouncer/jobs`). Redis
+only carries the row's id; the row is the source of truth for idempotency
+(unique per `(organization_id, idempotency_key)`), retry counters, the worker
+lease and the effect record.
+
+`state` values:
+
+- `queued`: waiting for, or being worked by, a worker. A lease
+  (`lease_owner`, `lease_expires_at`) is set while a worker holds it.
+- `completed`: the job's effect is done and recorded in `result`.
+- `dead_lettered`: gave up, with `dead_letter_reason` and `dead_lettered_at`
+  set. Listed in the dead-letter queue.
+- `resolved`: a dead-lettered job that an operator handled (`resolution` set).
+
+`queued` rows are never purged by retention (`expires_at` only applies to the
+other states), so a stuck job stays visible. `payload` may hold comment text but
+never credentials; the application layer enforces that.
+
 ## Deletion behavior
 
 Every foreign key states its `ON DELETE` action. These are the actions as built:
@@ -243,6 +264,7 @@ Every foreign key states its `ON DELETE` action. These are the actions as built:
 | `brand`          | `connection`                                                      | CASCADE                                 |
 | `connection`     | `source`, `author`                                                | CASCADE                                 |
 | `connection`     | `connection_secret`                                               | CASCADE                                 |
+| `connection`     | `job_ledger`                                                      | CASCADE                                 |
 | `source`         | `comment`                                                         | CASCADE                                 |
 | `author`         | `comment.author_id`                                               | SET NULL                                |
 | parent `comment` | `comment.parent_comment_id`                                       | SET NULL (`parent_external_id` is kept) |

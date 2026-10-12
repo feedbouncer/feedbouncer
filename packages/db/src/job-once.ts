@@ -26,9 +26,9 @@ export function validateJobKey(key: JobKey): void {
 //   sees it and is counted as a duplicate.
 // - If work throws, the claim rolls back, so a retry processes normally.
 // Limitation: the transaction stays open while `work` runs. Fine for DB-only
-// work; jobs calling external APIs need a claim/complete state machine
-// (job-queue ticket). `work` must use the provided client, not the pool
-// (otherwise a saturated pool can stall).
+// work; for platform jobs use `@feedbouncer/jobs` (job_ledger lease + effect
+// record). `work` must use the provided client, not the pool (otherwise a
+// saturated pool can stall).
 const CLAIM_SQL = `
   INSERT INTO processed_job (queue, job_id, processed_by)
   VALUES ($1, $2, $3)
