@@ -32,9 +32,9 @@ For how to write a job, see [docs/jobs/defining-a-job.md](../jobs/defining-a-job
 | Handler timeout                     | 60 s            | per job type, in code |
 | Worker lease                        | timeout + 30 s  | derived               |
 
-Overrides apply in this order, later wins: environment default, per-platform policy
-(`JobsConfig.platformPolicies`), per job type (`JobDefinition.policy`). Every resolved
-policy is validated, and a bad value fails the worker at startup.
+Overrides apply in this order, later wins: environment default, then per job type
+(`JobDefinition.policy`). Every resolved policy is validated, and a bad value fails
+the worker at startup.
 
 Backoff before retry `n` is `min(cap, base * 2^(n-1))`, then jittered into the upper
 half: `[exp/2, exp]`. With the defaults the delays are about 2.5-5 s, 5-10 s, 10-20 s,
@@ -46,15 +46,15 @@ exceed the backoff cap) and does not use up an attempt. It is dead-lettered with
 
 ## Error classes
 
-| Class                           | Examples                                      | Outcome                                            |
-| ------------------------------- | --------------------------------------------- | -------------------------------------------------- |
-| Transient                       | 5xx, network error, timeout, unexpected error | Retry with backoff; DLQ `retries_exhausted`        |
-| Rate limited                    | 429, platform quota                           | Defer by `retry-after`; DLQ `rate_limit_exhausted` |
-| Credential expired, fixable by reconnecting | `auth_expired` after the one refresh attempt  | DLQ `needs_reconnection`, no retries   |
-| Non-retryable                   | other 4xx, malformed response, unsupported, a revoked connection (reconnecting can't fix it) | DLQ `non_retryable` |
-| Target gone                     | 404 on a replayed job                         | Row becomes `resolved` (`target_gone`)             |
-| Invalid job                     | payload fails its schema, unknown job type    | DLQ `invalid_job`                                  |
-| Poison job (crashes the worker) | process dies mid-run, repeatedly              | DLQ `stall_limit_exceeded` after `maxAttempts`     |
+| Class                                       | Examples                                                                                     | Outcome                                            |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Transient                                   | 5xx, network error, timeout, unexpected error                                                | Retry with backoff; DLQ `retries_exhausted`        |
+| Rate limited                                | 429, platform quota                                                                          | Defer by `retry-after`; DLQ `rate_limit_exhausted` |
+| Credential expired, fixable by reconnecting | `auth_expired` after the one refresh attempt                                                 | DLQ `needs_reconnection`, no retries               |
+| Non-retryable                               | other 4xx, malformed response, unsupported, a revoked connection (reconnecting can't fix it) | DLQ `non_retryable`                                |
+| Target gone                                 | 404 on a replayed job                                                                        | Row becomes `resolved` (`target_gone`)             |
+| Invalid job                                 | payload fails its schema, unknown job type                                                   | DLQ `invalid_job`                                  |
+| Poison job (crashes the worker)             | process dies mid-run, repeatedly                                                             | DLQ `stall_limit_exceeded` after `maxAttempts`     |
 
 ## Dead-letter queue
 

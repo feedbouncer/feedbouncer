@@ -105,7 +105,7 @@ function processorFor(platform: Platform, ledger: JobLedgerPort, workerId: strin
     log: h.log,
     workerId,
     dlqRetentionMs: h.config.dlqRetentionMs,
-    policyFor: policyResolver(h.config, h.jobs, platform),
+    policyFor: policyResolver(h.config, h.jobs),
   });
 }
 

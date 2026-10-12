@@ -52,7 +52,7 @@ export class JobWorkers {
           log: d.log,
           workerId: d.workerId,
           dlqRetentionMs: d.config.dlqRetentionMs,
-          policyFor: policyResolver(d.config, d.jobs, p),
+          policyFor: policyResolver(d.config, d.jobs),
         }),
         {
           connection: d.connection,

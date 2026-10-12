@@ -2,7 +2,9 @@ import { randomBytes } from 'node:crypto';
 import net from 'node:net';
 import { Redis } from 'ioredis';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { createProducerConnection } from './connections.js';
+import { JobRegistry } from './definition.js';
 import { QueueSet } from './queues.js';
 import { createJobsHarness, type JobsHarness } from './testing/index.js';
 
@@ -170,12 +172,17 @@ describe('JobWorkers', () => {
   });
 
   it('checks the dedup window for platforms that have no consumer here', async () => {
-    const config = {
-      ...h.config,
-      concurrency: { ...h.config.concurrency, youtube: 0 },
-      platformPolicies: { youtube: { maxDeferredMs: 500_000_000 } },
-    };
-    await expect(h.workers({ config })).rejects.toThrow('JOB_DEDUP_WINDOW_DAYS must cover');
+    const config = { ...h.config, concurrency: { ...h.config.concurrency, youtube: 0 } };
+    const jobs = new JobRegistry();
+    jobs.register({
+      type: 'slow_retry',
+      platforms: ['youtube'],
+      policy: { maxDeferredMs: 500_000_000 },
+      payload: z.strictObject({}),
+      externalRef: () => 'slow',
+      handle: async () => ({ status: 'ok' }),
+    });
+    await expect(h.workers({ config, jobs })).rejects.toThrow('JOB_DEDUP_WINDOW_DAYS must cover');
   });
 
   it('close() waits for an in-flight sweep', async () => {

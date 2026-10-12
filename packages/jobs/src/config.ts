@@ -19,8 +19,6 @@ export interface JobsConfig {
   readonly prefix: string;
   /** JOB_MAX_ATTEMPTS, JOB_BACKOFF_BASE_MS, JOB_BACKOFF_MAX_MS. */
   readonly defaultPolicy: RetryPolicy;
-  /** Code-level overrides per platform; empty today. */
-  readonly platformPolicies: Readonly<Partial<Record<Platform, Partial<RetryPolicy>>>>;
   /** JOB_CONCURRENCY (default 2), JOB_CONCURRENCY_<PLATFORM>; 0 disables the consumer. */
   readonly concurrency: Readonly<Record<Platform, number>>;
   readonly dlqRetentionMs: number;
@@ -77,7 +75,6 @@ export function loadJobsConfig(env: Env): JobsConfig {
   return {
     prefix,
     defaultPolicy,
-    platformPolicies: {},
     concurrency,
     dlqRetentionMs:
       readInt(env, 'JOB_DLQ_RETENTION_DAYS', { min: 1, max: 365, fallback: 14 }) * DAY_MS,
@@ -89,13 +86,8 @@ export function loadJobsConfig(env: Env): JobsConfig {
   };
 }
 
-export function policyResolver(
-  c: JobsConfig,
-  jobs: JobRegistry,
-  p: Platform,
-): (jobType: string) => RetryPolicy {
-  return (jobType) =>
-    resolvePolicy(c.defaultPolicy, c.platformPolicies[p], jobs.get(jobType)?.policy);
+export function policyResolver(c: JobsConfig, jobs: JobRegistry): (jobType: string) => RetryPolicy {
+  return (jobType) => resolvePolicy(c.defaultPolicy, jobs.get(jobType)?.policy);
 }
 
 /**
@@ -108,7 +100,7 @@ export function assertDedupWindow(
   platforms: readonly Platform[],
 ): void {
   for (const platform of platforms) {
-    const policyFor = policyResolver(c, jobs, platform);
+    const policyFor = policyResolver(c, jobs);
     for (const def of jobs.all()) {
       if (!jobs.supports(def.type, platform)) continue;
       const horizon = retryHorizonMs(policyFor(def.type), def.timeoutMs ?? DEFAULT_TIMEOUT_MS);
