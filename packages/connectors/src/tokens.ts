@@ -48,16 +48,11 @@ export function normalizeTokenSet(
     throw new ConnectorError('permanent', 'invalid_connector_output');
   const expiry = (d: unknown): Date | null => {
     if (validDate(d)) return d;
-    if (d != null) {
-      try {
-        log.warn('connector returned an unusable token expiry', {
-          ...fields,
-          code: 'invalid_token_expiry',
-        });
-      } catch {
-        /* a logger failure must not reject a refresh */
-      }
-    }
+    if (d != null)
+      log.warn('connector returned an unusable token expiry', {
+        ...fields,
+        code: 'invalid_token_expiry',
+      });
     return null;
   };
   return {
@@ -96,7 +91,7 @@ export class TokenManager {
     const key = scopeKey(scope);
     const existing = this.#inflight.get(key);
     if (existing) {
-      this.#safeInfo('token refresh joined', { ...ids(scope), waiter: 'in_process' });
+      this.d.log.info('token refresh joined', { ...ids(scope), waiter: 'in_process' });
       return existing;
     }
     const p = this.d.lock
@@ -104,19 +99,6 @@ export class TokenManager {
       .finally(() => this.#inflight.delete(key));
     this.#inflight.set(key, p);
     return p;
-  }
-
-  /** Log lines must never abort a refresh, reject a waiter or replace a ConnectorError. */
-  #safeInfo(
-    msg: string,
-    fields: Readonly<Record<string, string | number | boolean | null>>,
-    level: 'info' | 'warn' = 'info',
-  ): void {
-    try {
-      this.d.log[level](msg, fields);
-    } catch {
-      /* a logger failure must not surface */
-    }
   }
 
   #usable(t: TokenRecord, rejected: Secret | undefined): boolean {
@@ -137,7 +119,7 @@ export class TokenManager {
       });
     const { access, refresh } = await this.d.vault.readTokens(scope);
     if (access && this.#usable(access, rejected)) {
-      this.#safeInfo('token refresh reused', { ...ids(scope), waiter: 'cross_process' });
+      this.d.log.info('token refresh reused', { ...ids(scope), waiter: 'cross_process' });
       return access.value;
     }
     const refreshExpired =
@@ -155,11 +137,11 @@ export class TokenManager {
     } catch (err) {
       const ce = toConnectorError(err);
       if (ce.kind === 'auth_expired') return this.#reauth(scope, 'oauth_refresh_rejected');
-      this.#safeInfo(
-        'token refresh failed',
-        { ...ids(scope), kind: ce.kind, errorCode: ce.code },
-        'warn',
-      );
+      this.d.log.warn('token refresh failed', {
+        ...ids(scope),
+        kind: ce.kind,
+        errorCode: ce.code,
+      });
       throw ce;
     }
     if (tokens.refreshToken)
@@ -171,7 +153,7 @@ export class TokenManager {
       value: tokens.accessToken,
       expiresAt: tokens.accessTokenExpiresAt,
     });
-    this.#safeInfo('access token refreshed', {
+    this.d.log.info('access token refreshed', {
       ...ids(scope),
       rotated: tokens.refreshToken !== null,
     });
@@ -180,11 +162,11 @@ export class TokenManager {
 
   async #reauth(scope: ConnectionScope, reason: ReauthReason): Promise<never> {
     const newlyFlagged = await this.d.directory.markReauthRequired(scope, reason);
-    this.#safeInfo(
-      'connection requires reauthorization',
-      { ...ids(scope), reason, newlyFlagged },
-      'warn',
-    );
+    this.d.log.warn('connection requires reauthorization', {
+      ...ids(scope),
+      reason,
+      newlyFlagged,
+    });
     throw new ConnectorError('auth_expired', reason, { reauthorize: true });
   }
 }

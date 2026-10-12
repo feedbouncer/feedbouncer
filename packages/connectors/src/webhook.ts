@@ -136,7 +136,7 @@ export class WebhookGate {
             skews = 0;
           }
           if (skews > 0)
-            this.#safeLog('telemetry.negative_lag', {
+            this.d.log.warn('telemetry.negative_lag', {
               source: 'webhook_event',
               platform,
               count: skews,
@@ -159,7 +159,7 @@ export class WebhookGate {
           const syncId: string | null = verifiedConnectionId;
           if (outcome.status === 'accepted' && syncId !== null && this.d.sync) {
             const warn = (err: unknown) =>
-              this.#safeLog('telemetry.sync_record_failed', {
+              this.d.log.warn('telemetry.sync_record_failed', {
                 platform,
                 connectionId: syncId,
                 error: err instanceof Error ? err.name : 'NonError',
@@ -176,18 +176,6 @@ export class WebhookGate {
     );
   }
 
-  #safeLog(
-    msg: string,
-    fields: Readonly<Record<string, string | number | boolean | null>>,
-    level: 'info' | 'warn' = 'warn',
-  ): void {
-    try {
-      this.d.log[level](msg, fields);
-    } catch {
-      /* a logger failure must not surface */
-    }
-  }
-
   async #handleInner(
     req: InboundWebhook,
     onVerified: (d: VerifiedDelivery) => void,
@@ -195,7 +183,7 @@ export class WebhookGate {
   ): Promise<WebhookOutcome> {
     const v = await this.#verify(req);
     if (!v.ok) {
-      this.#safeLog('webhook rejected', {
+      this.d.log.warn('webhook rejected', {
         platform: isPlatform(req.platform) ? req.platform : 'unknown',
         check: v.check,
       });
@@ -217,11 +205,7 @@ export class WebhookGate {
           () => deliver(delivery),
         );
         if (outcome === 'duplicate') {
-          this.#safeLog(
-            'duplicate webhook delivery skipped',
-            { platform: delivery.platform },
-            'info',
-          );
+          this.d.log.info('duplicate webhook delivery skipped', { platform: delivery.platform });
           return { status: 'duplicate' };
         }
         return { status: 'accepted', eventCount: delivery.events.length };
@@ -287,7 +271,7 @@ export class WebhookGate {
     if (boundAccount !== null) {
       const kept = events.filter((e) => e.externalAccountId === boundAccount);
       if (kept.length !== events.length)
-        this.#safeLog('webhook events for another account dropped', {
+        this.d.log.warn('webhook events for another account dropped', {
           platform,
           connectionId,
           dropped: events.length - kept.length,

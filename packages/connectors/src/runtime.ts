@@ -317,16 +317,11 @@ export class ConnectionClient {
   #recordSync(f: (s: SyncRecorder) => Promise<void>): void {
     const sync = this.d.sync;
     if (!sync) return;
-    const warn = (err: unknown) => {
-      try {
-        this.d.log.warn('telemetry.sync_record_failed', {
-          ...this.#ids(),
-          errorName: errorName(err),
-        });
-      } catch {
-        /* a logger failure must not surface either */
-      }
-    };
+    const warn = (err: unknown) =>
+      this.d.log.warn('telemetry.sync_record_failed', {
+        ...this.#ids(),
+        errorName: errorName(err),
+      });
     try {
       void f(sync).catch(warn);
     } catch (err) {

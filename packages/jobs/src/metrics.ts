@@ -72,11 +72,7 @@ export class JobMetrics {
       // Telemetry never fails a job; say so once.
       if (this.#warned) return;
       this.#warned = true;
-      try {
-        this.log.warn('telemetry.job_sink_failed', {});
-      } catch {
-        // ignore
-      }
+      this.log.warn('telemetry.job_sink_failed', {});
     }
   }
 

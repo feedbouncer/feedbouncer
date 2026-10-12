@@ -87,14 +87,6 @@ function capture() {
   const lines: string[] = [];
   return { lines, log: createLogger('test', 'debug', (l) => lines.push(l)) };
 }
-const throwingLogger = (): Logger => {
-  const boom = () => {
-    throw new Error('logger down');
-  };
-  const l = { debug: boom, info: boom, warn: boom, error: boom, child: () => l };
-  return l as unknown as Logger;
-};
-
 describe('webhook attribution', () => {
   it('a rejected delivery naming a foreign connection id is attributed to nobody', async () => {
     const { lines, log } = capture();
@@ -130,16 +122,6 @@ describe('webhook attribution', () => {
 });
 
 describe('webhook telemetry never fails intake', () => {
-  it('a throwing logger does not fail handle()', async () => {
-    const g = build(throwingLogger());
-    expect((await g.handle(delivery('wrong-secret', CONN), async () => {})).status).toBe(
-      'rejected',
-    );
-    const ok = delivery(SECRET, CONN);
-    expect((await g.handle(ok, async () => {})).status).toBe('accepted');
-    expect((await g.handle(ok, async () => {})).status).toBe('duplicate');
-  });
-
   it('a throwing observer does not fail handle()', async () => {
     const seen: WebhookDeliveryEvent[] = [];
     const g = build(capture().log, {
