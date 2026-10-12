@@ -413,17 +413,30 @@ export class PgJobLedger implements JobLedgerPort {
     return { status: 'busy', retryInMs: Math.max(Number(p.wait_ms), 250) };
   }
 
-  async queueStats(): Promise<QueueStat[]> {
-    const { rows } = await this.pool.query<{
-      platform: Platform;
-      depth: number;
-      oldest_ms: string | number;
-    }>(QUEUE_STATS_SQL);
-    return rows.map((r) => ({
-      platform: r.platform,
-      depth: r.depth,
-      oldestAgeMs: Number(r.oldest_ms),
-    }));
+  /** Read-only snapshot for scrape-time gauges; statement_timeout bounds a stuck query server-side. */
+  async queueStats(timeoutMs = 5_000): Promise<QueueStat[]> {
+    const client = await this.pool.connect();
+    let broken = false;
+    try {
+      await client.query('BEGIN READ ONLY');
+      await client.query("SELECT set_config('statement_timeout', $1, true)", [String(timeoutMs)]);
+      const { rows } = await client.query<{
+        platform: Platform;
+        depth: number;
+        oldest_ms: string | number;
+      }>(QUEUE_STATS_SQL);
+      await client.query('COMMIT');
+      return rows.map((r) => ({
+        platform: r.platform,
+        depth: r.depth,
+        oldestAgeMs: Number(r.oldest_ms),
+      }));
+    } catch (err) {
+      broken = true;
+      throw err;
+    } finally {
+      client.release(broken ? true : undefined);
+    }
   }
 
   async complete(id: string, owner: string, resultJson: string): Promise<boolean> {

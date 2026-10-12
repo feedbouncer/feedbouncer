@@ -1,0 +1,160 @@
+import type pg from 'pg';
+import type { Platform } from '@feedbouncer/connectors';
+import type { ErrorClass } from '@feedbouncer/service-runtime';
+import { deriveConnectionHealth, type ConnectionHealth, type HealthPolicy } from './derive.js';
+
+/** @internal */
+export const HEALTH_SQL_FOR_TESTS = `
+  SELECT c.id, c.organization_id, c.brand_id, c.platform, c.status, c.status_reason, c.created_at,
+         s.last_success_at, s.last_failure_at, s.last_error_code, s.last_error_class,
+         COALESCE(s.consecutive_failures, 0) AS consecutive_failures,
+         (SELECT min(j.created_at) FROM job_ledger j WHERE j.connection_id = c.id AND j.state = 'queued') AS oldest_queued_at,
+         a.expires_at AS access_expires_at, (a.id IS NOT NULL) AS has_access,
+         r.expires_at AS refresh_expires_at, (r.id IS NOT NULL) AS has_refresh,
+         now() AS db_now
+    FROM connection c
+    LEFT JOIN connection_sync s ON s.connection_id = c.id
+    LEFT JOIN LATERAL (SELECT id, expires_at FROM connection_secret
+                        WHERE connection_id = c.id AND kind = 'access_token' ORDER BY created_at DESC LIMIT 1) a ON true
+    LEFT JOIN LATERAL (SELECT id, expires_at FROM connection_secret
+                        WHERE connection_id = c.id AND kind = 'refresh_token' ORDER BY created_at DESC LIMIT 1) r ON true`;
+
+interface Rec {
+  id: string;
+  organization_id: string;
+  brand_id: string;
+  platform: Platform;
+  status: 'active' | 'paused' | 'revoked' | 'error' | 'reconnect_required';
+  status_reason: string | null;
+  created_at: Date;
+  last_success_at: Date | null;
+  last_failure_at: Date | null;
+  last_error_code: string | null;
+  last_error_class: ErrorClass | null;
+  consecutive_failures: number;
+  oldest_queued_at: Date | null;
+  access_expires_at: Date | null;
+  has_access: boolean;
+  refresh_expires_at: Date | null;
+  has_refresh: boolean;
+  db_now: Date;
+}
+
+export interface HealthReader {
+  forBrand(organizationId: string, brandId: string): Promise<ConnectionHealth[]>;
+  all(limit: number): Promise<{ rows: ConnectionHealth[]; truncated: boolean }>;
+}
+
+export interface PgHealthReaderOptions {
+  /** Server-side statement_timeout and overall bound for each query. Default 5000. */
+  readonly timeoutMs?: number;
+}
+
+const FOR_BRAND_LIMIT = 500;
+
+/**
+ * Runs one read-only statement with a server-side statement_timeout (so a stuck
+ * query is cancelled by Postgres, not just abandoned) and a client-side bound
+ * that also covers waiting for a pooled connection.
+ */
+export async function boundedQuery<R extends pg.QueryResultRow>(
+  pool: pg.Pool,
+  text: string,
+  values: readonly unknown[],
+  timeoutMs: number,
+): Promise<R[]> {
+  const run = async (): Promise<R[]> => {
+    const client = await pool.connect();
+    let broken = false;
+    try {
+      await client.query('BEGIN READ ONLY');
+      await client.query("SELECT set_config('statement_timeout', $1, true)", [String(timeoutMs)]);
+      const { rows } = await client.query<R>(text, [...values]);
+      await client.query('COMMIT');
+      return rows;
+    } catch (err) {
+      broken = true;
+      throw err;
+    } finally {
+      // An errored connection is destroyed rather than returned to the pool.
+      client.release(broken ? true : undefined);
+    }
+  };
+  let timer: NodeJS.Timeout | undefined;
+  const bound = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`health query exceeded ${timeoutMs}ms`)),
+      timeoutMs + 1_000,
+    );
+    timer.unref();
+  });
+  const work = run();
+  work.catch(() => {}); // the loser of the race must not become an unhandled rejection
+  try {
+    return await Promise.race([work, bound]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export class PgHealthReader implements HealthReader {
+  readonly #timeoutMs: number;
+  constructor(
+    private readonly pool: pg.Pool,
+    private readonly policy: HealthPolicy,
+    opts: PgHealthReaderOptions = {},
+  ) {
+    this.#timeoutMs = opts.timeoutMs ?? 5_000;
+  }
+
+  #derive(r: Rec): ConnectionHealth {
+    return deriveConnectionHealth(
+      {
+        connectionId: r.id,
+        organizationId: r.organization_id,
+        brandId: r.brand_id,
+        platform: r.platform,
+        status: r.status,
+        statusReason: r.status_reason,
+        createdAt: r.created_at,
+        lastSuccessAt: r.last_success_at,
+        lastFailureAt: r.last_failure_at,
+        lastErrorCode: r.last_error_code,
+        lastErrorClass: r.last_error_class,
+        consecutiveFailures: r.consecutive_failures,
+        oldestQueuedAt: r.oldest_queued_at,
+        accessTokenExpiresAt: r.access_expires_at,
+        hasAccessToken: r.has_access,
+        refreshTokenExpiresAt: r.refresh_expires_at,
+        hasRefreshToken: r.has_refresh,
+      },
+      this.policy,
+      r.db_now,
+    );
+  }
+
+  async forBrand(organizationId: string, brandId: string): Promise<ConnectionHealth[]> {
+    const rows = await boundedQuery<Rec>(
+      this.pool,
+      `${HEALTH_SQL_FOR_TESTS} WHERE c.organization_id = $1::uuid AND c.brand_id = $2::uuid ORDER BY c.created_at, c.id LIMIT ${FOR_BRAND_LIMIT}`,
+      [organizationId, brandId],
+      this.#timeoutMs,
+    );
+    return rows.map((r) => this.#derive(r));
+  }
+
+  async all(limit: number): Promise<{ rows: ConnectionHealth[]; truncated: boolean }> {
+    if (!Number.isSafeInteger(limit) || limit < 1)
+      throw new RangeError('limit must be a positive integer');
+    const rows = await boundedQuery<Rec>(
+      this.pool,
+      `${HEALTH_SQL_FOR_TESTS} ORDER BY c.id LIMIT $1`,
+      [limit + 1],
+      this.#timeoutMs,
+    );
+    return {
+      rows: rows.slice(0, limit).map((r) => this.#derive(r)),
+      truncated: rows.length > limit,
+    };
+  }
+}

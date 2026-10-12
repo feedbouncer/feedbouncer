@@ -4,3 +4,7 @@ export * from './diag.js';
 export * from './metrics.js';
 export * from './metrics-server.js';
 export * from './sinks.js';
+export * from './health/derive.js';
+export * from './health/policy.js';
+export * from './health/pg-reader.js';
+export * from './health/metrics.js';

@@ -16,6 +16,11 @@ export interface FbMetrics {
   readonly httpDuration: Histogram<'method' | 'route'>;
   readonly collectErrors: Counter<'collector'>;
   readonly negativeLag: Counter<'source'>;
+  /**
+   * Scrape-time preparation hooks. They run before collect_errors_total is read, so a
+   * collector that fails during a scrape is counted in that same scrape.
+   */
+  readonly scrapeHooks: Array<() => Promise<void>>;
 }
 
 export function createMetrics(service: 'api' | 'worker'): FbMetrics {
@@ -23,7 +28,9 @@ export function createMetrics(service: 'api' | 'worker'): FbMetrics {
   registry.setDefaultLabels({ service });
   collectDefaultMetrics({ register: registry });
   const r = [registry];
+  const scrapeHooks: Array<() => Promise<void>> = [];
   return {
+    scrapeHooks,
     registry,
     jobs: new Counter({
       name: 'feedbouncer_jobs_total',
@@ -88,6 +95,9 @@ export function createMetrics(service: 'api' | 'worker'): FbMetrics {
       help: 'Scrape-time collectors that failed (their gauges are omitted).',
       labelNames: ['collector'] as const,
       registers: r,
+      async collect() {
+        await Promise.all(scrapeHooks.map((h) => h().catch(() => undefined)));
+      },
     }),
     negativeLag: new Counter({
       name: 'feedbouncer_telemetry_negative_lag_total',
