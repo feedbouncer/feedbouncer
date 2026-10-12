@@ -99,6 +99,10 @@ This is a pnpm workspace orchestrated by [Turborepo](https://turborepo.com).
 pnpm install
 ```
 
+### Writing a connector
+
+Platform integrations implement the contract in `@feedbouncer/connectors`. See [docs/connectors/writing-a-connector.md](docs/connectors/writing-a-connector.md).
+
 ### Common commands
 
 | Command                                           | What it does                                                                                            |

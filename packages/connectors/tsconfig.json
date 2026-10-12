@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist", "rootDir": "src", "types": ["node"] },
+  "include": ["src"],
+  "references": [
+    { "path": "../service-runtime/tsconfig.build.json" },
+    { "path": "../db/tsconfig.build.json" },
+    { "path": "../secrets/tsconfig.build.json" },
+    { "path": "../authz/tsconfig.build.json" }
+  ]
+}

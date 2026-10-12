@@ -39,6 +39,24 @@ describe('envelope v1', () => {
     expect((await open(ringK1, blob, ctx)).reveal()).toBe(TOKEN);
   });
 
+  it('seals and opens an oauth_pkce_verifier bound to its record', async () => {
+    const pkce = {
+      organizationId: 'o1',
+      connectionId: 'state-row-1',
+      kind: 'oauth_pkce_verifier',
+    } as const;
+    const { blob } = await seal(ringK1, new Secret('verifier'), pkce);
+    expect((await open(ringK1, blob, pkce)).reveal()).toBe('verifier');
+    await expect(
+      open(ringK1, blob, { ...pkce, connectionId: 'state-row-2' }),
+    ).rejects.toMatchObject({
+      reason: 'tampered',
+    });
+    await expect(open(ringK1, blob, { ...pkce, kind: 'access_token' })).rejects.toMatchObject({
+      reason: 'tampered',
+    });
+  });
+
   it('never contains the plaintext and is randomized per seal', async () => {
     const a = await seal(ringK1, new Secret(TOKEN), ctx);
     const b = await seal(ringK1, new Secret(TOKEN), ctx);
@@ -206,6 +224,8 @@ describe('envelope v1', () => {
           const err = await run().catch((e: unknown) => e);
           expect(err).toBeInstanceOf(TypeError);
           expect((err as Error).message).not.toContain('bogus-kind');
+          if (c.kind !== ctx.kind)
+            expect((err as Error).message).toBe('Envelope context has an unknown envelope kind.');
         }
       }
     });

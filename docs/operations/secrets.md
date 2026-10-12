@@ -216,6 +216,21 @@ plaintext credential column (expected: 0).
 
 The command exits `1` while any of these remain.
 
+## Pending OAuth flows
+
+While a user is connecting a platform account, the OAuth flow keeps a
+short-lived PKCE verifier, sealed with the same envelope encryption and key
+ring as connection credentials. A flow lives for at most 10 minutes.
+
+If you remove an encryption key while a flow started under it is pending, that
+callback fails closed (the user sees the connection was rejected) and the user
+starts the connection again. Nothing else is affected.
+
+These rows (`oauth_state`) are not counted by `pnpm secrets status`, and
+`reencrypt` does not touch them, so a key reported as "safe to remove" can
+still have pending flows. Removing it costs those users one restart. Waiting
+10 minutes after the last use of a retired key avoids even that.
+
 ## Tampered or corrupted credentials
 
 A credential that fails its integrity check is never used. Its connection is
