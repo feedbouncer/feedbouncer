@@ -90,7 +90,13 @@ export class MemoryConnectionDirectory implements ConnectionDirectory {
   async activate(scope: ConnectionScope, actorUserId: string): Promise<void> {
     void actorUserId; // the Pg adapter records the actor; memory keeps no audit trail
     const row = this.#rows.get(scope.connectionId);
-    if (!row || !sameScope(row.rec.scope, scope) || row.rec.status === 'paused') return;
+    // Same transitions as the Pg adapter: paused and revoked connections never activate.
+    if (
+      !row ||
+      !sameScope(row.rec.scope, scope) ||
+      !['active', 'reconnect_required', 'error'].includes(row.rec.status)
+    )
+      return;
     this.#rows.set(scope.connectionId, { rec: { ...row.rec, status: 'active' }, reason: null });
   }
 }

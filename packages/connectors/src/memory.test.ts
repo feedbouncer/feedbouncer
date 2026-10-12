@@ -64,6 +64,16 @@ describe('memory adapters', () => {
     expect((await d.load(a.scope))?.status).toBe('active');
   });
 
+  it('activate never resurrects a paused or revoked connection', async () => {
+    const d = new MemoryConnectionDirectory();
+    for (const status of ['paused', 'revoked'] as const) {
+      const sc = { organizationId: 'o1', brandId: 'b1', connectionId: `c-${status}` };
+      d.seed({ scope: sc, platform: 'facebook', externalAccountId: status, status });
+      await d.activate(sc, 'u1');
+      expect((await d.load(sc))?.status).toBe(status);
+    }
+  });
+
   it('upsertPending refuses a brand that belongs to another organization', async () => {
     const d = new MemoryConnectionDirectory();
     await d.upsertPending({
