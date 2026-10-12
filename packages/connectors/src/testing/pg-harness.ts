@@ -13,7 +13,7 @@ import { CredentialStore } from '@feedbouncer/secrets';
 import { testKeyring } from '@feedbouncer/secrets/testing';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { redisBudget } from '../budget.js';
-import { systemClock, type Clock } from '../clock.js';
+import type { Clock } from '../clock.js';
 import type { CredentialVault, TokenRecord } from '../ports.js';
 import {
   PgConnectionDirectory,
@@ -125,8 +125,16 @@ export async function createPgHarness(flavor: 'push' | 'poll'): Promise<Conforma
   const redirectUri = 'https://app.feedbouncer.test/oauth/callback';
   const webhookSecret =
     flavor === 'push' ? `ref-webhook-secret-${randomBytes(8).toString('hex')}` : null;
+
+  // The platform's token expiry and the stack's clock must agree on "now":
+  // skipAhead() simulates time passing for the whole harness, not just the
+  // stack, so a freshly-refreshed token's expiry (computed on this clock)
+  // stays comfortably past TokenManager's skew margin after a skip.
+  let skewMs = 0;
+  const clock: Clock = { now: () => Date.now() + skewMs };
+
   const platform = new InMemoryPlatform({
-    clock: systemClock,
+    clock,
     rotateRefreshTokens: flavor === 'push',
     accessTokenTtlMs: 3_600_000,
     webhookSecret,
@@ -141,9 +149,6 @@ export async function createPgHarness(flavor: 'push' | 'poll'): Promise<Conforma
   const app = new Map(
     webhookSecret ? [[connector.platform, new Secret(webhookSecret)] as const] : [],
   );
-
-  let skewMs = 0;
-  const clock: Clock = { now: () => Date.now() + skewMs };
   const stack = assembleStack(
     connector,
     {
