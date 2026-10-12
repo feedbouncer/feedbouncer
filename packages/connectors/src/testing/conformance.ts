@@ -39,8 +39,28 @@ export interface ConformanceHarness {
   readonly connector: Connector;
   readonly driver: PlatformDriver;
   readonly stack: Stack;
+  /**
+   * An existing user (member of the actor's organization) and brand (of the same
+   * organization) used as impostors. The defaults are fine for memory ports;
+   * a database-backed harness must provision real rows (uuid columns).
+   */
+  /** Real-time harnesses: shifts the stack clock forward, so token expiry is observable without waiting. */
+  skipClock?(ms: number): void;
+  readonly impostors?: { readonly userId: string; readonly brandId: string };
   cleanup?(): Promise<void>;
 }
+
+export interface ConformanceOptions {
+  /**
+   * Skips fake timers. Needed when time lives outside the process (Redis TTLs,
+   * Postgres clock). The suite then waits in real time, and the harness must
+   * assemble the stack with `stateTtlMs: REAL_TIME_STATE_TTL_MS`.
+   */
+  readonly realTime?: boolean;
+}
+
+/** State lifetime a real-time harness must configure so the expiry test is quick. */
+export const REAL_TIME_STATE_TTL_MS = 500;
 
 const START = Date.parse('2026-10-12T10:00:00Z');
 const HOUR_MS = 3_600_000;
@@ -48,12 +68,27 @@ const HOUR_MS = 3_600_000;
 export function runConnectorConformance(
   name: string,
   makeHarness: () => Promise<ConformanceHarness>,
+  opts: ConformanceOptions = {},
 ): void {
+  const realTime = opts.realTime === true;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  /** Lets `ms` pass: advances fake time, or waits in real time. */
+  const elapse = async (ms: number) => {
+    if (realTime) await sleep(ms);
+    else vi.advanceTimersByTime(ms);
+  };
+
   describe(`connector conformance: ${name}`, () => {
     let h: ConformanceHarness;
     let scope: ConnectionScope;
     let account: string;
     let seen: string[];
+
+    /** Moves the framework clock forward so stored tokens look expired (a real-time harness offsets its own clock). */
+    const skipAhead = (ms: number) => {
+      if (realTime) h.skipClock?.(ms);
+      else vi.advanceTimersByTime(ms);
+    };
 
     /** Everything that could reach a caller or a log, flattened to text. */
     const record = (v: unknown): void => {
@@ -80,7 +115,9 @@ export function runConnectorConformance(
     };
     /** The same connection and ports, with the connector's hooks partly replaced. */
     const withHooks = async (hooks: Partial<Connector>) => {
-      const stack = assembleStack({ ...h.connector, ...hooks }, h.stack, h.stack.redirectUri);
+      const stack = assembleStack({ ...h.connector, ...hooks }, h.stack, h.stack.redirectUri, {
+        clock: h.stack.clock,
+      });
       return { client: await stack.runtime.connect(scope), lines: stack.lines };
     };
     const goodComment = (src: string): NormalizedComment => ({
@@ -96,7 +133,8 @@ export function runConnectorConformance(
 
     beforeEach(async () => {
       seen = [];
-      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: START });
+      if (!realTime)
+        vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: START });
       h = await makeHarness();
       account = await h.driver.createAccount();
       const { code, state } = await begin();
@@ -112,7 +150,7 @@ export function runConnectorConformance(
       };
     });
     afterEach(async () => {
-      vi.useRealTimers();
+      if (!realTime) vi.useRealTimers();
       await h.cleanup?.();
     });
 
@@ -138,7 +176,7 @@ export function runConnectorConformance(
       it('rejects an expired state', async () => {
         const q = await begin();
         const exchanges = await h.driver.calls('token');
-        vi.advanceTimersByTime(600_001);
+        await elapse(realTime ? REAL_TIME_STATE_TTL_MS + 250 : 600_001);
         expect(await h.stack.oauth.complete(h.stack.actor, h.connector.platform, q)).toEqual({
           ok: false,
           reason: 'rejected',
@@ -148,13 +186,14 @@ export function runConnectorConformance(
 
       it('rejects a callback from another user or brand without consuming the real state', async () => {
         const { organizationId, brandId, userId } = h.stack.actor;
-        h.stack.memberships.grant?.(organizationId, brandId, 'intruder', 'admin');
-        h.stack.memberships.grant?.(organizationId, 'brand-b', userId, 'admin');
+        const other = h.impostors ?? { userId: 'intruder', brandId: 'brand-b' };
+        await h.stack.memberships.grant?.(organizationId, brandId, other.userId, 'admin');
+        await h.stack.memberships.grant?.(organizationId, other.brandId, userId, 'admin');
         const q = await begin();
         const exchanges = await h.driver.calls('token');
         for (const impostor of [
-          { ...h.stack.actor, userId: 'intruder' },
-          { ...h.stack.actor, brandId: 'brand-b' },
+          { ...h.stack.actor, userId: other.userId },
+          { ...h.stack.actor, brandId: other.brandId },
         ])
           expect(await h.stack.oauth.complete(impostor, h.connector.platform, q)).toEqual({
             ok: false,
@@ -173,7 +212,7 @@ export function runConnectorConformance(
         const before = await h.driver.calls('refresh');
         const oldRefresh = (await h.stack.vault.readTokens(scope)).refresh?.value.reveal();
         await h.driver.expireAccessTokens();
-        vi.advanceTimersByTime(HOUR_MS);
+        skipAhead(HOUR_MS);
         const client = await h.stack.runtime.connect(scope);
         await Promise.all(
           Array.from({ length: 8 }, () =>
@@ -203,7 +242,7 @@ export function runConnectorConformance(
       it('survives a failed access-token write after the platform rotated the refresh token', async () => {
         const { src } = await target();
         await h.driver.expireAccessTokens();
-        vi.advanceTimersByTime(HOUR_MS);
+        skipAhead(HOUR_MS);
         const client = await h.stack.runtime.connect(scope);
         h.stack.faults.failNextAccessWrite();
         const ref = { sourceExternalId: src, externalId: 'c-000001' };
@@ -411,18 +450,19 @@ export function runConnectorConformance(
       it('defers (not drops) and honors the platform retry hint over the local budget', async () => {
         const { src, ids } = await target();
         const client = await h.stack.runtime.connect(scope);
-        await h.driver.throttleNext(45);
+        const hintSec = realTime ? 1 : 45;
+        await h.driver.throttleNext(hintSec);
         const t = { sourceExternalId: src, externalId: ids[0]! };
         const first = await client.act({ action: 'hide', target: t });
         expect(first).toMatchObject({
           status: 'failed',
-          error: { kind: 'rate_limited', retryAfterMs: 45_000 },
+          error: { kind: 'rate_limited', retryAfterMs: hintSec * 1000 },
         });
         const acts = await h.driver.calls('act');
         const blocked = await client.act({ action: 'hide', target: t });
         expect(blocked).toMatchObject({ status: 'failed', error: { kind: 'rate_limited' } });
         expect(await h.driver.calls('act')).toBe(acts); // deferred locally, no platform call
-        vi.advanceTimersByTime(45_001);
+        await elapse(hintSec * 1000 + 100);
         expect((await client.act({ action: 'hide', target: t })).status).toBe('applied');
       });
 
@@ -556,7 +596,7 @@ export function runConnectorConformance(
         // platform failures on the action and read paths
         await h.driver.throttleNext(1);
         record(await client.act({ action: 'hide', target: t }));
-        vi.advanceTimersByTime(1_001);
+        await elapse(1_100);
 
         // a connector whose own error text embeds the bearer token
         const { client: leaky, lines: leakyLines } = await withHooks({

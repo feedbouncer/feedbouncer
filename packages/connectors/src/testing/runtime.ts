@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import type { Role } from '@feedbouncer/authz';
 import { Secret, createLogger, type Logger } from '@feedbouncer/service-runtime';
 import { memoryBudget, type RateBudget } from '../budget.js';
-import { systemClock } from '../clock.js';
+import { systemClock, type Clock } from '../clock.js';
 import type { Connector } from '../connector.js';
 import { createSafeHttp } from '../http.js';
 import {
@@ -46,7 +46,12 @@ export interface StackPorts {
   lock: RefreshLock;
   states: OAuthStateStore;
   memberships: MembershipReader & {
-    grant?(organizationId: string, brandId: string, userId: string, role: Role): void;
+    grant?(
+      organizationId: string,
+      brandId: string,
+      userId: string,
+      role: Role,
+    ): void | Promise<void>;
   };
   ledger: DeliveryLedger;
   budget: RateBudget;
@@ -68,12 +73,18 @@ export interface Stack extends StackPorts {
   log: Logger;
   lines: string[];
   redirectUri: string;
+  clock: Clock;
 }
 
 /** Wires the framework services over the given ports. The HTTP client is built from the connector's own `apiHosts`. */
-export function assembleStack(connector: Connector, ports: StackPorts, redirectUri: string): Stack {
+export function assembleStack(
+  connector: Connector,
+  ports: StackPorts,
+  redirectUri: string,
+  opts: { stateTtlMs?: number; clock?: Clock } = {},
+): Stack {
   const { log, lines } = capturingLogger();
-  const clock = systemClock;
+  const clock = opts.clock ?? systemClock;
   const registry = new ConnectorRegistry();
   registry.register(connector);
   const http = (c: Connector) => createSafeHttp({ allowedHosts: c.capabilities.apiHosts });
@@ -92,6 +103,7 @@ export function assembleStack(connector: Connector, ports: StackPorts, redirectU
     log,
     lines,
     redirectUri,
+    clock,
     runtime: new ConnectorRuntime({
       registry,
       directory: ports.directory,
@@ -111,6 +123,7 @@ export function assembleStack(connector: Connector, ports: StackPorts, redirectU
       log,
       redirectUri: () => redirectUri,
       http,
+      ...(opts.stateTtlMs !== undefined ? { stateTtlMs: opts.stateTtlMs } : {}),
     }),
     webhooks: new WebhookGate({
       registry,

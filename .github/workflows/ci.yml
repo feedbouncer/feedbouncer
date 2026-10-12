@@ -239,6 +239,10 @@ jobs:
         run: pnpm turbo run build --filter=@feedbouncer/api...
       - name: API integration tests (auth, tenancy, isolation)
         run: pnpm --filter @feedbouncer/api test:integration
+      - name: Build connectors and dependencies
+        run: pnpm turbo run build --filter=@feedbouncer/connectors...
+      - name: Connector framework integration tests (Postgres + Redis conformance, isolation)
+        run: pnpm --filter @feedbouncer/connectors test:integration
 
   compose-smoke:
     name: Compose smoke
