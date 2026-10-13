@@ -65,6 +65,23 @@ const STATUS_REASONS: Record<string, string> = {
   page_role_lost: 'You no longer have a moderator role on this Page.',
 };
 
+const ACTION_KINDS: Record<string, string> = {
+  hide: 'Hide',
+  unhide: 'Unhide',
+  delete: 'Delete',
+  ban_author: 'Ban author',
+  unban_author: 'Unban author',
+  public_reply: 'Public reply',
+  private_reply: 'Private reply',
+};
+
+const ACTOR_TYPES: Record<string, string> = {
+  user: 'a team member',
+  rule: 'a rule',
+  classifier: 'automatic moderation',
+  system: 'the system',
+};
+
 const own = (table: Record<string, string>, key: string): string | undefined =>
   Object.hasOwn(table, key) ? table[key] : undefined;
 
@@ -79,4 +96,12 @@ export function outcomeText(code: string): string {
 export function statusReasonText(code: string | null): string | null {
   if (code === null) return null;
   return own(STATUS_REASONS, code) ?? 'This connection needs attention.';
+}
+
+export function actionKindText(kind: string): string {
+  return own(ACTION_KINDS, kind) ?? 'Action';
+}
+
+export function actorTypeText(actorType: string): string {
+  return own(ACTOR_TYPES, actorType) ?? 'someone';
 }

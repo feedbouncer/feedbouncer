@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { CommentActions } from '../../../../../../components/comment-actions';
 import { formatUtc } from '../../../../../../lib/format';
 import { isUuid } from '../../../../../../lib/ids';
+import { facebookPermalink } from '../../../../../../lib/permalink';
 import { dataOrThrow, requireMe, serverGet } from '../../../../../../lib/server-api';
 
 interface Comment {
@@ -57,29 +58,34 @@ export default async function CommentsPage({
       <h1>Comments</h1>
       {comments.length === 0 ? <p>No comments yet.</p> : null}
       <ul>
-        {comments.map((c) => (
-          <li key={c.id}>
-            <p>
-              <strong>{c.authorName ?? 'Unknown author'}</strong> · {formatUtc(c.postedAt)} ·{' '}
-              <span>{c.state}</span>
-            </p>
-            {c.parentCommentId ? <p>Reply to another comment</p> : null}
-            <p style={{ whiteSpace: 'pre-wrap' }}>{c.body || '(no text: sticker or attachment)'}</p>
-            {c.permalink?.startsWith('https://') ? (
-              <a href={c.permalink} rel="noopener noreferrer" target="_blank">
-                View on Facebook
-              </a>
-            ) : null}
-            <CommentActions
-              orgId={orgId}
-              brandId={brandId}
-              commentId={c.id}
-              state={c.state}
-              canBan={!c.isOwnAccount && c.authorName !== null}
-              privateReplyOpen={Date.parse(c.postedAt) + PRIVATE_REPLY_WINDOW_MS > now}
-            />
-          </li>
-        ))}
+        {comments.map((c) => {
+          const permalink = facebookPermalink(c.permalink);
+          return (
+            <li key={c.id}>
+              <p>
+                <strong>{c.authorName ?? 'Unknown author'}</strong> · {formatUtc(c.postedAt)} ·{' '}
+                <span>{c.state}</span>
+              </p>
+              {c.parentCommentId ? <p>Reply to another comment</p> : null}
+              <p style={{ whiteSpace: 'pre-wrap' }}>
+                {c.body || '(no text: sticker or attachment)'}
+              </p>
+              {permalink ? (
+                <a href={permalink} rel="noopener noreferrer" target="_blank">
+                  View on Facebook
+                </a>
+              ) : null}
+              <CommentActions
+                orgId={orgId}
+                brandId={brandId}
+                commentId={c.id}
+                state={c.state}
+                canBan={!c.isOwnAccount && c.authorName !== null}
+                privateReplyOpen={Date.parse(c.postedAt) + PRIVATE_REPLY_WINDOW_MS > now}
+              />
+            </li>
+          );
+        })}
       </ul>
       {last && comments.length === PAGE_SIZE ? (
         <p>

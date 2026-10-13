@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { messageFor, outcomeText } from './messages';
+import {
+  actionKindText,
+  actorTypeText,
+  messageFor,
+  outcomeText,
+  statusReasonText,
+} from './messages';
 
 const FALLBACK = messageFor('definitely_not_a_code');
 
@@ -37,8 +43,52 @@ describe('outcomeText', () => {
     'private_reply_already_sent',
     'connected_elsewhere',
     'not_eligible',
+    'not_found',
     'connection_inactive',
   ])('has a specific text for %s', (code) => {
     expect(outcomeText(code)).not.toBe(outcomeText('definitely_not_a_code'));
+  });
+});
+
+describe('statusReasonText', () => {
+  it('returns null for no reason', () => {
+    expect(statusReasonText(null)).toBeNull();
+  });
+  it.each(['oauth_not_refreshable', 'oauth_access_rejected', 'page_role_lost'])(
+    'has a specific text for %s',
+    (code) => {
+      expect(statusReasonText(code)).not.toBe(statusReasonText('definitely_not_a_code'));
+    },
+  );
+  it('does not read inherited object keys', () => {
+    expect(statusReasonText('constructor')).toBe(statusReasonText('definitely_not_a_code'));
+  });
+});
+
+describe('actionKindText', () => {
+  it.each([
+    'hide',
+    'unhide',
+    'delete',
+    'ban_author',
+    'unban_author',
+    'public_reply',
+    'private_reply',
+  ])('has a label for %s', (k) => {
+    expect(actionKindText(k)).not.toBe(actionKindText('definitely_not_a_kind'));
+    expect(actionKindText(k)).not.toBe(k);
+  });
+  it('falls back to a neutral label', () => {
+    expect(actionKindText('toString')).toBe('Action');
+    expect(actionKindText('weird')).toBe('Action');
+  });
+});
+
+describe('actorTypeText', () => {
+  it.each(['user', 'rule', 'classifier', 'system'])('has a label for %s', (a) => {
+    expect(actorTypeText(a)).not.toBe(actorTypeText('definitely_not_an_actor'));
+  });
+  it('falls back to a neutral label', () => {
+    expect(actorTypeText('weird')).toBe('someone');
   });
 });

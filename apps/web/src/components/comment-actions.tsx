@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { ApiRequestError, apiFetch } from '../lib/api-client';
 import { formatUtc } from '../lib/format';
-import { messageFor, outcomeText } from '../lib/messages';
+import { actionKindText, actorTypeText, messageFor, outcomeText } from '../lib/messages';
 
 interface ActionView {
   id: string;
@@ -164,7 +164,8 @@ export function CommentActions(props: {
           <ul>
             {history.map((a) => (
               <li key={a.id}>
-                {a.kind} by {a.actorType}: {resultText(a)} ({formatUtc(a.createdAt)})
+                {actionKindText(a.kind)} by {actorTypeText(a.actorType)}: {resultText(a)} (
+                {formatUtc(a.createdAt)})
               </li>
             ))}
           </ul>
