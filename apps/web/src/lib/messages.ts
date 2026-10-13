@@ -23,8 +23,59 @@ const MESSAGES: Record<string, string> = {
   invitation_not_pending: 'This invitation is no longer pending.',
   rate_limited: 'Too many attempts. Try again later.',
   temporarily_unavailable: 'Temporarily unavailable. Try again shortly.',
+  platform_not_configured: 'This platform is not available.',
+  platform_error: 'Facebook could not be reached. Try again shortly.',
+  connection_needs_reconnect: 'This connection needs to be reconnected first.',
+  connection_inactive: 'This connection is not active. Reconnect it and try again.',
+  unsupported_action: 'This action is not supported for this platform.',
+  request_key_conflict: 'This request was already used for a different action. Try again.',
+  service_unavailable: 'Service temporarily unavailable. Try again shortly.',
+  // Where Facebook sends the browser back after sign-in.
+  denied: 'Facebook access was not granted. Nothing was connected.',
+  missing_permissions:
+    'FeedBouncer needs every permission below to moderate your Page. Nothing was connected.',
+  account_mismatch: 'You signed in to a different Facebook account than the one this connection uses.',
+  oauth_rejected: 'This sign-in could not be used. Connect again.',
 };
 
+// Outcome codes of a moderation action or a Page connection attempt.
+const OUTCOMES: Record<string, string> = {
+  already_hidden: 'already hidden',
+  already_visible: 'already visible',
+  already_deleted: 'already deleted',
+  comment_gone: 'the comment no longer exists',
+  own_account_comment: 'this comment was written by your own Page',
+  author_is_page: 'the author is your own Page',
+  author_unavailable: 'the author could not be identified',
+  author_not_bannable: 'Facebook does not allow banning this author',
+  ban_limit_reached: 'the Page has reached its ban limit',
+  reblock_too_soon: 'this author was unbanned too recently to ban again',
+  private_reply_window_closed: 'the private reply window has closed',
+  private_reply_already_sent: 'a private reply was already sent',
+  connected_elsewhere: 'already connected in another FeedBouncer workspace',
+  not_eligible: 'you need a role that can moderate this Page',
+  not_found: 'this Page was not found in your Facebook account',
+  connection_inactive: 'this connection is not active',
+};
+
+const STATUS_REASONS: Record<string, string> = {
+  oauth_not_refreshable: 'Facebook access was lost or expired. Reconnect to resume moderation.',
+  oauth_access_rejected: 'Facebook access was lost or expired. Reconnect to resume moderation.',
+  page_role_lost: 'You no longer have a moderator role on this Page.',
+};
+
+const own = (table: Record<string, string>, key: string): string | undefined =>
+  Object.hasOwn(table, key) ? table[key] : undefined;
+
 export function messageFor(code: string): string {
-  return MESSAGES[code] ?? 'Something went wrong.';
+  return own(MESSAGES, code) ?? 'Something went wrong.';
+}
+
+export function outcomeText(code: string): string {
+  return own(OUTCOMES, code) ?? 'it could not be completed';
+}
+
+export function statusReasonText(code: string | null): string | null {
+  if (code === null) return null;
+  return own(STATUS_REASONS, code) ?? 'This connection needs attention.';
 }
