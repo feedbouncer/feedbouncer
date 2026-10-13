@@ -80,6 +80,8 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: ErrorCode,
     message?: string,
+    /** Machine-readable specifics of this error (never request values), merged into the envelope. */
+    readonly details?: Readonly<Record<string, number>>,
   ) {
     super(message ?? DEFAULT_MESSAGES[code]);
   }
@@ -87,8 +89,10 @@ export class ApiError extends Error {
 
 export const notFound = (): ApiError => new ApiError(404, 'not_found');
 
-export function errorBody(e: ApiError): { error: { code: ErrorCode; message: string } } {
-  return { error: { code: e.code, message: e.message } };
+export function errorBody(e: ApiError): {
+  error: { code: ErrorCode; message: string } & Record<string, unknown>;
+} {
+  return { error: { ...e.details, code: e.code, message: e.message } };
 }
 
 // Maps anything thrown in Nest (or by Fastify before a handler, which Nest
