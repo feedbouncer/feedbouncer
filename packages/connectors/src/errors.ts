@@ -1,6 +1,8 @@
 // The shared error taxonomy. Messages are built ONLY from the kind and a
 // validated snake_case code, so a ConnectorError can never carry a token,
 // URL or platform response text. Foreign errors are replaced, not wrapped.
+import { ERROR_CODE, type ErrorClass } from '@feedbouncer/service-runtime';
+
 export const CONNECTOR_ERROR_KINDS = [
   'auth_expired',
   'rate_limited',
@@ -11,7 +13,6 @@ export const CONNECTOR_ERROR_KINDS = [
 ] as const;
 export type ConnectorErrorKind = (typeof CONNECTOR_ERROR_KINDS)[number];
 
-const CODE = /^[a-z][a-z0-9_]{0,62}$/;
 const MAX_RETRY_AFTER_MS = 86_400_000;
 
 export interface ConnectorErrorInfo {
@@ -19,6 +20,19 @@ export interface ConnectorErrorInfo {
   readonly code: string;
   readonly retryAfterMs: number | null;
   readonly reauthorize: boolean;
+}
+
+export function errorClassFor(kind: ConnectorErrorKind, reauthorize: boolean): ErrorClass {
+  switch (kind) {
+    case 'transient':
+      return 'retryable';
+    case 'rate_limited':
+      return 'rate_limited';
+    case 'auth_expired':
+      return reauthorize ? 'needs_reconnection' : 'non_retryable';
+    default:
+      return 'non_retryable';
+  }
 }
 
 export class ConnectorError extends Error {
@@ -32,7 +46,7 @@ export class ConnectorError extends Error {
     code: string,
     opts: { retryAfterMs?: number; reauthorize?: boolean } = {},
   ) {
-    const safe = CODE.test(code) ? code : 'unspecified';
+    const safe = ERROR_CODE.test(code) ? code : 'unspecified';
     super(`${kind}: ${safe}`);
     this.code = safe;
     const r = opts.retryAfterMs;
@@ -45,6 +59,11 @@ export class ConnectorError extends Error {
 
   get retryable(): boolean {
     return this.kind === 'transient' || this.kind === 'rate_limited';
+  }
+
+  /** The job-layer failure class; `classifyFailure` in the jobs package agrees with it. */
+  get errorClass(): ErrorClass {
+    return errorClassFor(this.kind, this.reauthorize);
   }
 
   info(): ConnectorErrorInfo {

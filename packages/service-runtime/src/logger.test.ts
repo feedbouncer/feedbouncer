@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { withLogContext } from './log-context.js';
 import { createLogger, errorFields, isSecretField, redact } from './logger.js';
 
 describe('createLogger', () => {
@@ -38,6 +39,73 @@ describe('redact', () => {
       'postgresql://[redacted]@postgres:5432/db',
     );
     expect(redact('no url here')).toBe('no url here');
+  });
+
+  it('redacts credentials in Authorization headers and bearer tokens', () => {
+    expect(redact('failed Authorization: Bearer SENTINEL-BEARER now')).toBe(
+      'failed Authorization: Bearer [redacted] now',
+    );
+    expect(redact('authorization=Basic dXNlcjpwYXNz')).toBe('authorization=Basic [redacted]');
+    expect(redact('sent bearer abcdef0123456789')).toBe('sent bearer [redacted]');
+    expect(redact('sent bearer s3cr3t')).toBe('sent bearer [redacted]');
+    expect(redact('the basic plan is fine')).toBe('the basic plan is fine');
+  });
+
+  it('redacts a bearer token with any characters, in every header form', () => {
+    const odd = 'ab%2Fcd*ef:gh!ij$kl';
+    expect(redact(`Authorization: Bearer ${odd} then`)).toBe(
+      'Authorization: Bearer [redacted] then',
+    );
+    expect(redact(`got bearer ${odd}`)).toBe('got bearer [redacted]');
+    expect(redact('Authorization: Token tok_0123456789 ok')).toBe(
+      'Authorization: Token [redacted] ok',
+    );
+    const digest = redact('Authorization: Digest username="bob", realm="r", response="deadbeef"');
+    expect(digest).toBe('Authorization: Digest [redacted]');
+    expect(redact('Proxy-Authorization: Basic dXNlcjpwYXNz')).toBe(
+      'Proxy-Authorization: Basic [redacted]',
+    );
+    expect(redact('Authorization: rawcredential123 failed here')).not.toContain('rawcredential123');
+    expect(redact('Authorization: MyScheme mycredential456')).not.toContain('mycredential456');
+    expect(redact('{"authorization":"Bearer sekrit-v4lue"}')).toBe(
+      '{"authorization":"Bearer [redacted]"}',
+    );
+    const escaped = redact(String.raw`{\"authorization\":\"Bearer sekrit-v4lue%21\"}`);
+    expect(escaped).not.toContain('sekrit');
+    expect(
+      redact('x'.repeat(50_000) + ' authorization: ' + 'a '.repeat(20_000)).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('masks multi-word and parameterised authorization values', () => {
+    const aws = redact(
+      'authorization: AWS4-HMAC-SHA256 Credential=AKIA/x, SignedHeaders=host, Signature=deadbeef',
+    );
+    expect(aws).not.toMatch(/AKIA|SignedHeaders|deadbeef/);
+    const oauth = redact(
+      'Authorization: OAuth oauth_consumer_key="k", oauth_signature="SECRETSIG"',
+    );
+    expect(oauth).not.toMatch(/SECRETSIG|oauth_consumer_key/);
+    const quoted = redact('Authorization: Bearer "abc def ghi"');
+    expect(quoted).toBe('Authorization: Bearer [redacted]');
+    const arr = redact("authorization: [ 'Bearer abc' ]");
+    expect(arr).not.toContain('abc');
+    expect(arr).toContain('Bearer [redacted]');
+  });
+
+  it('stays bounded on 200KB adversarial input', () => {
+    const inputs = [
+      'authorization: ' + 'a '.repeat(100_000),
+      'authorization:' + ' '.repeat(200_000) + 'x',
+      'Authorization: Bearer '.repeat(9_000),
+      'authorization: [ "' + 'a'.repeat(200_000),
+    ];
+    const start = performance.now();
+    for (const input of inputs) {
+      const out = redact(input);
+      expect(out.length).toBeLessThanOrEqual(input.length + 64);
+    }
+    expect(performance.now() - start).toBeLessThan(5_000);
   });
 
   it('redacts the whole userinfo when the password contains @', () => {
@@ -154,10 +222,16 @@ describe('errorFields', () => {
       error: 'Error',
       errorCode: 'ECONNREFUSED',
       errorMessage: 'connect to postgresql://[redacted]@h/db failed',
+      errorClass: null,
     });
   });
   it('handles non-Error throws', () => {
-    expect(errorFields('boom')).toEqual({ error: 'NonError', errorCode: null, errorMessage: null });
+    expect(errorFields('boom')).toEqual({
+      error: 'NonError',
+      errorCode: null,
+      errorMessage: null,
+      errorClass: null,
+    });
   });
 });
 
@@ -235,4 +309,77 @@ it('exports isSecretField with the logger rules', () => {
   expect(isSecretField('refresh_token')).toBe(true);
   expect(isSecretField('tokenExpiresAt')).toBe(false);
   expect(isSecretField('commentId')).toBe(false);
+});
+
+it('core keys cannot be overridden', () => {
+  const lines: string[] = [];
+  const log = createLogger('api', 'info', (l) => lines.push(l));
+  log.info('real', {
+    msg: 'fake',
+    level: 'debug',
+    service: 'x',
+    time: 'then',
+    tenant_id: 'a"}\n{"level":"error',
+  });
+  expect(lines).toHaveLength(1);
+  expect(lines[0]!.includes('\n')).toBe(false);
+  const o = JSON.parse(lines[0]!);
+  expect(o).toMatchObject({ msg: 'real', level: 'info', service: 'api' });
+  expect(o.time).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+});
+
+it('a throwing sink never throws to the caller', () => {
+  const log = createLogger('api', 'info', () => {
+    throw new Error('EPIPE');
+  });
+  expect(() => log.error('x')).not.toThrow();
+});
+
+it('errorFields carries a stable code and class', () => {
+  const e = Object.assign(new Error('boom password=hunter2'), {
+    code: 'upstream_5xx',
+    errorClass: 'retryable',
+  });
+  expect(errorFields(e)).toEqual({
+    error: 'Error',
+    errorCode: 'upstream_5xx',
+    errorMessage: 'boom password=[redacted]',
+    errorClass: 'retryable',
+  });
+  expect(errorFields(new Error('x')).errorClass).toBeNull();
+});
+
+describe('correlation keys', () => {
+  const hostile = 'a"}\n{"level":"error';
+
+  it('bound context wins over caller fields and spoofed span ids', () => {
+    const lines: string[] = [];
+    const log = createLogger('api', 'info', (l) => lines.push(l));
+    withLogContext({ tenant_id: 'org-1' }, () =>
+      log.info('x', { tenant_id: hostile, trace_id: 'spoof', job_id: 'j-9' }),
+    );
+    expect(lines[0]!.includes('\n')).toBe(false);
+    const o = JSON.parse(lines[0]!);
+    expect(o.tenant_id).toBe('org-1');
+    expect(o.trace_id).toBe('spoof'); // no active span: a safe caller id is kept
+    expect(o.job_id).toBe('j-9');
+    expect(o.level).toBe('info');
+  });
+
+  it('bound context overrides even a safe caller value', () => {
+    const lines: string[] = [];
+    const log = createLogger('api', 'info', (l) => lines.push(l));
+    withLogContext({ tenant_id: 'org-1' }, () => log.info('x', { tenant_id: 'org-2' }));
+    expect(JSON.parse(lines[0]!).tenant_id).toBe('org-1');
+  });
+
+  it('outside a context drops hostile caller ids and keeps safe ones', () => {
+    const lines: string[] = [];
+    const log = createLogger('api', 'info', (l) => lines.push(l));
+    log.info('x', { tenant_id: hostile, trace_id: 'bad id', request_id: 'req-1' });
+    const o = JSON.parse(lines[0]!);
+    expect(o).not.toHaveProperty('tenant_id');
+    expect(o).not.toHaveProperty('trace_id');
+    expect(o.request_id).toBe('req-1');
+  });
 });

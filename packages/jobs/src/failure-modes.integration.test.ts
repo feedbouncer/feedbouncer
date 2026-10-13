@@ -164,6 +164,7 @@ async function insertRow(platform: 'facebook' | 'youtube', jobType: string, payl
     idempotencyKey: randomBytes(32).toString('hex'),
     payloadJson: JSON.stringify(payload),
     ttlMs: h.config.dedupWindowMs,
+    traceContext: null,
   });
   if (res.status !== 'inserted') throw new Error('row not inserted');
   return res.id;

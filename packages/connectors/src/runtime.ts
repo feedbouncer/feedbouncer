@@ -6,14 +6,31 @@
 // permanent/connector_failure; a foreign error from a port (directory, vault,
 // lock, budget store) is an outage, reported as transient/storage_unavailable
 // so the caller retries instead of dropping the work.
+import { trace } from '@opentelemetry/api';
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import type { Logger, Secret } from '@feedbouncer/service-runtime';
+import {
+  SpanKind,
+  setSpanAttributes,
+  withSpan,
+  type Logger,
+  type Secret,
+} from '@feedbouncer/service-runtime';
 import type { RateBudget } from './budget.js';
 import type { Clock } from './clock.js';
 import type { CallContext, Connector } from './connector.js';
-import { ConnectorError, toConnectorError } from './errors.js';
+import {
+  ConnectorError,
+  errorClassFor,
+  toConnectorError,
+  type ConnectorErrorKind,
+} from './errors.js';
 import type { SafeHttp } from './http.js';
-import type { ConnectionDirectory, ConnectionRecord } from './ports.js';
+import {
+  recordSync,
+  type ConnectionDirectory,
+  type ConnectionRecord,
+  type SyncRecorder,
+} from './ports.js';
 import type { ConnectorRegistry } from './registry.js';
 import { scopeKey } from './scope.js';
 import {
@@ -41,6 +58,18 @@ import {
   type Priority,
 } from './types.js';
 
+export type ConnectorOperation = 'list_sources' | 'list_comments' | 'get_comment' | 'act';
+export interface ConnectorCallEvent {
+  readonly platform: Platform;
+  readonly operation: ConnectorOperation;
+  readonly outcome: 'ok' | ConnectorErrorKind;
+  readonly durationMs: number;
+}
+/** Receives one event per platform call. Must not throw; exceptions are swallowed. */
+export interface ConnectorCallObserver {
+  onCall(e: ConnectorCallEvent): void;
+}
+
 export interface RuntimeDeps {
   registry: ConnectorRegistry;
   directory: ConnectionDirectory;
@@ -50,6 +79,8 @@ export interface RuntimeDeps {
   log: Logger;
   http(connector: Connector): SafeHttp;
   callTimeoutMs?: number;
+  observer?: ConnectorCallObserver;
+  sync?: SyncRecorder;
 }
 
 export class ConnectorRuntime {
@@ -103,7 +134,10 @@ export class ConnectionClient {
     const op = this.connector.listSources?.bind(this.connector);
     if (!op) throw new ConnectorError('unsupported', 'list_sources');
     if (!cursorSchema.safeParse(cursor).success) throw invalidRequest();
-    return parsePage(sourceSchema, await this.#call('bulk', (ctx) => op(ctx, { cursor })));
+    return parsePage(
+      sourceSchema,
+      await this.#call('bulk', 'list_sources', (ctx) => op(ctx, { cursor })),
+    );
   }
 
   async listComments(req: {
@@ -118,7 +152,7 @@ export class ConnectionClient {
       throw invalidRequest();
     const max = this.capabilities.maxPageSize;
     const limit = Math.min(Math.max(Math.trunc(req.limit ?? max), 1), max);
-    const raw = await this.#call('bulk', (ctx) =>
+    const raw = await this.#call('bulk', 'list_comments', (ctx) =>
       this.connector.listComments(ctx, {
         sourceExternalId: req.sourceExternalId,
         cursor: req.cursor,
@@ -131,7 +165,9 @@ export class ConnectionClient {
   async getComment(ref: CommentRef): Promise<NormalizedComment | null> {
     if (!commentRefSchema.safeParse(ref).success) throw invalidRequest();
     try {
-      const raw = await this.#call('bulk', (ctx) => this.connector.getComment(ctx, ref));
+      const raw = await this.#call('bulk', 'get_comment', (ctx) =>
+        this.connector.getComment(ctx, ref),
+      );
       return raw === null ? null : parseComment(raw);
     } catch (err) {
       if (
@@ -145,7 +181,37 @@ export class ConnectionClient {
   }
 
   /** Never throws for platform outcomes; they are encoded in the result. */
-  async act(req: ActionRequest): Promise<ActionResult> {
+  act(req: ActionRequest): Promise<ActionResult> {
+    return withSpan(
+      'moderation.apply',
+      { attributes: { 'feedbouncer.platform': this.platform, 'feedbouncer.action': req.action } },
+      async (span) => {
+        const result = await this.#actInner(req);
+        setSpanAttributes(span, {
+          'feedbouncer.action.status': result.status,
+          'feedbouncer.action.reversible': result.status === 'applied' && result.undo !== null,
+          'feedbouncer.error.code': result.status === 'failed' ? result.error.code : null,
+        });
+        // Failures are recorded here, not in #call: #actInner turns thrown errors into results.
+        // A rejected request and an exhausted local budget say nothing about platform health.
+        if (
+          result.status === 'failed' &&
+          result.error.code !== 'budget_exhausted' &&
+          result.error.code !== 'invalid_action_request'
+        ) {
+          const e = result.error;
+          const errorClass = errorClassFor(e.kind, e.reauthorize);
+          const ids = this.#ids();
+          recordSync(this.d.sync, this.d.log, ids, (s) =>
+            s.failure(ids.connectionId, { code: e.code, errorClass }),
+          );
+        }
+        return result;
+      },
+    );
+  }
+
+  async #actInner(req: ActionRequest): Promise<ActionResult> {
     if (!actionRequestSchema.safeParse(req).success)
       return {
         status: 'failed',
@@ -154,7 +220,7 @@ export class ConnectionClient {
       };
     if (!this.supports(req.action)) return { status: 'unsupported', request: req };
     try {
-      const out = await this.#call('urgent', (ctx) => this.connector.act(ctx, req));
+      const out = await this.#call('urgent', 'act', (ctx) => this.connector.act(ctx, req));
       if (out?.status === 'not_found') return { status: 'not_found', request: req };
       if (out?.status !== 'applied')
         throw new ConnectorError('permanent', 'invalid_connector_output');
@@ -198,7 +264,68 @@ export class ConnectionClient {
     return viaPort(this.d.log, this.#ids(), fn);
   }
 
-  async #call<T>(priority: Priority, op: (ctx: CallContext) => Promise<T>): Promise<T> {
+  async #call<T>(
+    priority: Priority,
+    operation: ConnectorOperation,
+    op: (ctx: CallContext) => Promise<T>,
+  ): Promise<T> {
+    const ids = this.#ids();
+    return withSpan(
+      `connector.${operation}`,
+      {
+        kind: SpanKind.CLIENT,
+        attributes: {
+          'feedbouncer.platform': ids.platform,
+          'feedbouncer.connector.id': ids.connectionId,
+          'feedbouncer.connector.operation': operation,
+          'feedbouncer.connector.priority': priority,
+        },
+      },
+      async () => {
+        const started = performance.now();
+        try {
+          const out = await this.#callInner(priority, op);
+          this.#observe(operation, 'ok', started);
+          if (operation !== 'act')
+            recordSync(this.d.sync, this.d.log, ids, (s) => s.success(ids.connectionId));
+          return out;
+        } catch (err) {
+          const ce = err instanceof ConnectorError ? err : null;
+          this.#observe(operation, ce?.kind ?? 'permanent', started);
+          if (ce && operation !== 'act') {
+            if (ce.kind === 'not_found' && ce.code !== 'connection_not_found') {
+              // The platform answered: a missing comment or source is not a sync failure.
+              recordSync(this.d.sync, this.d.log, ids, (s) => s.success(ids.connectionId));
+            } else if (ce.code !== 'budget_exhausted') {
+              recordSync(this.d.sync, this.d.log, ids, (s) =>
+                s.failure(ids.connectionId, { code: ce.code, errorClass: ce.errorClass }),
+              );
+            }
+          }
+          throw err;
+        }
+      },
+    );
+  }
+
+  #observe(
+    operation: ConnectorOperation,
+    outcome: 'ok' | ConnectorErrorKind,
+    started: number,
+  ): void {
+    try {
+      this.d.observer?.onCall({
+        platform: this.platform,
+        operation,
+        outcome,
+        durationMs: performance.now() - started,
+      });
+    } catch {
+      /* telemetry never fails a call */
+    }
+  }
+
+  async #callInner<T>(priority: Priority, op: (ctx: CallContext) => Promise<T>): Promise<T> {
     const rec = await this.#port(() => this.d.directory.load(this.scope));
     if (!rec) throw new ConnectorError('not_found', 'connection_not_found');
     if (rec.status === 'revoked')
@@ -237,6 +364,7 @@ export class ConnectionClient {
         if (ce.kind === 'auth_expired' && !ce.reauthorize) {
           if (attempt === 0) {
             rejected = token;
+            trace.getActiveSpan()?.addEvent('connector.retry_with_refreshed_token');
             continue;
           }
           await this.#port(() =>

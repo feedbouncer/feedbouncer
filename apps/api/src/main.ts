@@ -3,14 +3,20 @@
 import { Redis } from 'ioredis';
 import { createPool } from '@feedbouncer/db';
 import { createSmtpMailer } from '@feedbouncer/mailer';
+import {
+  PgHealthReader,
+  createMetrics,
+  initTracing,
+  startMetricsServer,
+} from '@feedbouncer/observability';
 import { reportKeyCoverage } from '@feedbouncer/secrets';
 import {
-  EnvError,
   createLogger,
   errorFields,
   installCrashHandlers,
   logConfigurationLoaded,
   onShutdown,
+  writeStartupConfigError,
 } from '@feedbouncer/service-runtime';
 import { buildApp } from './app.factory.js';
 import { loadApiEnv, type ApiEnv } from './env.js';
@@ -20,7 +26,7 @@ const configWarnings: string[] = [];
 try {
   env = loadApiEnv(process.env, { warn: (m) => configWarnings.push(m) });
 } catch (err) {
-  process.stderr.write(`${err instanceof EnvError ? err.message : 'Invalid configuration'}\n`);
+  writeStartupConfigError('api', err);
   process.exit(1);
 }
 
@@ -28,6 +34,9 @@ const log = createLogger('api', env.logLevel);
 installCrashHandlers(log);
 for (const w of configWarnings) log.warn(w, { appEnv: env.appEnv });
 logConfigurationLoaded(log, env);
+// Tracing registers its global provider here, before any span-producing code runs.
+const tracing = initTracing(env.telemetry, log);
+const metrics = createMetrics('api');
 const pool = createPool(env.databaseUrl, {
   applicationName: 'feedbouncer-api',
   onIdleError: (err) => log.warn('postgres idle client error', errorFields(err)),
@@ -43,16 +52,34 @@ async function closeResources(): Promise<void> {
 }
 
 try {
-  const app = await buildApp({ env, pool, redis, mailer, log, redisKeyPrefix: 'fb:' });
+  const app = await buildApp({
+    env,
+    pool,
+    redis,
+    mailer,
+    log,
+    redisKeyPrefix: 'fb:',
+    metrics,
+    health: new PgHealthReader(pool, env.health),
+  });
   await app.listen({ host: '0.0.0.0', port: env.port });
   log.info('api listening', { port: env.port });
+  const metricsServer = await startMetricsServer({
+    host: env.telemetry.metrics.host,
+    port: env.telemetry.metrics.port,
+    registry: metrics.registry,
+    log,
+  });
   void reportKeyCoverage(pool, env.encryption, log);
   onShutdown(async () => {
     await app.close();
     await closeResources();
+    await metricsServer?.close();
+    await tracing.shutdown();
   }, log);
 } catch (err) {
   log.error('api failed to start', errorFields(err));
   await closeResources();
+  await tracing.shutdown();
   process.exit(1);
 }

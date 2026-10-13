@@ -15,6 +15,12 @@ import {
   type SecretFileSystem,
 } from '@feedbouncer/service-runtime';
 import { loadJobsConfig, type JobsConfig } from '@feedbouncer/jobs';
+import {
+  loadHealthPolicy,
+  loadTelemetryConfig,
+  type HealthPolicy,
+  type TelemetryConfig,
+} from '@feedbouncer/observability';
 import { ENCRYPTION_FILE_VARS, loadEncryptionKeyring, type Keyring } from '@feedbouncer/secrets';
 
 export const WORKER_FILE_VARS = ['DATABASE_URL', 'REDIS_URL', ...ENCRYPTION_FILE_VARS] as const;
@@ -28,6 +34,8 @@ export interface WorkerEnv {
   readonly logLevel: LogLevel;
   readonly encryption: Keyring;
   readonly jobs: JobsConfig;
+  readonly telemetry: TelemetryConfig;
+  readonly health: HealthPolicy;
 }
 
 /** The worker's single typed configuration layer. Call once, from main.ts. */
@@ -50,6 +58,8 @@ export function loadWorkerEnv(
     logLevel: readEnum(env, 'LOG_LEVEL', LOG_LEVELS, 'info'),
     encryption: loadEncryptionKeyring(env, appEnv, opts.warn),
     jobs: loadJobsConfig(env),
+    telemetry: loadTelemetryConfig(env, 'worker'),
+    health: loadHealthPolicy(env),
   };
   // A whole-config dump (JSON, util.inspect) must never carry URL passwords or keys.
   return redactOnSerialize(config, {
@@ -60,5 +70,8 @@ export function loadWorkerEnv(
     activeKeyId: config.encryption.activeKeyId,
     jobQueuePrefix: config.jobs.prefix,
     jobDlqRetentionDays: config.jobs.dlqRetentionMs / 86_400_000,
+    metricsPort: config.telemetry.metrics.port,
+    metricsHost: config.telemetry.metrics.host,
+    tracesExporter: config.telemetry.traces.exporter,
   });
 }

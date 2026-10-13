@@ -66,6 +66,11 @@ export const CASES: IsolationCase[] = [
     body: () => ({}),
   },
   {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/connections/health',
+    name: "connection health of another tenant's brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/connections/health`,
+  },
+  {
     route: 'GET /api/v1/orgs/:orgId/members',
     name: 'list B members',
     url: (f) => `/api/v1/orgs/${f.B.orgId}/members`,

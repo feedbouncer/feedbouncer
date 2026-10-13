@@ -1,0 +1,7 @@
+DROP INDEX job_ledger_queued_platform_created_at_idx;
+DROP INDEX job_ledger_queued_connection_id_created_at_idx;
+ALTER TABLE job_ledger DROP CONSTRAINT job_ledger_trace_context_check;
+ALTER TABLE job_ledger DROP COLUMN trace_context;
+DROP TRIGGER connection_sync_set_updated_at_trg ON connection_sync;
+DROP INDEX connection_sync_organization_id_brand_id_idx;
+DROP TABLE connection_sync;

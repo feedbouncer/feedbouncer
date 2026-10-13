@@ -8,3 +8,7 @@ export * from './secret.js';
 export * from './crash.js';
 export * from './startup.js';
 export * from './placeholders.js';
+export * from './error-class.js';
+export * from './log-context.js';
+export * from './tracing.js';
+export * from './lag.js';

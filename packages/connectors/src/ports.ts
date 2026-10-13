@@ -1,6 +1,6 @@
 import type { Role } from '@feedbouncer/authz';
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import type { Secret } from '@feedbouncer/service-runtime';
+import type { ErrorClass, Logger, Secret } from '@feedbouncer/service-runtime';
 import type { Platform } from './types.js';
 
 export type ConnectionStatus = 'active' | 'paused' | 'revoked' | 'error' | 'reconnect_required';
@@ -10,10 +10,12 @@ export interface ConnectionRecord {
   readonly externalAccountId: string;
   readonly status: ConnectionStatus;
 }
-export type ReauthReason =
-  | 'oauth_refresh_rejected'
-  | 'oauth_access_rejected'
-  | 'oauth_not_refreshable';
+export const REAUTH_REASONS = [
+  'oauth_refresh_rejected',
+  'oauth_access_rejected',
+  'oauth_not_refreshable',
+] as const;
+export type ReauthReason = (typeof REAUTH_REASONS)[number];
 export interface ConnectionDirectory {
   load(scope: ConnectionScope): Promise<ConnectionRecord | null>;
   markReauthRequired(scope: ConnectionScope, reason: ReauthReason): Promise<boolean>;
@@ -85,4 +87,40 @@ export interface WebhookSecretSource {
     connectionId: string,
     platform: Platform,
   ): Promise<{ secret: Secret; externalAccountId: string } | null>;
+}
+
+/**
+ * Records per-connection sync health. Implementations may throw or reject;
+ * callers treat the recorder as best-effort telemetry and never fail work on it.
+ */
+export interface SyncRecorder {
+  success(connectionId: string): Promise<void>;
+  failure(
+    connectionId: string,
+    f: { readonly code: string; readonly errorClass: ErrorClass },
+  ): Promise<void>;
+}
+export const noopSyncRecorder: SyncRecorder = { success: async () => {}, failure: async () => {} };
+
+/**
+ * Fire-and-forget: a slow or failing recorder never delays or fails the caller.
+ * Shared by the connector runtime and the webhook gate.
+ */
+export function recordSync(
+  sync: SyncRecorder | undefined,
+  log: Logger,
+  ids: { readonly platform: string; readonly connectionId: string },
+  f: (s: SyncRecorder) => Promise<void>,
+): void {
+  if (!sync) return;
+  const warn = (err: unknown) =>
+    log.warn('telemetry.sync_record_failed', {
+      ...ids,
+      errorName: err instanceof Error ? err.name : 'NonError',
+    });
+  try {
+    void f(sync).catch(warn);
+  } catch (err) {
+    warn(err);
+  }
 }

@@ -63,3 +63,17 @@ describe('toConnectorError', () => {
     expect(e.cause).toBeUndefined();
   });
 });
+
+describe('ConnectorError.errorClass', () => {
+  it.each([
+    ['transient', false, 'retryable'],
+    ['rate_limited', false, 'rate_limited'],
+    ['auth_expired', true, 'needs_reconnection'],
+    ['auth_expired', false, 'non_retryable'],
+    ['not_found', false, 'non_retryable'],
+    ['unsupported', false, 'non_retryable'],
+    ['permanent', false, 'non_retryable'],
+  ] as const)('%s (reauthorize=%s) is %s', (kind, reauthorize, cls) => {
+    expect(new ConnectorError(kind, 'x_code', { reauthorize }).errorClass).toBe(cls);
+  });
+});

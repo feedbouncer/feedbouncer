@@ -6,6 +6,7 @@
     { "path": "packages/service-runtime" },
     { "path": "packages/connectors" },
     { "path": "packages/jobs" },
+    { "path": "packages/observability" },
     { "path": "apps/placeholder-app" },
     { "path": "apps/api" },
     { "path": "apps/worker" }

@@ -20,6 +20,7 @@ const MATRIX: Record<Capability, Record<Role, boolean>> = {
   'member.change_role': { owner: true, admin: true, member: false },
   'invitation.read': { owner: true, admin: true, member: false },
   'connection.manage': { owner: true, admin: true, member: false },
+  'connection.read': { owner: true, admin: true, member: false },
   'org.update': { owner: true, admin: true, member: false },
   'org.transfer_ownership': { owner: true, admin: false, member: false },
   'org.delete': { owner: true, admin: false, member: false },

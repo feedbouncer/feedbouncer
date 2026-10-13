@@ -19,6 +19,12 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@opentelemetry/context-async-hooks": "2.12.0",
+    "@opentelemetry/core": "2.12.0",
+    "@opentelemetry/sdk-trace-base": "2.12.0",
     "@types/node": "24.13.6"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "1.9.1"
   }
 }

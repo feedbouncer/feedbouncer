@@ -4,10 +4,23 @@
 // -> dedupe (keyed on sha256 of the signed body only). Every failure returns the same frozen REJECTED value; the reason
 // is logged as a check name only (never header values, digests or secrets).
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import type { Logger, Secret } from '@feedbouncer/service-runtime';
+import {
+  SpanKind,
+  clampLag,
+  setSpanAttributes,
+  withLogContext,
+  withSpan,
+  type Logger,
+  type Secret,
+} from '@feedbouncer/service-runtime';
 import type { Clock } from './clock.js';
 import type { InboundEvent, WebhookSpec } from './connector.js';
-import type { DeliveryLedger, WebhookSecretSource } from './ports.js';
+import {
+  recordSync,
+  type DeliveryLedger,
+  type SyncRecorder,
+  type WebhookSecretSource,
+} from './ports.js';
 import type { ConnectorRegistry } from './registry.js';
 import { inboundEventsSchema } from './schemas.js';
 import { isPlatform, type Platform } from './types.js';
@@ -28,6 +41,21 @@ export type WebhookOutcome =
   | { readonly status: 'accepted'; readonly eventCount: number }
   | { readonly status: 'duplicate' }
   | { readonly status: 'rejected' };
+
+export interface WebhookDeliveryEvent {
+  /** `unknown` for anything that is not a registered platform name; never a raw request value. */
+  readonly platform: Platform | 'unknown';
+  readonly outcome: WebhookOutcome['status'];
+  readonly eventCount: number;
+  /** Receipt time minus event time per event, clamped at 0. Empty unless accepted. */
+  readonly eventDelaysMs: readonly number[];
+  /** Events whose timestamp was ahead of our clock. */
+  readonly negativeSkews: number;
+}
+/** Receives one event per delivery. Must not throw; exceptions are swallowed. */
+export interface WebhookObserver {
+  onDelivery(e: WebhookDeliveryEvent): void;
+}
 
 const REJECTED: WebhookOutcome = Object.freeze({ status: 'rejected' });
 const DIGEST_BYTES = 32;
@@ -66,13 +94,88 @@ export class WebhookGate {
       clock: Clock;
       log: Logger;
       maxBodyBytes?: number;
+      observer?: WebhookObserver;
+      sync?: SyncRecorder;
     },
   ) {
     this.#max = d.maxBodyBytes ?? 1_048_576;
   }
 
+  /** Every delivery is a new root span; inbound trace headers are never extracted. */
   async handle(
     req: InboundWebhook,
+    deliver: (d: VerifiedDelivery) => Promise<void>,
+  ): Promise<WebhookOutcome> {
+    const platform: Platform | 'unknown' = isPlatform(req.platform) ? req.platform : 'unknown';
+    // The request's connection id is unauthenticated: it is bound to logs and spans
+    // only after verification, from the verified delivery (see #handleInner).
+    return withLogContext({ connector_type: platform }, () =>
+      withSpan(
+        'webhook.receive',
+        {
+          kind: SpanKind.SERVER,
+          root: true,
+          attributes: { 'feedbouncer.platform': platform },
+        },
+        async (span) => {
+          let delays: number[] = [];
+          let skews = 0;
+          // Only a delivery the gate verified may be attributed to a connection: an
+          // app-secret delivery carries a caller-chosen connectionId that proves nothing.
+          let verifiedConnectionId: string | null = null;
+          const onVerified = (d: VerifiedDelivery) => {
+            verifiedConnectionId = d.connectionId;
+            setSpanAttributes(span, { 'feedbouncer.connector.id': d.connectionId });
+          };
+          const outcome = await this.#handleInner(req, onVerified, async (d) => {
+            const now = this.d.clock.now();
+            for (const ev of d.events) {
+              const { lagMs, skewMs } = clampLag(ev.occurredAt.getTime(), now);
+              delays.push(lagMs);
+              if (skewMs > 0) skews++;
+            }
+            await deliver(d);
+          });
+          if (outcome.status !== 'accepted') {
+            delays = [];
+            skews = 0;
+          }
+          if (skews > 0)
+            this.d.log.warn('telemetry.negative_lag', {
+              source: 'webhook_event',
+              platform,
+              count: skews,
+            });
+          setSpanAttributes(span, {
+            'feedbouncer.webhook.outcome': outcome.status,
+            'feedbouncer.webhook.events': outcome.status === 'accepted' ? outcome.eventCount : 0,
+          });
+          try {
+            this.d.observer?.onDelivery({
+              platform,
+              outcome: outcome.status,
+              eventCount: outcome.status === 'accepted' ? outcome.eventCount : 0,
+              eventDelaysMs: delays,
+              negativeSkews: skews,
+            });
+          } catch {
+            /* telemetry never fails intake */
+          }
+          const syncId: string | null = verifiedConnectionId;
+          if (outcome.status === 'accepted' && syncId !== null) {
+            recordSync(this.d.sync, this.d.log, { platform, connectionId: syncId }, (s) =>
+              s.success(syncId),
+            );
+          }
+          return outcome;
+        },
+      ),
+    );
+  }
+
+  async #handleInner(
+    req: InboundWebhook,
+    onVerified: (d: VerifiedDelivery) => void,
     deliver: (d: VerifiedDelivery) => Promise<void>,
   ): Promise<WebhookOutcome> {
     const v = await this.#verify(req);
@@ -84,16 +187,27 @@ export class WebhookGate {
       return REJECTED;
     }
     const { delivery } = v;
-    const outcome = await this.d.ledger.once(
-      `webhook:${delivery.platform}`,
-      delivery.deliveryKey,
-      () => deliver(delivery),
-    );
-    if (outcome === 'duplicate') {
-      this.d.log.info('duplicate webhook delivery skipped', { platform: delivery.platform });
-      return { status: 'duplicate' };
+    try {
+      onVerified(delivery);
+    } catch {
+      /* telemetry never fails intake */
     }
-    return { status: 'accepted', eventCount: delivery.events.length };
+    // From here on, logs are attributed to the verified connection, if there is one.
+    return withLogContext(
+      delivery.connectionId !== null ? { connector_id: delivery.connectionId } : {},
+      async (): Promise<WebhookOutcome> => {
+        const outcome = await this.d.ledger.once(
+          `webhook:${delivery.platform}`,
+          delivery.deliveryKey,
+          () => deliver(delivery),
+        );
+        if (outcome === 'duplicate') {
+          this.d.log.info('duplicate webhook delivery skipped', { platform: delivery.platform });
+          return { status: 'duplicate' };
+        }
+        return { status: 'accepted', eventCount: delivery.events.length };
+      },
+    );
   }
 
   async #verify(req: InboundWebhook): Promise<Verified> {

@@ -9,6 +9,8 @@ afterAll(() => ctx.close());
 const q = async <T>(sql: string) => (await ctx.c.query(sql)).rows as T[];
 
 const SYSTEM_TABLES = ['processed_job'];
+// One row per connection, keyed by the connection's own id instead of a surrogate id.
+const CONNECTION_KEYED_TABLES = ['connection_sync'];
 const GLOBAL_TABLES = [
   'organization',
   'app_user',
@@ -78,6 +80,10 @@ describe('schema conventions', () => {
     for (const r of rows) {
       expect(r.pk, r.t).not.toBeNull();
       if (SYSTEM_TABLES.includes(r.t)) continue;
+      if (CONNECTION_KEYED_TABLES.includes(r.t)) {
+        expect(r.pk, r.t).toBe('PRIMARY KEY (connection_id)');
+        continue;
+      }
       expect(r.pk, r.t).toBe('PRIMARY KEY (id)');
       expect(r.def, r.t).toBe('gen_random_uuid()');
     }

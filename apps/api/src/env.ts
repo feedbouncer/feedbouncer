@@ -18,6 +18,12 @@ import {
   type LogLevel,
   type SecretFileSystem,
 } from '@feedbouncer/service-runtime';
+import {
+  loadHealthPolicy,
+  loadTelemetryConfig,
+  type HealthPolicy,
+  type TelemetryConfig,
+} from '@feedbouncer/observability';
 import { ENCRYPTION_FILE_VARS, loadEncryptionKeyring, type Keyring } from '@feedbouncer/secrets';
 
 export const SMTP_PROTOCOLS = ['smtp:', 'smtps:'] as const;
@@ -47,6 +53,8 @@ export interface ApiEnv {
   readonly trustProxyHops: number;
   /** Deployment keys for stored platform credentials. Serializes without key material. */
   readonly encryption: Keyring;
+  readonly telemetry: TelemetryConfig;
+  readonly health: HealthPolicy;
 }
 
 export interface LoadEnvOptions {
@@ -86,6 +94,8 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     }),
     trustProxyHops: readInt(env, 'TRUST_PROXY_HOPS', { min: 0, max: 5, fallback: 0 }),
     encryption: loadEncryptionKeyring(env, appEnv, opts.warn),
+    telemetry: loadTelemetryConfig(env, 'api'),
+    health: loadHealthPolicy(env),
   };
   // A whole-config dump (JSON, util.inspect) must never carry secrets or URL passwords.
   return redactOnSerialize(config, {
@@ -95,5 +105,8 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     publicWebUrl: publicWebUrl.origin,
     trustProxyHops: config.trustProxyHops,
     activeKeyId: config.encryption.activeKeyId,
+    metricsPort: config.telemetry.metrics.port,
+    metricsHost: config.telemetry.metrics.host,
+    tracesExporter: config.telemetry.traces.exporter,
   });
 }

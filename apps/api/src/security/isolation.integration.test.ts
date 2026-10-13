@@ -9,6 +9,19 @@ beforeAll(async () => {
   api = await startTestApi();
   const A = await orgWithRoles(api, 'isoA');
   const B = await orgWithRoles(api, 'isoB');
+  // Each org has a connection with sync state, so the snapshots prove read routes do not write it.
+  for (const o of [A, B]) {
+    const { rows } = await api.pool.query(
+      `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, display_name)
+       VALUES ($1, $2, 'youtube', $3, 'acct') RETURNING id`,
+      [o.orgId, o.brandId, `ext-${o.orgId}`],
+    );
+    await api.pool.query(
+      `INSERT INTO connection_sync (connection_id, organization_id, brand_id, last_success_at)
+       VALUES ($1, $2, $3, now())`,
+      [rows[0].id, o.orgId, o.brandId],
+    );
+  }
   const inv = await api.req('POST', `/api/v1/orgs/${B.orgId}/invitations`, {
     cookie: B.owner.cookie,
     body: { email: 'iso@x.test', role: 'member' },
@@ -39,6 +52,10 @@ async function snapshot(orgId: string) {
     invitations: await q(
       `SELECT id, email, role, status, token_hash, expires_at FROM invitation
        WHERE organization_id = $1 ORDER BY id`,
+    ),
+    connectionSync: await q(
+      `SELECT connection_id, last_success_at, consecutive_failures FROM connection_sync
+       WHERE organization_id = $1 ORDER BY connection_id`,
     ),
     audit: await q(
       `SELECT sequence, action, subject_type, subject_id, actor_user_id FROM audit_event

@@ -1,4 +1,6 @@
+import { EnvError } from './env.js';
 import type { Logger } from './logger.js';
+import { redact } from './redaction.js';
 
 interface LoadedConfig {
   readonly appEnv: string;
@@ -12,4 +14,22 @@ export function logConfigurationLoaded(log: Logger, env: LoadedConfig): void {
     appEnv: env.appEnv,
     activeKeyId: env.encryption.activeKeyId,
   });
+}
+
+export function writeStartupConfigError(
+  service: string,
+  err: unknown,
+  write: (line: string) => void = (l) => {
+    process.stderr.write(`${l}\n`);
+  },
+): void {
+  write(
+    JSON.stringify({
+      time: new Date().toISOString(),
+      level: 'error',
+      service,
+      msg: 'invalid configuration',
+      error: err instanceof EnvError ? redact(err.message) : 'Invalid configuration',
+    }),
+  );
 }

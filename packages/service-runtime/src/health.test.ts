@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runChecks } from './health.js';
+import { runChecks, TimeoutError, withTimeout } from './health.js';
 
 describe('runChecks', () => {
   it('reports ok when every check resolves', async () => {
@@ -33,5 +33,19 @@ describe('runChecks', () => {
     const onFailure = vi.fn();
     await runChecks({ db: () => Promise.reject(new Error('x')) }, { timeoutMs: 50, onFailure });
     expect(onFailure).toHaveBeenCalledWith('db', expect.any(Error));
+  });
+});
+
+describe('withTimeout', () => {
+  it('rejects with a TimeoutError naming the label when the promise is too slow', async () => {
+    const err = await withTimeout(new Promise(() => {}), 20, 'collect').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TimeoutError);
+    expect((err as Error).message).toBe('collect timed out after 20ms');
+  });
+
+  it('passes through the result and the original rejection', async () => {
+    await expect(withTimeout(Promise.resolve(7), 50, 'x')).resolves.toBe(7);
+    const boom = new Error('boom');
+    await expect(withTimeout(Promise.reject(boom), 50, 'x')).rejects.toBe(boom);
   });
 });

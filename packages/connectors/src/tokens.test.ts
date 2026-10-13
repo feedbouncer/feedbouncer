@@ -5,7 +5,7 @@ import type { Connector, TokenSet } from './connector.js';
 import { ConnectorError } from './errors.js';
 import { MemoryConnectionDirectory, MemoryCredentialVault, MemoryRefreshLock } from './memory.js';
 import type { TokenRecord } from './ports.js';
-import { TokenManager } from './tokens.js';
+import { TokenManager, normalizeTokenSet } from './tokens.js';
 
 const NOW = Date.parse('2026-10-12T10:00:00Z');
 
@@ -263,6 +263,24 @@ describe('TokenManager', () => {
     expect((await s.directory.load(scope))?.status).toBe('reconnect_required');
     expect(s.directory.statusReason('c1')).toBe('oauth_refresh_rejected');
     expect(s.refreshTokens).toHaveBeenCalledTimes(1);
+  });
+
+  it('an unusable expiry becomes null and is logged', () => {
+    const lines: string[] = [];
+    const log = createLogger('t', 'debug', (l) => lines.push(l));
+    expect(
+      normalizeTokenSet(
+        {
+          accessToken: new Secret('a'),
+          accessTokenExpiresAt: 'not-a-date',
+          refreshToken: null,
+          scopes: [],
+        },
+        log,
+        {},
+      ).accessTokenExpiresAt,
+    ).toBeNull();
+    expect(lines.join('\n')).toContain('invalid_token_expiry');
   });
 
   it('transient refresh failures do not flag the connection', async () => {

@@ -23,6 +23,7 @@ async function add(k = key(), x = t): Promise<string> {
     idempotencyKey: k,
     payloadJson: '{"ref":"r"}',
     ttlMs: 86_400_000,
+    traceContext: null,
   });
   if (r.status !== 'inserted') throw new Error(`expected insert, got ${r.status}`);
   return r.id;
@@ -57,6 +58,7 @@ describe('PgJobLedger.insert', () => {
       idempotencyKey: k,
       payloadJson: '{}',
       ttlMs: 1_000,
+      traceContext: null,
     });
     expect(again).toEqual({ status: 'exists', id, state: 'queued' });
   });
@@ -68,6 +70,7 @@ describe('PgJobLedger.insert', () => {
       idempotencyKey: key(),
       payloadJson: '{}',
       ttlMs: 1_000,
+      traceContext: null,
     });
     expect(cross).toEqual({ status: 'no_connection' });
     const wrongPlatform = await ledger.insert({
@@ -77,6 +80,7 @@ describe('PgJobLedger.insert', () => {
       idempotencyKey: key(),
       payloadJson: '{}',
       ttlMs: 1_000,
+      traceContext: null,
     });
     expect(wrongPlatform).toEqual({ status: 'no_connection' });
   });
@@ -302,5 +306,74 @@ describe('numeric inputs', () => {
       ledger.recordRetry(id, 'w1', { kind: 'retryable', code: 'x' }, -1),
     ).rejects.toThrow(RangeError);
     await expect(ledger.staleQueued(Number.POSITIVE_INFINITY, 10)).rejects.toThrow(RangeError);
+  });
+});
+
+describe('trace context, wait time and queue stats', () => {
+  const TP = '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01';
+  const insertWith = async (traceContext: string | null) => {
+    const r = await ledger.insert({
+      scope: scopeOf(t),
+      platform: 'facebook',
+      jobType: 'scripted',
+      idempotencyKey: key(),
+      payloadJson: '{"ref":"r"}',
+      ttlMs: 86_400_000,
+      traceContext,
+    });
+    if (r.status !== 'inserted') throw new Error('expected insert');
+    return r.id;
+  };
+
+  it('stores a valid traceparent, drops a malformed one, and the first writer wins', async () => {
+    const good = await insertWith(TP);
+    expect((await claimed(good)).traceContext).toBe(TP);
+    const bad = await insertWith('00-nothex-bad-01');
+    expect((await claimed(bad)).traceContext).toBeNull();
+    const k = key();
+    const input = {
+      scope: scopeOf(t),
+      platform: 'facebook' as const,
+      jobType: 'scripted',
+      idempotencyKey: k,
+      payloadJson: '{"ref":"r"}',
+      ttlMs: 86_400_000,
+    };
+    await ledger.insert({ ...input, traceContext: TP });
+    const again = await ledger.insert({
+      ...input,
+      traceContext: '00-11111111111111111111111111111111-2222222222222222-01',
+    });
+    expect(again.status).toBe('exists');
+    const { rows } = await pool.query<{ trace_context: string }>(
+      'SELECT trace_context FROM job_ledger WHERE idempotency_key = $1',
+      [k],
+    );
+    expect(rows[0]!.trace_context).toBe(TP);
+  });
+
+  it('reports wait from creation on first run and from next_run_at on retries', async () => {
+    const id = await insertWith(null);
+    await sleep(50);
+    const first = await ledger.claim(id, 'w1', 60_000);
+    if (first.status !== 'claimed') throw new Error('expected claim');
+    expect(first.waitMs).toBeGreaterThanOrEqual(40);
+    expect(await ledger.recordRetry(id, 'w1', { kind: 'retryable', code: 'x' }, 100)).toBe(true);
+    await sleep(1_300);
+    const second = await ledger.claim(id, 'w2', 60_000);
+    if (second.status !== 'claimed') throw new Error('expected claim');
+    expect(second.waitMs).not.toBeNull();
+    expect(second.waitMs!).toBeGreaterThanOrEqual(0);
+    expect(second.waitMs!).toBeLessThan(5_000);
+  });
+
+  it('queueStats counts queued rows per platform', async () => {
+    const id = await insertWith(null);
+    const stats = await ledger.queueStats();
+    const fb = stats.find((s) => s.platform === 'facebook')!;
+    expect(fb.depth).toBeGreaterThanOrEqual(1);
+    expect(fb.oldestAgeMs).toBeGreaterThanOrEqual(0);
+    await claimed(id);
+    await ledger.complete(id, 'w1', '{}');
   });
 });

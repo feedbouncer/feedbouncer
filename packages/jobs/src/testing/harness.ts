@@ -9,7 +9,7 @@ import { loadJobsConfig, type JobsConfig } from '../config.js';
 import { createProducerConnection } from '../connections.js';
 import { JobRegistry } from '../definition.js';
 import { PgJobLedger, type LedgerDetail, type LedgerState } from '../ledger.js';
-import { JobMetrics } from '../metrics.js';
+import { JobMetrics, type JobEventSink } from '../metrics.js';
 import { JobProducer } from '../producer.js';
 import { QueueSet } from '../queues.js';
 import { JobWorkers, type JobWorkersDeps } from '../workers.js';
@@ -42,7 +42,7 @@ export interface JobsHarness {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export async function createJobsHarness(): Promise<JobsHarness> {
+export async function createJobsHarness(opts: { sink?: JobEventSink } = {}): Promise<JobsHarness> {
   const db = await jobsDatabase();
   const label = () => `h-${randomBytes(4).toString('hex')}`;
   const tenants = [await seedJobsTenant(db, label()), await seedJobsTenant(db, label())] as const;
@@ -87,7 +87,7 @@ export async function createJobsHarness(): Promise<JobsHarness> {
 
   const lines: string[] = [];
   const log = createLogger('jobs-test', 'debug', (l) => lines.push(l));
-  const metrics = new JobMetrics(log);
+  const metrics = new JobMetrics(log, opts.sink);
   const ledger = new PgJobLedger(pool);
   const queues = new QueueSet({ connection: producerConnection, prefix: config.prefix });
   const producer = new JobProducer({

@@ -10,6 +10,12 @@ import { createPool } from '@feedbouncer/db';
 import { migratedDb } from '@feedbouncer/db/testing';
 import { extractFirstUrl, MemoryMailer } from '@feedbouncer/mailer/testing';
 import { testKeyring } from '@feedbouncer/secrets/testing';
+import {
+  PgHealthReader,
+  createMetrics,
+  loadHealthPolicy,
+  loadTelemetryConfig,
+} from '@feedbouncer/observability';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { buildApp } from '../app.factory.js';
 import type { AppDeps } from '../deps.js';
@@ -64,6 +70,8 @@ export async function startTestApi(overrides: Partial<ApiEnv> = {}): Promise<Tes
     mailFrom: 'FeedBouncer <no-reply@localhost>',
     trustProxyHops: 0,
     encryption: testKeyring(),
+    telemetry: loadTelemetryConfig({ METRICS_PORT: '0' }, 'api'),
+    health: loadHealthPolicy({}),
     ...overrides,
   };
   const logLines: string[] = [];
@@ -73,7 +81,16 @@ export async function startTestApi(overrides: Partial<ApiEnv> = {}): Promise<Tes
   redis.on('error', () => {}); // reported through /healthz; tests may point at a dead Redis
   const redisKeyPrefix = `fbtest:${randomUUID()}:`;
   const mailer = new MemoryMailer();
-  const deps: AppDeps = { env, pool, redis, mailer, log, redisKeyPrefix };
+  const deps: AppDeps = {
+    env,
+    pool,
+    redis,
+    mailer,
+    log,
+    redisKeyPrefix,
+    metrics: createMetrics('api'),
+    health: new PgHealthReader(pool, env.health),
+  };
   let app: NestFastifyApplication;
   try {
     app = await buildApp(deps);
