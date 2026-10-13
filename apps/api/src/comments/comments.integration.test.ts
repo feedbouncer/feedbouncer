@@ -132,6 +132,7 @@ describe('comments', () => {
       body: 'second',
       state: 'hidden',
       authorName: expect.stringMatching(/^Author \d+$/) as string,
+      hasAuthor: true,
       isOwnAccount: false,
     });
 

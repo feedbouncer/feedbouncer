@@ -17,6 +17,8 @@ export interface CommentView {
   platform: string;
   parentCommentId: string | null;
   authorName: string | null;
+  /** True when the platform gave an author id, so the author can be banned even without a display name. */
+  hasAuthor: boolean;
   /** Plain text exactly as posted; the web app renders it as text, never as markup. */
   body: string;
   state: CommentRow['platformState'];
@@ -53,6 +55,7 @@ const toView = (c: CommentRow): CommentView => ({
   platform: c.platform,
   parentCommentId: c.parentCommentId,
   authorName: c.authorName,
+  hasAuthor: c.authorExternalId !== null,
   body: c.body,
   state: c.platformState,
   postedAt: c.postedAt.toISOString(),

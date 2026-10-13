@@ -41,7 +41,10 @@ describe('ConnectionsService.disconnect', () => {
   });
 
   it('re-queues the teardown for a row the user already disconnected (retry after a 503)', async () => {
-    const { svc, enqueue } = setup(false, { status: 'revoked', status_reason: 'user_disconnected' });
+    const { svc, enqueue } = setup(false, {
+      status: 'revoked',
+      status_reason: 'user_disconnected',
+    });
     await svc.disconnect(org, brandId, connectionId);
     expect(enqueue).toHaveBeenCalledTimes(1);
   });

@@ -10,6 +10,7 @@ interface Comment {
   id: string;
   parentCommentId: string | null;
   authorName: string | null;
+  hasAuthor: boolean;
   body: string;
   state: 'visible' | 'hidden' | 'deleted';
   postedAt: string;
@@ -80,7 +81,7 @@ export default async function CommentsPage({
                 brandId={brandId}
                 commentId={c.id}
                 state={c.state}
-                canBan={!c.isOwnAccount && c.authorName !== null}
+                canBan={!c.isOwnAccount && c.hasAuthor}
                 privateReplyOpen={Date.parse(c.postedAt) + PRIVATE_REPLY_WINDOW_MS > now}
               />
             </li>
