@@ -36,7 +36,9 @@ export function viewStatus(status: string, reason: string | null): ConnectionVie
       // An abandoned connect: the Page was chosen but never activated.
       return reason === 'oauth_pending' ? null : 'needs_reconnect';
     case 'revoked':
-      return reason === 'user_disconnected' ? null : 'needs_reconnect';
+      // Revoked is terminal: reconnecting cannot reopen it, only disconnecting
+      // (then connecting again) can, so it is not offered as a reconnect.
+      return reason === 'user_disconnected' ? null : 'error';
     case 'paused':
       return 'paused';
     case 'error':

@@ -49,7 +49,7 @@ describe('viewStatus', () => {
     expect(viewStatus('reconnect_required', 'oauth_access_rejected')).toBe('needs_reconnect');
     expect(viewStatus('reconnect_required', 'oauth_pending')).toBeNull();
     expect(viewStatus('revoked', 'user_disconnected')).toBeNull();
-    expect(viewStatus('revoked', 'platform_revoked')).toBe('needs_reconnect');
+    expect(viewStatus('revoked', 'platform_revoked')).toBe('error');
     expect(viewStatus('paused', null)).toBe('paused');
     expect(viewStatus('error', 'x')).toBe('error');
     expect(viewStatus('something_new', null)).toBeNull();
