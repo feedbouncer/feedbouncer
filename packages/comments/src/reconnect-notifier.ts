@@ -85,11 +85,7 @@ export class NotifyingConnectionDirectory implements ConnectionDirectory {
           connectionId: scope.connectionId,
           errorName: err instanceof Error ? err.name : 'NonError',
         });
-      try {
-        void this.notifier.connectionNeedsReconnect(scope).catch(failed);
-      } catch (err) {
-        failed(err);
-      }
+      void this.notifier.connectionNeedsReconnect(scope).catch(failed);
     }
     return flagged;
   }
