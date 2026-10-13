@@ -273,6 +273,27 @@ describe('PgCommentStore', () => {
     expect(page2.map((r) => r.id)).toEqual([expected[2]]);
   });
 
+  it('leaves deleted comments out before the limit when asked', async () => {
+    const x = await seedTenant(ctx.c, 'cs-del');
+    const sx = scopeOf(x);
+    const kept = await store.upsertFromPlatform(
+      sx,
+      comment({ postedAt: new Date(Date.UTC(2026, 9, 3, 0, 0, 0)) }),
+      own(1),
+    );
+    const gone = comment({ postedAt: new Date(Date.UTC(2026, 9, 3, 0, 0, 1)) });
+    const { commentId: goneId } = await store.upsertFromPlatform(sx, gone, own(1));
+    await store.recordDeleted(
+      sx,
+      { sourceExternalId: gone.sourceExternalId, externalId: gone.externalId },
+      { syncedAt: at(2), occurredAt: at(2) },
+    );
+    expect((await store.list(x, { before: null, limit: 1 })).map((r) => r.id)).toEqual([goneId]);
+    expect(
+      (await store.list(x, { before: null, limit: 1, excludeDeleted: true })).map((r) => r.id),
+    ).toEqual([kept.commentId]);
+  });
+
   it('load/list never cross brands', async () => {
     const other = await seedTenant(ctx.c, 'cs2');
     const { commentId } = await store.upsertFromPlatform(scope(), comment(), own(1));

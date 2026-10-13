@@ -278,7 +278,13 @@ export class PgCommentStore {
 
   async list(
     scope: BrandScope,
-    q: { before: CommentCursor | null; limit: number; connectionId?: string },
+    q: {
+      before: CommentCursor | null;
+      limit: number;
+      connectionId?: string;
+      /** Leaves out deleted comments (and tombstones of never-seen ones) before the limit applies. */
+      excludeDeleted?: boolean;
+    },
   ): Promise<CommentRow[]> {
     if (q.connectionId !== undefined && !UUID.test(q.connectionId)) return [];
     if (q.before !== null && !UUID.test(q.before.id)) return [];
@@ -287,6 +293,7 @@ export class PgCommentStore {
       `${ROW_SQL} WHERE c.organization_id = $1 AND c.brand_id = $2
                    AND ($3::timestamptz IS NULL OR (c.posted_at, c.id) < ($3::timestamptz, $4::uuid))
                    AND ($5::uuid IS NULL OR c.connection_id = $5)
+                   AND (NOT $7::boolean OR c.platform_state <> 'deleted')
                  ORDER BY c.posted_at DESC, c.id DESC LIMIT $6`,
       [
         scope.organizationId,
@@ -295,6 +302,7 @@ export class PgCommentStore {
         q.before?.id ?? null,
         q.connectionId ?? null,
         limit,
+        q.excludeDeleted === true,
       ],
     );
     return r.rows.map(toRow);
