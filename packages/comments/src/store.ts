@@ -38,6 +38,12 @@ export interface CommentRow {
   readonly connectionStatus: ConnectionStatus;
 }
 
+/** Position in the newest-first listing: the last row of the previous page. */
+export interface CommentCursor {
+  readonly postedAt: Date;
+  readonly id: string;
+}
+
 /** Postgres text cannot hold NUL; same replacement as the connector boundary. */
 const noNul = (s: string): string => s.replaceAll('\u0000', '�');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -268,16 +274,24 @@ export class PgCommentStore {
 
   async list(
     scope: BrandScope,
-    q: { before: Date | null; limit: number; connectionId?: string },
+    q: { before: CommentCursor | null; limit: number; connectionId?: string },
   ): Promise<CommentRow[]> {
     if (q.connectionId !== undefined && !UUID.test(q.connectionId)) return [];
+    if (q.before !== null && !UUID.test(q.before.id)) return [];
     const limit = Math.min(Math.max(Math.trunc(q.limit) || 1, 1), 100);
     const r = await this.pool.query(
       `${ROW_SQL} WHERE c.organization_id = $1 AND c.brand_id = $2
-                   AND ($3::timestamptz IS NULL OR c.posted_at < $3)
-                   AND ($4::uuid IS NULL OR c.connection_id = $4)
-                 ORDER BY c.posted_at DESC, c.id DESC LIMIT $5`,
-      [scope.organizationId, scope.brandId, q.before, q.connectionId ?? null, limit],
+                   AND ($3::timestamptz IS NULL OR (c.posted_at, c.id) < ($3::timestamptz, $4::uuid))
+                   AND ($5::uuid IS NULL OR c.connection_id = $5)
+                 ORDER BY c.posted_at DESC, c.id DESC LIMIT $6`,
+      [
+        scope.organizationId,
+        scope.brandId,
+        q.before?.postedAt ?? null,
+        q.before?.id ?? null,
+        q.connectionId ?? null,
+        limit,
+      ],
     );
     return r.rows.map(toRow);
   }

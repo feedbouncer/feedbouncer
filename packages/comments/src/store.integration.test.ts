@@ -49,8 +49,11 @@ describe('PgCommentStore', () => {
     expect(a).toMatchObject({ created: true, applied: true });
     expect(b).toEqual({ commentId: a.commentId, created: false, applied: false });
     expect(
-      (await pool.query('SELECT count(*)::int AS n FROM comment WHERE external_id = $1', [c.externalId]))
-        .rows[0].n,
+      (
+        await pool.query('SELECT count(*)::int AS n FROM comment WHERE external_id = $1', [
+          c.externalId,
+        ])
+      ).rows[0].n,
     ).toBe(1);
   });
 
@@ -115,7 +118,11 @@ describe('PgCommentStore', () => {
   it('a delete that lands after a newer fetch still deletes, and keeps the newer sync time', async () => {
     const c = comment();
     const { commentId } = await store.upsertFromPlatform(scope(), c, own(9));
-    await store.markDeleted(scope(), { sourceExternalId: 'post-1', externalId: c.externalId }, at(2));
+    await store.markDeleted(
+      scope(),
+      { sourceExternalId: 'post-1', externalId: c.externalId },
+      at(2),
+    );
     expect((await store.load(t, commentId))?.platformState).toBe('deleted');
     const r = await pool.query('SELECT platform_synced_at FROM comment WHERE id = $1', [commentId]);
     expect(r.rows[0].platform_synced_at).toEqual(at(9));
@@ -127,8 +134,11 @@ describe('PgCommentStore', () => {
     const ref = { sourceExternalId: 'post-1', externalId: 'never-seen' };
     expect(await store.markDeleted(scope(), ref, at(1))).toBeNull();
     expect(
-      (await pool.query('SELECT count(*)::int AS n FROM comment WHERE external_id = $1', [ref.externalId]))
-        .rows[0].n,
+      (
+        await pool.query('SELECT count(*)::int AS n FROM comment WHERE external_id = $1', [
+          ref.externalId,
+        ])
+      ).rows[0].n,
     ).toBe(0);
   });
 
@@ -137,7 +147,9 @@ describe('PgCommentStore', () => {
     const ref = { sourceExternalId: c.sourceExternalId, externalId: c.externalId };
     const id = await store.recordDeleted(scope(), ref, { syncedAt: at(2), occurredAt: at(1) });
     expect(await store.load(t, id)).toMatchObject({ platformState: 'deleted', body: '' });
-    expect(await store.recordDeleted(scope(), ref, { syncedAt: at(3), occurredAt: at(1) })).toBe(id);
+    expect(await store.recordDeleted(scope(), ref, { syncedAt: at(3), occurredAt: at(1) })).toBe(
+      id,
+    );
     const late = await store.upsertFromPlatform(scope(), { ...c, body: 'late' }, own(4));
     expect(late).toMatchObject({ commentId: id, created: false });
     expect(await store.load(t, id)).toMatchObject({
@@ -226,16 +238,39 @@ describe('PgCommentStore', () => {
     );
     expect((await store.list(x, { before: null, limit: 1 })).map((r) => r.id)).toEqual([ids[2]]);
     expect(
-      (await store.list(x, { before: new Date(Date.UTC(2026, 9, 1, 0, 0, 2)), limit: 50 })).map(
-        (r) => r.id,
-      ),
+      (
+        await store.list(x, {
+          before: { postedAt: new Date(Date.UTC(2026, 9, 1, 0, 0, 2)), id: ids[2]! },
+          limit: 50,
+        })
+      ).map((r) => r.id),
     ).toEqual([ids[1], ids[0]]);
-    expect(
-      await store.list(x, { before: null, limit: 50, connectionId: t.connectionId }),
-    ).toEqual([]);
+    expect(await store.list(x, { before: null, limit: 50, connectionId: t.connectionId })).toEqual(
+      [],
+    );
     expect(
       (await store.list(x, { before: null, limit: 50, connectionId: x.connectionId })).length,
     ).toBe(3);
+  });
+
+  it('pages through comments that share one posted_at second without skipping any', async () => {
+    const x = await seedTenant(ctx.c, 'cs-tie');
+    const sx = scopeOf(x);
+    const same = new Date(Date.UTC(2026, 9, 2, 0, 0, 0));
+    const expected: string[] = [];
+    for (let i = 0; i < 3; i++)
+      expected.push(
+        (await store.upsertFromPlatform(sx, comment({ postedAt: same }), own(1))).commentId,
+      );
+    expected.sort().reverse();
+    const page1 = await store.list(x, { before: null, limit: 2 });
+    expect(page1.map((r) => r.id)).toEqual(expected.slice(0, 2));
+    const last = page1[1]!;
+    const page2 = await store.list(x, {
+      before: { postedAt: last.postedAt, id: last.id },
+      limit: 2,
+    });
+    expect(page2.map((r) => r.id)).toEqual([expected[2]]);
   });
 
   it('load/list never cross brands', async () => {
