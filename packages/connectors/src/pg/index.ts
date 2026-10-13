@@ -7,3 +7,4 @@ export { PgDeliveryLedger } from './ledger.js';
 export { PgWebhookSecrets } from './webhook-secrets.js';
 export { PgSyncRecorder } from './sync.js';
 export { PgOAuthGrantStore } from './oauth-grant.js';
+export { buildPgConnectorStack, type PgConnectorStack } from './stack.js';
