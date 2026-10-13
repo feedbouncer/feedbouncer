@@ -14,14 +14,16 @@ export type AuditAction =
   | 'invitation.renewed'
   | 'invitation.revoked'
   /** Also records joining: details.joined is false when the user was already a member. */
-  | 'invitation.accepted';
+  | 'invitation.accepted'
+  /** Written by the connector framework's directory, not by the API. */
+  | 'connection.disconnected';
 
 export interface AuditInput {
   organizationId: string;
   brandId?: string | null;
   actorUserId: string;
   action: AuditAction;
-  subjectType: 'organization' | 'brand' | 'membership' | 'invitation';
+  subjectType: 'organization' | 'brand' | 'membership' | 'invitation' | 'connection' | 'comment';
   subjectId: string | null;
   /** Ids, roles and booleans only: never emails, people's names or tokens. */
   details?: Readonly<Record<string, string | number | boolean | null>>;

@@ -1,0 +1,82 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import type { FastifyReply } from 'fastify';
+import { z } from 'zod';
+import { ACTION_KINDS } from '@feedbouncer/comments';
+import { replyTextSchema } from '@feedbouncer/connectors';
+import { SessionGuard } from '../auth/session.guard.js';
+import { parseBody, parseUuidOr404, zUuid } from '../http/validation.js';
+import { RequireCapability } from '../tenancy/capability.decorator.js';
+import { OrgAccessGuard, type OrgRequest } from '../tenancy/org-access.guard.js';
+import { CommentsService } from './comments.service.js';
+
+const REPLY_KINDS: ReadonlySet<string> = new Set(['public_reply', 'private_reply']);
+
+const ListQuery = z.strictObject({
+  before: z.iso.datetime({ offset: true }).optional(),
+  beforeId: zUuid.optional(),
+  connectionId: zUuid.optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+const ActionBody = z
+  .strictObject({
+    kind: z.enum(ACTION_KINDS),
+    requestKey: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/),
+    text: replyTextSchema.optional(),
+  })
+  .refine((b) => REPLY_KINDS.has(b.kind) === (b.text !== undefined), { path: ['text'] });
+
+@Controller('api/v1/orgs/:orgId/brands/:brandId/comments')
+@UseGuards(SessionGuard, OrgAccessGuard)
+export class CommentsController {
+  constructor(@Inject(CommentsService) private readonly svc: CommentsService) {}
+
+  @Get()
+  @RequireCapability('comment.moderate')
+  async list(@Req() req: OrgRequest, @Param('brandId') brandId: string, @Query() query: unknown) {
+    const q = parseBody(ListQuery, query);
+    const comments = await this.svc.list(req.org, brandId, {
+      limit: q.limit,
+      ...(q.before !== undefined && { before: new Date(q.before) }),
+      ...(q.beforeId !== undefined && { beforeId: q.beforeId }),
+      ...(q.connectionId !== undefined && { connectionId: q.connectionId }),
+    });
+    return { comments };
+  }
+
+  @Get(':commentId/actions')
+  @RequireCapability('comment.moderate')
+  async actions(
+    @Req() req: OrgRequest,
+    @Param('brandId') brandId: string,
+    @Param('commentId') commentId: string,
+  ) {
+    return { actions: await this.svc.actions(req.org, brandId, parseUuidOr404(commentId)) };
+  }
+
+  @Post(':commentId/actions')
+  @RequireCapability('comment.moderate')
+  async request(
+    @Req() req: OrgRequest,
+    @Param('brandId') brandId: string,
+    @Param('commentId') commentId: string,
+    @Body() body: unknown,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    const id = parseUuidOr404(commentId);
+    const r = await this.svc.request(req.org, brandId, id, parseBody(ActionBody, body));
+    void reply.status(r.status);
+    return { action: r.action };
+  }
+}

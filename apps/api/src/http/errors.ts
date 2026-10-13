@@ -29,7 +29,14 @@ export type ErrorCode =
   | 'invitation_email_mismatch'
   | 'invitation_not_pending'
   | 'rate_limited'
-  | 'temporarily_unavailable';
+  | 'temporarily_unavailable'
+  | 'platform_not_configured'
+  | 'platform_error'
+  | 'connection_needs_reconnect'
+  | 'connection_inactive'
+  | 'unsupported_action'
+  | 'request_key_conflict'
+  | 'service_unavailable';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
@@ -56,6 +63,13 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invitation_not_pending: 'This invitation is no longer pending.',
   rate_limited: 'Too many attempts. Try again later.',
   temporarily_unavailable: 'Temporarily unavailable. Try again shortly.',
+  platform_not_configured: 'This platform is not available.',
+  platform_error: 'The platform could not be reached. Try again shortly.',
+  connection_needs_reconnect: 'This connection needs to be reconnected first.',
+  connection_inactive: 'This connection is not active.',
+  unsupported_action: 'This action is not supported for this platform.',
+  request_key_conflict: 'This request key was already used for a different action.',
+  service_unavailable: 'Service temporarily unavailable. Try again shortly.',
 };
 
 export class ApiError extends Error {
