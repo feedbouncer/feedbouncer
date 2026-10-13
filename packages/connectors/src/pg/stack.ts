@@ -67,6 +67,8 @@ export function buildPgConnectorStack(d: {
   sync?: SyncRecorder;
   /** Decorates the directory every service uses (e.g. to notify on reconnect). */
   wrapDirectory?: (d: ConnectionDirectory) => ConnectionDirectory;
+  /** Replaces the global fetch behind SafeHttp (tests: an in-memory platform double). */
+  fetch?: typeof fetch;
 }): PgConnectorStack {
   const { pool, registry, log } = d;
   const clock = systemClock;
@@ -80,7 +82,8 @@ export function buildPgConnectorStack(d: {
   const ledger = new PgDeliveryLedger(pool, d.workerId);
   const secrets = new PgWebhookSecrets(pool, store, d.appSecrets);
   const budget = redisBudget(d.redis, d.redisPrefix);
-  const http = (c: Connector) => createSafeHttp({ allowedHosts: c.capabilities.apiHosts });
+  const http = (c: Connector) =>
+    createSafeHttp({ allowedHosts: c.capabilities.apiHosts, ...(d.fetch && { fetch: d.fetch }) });
   const sync = d.sync ? { sync: d.sync } : {};
   const tokens = new TokenManager({
     vault,
