@@ -12,7 +12,6 @@ import { z } from 'zod';
 import type { Platform } from '@feedbouncer/connectors';
 import {
   contextFromTraceparent,
-  markSpanError,
   setSpanAttributes,
   SpanKind,
   withLogContext,
@@ -119,17 +118,12 @@ export function createJobProcessor(
     const base = { platform: d.platform, jobType: row.jobType, ledgerId };
 
     const runClaimed = async (span: Span): Promise<RunOutcome> => {
-      const errorSpan = (kind: string, code: string, err?: unknown): void => {
-        try {
-          if (err !== undefined) markSpanError(span, err);
-          setSpanAttributes(span, {
-            'feedbouncer.error.code': code,
-            'feedbouncer.error.class': kind,
-          });
-          span.setStatus({ code: SpanStatusCode.ERROR, message: code });
-        } catch {
-          // telemetry never fails a job
-        }
+      const errorSpan = (kind: string, code: string): void => {
+        setSpanAttributes(span, {
+          'feedbouncer.error.code': code,
+          'feedbouncer.error.class': kind,
+        });
+        span.setStatus({ code: SpanStatusCode.ERROR, message: code });
       };
       const outcome = (o: string): void =>
         setSpanAttributes(span, { 'feedbouncer.job.outcome': o });
@@ -254,7 +248,7 @@ export function createJobProcessor(
         outcome(
           disp.type === 'retry' ? 'retried' : disp.type === 'defer' ? 'deferred' : 'dead_lettered',
         );
-        errorSpan(f.kind, f.code, err);
+        errorSpan(f.kind, f.code);
 
         if (handlerRunning) {
           // The handler ignored its abort signal and is still running. Its lease

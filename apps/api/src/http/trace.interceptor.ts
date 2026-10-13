@@ -7,16 +7,9 @@ import {
   setSpanAttributes,
   withLogContext,
   withSpan,
-  type Span,
 } from '@feedbouncer/service-runtime';
 import { ApiError } from './errors.js';
 import type { TracedRequest } from './traced-request.js';
-
-const recordStatus = (span: Span, statusCode: number): void => {
-  setSpanAttributes(span, { 'http.response.status_code': statusCode });
-};
-
-const isClientError = (e: unknown): boolean => statusOf(e) < 500;
 
 const statusOf = (e: unknown): number => {
   if (e instanceof ApiError) return e.status;
@@ -47,16 +40,19 @@ export class TraceInterceptor implements NestInterceptor {
               kind: SpanKind.SERVER,
               root: true,
               attributes: { 'http.request.method': req.method, 'http.route': route },
-              isControlFlow: (e) => isClientError(e),
+              isControlFlow: (e) => statusOf(e) < 500,
             },
             async (span) => {
               req.fbTrace = currentTraceIds() ?? undefined;
               try {
                 const value = await lastValueFrom(next.handle(), { defaultValue: undefined });
-                recordStatus(span, http.getResponse<{ statusCode: number }>().statusCode);
+                setSpanAttributes(span, {
+                  'http.response.status_code': http.getResponse<{ statusCode: number }>()
+                    .statusCode,
+                });
                 return value;
               } catch (e) {
-                recordStatus(span, statusOf(e));
+                setSpanAttributes(span, { 'http.response.status_code': statusOf(e) });
                 throw e;
               }
             },

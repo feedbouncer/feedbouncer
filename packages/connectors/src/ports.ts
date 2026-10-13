@@ -1,6 +1,6 @@
 import type { Role } from '@feedbouncer/authz';
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import type { ErrorClass, Secret } from '@feedbouncer/service-runtime';
+import type { ErrorClass, Logger, Secret } from '@feedbouncer/service-runtime';
 import type { Platform } from './types.js';
 
 export type ConnectionStatus = 'active' | 'paused' | 'revoked' | 'error' | 'reconnect_required';
@@ -101,3 +101,26 @@ export interface SyncRecorder {
   ): Promise<void>;
 }
 export const noopSyncRecorder: SyncRecorder = { success: async () => {}, failure: async () => {} };
+
+/**
+ * Fire-and-forget: a slow or failing recorder never delays or fails the caller.
+ * Shared by the connector runtime and the webhook gate.
+ */
+export function recordSync(
+  sync: SyncRecorder | undefined,
+  log: Logger,
+  ids: { readonly platform: string; readonly connectionId: string },
+  f: (s: SyncRecorder) => Promise<void>,
+): void {
+  if (!sync) return;
+  const warn = (err: unknown) =>
+    log.warn('telemetry.sync_record_failed', {
+      ...ids,
+      errorName: err instanceof Error ? err.name : 'NonError',
+    });
+  try {
+    void f(sync).catch(warn);
+  } catch (err) {
+    warn(err);
+  }
+}

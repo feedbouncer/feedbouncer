@@ -15,7 +15,12 @@ import {
 } from '@feedbouncer/service-runtime';
 import type { Clock } from './clock.js';
 import type { InboundEvent, WebhookSpec } from './connector.js';
-import type { DeliveryLedger, SyncRecorder, WebhookSecretSource } from './ports.js';
+import {
+  recordSync,
+  type DeliveryLedger,
+  type SyncRecorder,
+  type WebhookSecretSource,
+} from './ports.js';
 import type { ConnectorRegistry } from './registry.js';
 import { inboundEventsSchema } from './schemas.js';
 import { isPlatform, type Platform } from './types.js';
@@ -157,18 +162,10 @@ export class WebhookGate {
             /* telemetry never fails intake */
           }
           const syncId: string | null = verifiedConnectionId;
-          if (outcome.status === 'accepted' && syncId !== null && this.d.sync) {
-            const warn = (err: unknown) =>
-              this.d.log.warn('telemetry.sync_record_failed', {
-                platform,
-                connectionId: syncId,
-                error: err instanceof Error ? err.name : 'NonError',
-              });
-            try {
-              void this.d.sync.success(syncId).catch(warn);
-            } catch (err) {
-              warn(err);
-            }
+          if (outcome.status === 'accepted' && syncId !== null) {
+            recordSync(this.d.sync, this.d.log, { platform, connectionId: syncId }, (s) =>
+              s.success(syncId),
+            );
           }
           return outcome;
         },

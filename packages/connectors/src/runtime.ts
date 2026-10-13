@@ -25,7 +25,12 @@ import {
   type ConnectorErrorKind,
 } from './errors.js';
 import type { SafeHttp } from './http.js';
-import type { ConnectionDirectory, ConnectionRecord, SyncRecorder } from './ports.js';
+import {
+  recordSync,
+  type ConnectionDirectory,
+  type ConnectionRecord,
+  type SyncRecorder,
+} from './ports.js';
 import type { ConnectorRegistry } from './registry.js';
 import { scopeKey } from './scope.js';
 import {
@@ -196,7 +201,10 @@ export class ConnectionClient {
         ) {
           const e = result.error;
           const errorClass = errorClassFor(e.kind, e.reauthorize);
-          this.#recordSync((s) => s.failure(this.scope.connectionId, { code: e.code, errorClass }));
+          const ids = this.#ids();
+          recordSync(this.d.sync, this.d.log, ids, (s) =>
+            s.failure(ids.connectionId, { code: e.code, errorClass }),
+          );
         }
         return result;
       },
@@ -278,7 +286,8 @@ export class ConnectionClient {
         try {
           const out = await this.#callInner(priority, op);
           this.#observe(operation, 'ok', started);
-          if (operation !== 'act') this.#recordSync((s) => s.success(ids.connectionId));
+          if (operation !== 'act')
+            recordSync(this.d.sync, this.d.log, ids, (s) => s.success(ids.connectionId));
           return out;
         } catch (err) {
           const ce = err instanceof ConnectorError ? err : null;
@@ -286,9 +295,9 @@ export class ConnectionClient {
           if (ce && operation !== 'act') {
             if (ce.kind === 'not_found' && ce.code !== 'connection_not_found') {
               // The platform answered: a missing comment or source is not a sync failure.
-              this.#recordSync((s) => s.success(ids.connectionId));
+              recordSync(this.d.sync, this.d.log, ids, (s) => s.success(ids.connectionId));
             } else if (ce.code !== 'budget_exhausted') {
-              this.#recordSync((s) =>
+              recordSync(this.d.sync, this.d.log, ids, (s) =>
                 s.failure(ids.connectionId, { code: ce.code, errorClass: ce.errorClass }),
               );
             }
@@ -313,22 +322,6 @@ export class ConnectionClient {
       });
     } catch {
       /* telemetry never fails a call */
-    }
-  }
-
-  /** Fire-and-forget: a slow or failing recorder never delays or fails the call. */
-  #recordSync(f: (s: SyncRecorder) => Promise<void>): void {
-    const sync = this.d.sync;
-    if (!sync) return;
-    const warn = (err: unknown) =>
-      this.d.log.warn('telemetry.sync_record_failed', {
-        ...this.#ids(),
-        errorName: errorName(err),
-      });
-    try {
-      void f(sync).catch(warn);
-    } catch (err) {
-      warn(err);
     }
   }
 
