@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { EXTERNAL_REF, JobError, JobRegistry, type JobContext } from '@feedbouncer/jobs';
-import { EXECUTE_JOB, INGEST_JOB, enqueueOnly, type IngestPayload } from './specs.js';
+import {
+  EXECUTE_JOB,
+  INGEST_JOB,
+  LIFECYCLE_JOB,
+  enqueueOnly,
+  type IngestPayload,
+} from './specs.js';
 import { ingestCommentJob } from './ingest.js';
 
 const p = (over: Partial<IngestPayload> = {}): IngestPayload => ({
@@ -72,6 +78,36 @@ describe('EXECUTE_JOB', () => {
     const r = new JobRegistry();
     r.register(enqueueOnly(EXECUTE_JOB));
     expect(r.supports(EXECUTE_JOB.type, 'facebook')).toBe(true);
+  });
+});
+
+describe('LIFECYCLE_JOB', () => {
+  const nonce = '6f1c2a4e-8d2b-4c3a-9b1e-0a1b2c3d4e5f:42';
+
+  it('keys a run by operation and (re)connect event', () => {
+    expect(LIFECYCLE_JOB.externalRef({ op: 'setup', nonce })).toBe(`setup:${nonce}`);
+    expect(LIFECYCLE_JOB.externalRef({ op: 'teardown', nonce })).toBe(`teardown:${nonce}`);
+    expect(EXTERNAL_REF.test(LIFECYCLE_JOB.externalRef({ op: 'teardown', nonce }))).toBe(true);
+  });
+
+  it('accepts only a connection id and audit sequence as nonce', () => {
+    expect(LIFECYCLE_JOB.payload.parse({ op: 'setup', nonce })).toEqual({ op: 'setup', nonce });
+    for (const bad of [
+      { op: 'setup' },
+      { op: 'refresh', nonce },
+      { op: 'setup', nonce: '6f1c2a4e-8d2b-4c3a-9b1e-0a1b2c3d4e5f' },
+      { op: 'setup', nonce: '6f1c2a4e-8d2b-4c3a-9b1e-0a1b2c3d4e5f:x' },
+      { op: 'setup', nonce: '../x:1' },
+      { op: 'setup', nonce, extra: 1 },
+    ])
+      expect(LIFECYCLE_JOB.payload.safeParse(bad).success).toBe(false);
+  });
+
+  it('registers under a snake_case type with 6 attempts', () => {
+    expect(LIFECYCLE_JOB.policy).toEqual({ maxAttempts: 6 });
+    const r = new JobRegistry();
+    r.register(enqueueOnly(LIFECYCLE_JOB));
+    expect(r.supports(LIFECYCLE_JOB.type, 'facebook')).toBe(true);
   });
 });
 

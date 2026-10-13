@@ -43,6 +43,24 @@ export const EXECUTE_JOB = {
   platforms: ['facebook'] as readonly Platform[] | 'all',
 };
 
+// `${connectionId}:${audit sequence}` of the connection.authorized (setup) or
+// connection.disconnected (teardown) event: unique per (re)connect, stable across retries.
+export const lifecyclePayload = z.strictObject({
+  op: z.enum(['setup', 'teardown']),
+  nonce: z
+    .string()
+    .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:\d{1,19}$/),
+});
+export type LifecyclePayload = z.infer<typeof lifecyclePayload>;
+
+export const LIFECYCLE_JOB = {
+  type: 'connection_lifecycle' as const,
+  payload: lifecyclePayload,
+  externalRef: (p: LifecyclePayload): string => `${p.op}:${p.nonce}`,
+  policy: { maxAttempts: 6 } satisfies Partial<RetryPolicy>,
+  platforms: 'all' as readonly Platform[] | 'all',
+};
+
 /** For processes that enqueue but never run jobs (the API): same type, payload and key; no handler. */
 export function enqueueOnly<P>(spec: {
   type: string;
