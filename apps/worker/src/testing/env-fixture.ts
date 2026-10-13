@@ -9,6 +9,8 @@ export function validWorkerEnv(): Record<string, string> {
     REDIS_URL: 'redis://:dev-only-pw@redis:6379/0',
     FB_ENCRYPTION_KEYS: randomKeyEntry('k1'),
     FB_ENCRYPTION_ACTIVE_KEY_ID: 'k1',
+    SMTP_URL: 'smtp://mailpit:1025',
+    PUBLIC_WEB_URL: 'https://app.example.com',
   };
 }
 

@@ -260,6 +260,12 @@ importers:
 
   apps/worker:
     dependencies:
+      '@feedbouncer/comments':
+        specifier: workspace:*
+        version: link:../../packages/comments
+      '@feedbouncer/connector-facebook':
+        specifier: workspace:*
+        version: link:../../packages/connector-facebook
       '@feedbouncer/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
@@ -269,6 +275,9 @@ importers:
       '@feedbouncer/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@feedbouncer/mailer':
+        specifier: workspace:*
+        version: link:../../packages/mailer
       '@feedbouncer/observability':
         specifier: workspace:*
         version: link:../../packages/observability
