@@ -3,6 +3,23 @@
 // binding, error injection and a call log that never holds a token.
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { PRIVATE_REPLY_WINDOW_MS } from '@feedbouncer/connectors';
+import {
+  FAKE_IG_SCOPES,
+  addIgComment,
+  addInstagramAccount,
+  createIgState,
+  igPrivateReplies,
+  igReplies,
+  igState,
+  instagramDeliveryBody,
+  linkedAccount,
+  ownerDeletes,
+  ownerHides,
+  routeInstagram,
+  type AddIgCommentOptions,
+  type IgDeliveryComment,
+  type IgHost,
+} from './fake-instagram.js';
 
 const HOST = 'graph.facebook.com';
 
@@ -77,6 +94,8 @@ export class FakeGraph {
   private readonly issued: string[] = [];
   private readonly log: { method: string; path: string }[] = [];
   private readonly injected: Injected[] = [];
+  private readonly ig = createIgState();
+  private readonly igHost: IgHost;
 
   constructor(opts: FakeGraphOptions) {
     this.appSecret = opts.appSecret;
@@ -84,6 +103,69 @@ export class FakeGraph {
     this.version = opts.version ?? 'v26.0';
     this.clock = opts.clock ?? Date.now;
     this.fetch = (input, init) => this.handle(input, init);
+    this.igHost = {
+      clock: () => this.clock(),
+      graphTime,
+      reply: (status, body) => this.reply(status, body),
+      error: (code, subcode) => this.error(code, subcode),
+      pageOwner: (pageId) => this.pages.get(pageId)?.userId,
+      permissionGranted: (userId, permission) => {
+        const explicit = this.ig.granted.get(userId);
+        if (explicit) return explicit.includes(permission);
+        return !this.grantedScopes.get(userId)?.declined.includes(permission);
+      },
+    };
+  }
+
+  // instagram controls and observation (implemented in fake-instagram.ts)
+
+  addInstagramAccount(pageId: string, o: { username?: string } = {}): { igUserId: string } {
+    if (!this.pages.has(pageId)) throw new Error('unknown page');
+    return addInstagramAccount(this.ig, pageId, o);
+  }
+
+  addIgComment(
+    igUserId: string,
+    o: AddIgCommentOptions = {},
+  ): { mediaId: string; commentId: string } {
+    return addIgComment(this.ig, this.clock(), igUserId, o);
+  }
+
+  igState(commentId: string): 'visible' | 'hidden' | 'deleted' {
+    return igState(this.ig, commentId);
+  }
+
+  igReplies(commentId: string): readonly { id: string; text: string; fromId: string }[] {
+    return igReplies(this.ig, commentId);
+  }
+
+  igPrivateReplies(commentId: string): readonly string[] {
+    return igPrivateReplies(this.ig, commentId);
+  }
+
+  /** The owner acted in the Instagram app: no webhook is produced. */
+  ownerHides(commentId: string): void {
+    ownerHides(this.ig, commentId);
+  }
+
+  ownerDeletes(commentId: string): void {
+    ownerDeletes(this.ig, commentId);
+  }
+
+  /** Drives GET me/permissions and the private-reply permission error. */
+  setGrantedPermissions(userId: string, perms: readonly string[]): void {
+    if (!this.users.has(userId)) throw new Error('unknown user');
+    this.ig.granted.set(userId, [...perms]);
+  }
+
+  signedInstagramDelivery(
+    igUserId: string,
+    comments: readonly IgDeliveryComment[],
+    o: { timeUnit?: 's' | 'ms' } = {},
+  ): { headers: Record<string, string>; rawBody: Buffer } {
+    return this.sign(
+      instagramDeliveryBody(this.ig, this.clock(), igUserId, comments, o.timeUnit ?? 's'),
+    );
   }
 
   // controls
@@ -268,6 +350,10 @@ export class FakeGraph {
         },
       ],
     };
+    return this.sign(body);
+  }
+
+  private sign(body: unknown): { headers: Record<string, string>; rawBody: Buffer } {
     const rawBody = Buffer.from(JSON.stringify(body), 'utf8');
     const sig = createHmac('sha256', this.appSecret).update(rawBody).digest('hex');
     return {
@@ -424,6 +510,13 @@ export class FakeGraph {
     if (first === 'me' && second === 'permissions' && path.length === 2 && method === 'GET') {
       if (who.kind !== 'user') return denied();
       const c = this.grantedScopes.get(who.id);
+      const explicit = this.ig.granted.get(who.id);
+      if (explicit || !c) {
+        const list = explicit ?? FAKE_IG_SCOPES;
+        return this.reply(200, {
+          data: list.map((permission) => ({ permission, status: 'granted' })),
+        });
+      }
       return this.reply(200, {
         data: [
           ...(c?.scopes ?? []).map((permission) => ({ permission, status: 'granted' })),
@@ -435,10 +528,22 @@ export class FakeGraph {
       if (who.kind !== 'user') return denied();
       const data = [...this.pages.values()]
         .filter((p) => p.userId === who.id)
-        .map((p) => ({ id: p.id, name: p.name, tasks: p.tasks, access_token: p.token }));
+        .map((p) => {
+          const ig = linkedAccount(this.ig, p.id);
+          return {
+            id: p.id,
+            name: p.name,
+            tasks: p.tasks,
+            access_token: p.token,
+            ...(ig ? { instagram_business_account: ig } : {}),
+          };
+        });
       return this.reply(200, { data });
     }
     if (first === 'me' || !first || path.length > 2) return missing();
+
+    const igResponse = routeInstagram(this.ig, this.igHost, method, path, query, form, json, who);
+    if (igResponse) return igResponse;
 
     // Everything else addresses a Page-owned object: the first id segment is the Page.
     const owner = first.split('_')[0]!;
