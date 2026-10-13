@@ -32,6 +32,17 @@ export const INGEST_JOB = {
   platforms: ['facebook'] as readonly Platform[] | 'all',
 };
 
+export const executePayload = z.strictObject({ actionId: z.uuid() });
+export type ExecutePayload = z.infer<typeof executePayload>;
+
+export const EXECUTE_JOB = {
+  type: 'moderation_execute' as const,
+  payload: executePayload,
+  externalRef: (p: ExecutePayload): string => `action:${p.actionId}`,
+  policy: { maxAttempts: 8 } satisfies Partial<RetryPolicy>,
+  platforms: ['facebook'] as readonly Platform[] | 'all',
+};
+
 /** For processes that enqueue but never run jobs (the API): same type, payload and key; no handler. */
 export function enqueueOnly<P>(spec: {
   type: string;

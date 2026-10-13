@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EXTERNAL_REF, JobError, JobRegistry, type JobContext } from '@feedbouncer/jobs';
-import { INGEST_JOB, enqueueOnly, type IngestPayload } from './specs.js';
+import { EXECUTE_JOB, INGEST_JOB, enqueueOnly, type IngestPayload } from './specs.js';
 import { ingestCommentJob } from './ingest.js';
 
 const p = (over: Partial<IngestPayload> = {}): IngestPayload => ({
@@ -51,6 +51,28 @@ describe('INGEST_JOB', () => {
   });
 
   it('retries up to 8 times', () => expect(INGEST_JOB.policy).toEqual({ maxAttempts: 8 }));
+});
+
+describe('EXECUTE_JOB', () => {
+  const id = '6f1c2a4e-8d2b-4c3a-9b1e-0a1b2c3d4e5f';
+
+  it('keys a run by its action', () => {
+    expect(EXECUTE_JOB.externalRef({ actionId: id })).toBe(`action:${id}`);
+    expect(EXTERNAL_REF.test(EXECUTE_JOB.externalRef({ actionId: id }))).toBe(true);
+  });
+
+  it('accepts only an action id', () => {
+    expect(EXECUTE_JOB.payload.parse({ actionId: id })).toEqual({ actionId: id });
+    for (const bad of [{}, { actionId: 'x' }, { actionId: id, text: 'hi' }, { actionId: 1 }])
+      expect(EXECUTE_JOB.payload.safeParse(bad).success).toBe(false);
+  });
+
+  it('registers under a snake_case type with 8 attempts', () => {
+    expect(EXECUTE_JOB.policy).toEqual({ maxAttempts: 8 });
+    const r = new JobRegistry();
+    r.register(enqueueOnly(EXECUTE_JOB));
+    expect(r.supports(EXECUTE_JOB.type, 'facebook')).toBe(true);
+  });
 });
 
 describe('job definitions', () => {
