@@ -231,6 +231,24 @@ describe('lifecycle', () => {
     expect((await stack.vault.readTokens(scope)).access).not.toBeNull();
   });
 
+  it('teardown on the final attempt deletes tokens even after a retryable failure', async () => {
+    const c = connector({
+      lifecycle: {
+        onConnected: async () => {},
+        onDisconnected: async () => {
+          throw new ConnectorError('transient', 'graph_unavailable');
+        },
+      },
+    });
+    const { stack, scope } = await connected(c);
+    await stack.directory.disconnect(scope, stack.actor.userId);
+    await expect(stack.runtime.teardown(scope, { final: true })).rejects.toMatchObject({
+      kind: 'transient',
+      code: 'graph_unavailable',
+    });
+    expect(await stack.vault.readTokens(scope)).toEqual({ access: null, refresh: null });
+  });
+
   it('teardown deletes tokens on a non-retryable platform failure and rethrows', async () => {
     const c = connector({
       lifecycle: {

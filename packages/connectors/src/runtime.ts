@@ -111,10 +111,14 @@ export class ConnectorRuntime {
    * Platform-side cleanup after a local disconnect, then removal of the stored
    * credentials. Runs only on revoked connections; reads the access token
    * straight from the vault (no refresh, no status check, no budget).
-   * Credentials are kept only when the platform call fails retryably, so the
-   * caller's retry can finish the cleanup.
+   * Credentials are kept only when the platform call fails retryably and
+   * `final` is not set, so the caller's retry can finish the cleanup. Pass
+   * `final` on the last attempt: the credentials go either way.
    */
-  async teardown(scope: ConnectionScope): Promise<'done' | 'no_token' | 'no_lifecycle'> {
+  async teardown(
+    scope: ConnectionScope,
+    opts: { final?: boolean } = {},
+  ): Promise<'done' | 'no_token' | 'no_lifecycle'> {
     const vault = this.d.vault;
     if (!vault) throw new ConnectorError('permanent', 'teardown_unavailable');
     const fields = { connectionId: scope.connectionId };
@@ -150,7 +154,7 @@ export class ConnectorRuntime {
         errorCode: ce.code,
         ...(ce === err ? {} : { errorName: errorName(err) }),
       });
-      if (ce.kind !== 'transient' && ce.kind !== 'rate_limited') await forget();
+      if (opts.final || (ce.kind !== 'transient' && ce.kind !== 'rate_limited')) await forget();
       throw ce;
     }
     await forget();

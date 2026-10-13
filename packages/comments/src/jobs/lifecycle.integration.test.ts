@@ -133,7 +133,7 @@ beforeAll(async () => {
     log,
     http,
   });
-  job = connectionLifecycleJob({ runtime, credentials: creds, log });
+  job = connectionLifecycleJob({ runtime, log });
 });
 afterAll(async () => {
   await pool.end();
