@@ -156,6 +156,8 @@ describe('toNormalizedIgComment', () => {
     ['other host', 'https://evil.example/p/x/'],
     ['lookalike host', 'https://www.instagram.com.evil.example/p/x/'],
     ['not a url', 'nope'],
+    ['userinfo', 'https://evil@www.instagram.com/p/x/'],
+    ['userinfo with password', 'https://user:pw@www.instagram.com/p/x/'],
   ])('rejects a %s permalink as null', (_n, permalink) => {
     const c = toNormalizedIgComment(
       rawComment({ media: { id: '17900000000000001', permalink } }),

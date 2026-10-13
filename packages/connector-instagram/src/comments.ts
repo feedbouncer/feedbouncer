@@ -27,7 +27,8 @@ function permalinkOf(v: unknown): string | null {
   if (typeof v !== 'string' || v.length > 2048) return null;
   try {
     const u = new URL(v);
-    return u.protocol === 'https:' && u.host === 'www.instagram.com' ? u.href : null;
+    const plain = u.username === '' && u.password === '';
+    return plain && u.protocol === 'https:' && u.host === 'www.instagram.com' ? u.href : null;
   } catch {
     return null;
   }
