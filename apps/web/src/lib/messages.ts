@@ -34,7 +34,8 @@ const MESSAGES: Record<string, string> = {
   denied: 'Facebook access was not granted. Nothing was connected.',
   missing_permissions:
     'FeedBouncer needs every permission below to moderate your Page. Nothing was connected.',
-  account_mismatch: 'You signed in to a different Facebook account than the one this connection uses.',
+  account_mismatch:
+    'You signed in to a different Facebook account than the one this connection uses.',
   oauth_rejected: 'This sign-in could not be used. Connect again.',
 };
 

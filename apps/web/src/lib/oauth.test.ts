@@ -3,9 +3,9 @@ import { missingPermissionText, safeAuthorizationUrl } from './oauth';
 
 describe('safeAuthorizationUrl', () => {
   it('accepts the facebook dialog', () => {
-    expect(
-      safeAuthorizationUrl('https://www.facebook.com/v26.0/dialog/oauth?state=x')?.host,
-    ).toBe('www.facebook.com');
+    expect(safeAuthorizationUrl('https://www.facebook.com/v26.0/dialog/oauth?state=x')?.host).toBe(
+      'www.facebook.com',
+    );
   });
   it.each([
     'javascript:alert(1)',
