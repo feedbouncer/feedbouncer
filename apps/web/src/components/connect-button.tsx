@@ -3,10 +3,12 @@ import { useState } from 'react';
 import { ApiRequestError, apiFetch } from '../lib/api-client';
 import { messageFor } from '../lib/messages';
 import { safeAuthorizationUrl } from '../lib/oauth';
+import type { ConnectablePlatform } from '../lib/platforms';
 
 export function ConnectButton(props: {
   orgId: string;
   brandId: string;
+  platform: ConnectablePlatform;
   label: string;
   reconnectConnectionId?: string;
 }) {
@@ -18,7 +20,7 @@ export function ConnectButton(props: {
     setError(null);
     try {
       const res = await apiFetch<{ authorizationUrl?: unknown }>(
-        `/api/v1/orgs/${props.orgId}/brands/${props.brandId}/connections/facebook/authorize`,
+        `/api/v1/orgs/${props.orgId}/brands/${props.brandId}/connections/${props.platform}/authorize`,
         {
           method: 'POST',
           body: props.reconnectConnectionId
@@ -30,6 +32,7 @@ export function ConnectButton(props: {
       if (!url) throw new Error('unsafe authorization url');
       window.location.assign(url.href);
     } catch (err) {
+      // An unconfigured platform answers 404 platform_not_configured, shown as such.
       setError(err instanceof ApiRequestError ? messageFor(err.code) : 'Something went wrong.');
       setBusy(false);
     }

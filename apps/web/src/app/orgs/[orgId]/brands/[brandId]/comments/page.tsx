@@ -1,25 +1,30 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CommentActions } from '../../../../../../components/comment-actions';
+import { CommentBody } from '../../../../../../components/comment-body';
+import { CommentLinks } from '../../../../../../components/comment-links';
 import { formatUtc } from '../../../../../../lib/format';
 import { isUuid } from '../../../../../../lib/ids';
-import { facebookPermalink } from '../../../../../../lib/permalink';
+import type { Availability, ReplyLimits } from '../../../../../../lib/moderation';
 import { dataOrThrow, requireMe, serverGet } from '../../../../../../lib/server-api';
 
 interface Comment {
   id: string;
+  platform: string;
   parentCommentId: string | null;
   authorName: string | null;
-  hasAuthor: boolean;
   body: string;
   state: 'visible' | 'hidden' | 'deleted';
   postedAt: string;
   permalink: string | null;
   isOwnAccount: boolean;
+  mediaExternalId: string;
+  /** Computed by the API with the same rules it applies to a request. */
+  availability: Availability;
+  replyLimits: ReplyLimits;
 }
 
 const PAGE_SIZE = 50;
-const PRIVATE_REPLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 
 function cursor(v: string | string[] | undefined): Date | null {
@@ -53,40 +58,35 @@ export default async function CommentsPage({
     'comments',
   );
   const last = comments.at(-1);
-  const now = Date.now();
   return (
     <main>
       <h1>Comments</h1>
       {comments.length === 0 ? <p>No comments yet.</p> : null}
       <ul>
-        {comments.map((c) => {
-          const permalink = facebookPermalink(c.permalink);
-          return (
-            <li key={c.id}>
-              <p>
-                <strong>{c.authorName ?? 'Unknown author'}</strong> · {formatUtc(c.postedAt)} ·{' '}
-                <span>{c.state}</span>
-              </p>
-              {c.parentCommentId ? <p>Reply to another comment</p> : null}
-              <p style={{ whiteSpace: 'pre-wrap' }}>
-                {c.body || '(no text: sticker or attachment)'}
-              </p>
-              {permalink ? (
-                <a href={permalink} rel="noopener noreferrer" target="_blank">
-                  View on Facebook
-                </a>
-              ) : null}
-              <CommentActions
-                orgId={orgId}
-                brandId={brandId}
-                commentId={c.id}
-                state={c.state}
-                canBan={!c.isOwnAccount && c.hasAuthor}
-                privateReplyOpen={Date.parse(c.postedAt) + PRIVATE_REPLY_WINDOW_MS > now}
-              />
-            </li>
-          );
-        })}
+        {comments.map((c) => (
+          <li key={c.id}>
+            <p>
+              <strong>{c.authorName ?? 'Unknown author'}</strong> · {formatUtc(c.postedAt)} ·{' '}
+              <span>{c.state}</span>
+            </p>
+            {c.parentCommentId ? <p>Reply to another comment</p> : null}
+            <CommentBody body={c.body} />
+            <CommentLinks
+              platform={c.platform}
+              permalink={c.permalink}
+              mediaExternalId={c.mediaExternalId}
+            />
+            <CommentActions
+              orgId={orgId}
+              brandId={brandId}
+              commentId={c.id}
+              platform={c.platform}
+              state={c.state}
+              availability={c.availability}
+              replyLimits={c.replyLimits}
+            />
+          </li>
+        ))}
       </ul>
       {last && comments.length === PAGE_SIZE ? (
         <p>

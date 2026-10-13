@@ -3,6 +3,7 @@ import {
   actionKindText,
   actorTypeText,
   messageFor,
+  outcomeSentence,
   outcomeText,
   statusReasonText,
 } from './messages';
@@ -90,5 +91,75 @@ describe('actorTypeText', () => {
   });
   it('falls back to a neutral label', () => {
     expect(actorTypeText('weird')).toBe('someone');
+  });
+});
+
+describe('instagram and platform-neutral codes', () => {
+  it.each([
+    [
+      'own_comment_always_visible',
+      "Instagram always shows your own comments, so they can't be hidden.",
+    ],
+    [
+      'reply_to_hidden_comment',
+      "Instagram doesn't allow replies to hidden comments. Unhide it first.",
+    ],
+    [
+      'private_reply_nested_comment',
+      'Instagram only allows private replies to top-level comments.',
+    ],
+    [
+      'private_reply_not_permitted',
+      'Private replies need the messaging permission. Reconnect and allow it.',
+    ],
+    ['reply_too_long', 'Reply is too long for this platform.'],
+    ['text_too_long', 'Reply is too long for this platform.'],
+    ['permission_revoked', 'FeedBouncer lost permission for this account. Reconnect it.'],
+    [
+      'instagram_account_restricted',
+      'Instagram has restricted this account. Open the Instagram app to resolve it.',
+    ],
+    ['unsupported', 'Not available on this platform.'],
+    ['platform_not_configured', "This platform isn't set up on this FeedBouncer server."],
+  ])('outcome %s has its text', (code, text) => {
+    expect(outcomeText(code)).toBe(text);
+  });
+
+  it.each([
+    ['platform_not_configured', "This platform isn't set up on this FeedBouncer server."],
+    ['platform_error', 'The platform could not be reached. Try again.'],
+    ['text_too_long', 'Reply is too long for this platform.'],
+  ])('message %s has its text', (code, text) => {
+    expect(messageFor(code)).toBe(text);
+  });
+
+  it('formats an Instagram error code with its subcode', () => {
+    expect(outcomeText('instagram_error_190_0')).toBe(
+      'Instagram refused this action (error 190/0).',
+    );
+    expect(outcomeText('instagram_error_10_2207051')).toContain('error 10/2207051');
+  });
+
+  it('does not format a malformed Instagram error code', () => {
+    expect(outcomeText('instagram_error_<b>_1')).toBe(outcomeText('definitely_not_a_code'));
+    expect(outcomeText('instagram_error_1')).toBe(outcomeText('definitely_not_a_code'));
+  });
+
+  it('has an Instagram variant of connected_elsewhere', () => {
+    expect(outcomeText('connected_elsewhere', 'instagram')).toBe(
+      'This Instagram account is already connected in another FeedBouncer workspace.',
+    );
+    expect(outcomeText('connected_elsewhere', 'facebook')).toBe(outcomeText('connected_elsewhere'));
+  });
+});
+
+describe('outcomeSentence', () => {
+  it('turns a fragment into a sentence', () => {
+    expect(outcomeSentence('comment_gone')).toBe('The comment no longer exists.');
+  });
+  it('keeps a full sentence unchanged', () => {
+    expect(outcomeSentence('reply_to_hidden_comment')).toBe(
+      "Instagram doesn't allow replies to hidden comments. Unhide it first.",
+    );
   });
 });
