@@ -7,6 +7,7 @@ body:
     attributes:
       value: |
         Larger changes (a new connector, a schema change, a new dependency, anything touching auth, secrets or tenancy) start here, before a pull request.
+        See https://github.com/feed-bouncer-hq/feed-bouncer/blob/main/CONTRIBUTING.md#proposing-larger-changes
   - type: textarea
     id: problem
     attributes:

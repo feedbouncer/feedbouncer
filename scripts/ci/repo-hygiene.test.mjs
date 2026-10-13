@@ -276,3 +276,61 @@ test('PR template has summary, linked issue and a tests/docs checklist', () => {
     'checklist needs a docs item',
   );
 });
+
+function assertSectionsInOrder(rel, headings) {
+  const text = read(rel);
+  let at = -1;
+  for (const heading of headings) {
+    const i = text.indexOf(`\n${heading}\n`);
+    assert.ok(i > at, `${rel}: missing or out-of-order section ${heading}`);
+    at = i;
+  }
+}
+
+test('SECURITY tells reporters to use private reporting, not public issues', () => {
+  const text = read('SECURITY.md');
+  assert.ok(text.includes(PVR_URL), 'SECURITY.md must link private vulnerability reporting');
+  assert.match(text, /not .*public issue/i);
+  assertSectionsInOrder('SECURITY.md', ['## Reporting a vulnerability', '## Supported versions']);
+});
+
+test('CONTRIBUTING covers setup, conventions, checks, proposals and review, in order', () => {
+  assertSectionsInOrder('CONTRIBUTING.md', [
+    '## Development environment',
+    '### Services for integration tests',
+    '## Branches and commits',
+    '## Before you ask for review',
+    '## Proposing larger changes',
+    '## What reviewers look for',
+    '## Security issues',
+  ]);
+});
+
+test('pnpm commands named in CONTRIBUTING exist', () => assertPnpmCommandsExist('CONTRIBUTING.md'));
+
+test('README introduces the project, keeps operational sections and links community files', () => {
+  const text = read('README.md');
+  assert.match(text, /^# FeedBouncer\n\n[^#\n][^\n]*comment/i, 'first paragraph says what it does');
+  assertSectionsInOrder('README.md', [
+    '## Project status',
+    '## Quick start',
+    '## Running the tests',
+    '## Repository layout',
+    '## Local stack with Docker Compose',
+    '## Development',
+    '## Continuous integration',
+    '## Contributing',
+    '## Security',
+  ]);
+  for (const target of ['CONTRIBUTING.md', 'SECURITY.md'])
+    assert.ok(text.includes(`](${target})`), `README must link ${target}`);
+  assert.match(text, /not affiliated with or endorsed by/i, 'platform non-endorsement statement');
+});
+
+test('README repository layout lists every app and package', () => {
+  const layout = read('README.md').split('\n## Repository layout\n')[1].split('\n## ')[0];
+  for (const dir of ['apps', 'packages'])
+    for (const name of readdirSync(abs(dir)))
+      if (statSync(abs(`${dir}/${name}`)).isDirectory())
+        assert.ok(layout.includes(`\`${dir}/${name}\``), `layout is missing ${dir}/${name}`);
+});

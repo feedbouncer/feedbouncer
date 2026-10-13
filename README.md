@@ -1,5 +1,51 @@
 # FeedBouncer
 
+FeedBouncer is an open-source comment firewall and inbox for brands that run social ads. It is meant to check every new comment on connected social accounts, hide or remove scams, spam and abuse, and route real questions and complaints to a person. It can be self-hosted.
+
+## Project status
+
+**Pre-alpha. Not for production use.** The foundations are in place: workspace and CI, data model and migrations, sign-up and organizations, encrypted token storage, the connector framework, the job queue and observability. **No social platform connector exists yet, so FeedBouncer cannot moderate real comments today.** Interfaces and the database schema will change without notice.
+
+FeedBouncer is not affiliated with or endorsed by Meta, TikTok, Google/YouTube or any other platform it integrates with. Platform names are trademarks of their owners.
+
+## Quick start
+
+```bash
+cp .env.example .env
+docker compose up
+```
+
+Then open http://localhost:3000. Details, ports and troubleshooting are under [Local stack with Docker Compose](#local-stack-with-docker-compose).
+
+## Running the tests
+
+```bash
+pnpm install
+pnpm test
+```
+
+`pnpm test` runs every package's unit tests and the `scripts/ci` guard tests, with no services needed. Integration tests need Postgres and Redis; see [CONTRIBUTING.md](CONTRIBUTING.md#services-for-integration-tests).
+
+## Repository layout
+
+| Path                       | What it is                                                              |
+| -------------------------- | ----------------------------------------------------------------------- |
+| `apps/api`                 | HTTP API (NestJS on Fastify): accounts, organizations, brands, health   |
+| `apps/web`                 | Web app (Next.js)                                                       |
+| `apps/worker`              | Background worker that runs queued jobs                                 |
+| `apps/placeholder-app`     | Minimal app used as the template for new apps and Docker images         |
+| `packages/authz`           | Roles and authorization checks                                          |
+| `packages/connectors`      | Contract and shared services for platform connectors                    |
+| `packages/db`              | Postgres schema, migrations and the migration CLI                       |
+| `packages/jobs`            | Job queue: per-platform queues, retries, dead-letter queue, idempotency |
+| `packages/mailer`          | Transactional email                                                     |
+| `packages/observability`   | Structured logs, traces, metrics and connector health                   |
+| `packages/placeholder`     | Minimal package used as the template for new packages                   |
+| `packages/secrets`         | Envelope encryption for stored credentials and key management           |
+| `packages/service-runtime` | Shared service startup, configuration, health and error handling        |
+| `docs/`                    | Operations and developer guides                                         |
+| `scripts/`                 | CI guard tests and dev-stack smoke scripts                              |
+
 ## Local stack with Docker Compose
 
 Runs everything locally: Postgres, Redis, the API, the background worker, the web app and Mailpit (a dev mail inbox). **This stack is for development and evaluation only.** It is not a production deployment.
@@ -142,3 +188,13 @@ Three more jobs: `Compose config` (static validation of the compose files, inclu
 - **Adding a shared root config file** that packages extend: add it to `globalDependencies` in `turbo.json` _and_ to `SHARED_ROOT_CONFIG` in `scripts/ci/turbo-config.test.mjs`, or cached results can go stale.
 - **Lockfile errors in CI** (`ERR_PNPM_OUTDATED_LOCKFILE`): run `pnpm install` locally and commit the updated `pnpm-lock.yaml`.
 - A new push to a PR cancels that PR's in-progress run. Jobs time out after 5–25 minutes (`Compose smoke` has the longest limit).
+
+## Contributing
+
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), which covers setup, conventions and the checks a pull request must pass.
+
+Found a bug or have an idea? [Open an issue](https://github.com/feed-bouncer-hq/feed-bouncer/issues/new/choose).
+
+## Security
+
+Please report vulnerabilities privately. See [SECURITY.md](SECURITY.md). Do not open a public issue.
