@@ -15,6 +15,7 @@ it('exposes the documented metric names with bounded labels', async () => {
     'feedbouncer_webhook_deliveries_total',
     'feedbouncer_webhook_events_total',
     'feedbouncer_webhook_event_delay_seconds',
+    'feedbouncer_comment_ingest_lag_seconds',
     'feedbouncer_http_requests_total',
     'feedbouncer_http_request_duration_seconds',
     'feedbouncer_telemetry_collect_errors_total',

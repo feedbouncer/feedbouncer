@@ -5,6 +5,14 @@ import type { ConnectorCallObserver, WebhookObserver } from '@feedbouncer/connec
 import { queueName, type JobEventSink } from '@feedbouncer/jobs';
 import type { FbMetrics } from './metrics.js';
 
+/**
+ * Structural twin of the comment ingest job's observer. It is declared here
+ * because the comments package cannot be imported from this one.
+ */
+export interface IngestObserver {
+  onIngested(e: { platform: string; lagMs: number; outcome: string }): void;
+}
+
 export function promJobSink(m: FbMetrics): JobEventSink {
   return {
     onEvent: (event, platform, jobType) =>
@@ -37,5 +45,12 @@ export function promWebhookObserver(m: FbMetrics): WebhookObserver {
       }
       if (e.negativeSkews > 0) m.negativeLag.inc({ source: 'webhook_event' }, e.negativeSkews);
     },
+  };
+}
+
+export function promIngestObserver(m: FbMetrics): IngestObserver {
+  return {
+    onIngested: (e) =>
+      m.commentIngestLag.observe({ platform: e.platform, outcome: e.outcome }, e.lagMs / 1000),
   };
 }
