@@ -32,6 +32,7 @@ Operators: key removal and pending OAuth flows are covered in
 | `src/memory.ts`    | In-memory adapters for every port, `MemorySyncRecorder`                                                        |
 | `src/pg/*.ts`      | Postgres adapters: vault, directory, refresh lock, OAuth state, membership, delivery ledger, webhook secrets   |
 | `src/pg/sync.ts`   | `PgSyncRecorder`: writes `connection_sync`, copies tenant columns from the connection row, coalesces successes |
+| `src/pg/stack.ts`  | `buildPgConnectorStack`: every adapter and service over Postgres and Redis, shared by the API and worker       |
 | `src/reference/`   | `InMemoryPlatform` and `createReferenceConnector` (`push` and `poll` flavors)                                  |
 | `src/testing/`     | `./testing` export: `runConnectorConformance`, `PlatformDriver`, in-memory stack and harness                   |
 | `src/index.ts`     | Public exports                                                                                                 |
