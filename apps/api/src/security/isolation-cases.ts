@@ -10,6 +10,9 @@ export interface IsolationFixture {
   bConnectionId: string;
   bCommentId: string;
   bGrantId: string;
+  /** B's live connection and B owner's pending grant, per account-selection platform. */
+  bConnectionIds: Record<'facebook' | 'instagram', string>;
+  bGrantIds: Record<'facebook' | 'instagram', string>;
 }
 
 export interface IsolationCase {
@@ -74,25 +77,41 @@ export const CASES: IsolationCase[] = [
     name: "connection health of another tenant's brand",
     url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/connections/health`,
   },
-  {
-    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/connections/facebook/authorize',
-    name: 'authorize B brand under A path',
-    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/connections/facebook/authorize`,
-    body: () => ({}),
-  },
-  {
-    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/connections/facebook/grants/:grantId',
-    name: "B's grant under A's brand",
-    url: (f) =>
-      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections/facebook/grants/${f.bGrantId}`,
-  },
-  {
-    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/connections/facebook/grants/:grantId/connect',
-    name: "connect with B's grant",
-    url: (f) =>
-      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections/facebook/grants/${f.bGrantId}/connect`,
-    body: () => ({ pageIds: ['1'] }),
-  },
+  // The connect flow, once per account-selection platform.
+  ...(['facebook', 'instagram'] as const).flatMap((p): IsolationCase[] => [
+    {
+      route: 'POST /api/v1/orgs/:orgId/brands/:brandId/connections/:platform/authorize',
+      name: `${p}: authorize B brand under A path`,
+      url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/connections/${p}/authorize`,
+      body: () => ({}),
+    },
+    {
+      route: 'POST /api/v1/orgs/:orgId/brands/:brandId/connections/:platform/authorize',
+      name: `${p}: reconnect B's connection from A's brand`,
+      url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections/${p}/authorize`,
+      body: (f) => ({ reconnectConnectionId: f.bConnectionIds[p] }),
+    },
+    {
+      route: 'GET /api/v1/orgs/:orgId/brands/:brandId/connections/:platform/grants/:grantId',
+      name: `${p}: B's grant under A's brand`,
+      url: (f) =>
+        `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections/${p}/grants/${f.bGrantIds[p]}`,
+    },
+    {
+      route: 'GET /api/v1/orgs/:orgId/brands/:brandId/connections/:platform/grants/:grantId',
+      name: `${p}: B's grant under B's brand from A`,
+      url: (f) =>
+        `/api/v1/orgs/${f.B.orgId}/brands/${f.B.brandId}/connections/${p}/grants/${f.bGrantIds[p]}`,
+    },
+    {
+      route:
+        'POST /api/v1/orgs/:orgId/brands/:brandId/connections/:platform/grants/:grantId/connect',
+      name: `${p}: connect with B's grant`,
+      url: (f) =>
+        `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections/${p}/grants/${f.bGrantIds[p]}/connect`,
+      body: () => ({ accountIds: ['1'] }),
+    },
+  ]),
   {
     route: 'GET /api/v1/orgs/:orgId/brands/:brandId/connections',
     name: 'list B connections',
@@ -197,7 +216,7 @@ export const ACCOUNT_ROUTES = [
   'POST /api/v1/invitations/lookup',
   'POST /api/v1/invitations/accept',
   /** The OAuth redirect lands here; the organization comes from the user's own pending state. */
-  'GET /api/v1/oauth/facebook/callback',
+  'GET /api/v1/oauth/:platform/callback',
 ];
 
 /**
@@ -205,7 +224,12 @@ export const ACCOUNT_ROUTES = [
  * verify token instead. Each declares `config.publicWebhook`, which also exempts
  * it from the Origin check; the route inventory test pins both lists.
  */
-export const PUBLIC_ROUTES = ['GET /api/v1/webhooks/facebook', 'POST /api/v1/webhooks/facebook'];
+export const PUBLIC_ROUTES = [
+  'GET /api/v1/webhooks/facebook',
+  'POST /api/v1/webhooks/facebook',
+  'GET /api/v1/webhooks/instagram',
+  'POST /api/v1/webhooks/instagram',
+];
 
 /** The Better Auth endpoints the /api/auth proxy forwards; everything else is a 404. */
 export const PROXY_ROUTES = [

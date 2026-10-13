@@ -94,6 +94,7 @@ async function runExecuteJob(actionId: string, scope: ConnectionScope) {
     pool: api.pool,
     runtime: api.deps.connectors!.stack.runtime,
     log: api.deps.log,
+    producer: api.deps.producer!,
   });
   return job.handle(ctx, EXECUTE_JOB.payload.parse(ledger.rows[0]!.payload));
 }

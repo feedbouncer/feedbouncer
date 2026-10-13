@@ -46,6 +46,7 @@ const REFUSALS: Record<
   request_key_conflict: [409, 'request_key_conflict'],
   connection_needs_reconnect: [409, 'connection_needs_reconnect'],
   connection_inactive: [409, 'connection_inactive'],
+  text_too_long: [422, 'text_too_long'],
 };
 
 const toView = (c: CommentRow): CommentView => ({

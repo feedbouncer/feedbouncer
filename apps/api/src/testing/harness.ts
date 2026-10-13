@@ -6,6 +6,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { Redis } from 'ioredis';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import type { Platform } from '@feedbouncer/connectors';
 import { createPool } from '@feedbouncer/db';
 import { loadJobsConfig } from '@feedbouncer/jobs';
 import { migratedDb } from '@feedbouncer/db/testing';
@@ -21,7 +22,7 @@ import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { buildApp } from '../app.factory.js';
 import type { AppDeps } from '../deps.js';
 import type { ApiEnv } from '../env.js';
-import { buildFacebookDeps, type FacebookDeps } from '../facebook-deps.js';
+import { buildMetaDeps, type MetaDeps } from '../meta-deps.js';
 
 export const WEB = 'http://localhost:3000';
 
@@ -72,12 +73,18 @@ export interface TestApi {
     orgId: string;
     brandId: string;
   }): Promise<SeededFacebookConnection>;
+  /** Inserts an active connection for a given platform account into an organization's brand. */
+  seedConnection(
+    org: { orgId: string; brandId: string },
+    account: { platform: Platform; externalAccountId: string },
+  ): Promise<{ scope: SeededFacebookConnection['scope'] }>;
   close(): Promise<void>;
 }
 
 /**
  * `deps` replaces individual AppDeps built by the harness (e.g. a failing
- * producer). Facebook-backed deps exist only when `overrides.facebook` is set;
+ * producer). Meta-backed deps (Facebook, plus Instagram when `overrides.instagram`
+ * is set) exist only when `overrides.facebook` is set;
  * `fetch` (e.g. FakeGraph's) then replaces the network behind their SafeHttp.
  */
 export async function startTestApi(
@@ -109,6 +116,7 @@ export async function startTestApi(
     telemetry: loadTelemetryConfig({ METRICS_PORT: '0' }, 'api'),
     health: loadHealthPolicy({}),
     facebook: null,
+    instagram: null,
     // A random queue prefix per app keeps tests from sharing BullMQ keys.
     jobs: loadJobsConfig({ JOB_QUEUE_PREFIX: `t${randomUUID().replaceAll('-', '').slice(0, 20)}` }),
     ...overrides,
@@ -121,7 +129,7 @@ export async function startTestApi(
   const redisKeyPrefix = `fbtest:${randomUUID()}:`;
   const mailer = new MemoryMailer();
   const metrics = createMetrics('api');
-  const facebook: FacebookDeps | null = buildFacebookDeps({
+  const meta: MetaDeps | null = buildMetaDeps({
     env,
     pool,
     log,
@@ -137,22 +145,32 @@ export async function startTestApi(
     redisKeyPrefix,
     metrics,
     health: new PgHealthReader(pool, env.health),
-    connectors: facebook?.connectors ?? null,
-    producer: facebook?.producer ?? null,
-    comments: facebook?.comments ?? null,
+    connectors: meta?.connectors ?? null,
+    producer: meta?.producer ?? null,
+    comments: meta?.comments ?? null,
     ...appDepsOverrides,
   };
   let app: NestFastifyApplication;
   try {
     app = await buildApp(deps);
   } catch (err) {
-    await facebook?.close();
+    await meta?.close();
     redis.disconnect();
     await pool.end();
     await db.close();
     throw err;
   }
   const fastify = app.getHttpAdapter().getInstance();
+  const seedConnection: TestApi['seedConnection'] = async (org, account) => {
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, status)
+       VALUES ($1, $2, $3, $4, 'active') RETURNING id`,
+      [org.orgId, org.brandId, account.platform, account.externalAccountId],
+    );
+    return {
+      scope: { organizationId: org.orgId, brandId: org.brandId, connectionId: rows[0]!.id },
+    };
+  };
 
   return {
     app,
@@ -193,19 +211,16 @@ export async function startTestApi(
     },
     async seedFacebookConnection(org) {
       const pageId = `1${String(randomInt(0, 100_000_000_000_000)).padStart(14, '0')}`;
-      const { rows } = await pool.query<{ id: string }>(
-        `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, status)
-         VALUES ($1, $2, 'facebook', $3, 'active') RETURNING id`,
-        [org.orgId, org.brandId, pageId],
-      );
-      return {
-        pageId,
-        scope: { organizationId: org.orgId, brandId: org.brandId, connectionId: rows[0]!.id },
-      };
+      const { scope } = await seedConnection(org, {
+        platform: 'facebook',
+        externalAccountId: pageId,
+      });
+      return { pageId, scope };
     },
+    seedConnection,
     async close() {
       await app.close();
-      await facebook?.close();
+      await meta?.close();
       if (redis.status === 'ready') {
         const keys = [
           ...(await redis.keys(`${env.jobs.prefix}:*`)),

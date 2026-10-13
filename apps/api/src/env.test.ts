@@ -173,6 +173,33 @@ describe('loadApiEnv', () => {
         expect(out).not.toContain(facebook.FACEBOOK_WEBHOOK_VERIFY_TOKEN);
       }
     });
+    it('leaves instagram null unless INSTAGRAM_CONNECTOR_ENABLED=true', () => {
+      expect(load({ ...base, ...facebook }).instagram).toBeNull();
+      expect(load({ ...base, ...facebook, INSTAGRAM_CONNECTOR_ENABLED: 'false' }).instagram).toBe(
+        null,
+      );
+    });
+    it('INSTAGRAM_CONNECTOR_ENABLED=true without FACEBOOK_APP_ID fails startup', () => {
+      expect(messageOf(() => load({ ...base, INSTAGRAM_CONNECTOR_ENABLED: 'true' }))).toMatch(
+        /INSTAGRAM_CONNECTOR_ENABLED=true requires .*FACEBOOK_APP_ID/,
+      );
+      expect(
+        messageOf(() => load({ ...base, ...facebook, INSTAGRAM_CONNECTOR_ENABLED: 'yes' })),
+      ).toMatch(/INSTAGRAM_CONNECTOR_ENABLED/);
+    });
+    it('instagram enabled shows instagramEnabled: true in the redacted summary and no secret', () => {
+      const env = load({ ...base, ...facebook, INSTAGRAM_CONNECTOR_ENABLED: 'true' });
+      expect(env.instagram?.meta.appId).toBe('1234567890');
+      const summary = JSON.parse(JSON.stringify(env)) as Record<string, unknown>;
+      expect(summary).toMatchObject({ facebookEnabled: true, instagramEnabled: true });
+      expect(JSON.parse(JSON.stringify(load({ ...base, ...facebook })))).toMatchObject({
+        instagramEnabled: false,
+      });
+      for (const out of [JSON.stringify(env), inspect(env, { depth: 10, showHidden: true })]) {
+        expect(out).not.toContain(facebook.FACEBOOK_APP_SECRET);
+        expect(out).not.toContain(facebook.FACEBOOK_WEBHOOK_VERIFY_TOKEN);
+      }
+    });
   });
 
   describe('TRUST_PROXY_HOPS', () => {

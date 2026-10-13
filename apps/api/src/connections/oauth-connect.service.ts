@@ -1,9 +1,9 @@
-// The Facebook connect flow: authorize, OAuth callback, Page selection and
-// connect. OAuthFlow checks membership and connection.manage on every leg;
-// this layer adds the path brand check, maps outcomes to HTTP, and enqueues
-// the platform-side setup for every connected Page.
+// The connect flow for platforms where the user picks accounts after consent
+// (Facebook Pages, Instagram accounts): authorize, OAuth callback, account
+// selection and connect. OAuthFlow checks membership and connection.manage on
+// every leg; this layer adds the path brand check, maps outcomes to HTTP, and
+// enqueues the platform-side setup for every connected account.
 import { Inject, Injectable } from '@nestjs/common';
-import { FACEBOOK_SCOPES } from '@feedbouncer/connector-facebook';
 import {
   OAuthAccessDeniedError,
   assertAllowedUrl,
@@ -12,6 +12,7 @@ import {
   type OAuthActor,
   type OAuthCompletion,
   type PgConnectorStack,
+  type Platform,
 } from '@feedbouncer/connectors';
 import type { JobProducer } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
@@ -22,27 +23,31 @@ import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { CONNECTOR_STACK, DEPS, JOB_PRODUCER } from '../tokens.js';
 import { enqueueLifecycle } from './lifecycle.js';
 
-const PLATFORM = 'facebook';
-const AUTHORIZATION_HOSTS = ['www.facebook.com'];
-const OWN_SCOPES: ReadonlySet<string> = new Set(FACEBOOK_SCOPES);
-
-/** A web-app path for a callback outcome. Built from ids and fixed codes only, never from the query. */
-export function callbackPath(actor: OAuthActor | null, c: OAuthCompletion): string {
+/**
+ * A web-app path for a callback outcome. Built from ids, fixed codes and the
+ * platform's own scope names only, never from the query.
+ */
+export function callbackPath(
+  target: { platform: Platform; scopes: readonly string[] },
+  actor: OAuthActor | null,
+  c: OAuthCompletion,
+): string {
   if (actor === null || (!c.ok && c.reason === 'rejected')) return '/orgs?error=oauth_rejected';
   const connections = `/orgs/${actor.organizationId}/brands/${actor.brandId}/connections`;
   if (c.ok)
     return c.kind === 'account_selection'
-      ? `${connections}/facebook/select?grant=${c.grantId}`
+      ? `${connections}/${target.platform}/select?grant=${c.grantId}`
       : connections;
   if (c.reason === 'missing_permissions') {
-    const missing = c.missing.filter((s) => OWN_SCOPES.has(s)).join(',');
+    const own = new Set(target.scopes);
+    const missing = c.missing.filter((s) => own.has(s)).join(',');
     return `${connections}?error=missing_permissions&missing=${missing}`;
   }
   return `${connections}?error=${c.reason}`;
 }
 
 @Injectable()
-export class FacebookConnectService {
+export class OAuthConnectService {
   constructor(
     @Inject(DEPS) private readonly deps: AppDeps,
     @Inject(CONNECTOR_STACK) private readonly stack: PgConnectorStack | null,
@@ -54,12 +59,20 @@ export class FacebookConnectService {
     return { stack: this.stack, producer: this.producer };
   }
 
+  /** Scopes and authorization hosts come from the connector, so each platform keeps its own. */
+  #capabilities(platform: Platform) {
+    const c = this.deps.connectors?.registry.get(platform);
+    if (!c) throw new ApiError(404, 'platform_not_configured');
+    return c.capabilities;
+  }
+
   async #actor(org: OrgContext, brandId: unknown): Promise<OAuthActor> {
     const brand = await requireBrand(this.deps.pool, org, brandId);
     return { ...brand, userId: org.actorUserId };
   }
 
   async authorize(
+    platform: Platform,
     org: OrgContext,
     brandId: unknown,
     reconnectConnectionId: string | undefined,
@@ -69,10 +82,11 @@ export class FacebookConnectService {
     try {
       const { authorizationUrl } = await stack.oauth.start(
         actor,
-        PLATFORM,
+        platform,
         reconnectConnectionId === undefined ? {} : { reconnectConnectionId },
       );
-      return assertAllowedUrl(authorizationUrl, AUTHORIZATION_HOSTS).href;
+      return assertAllowedUrl(authorizationUrl, this.#capabilities(platform).authorizationHosts)
+        .href;
     } catch (err) {
       // Not this brand's connection to reconnect.
       if (err instanceof OAuthAccessDeniedError) throw notFound();
@@ -81,13 +95,19 @@ export class FacebookConnectService {
   }
 
   /** The absolute web-app URL to redirect the browser to. */
-  async complete(userId: string, query: Readonly<Record<string, unknown>>): Promise<string> {
+  async complete(
+    platform: Platform,
+    userId: string,
+    query: Readonly<Record<string, unknown>>,
+  ): Promise<string> {
     const { stack } = this.#configured();
-    const { actor, completion } = await stack.oauth.completeForUser(userId, PLATFORM, query);
-    return new URL(callbackPath(actor, completion), this.deps.env.publicWebUrl).href;
+    const { actor, completion } = await stack.oauth.completeForUser(userId, platform, query);
+    const target = { platform, scopes: this.#capabilities(platform).defaultScopes };
+    return new URL(callbackPath(target, actor, completion), this.deps.env.publicWebUrl).href;
   }
 
   async grantAccounts(
+    platform: Platform,
     org: OrgContext,
     brandId: unknown,
     grantId: string,
@@ -95,7 +115,7 @@ export class FacebookConnectService {
     const { stack } = this.#configured();
     const r = await stack.oauth.listGrantAccounts(
       await this.#actor(org, brandId),
-      PLATFORM,
+      platform,
       grantId,
     );
     if (r.ok) return r.accounts;
@@ -103,19 +123,21 @@ export class FacebookConnectService {
   }
 
   async connect(
+    platform: Platform,
     org: OrgContext,
     brandId: unknown,
     grantId: string,
-    pageIds: readonly string[],
+    accountIds: readonly string[],
   ): Promise<readonly ConnectAccountResult[]> {
     const { stack, producer } = this.#configured();
     const actor = await this.#actor(org, brandId);
     let r: Awaited<ReturnType<typeof stack.oauth.connectAccounts>>;
     try {
-      r = await stack.oauth.connectAccounts(actor, PLATFORM, grantId, pageIds);
+      r = await stack.oauth.connectAccounts(actor, platform, grantId, accountIds);
     } catch (err) {
       // A storage failure part-way through: report it by name only.
-      this.deps.log.error('facebook connect failed', {
+      this.deps.log.error('oauth connect failed', {
+        platform,
         organizationId: actor.organizationId,
         brandId: actor.brandId,
         errorName: err instanceof Error ? err.name : 'NonError',
@@ -135,9 +157,10 @@ export class FacebookConnectService {
         connectionId: res.connectionId,
       };
       try {
-        await this.#afterConnect(producer, scope, res.wasReconnectRequired);
+        await this.#afterConnect(producer, platform, scope, res.wasReconnectRequired);
       } catch (err) {
-        this.deps.log.error('facebook connect follow-up could not be queued', {
+        this.deps.log.error('oauth connect follow-up could not be queued', {
+          platform,
           organizationId: actor.organizationId,
           brandId: actor.brandId,
           errorName: err instanceof Error ? err.name : 'NonError',
@@ -155,10 +178,11 @@ export class FacebookConnectService {
 
   async #afterConnect(
     producer: JobProducer,
+    platform: Platform,
     scope: ConnectionScope,
     wasReconnectRequired: boolean,
   ): Promise<void> {
-    if (!(await enqueueLifecycle(this.deps.pool, producer, scope, PLATFORM, 'setup')))
+    if (!(await enqueueLifecycle(this.deps.pool, producer, scope, platform, 'setup')))
       throw new Error('connection authorized without an audit record');
     // Work that failed while access was lost runs again with the new token.
     if (wasReconnectRequired)

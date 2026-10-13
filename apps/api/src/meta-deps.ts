@@ -1,7 +1,9 @@
-// The API's side of the Facebook connector: the connector stack for webhook
-// routing, an enqueue-only job producer, and the comment store and moderation
-// actions. The worker runs the jobs. Everything here is null (not built) when
-// Facebook is not configured, so no queue connection is opened.
+// The API's side of the Meta connectors (Facebook, and Instagram through
+// Facebook Login): the connector stack for OAuth and webhook routing, an
+// enqueue-only job producer, and the comment store and moderation actions. The
+// worker runs the jobs. Everything here is null (not built) when Facebook is
+// not configured, so no queue connection is opened. Instagram runs on the same
+// Meta app, so it is only ever registered alongside Facebook.
 import { hostname } from 'node:os';
 import type pg from 'pg';
 import {
@@ -13,6 +15,7 @@ import {
   enqueueOnly,
 } from '@feedbouncer/comments';
 import { createFacebookConnector } from '@feedbouncer/connector-facebook';
+import { createInstagramConnector } from '@feedbouncer/connector-instagram';
 import {
   ConnectorRegistry,
   buildPgConnectorStack,
@@ -37,7 +40,7 @@ import { errorFields, type Logger } from '@feedbouncer/service-runtime';
 import type { AppDeps } from './deps.js';
 import type { ApiEnv } from './env.js';
 
-export interface FacebookDeps extends Pick<AppDeps, 'connectors' | 'producer' | 'comments'> {
+export interface MetaDeps extends Pick<AppDeps, 'connectors' | 'producer' | 'comments'> {
   readonly connectors: { registry: ConnectorRegistry; stack: PgConnectorStack };
   readonly producer: JobProducer;
   readonly comments: NonNullable<AppDeps['comments']>;
@@ -45,19 +48,20 @@ export interface FacebookDeps extends Pick<AppDeps, 'connectors' | 'producer' | 
   close(): Promise<void>;
 }
 
-export function buildFacebookDeps(d: {
+export function buildMetaDeps(d: {
   env: ApiEnv;
   pool: pg.Pool;
   log: Logger;
   metrics: FbMetrics;
   /** Tests only: the platform double behind SafeHttp. */
   fetch?: typeof fetch;
-}): FacebookDeps | null {
+}): MetaDeps | null {
   const { env, pool, log, metrics } = d;
   const fb = env.facebook;
   if (!fb) return null;
   const registry = new ConnectorRegistry();
   registry.register(createFacebookConnector(fb));
+  if (env.instagram) registry.register(createInstagramConnector(env.instagram));
 
   const redis = createProducerConnection(env.redisUrl.href);
   redis.on('error', (err) => log.warn('redis producer connection error', errorFields(err)));
@@ -74,15 +78,20 @@ export function buildFacebookDeps(d: {
     redisPrefix: env.jobs.prefix,
     keys: env.encryption,
     registry,
-    appSecrets: new Map([['facebook', fb.appSecret]]),
-    redirectUri: () => new URL('/api/v1/oauth/facebook/callback', env.publicWebUrl).href,
+    // One Meta app signs both platforms' webhooks and owns both OAuth clients.
+    appSecrets: new Map([
+      ['facebook', fb.appSecret],
+      ['instagram', fb.appSecret],
+    ]),
+    redirectUri: (p) => new URL(`/api/v1/oauth/${p}/callback`, env.publicWebUrl).href,
     log,
     workerId: `api-${hostname()}`,
     observer: promConnectorObserver(metrics),
     webhookObserver: promWebhookObserver(metrics),
     ...(d.fetch && { fetch: d.fetch }),
   });
-  // Same job types and keys as the worker's registry, without handlers.
+  // Same job types and keys as the worker's registry, without handlers. Each
+  // spec lists the platforms it serves, so one registration covers both.
   const jobs = new JobRegistry();
   jobs.register(enqueueOnly(INGEST_JOB));
   jobs.register(enqueueOnly(EXECUTE_JOB));
