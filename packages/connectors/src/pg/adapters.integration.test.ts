@@ -6,12 +6,13 @@ import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { CredentialStore, type ConnectionScope } from '@feedbouncer/secrets';
 import { testKeyring } from '@feedbouncer/secrets/testing';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
-import type { PendingAuthorization, StateBinding } from '../ports.js';
+import { ConnectionTakenError, type PendingAuthorization, type StateBinding } from '../ports.js';
 import {
   PgConnectionDirectory,
   PgCredentialVault,
   PgDeliveryLedger,
   PgMembershipReader,
+  PgOAuthGrantStore,
   PgOAuthStateStore,
   PgRefreshLock,
   PgWebhookSecrets,
@@ -597,5 +598,126 @@ describe('PgCredentialVault', () => {
     ).rows[0];
     expect(row).toEqual({ status: 'reconnect_required', status_reason: 'credential_unknown_key' });
     expect(lines.join('\n')).not.toContain('t-access');
+  });
+});
+
+describe('PgConnectionDirectory (facebook pages additions)', () => {
+  const fb = (
+    t: Tenant,
+    page: string,
+    displayName: string | null,
+    grantedScopes: string[] = [],
+  ) => ({
+    organizationId: t.organizationId,
+    brandId: t.brandId,
+    platform: 'facebook' as const,
+    externalAccountId: page,
+    displayName,
+    grantedScopes,
+  });
+
+  it('findLiveByAccount returns the live row and ignores revoked ones', async () => {
+    const page = `7${Date.now()}`;
+    const { scope } = await dir.upsertPending(fb(a, page, 'P'));
+    expect((await dir.findLiveByAccount('facebook', page))?.scope).toEqual(scope);
+    expect(await dir.disconnect(scope, a.userId)).toBe(true);
+    expect(await dir.findLiveByAccount('facebook', page)).toBeNull();
+    expect(await dir.disconnect(scope, a.userId)).toBe(false);
+    const audit = await h.c.query(
+      `SELECT action FROM audit_event WHERE subject_id = $1 ORDER BY sequence`,
+      [scope.connectionId],
+    );
+    expect(audit.rows.map((r) => r.action)).toContain('connection.disconnected');
+  });
+
+  it('disconnect cannot touch another tenant', async () => {
+    const page = `8${Date.now()}`;
+    const { scope } = await dir.upsertPending(fb(a, page, null));
+    expect(await dir.disconnect({ ...scope, organizationId: b.organizationId }, b.userId)).toBe(
+      false,
+    );
+    expect(await dir.disconnect({ ...scope, brandId: b.brandId }, b.userId)).toBe(false);
+    expect(await statusOf(scope.connectionId)).toBe('reconnect_required');
+  });
+
+  it('upsertPending reopens a user-disconnected row but not a platform-revoked one', async () => {
+    const page = `6${Date.now()}`;
+    const first = await dir.upsertPending(fb(a, page, null));
+    await dir.disconnect(first.scope, a.userId);
+    const again = await dir.upsertPending(fb(a, page, 'P2', ['a']));
+    expect(again).toEqual({ scope: first.scope, created: false });
+    expect((await dir.load(first.scope))?.status).toBe('reconnect_required');
+    await h.c.query(
+      `UPDATE connection SET status = 'revoked', status_reason = NULL WHERE id = $1`,
+      [first.scope.connectionId],
+    );
+    await dir.upsertPending(fb(a, page, 'P3'));
+    expect((await dir.load(first.scope))?.status).toBe('revoked');
+  });
+
+  it('upsertPending throws ConnectionTakenError when another brand holds the page', async () => {
+    const other = await seedTenant(h.c, `taken${Date.now()}`);
+    const page = `5${Date.now()}`;
+    await dir.upsertPending(fb(a, page, null));
+    await expect(dir.upsertPending(fb(other, page, null))).rejects.toBeInstanceOf(
+      ConnectionTakenError,
+    );
+  });
+});
+
+describe('PgOAuthStateStore.peekBinding', () => {
+  it('returns the binding without consuming, and null when expired', async () => {
+    const hash = randomBytes(32);
+    const binding = bindingOf(a);
+    await states.save(hash, { ...pending(a), id: randomUUID() });
+    expect(await states.peekBinding(hash)).toEqual(binding);
+    expect(await states.consume(hash, binding)).not.toBeNull();
+    expect(await states.peekBinding(hash)).toBeNull();
+    const old = randomBytes(32);
+    await states.save(old, { ...pending(a), expiresAt: new Date(Date.now() + 50) });
+    await sleep(120);
+    expect(await states.peekBinding(old)).toBeNull();
+  });
+});
+
+describe('PgOAuthGrantStore', () => {
+  it('round-trips an encrypted user token, binding-checked and single-use', async () => {
+    const grants = new PgOAuthGrantStore(pool, keys);
+    const binding = bindingOf(a);
+    const g = {
+      id: randomUUID(),
+      ...binding,
+      reconnectConnectionId: null,
+      userToken: new Secret('EAAG-SENTINEL'),
+      grantedScopes: ['pages_show_list'],
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+    await grants.save(g);
+    const raw = await h.c.query(`SELECT encrypted_user_token FROM oauth_grant WHERE id = $1`, [
+      g.id,
+    ]);
+    expect(raw.rows[0].encrypted_user_token.toString('latin1')).not.toContain('EAAG-SENTINEL');
+    expect(await grants.load(g.id, { ...binding, initiatedByUserId: randomUUID() })).toBeNull();
+    expect((await grants.load(g.id, binding))?.userToken.reveal()).toBe('EAAG-SENTINEL');
+    expect(await grants.consume(g.id, { ...binding, brandId: randomUUID() })).toBeNull();
+    expect((await grants.consume(g.id, binding))?.grantedScopes).toEqual(['pages_show_list']);
+    expect(await grants.consume(g.id, binding)).toBeNull();
+  });
+
+  it('returns null for an expired grant and for a malformed id', async () => {
+    const grants = new PgOAuthGrantStore(pool, keys);
+    const binding = bindingOf(a);
+    const g = {
+      id: randomUUID(),
+      ...binding,
+      reconnectConnectionId: null,
+      userToken: new Secret('t'),
+      grantedScopes: [],
+      expiresAt: new Date(Date.now() + 50),
+    };
+    await grants.save(g);
+    await sleep(120);
+    expect(await grants.load(g.id, binding)).toBeNull();
+    expect(await grants.consume('not-a-uuid', binding)).toBeNull();
   });
 });

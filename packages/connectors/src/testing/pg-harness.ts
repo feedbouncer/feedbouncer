@@ -139,6 +139,8 @@ export async function createPgHarness(flavor: 'push' | 'poll'): Promise<Conforma
     accessTokenTtlMs: 3_600_000,
     webhookSecret,
     redirectUri,
+    // Facebook accounts are unique across tenants, and harnesses share one database.
+    accountIdPrefix: label,
   });
   const connector = createReferenceConnector(platform, { flavor, redirectUri });
 

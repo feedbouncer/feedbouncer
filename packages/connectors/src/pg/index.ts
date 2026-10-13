@@ -6,3 +6,4 @@ export { PgMembershipReader } from './membership.js';
 export { PgDeliveryLedger } from './ledger.js';
 export { PgWebhookSecrets } from './webhook-secrets.js';
 export { PgSyncRecorder } from './sync.js';
+export { PgOAuthGrantStore } from './oauth-grant.js';

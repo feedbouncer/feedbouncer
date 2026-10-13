@@ -66,6 +66,8 @@ export class InMemoryPlatform {
       accessTokenTtlMs: number;
       webhookSecret: string | null;
       redirectUri: string;
+      /** Prefix for generated account ids; set when platforms share a database. */
+      accountIdPrefix?: string;
     },
   ) {
     if (opts.webhookSecret) this.#issued.push(opts.webhookSecret);
@@ -74,7 +76,7 @@ export class InMemoryPlatform {
   // ---- test controls ----
 
   createAccount(): string {
-    const id = `acct-${this.#accounts.size + 1}`;
+    const id = `${this.opts.accountIdPrefix ?? 'acct'}-${this.#accounts.size + 1}`;
     this.#accounts.add(id);
     return id;
   }

@@ -33,6 +33,24 @@ export interface ConnectionDirectory {
    * Resolves true only when the row ended up active.
    */
   activate(scope: ConnectionScope, actorUserId: string): Promise<boolean>;
+  /**
+   * Pre-authentication lookup (documented tenancy exception), used only after a
+   * webhook signature verified: the single non-revoked connection for an account.
+   */
+  findLiveByAccount(
+    platform: Platform,
+    externalAccountId: string,
+  ): Promise<ConnectionRecord | null>;
+  /** Marks revoked/user_disconnected and audits; false if already revoked or not in scope. */
+  disconnect(scope: ConnectionScope, actorUserId: string): Promise<boolean>;
+}
+/** Thrown by `upsertPending` when the account is already live in another workspace. */
+export class ConnectionTakenError extends Error {
+  override name = 'ConnectionTakenError';
+  readonly code = 'connected_elsewhere';
+  constructor() {
+    super('This account is already connected in another workspace.');
+  }
 }
 export interface TokenRecord {
   readonly value: Secret;
@@ -70,6 +88,26 @@ export interface OAuthStateStore {
   save(stateHash: Buffer, p: PendingAuthorization): Promise<void>;
   /** Atomically deletes and returns the row iff hash AND binding match; otherwise null and nothing is deleted. */
   consume(stateHash: Buffer, binding: StateBinding): Promise<PendingAuthorization | null>;
+  /** Pre-auth read of who started this flow; never returns secrets; expired rows return null. */
+  peekBinding(stateHash: Buffer): Promise<StateBinding | null>;
+}
+export interface PendingGrant {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly brandId: string;
+  readonly platform: Platform;
+  readonly initiatedByUserId: string;
+  readonly reconnectConnectionId: string | null;
+  readonly userToken: Secret;
+  readonly grantedScopes: readonly string[];
+  readonly expiresAt: Date;
+}
+export interface OAuthGrantStore {
+  save(g: PendingGrant): Promise<void>;
+  /** Binding mismatch or expiry returns null without consuming. */
+  load(id: string, binding: StateBinding): Promise<PendingGrant | null>;
+  /** Atomic delete-returning; binding mismatch consumes nothing. */
+  consume(id: string, binding: StateBinding): Promise<PendingGrant | null>;
 }
 export interface MembershipReader {
   roleInBrand(organizationId: string, brandId: string, userId: string): Promise<Role | null>;

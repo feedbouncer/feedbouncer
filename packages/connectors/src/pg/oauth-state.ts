@@ -84,4 +84,27 @@ export class PgOAuthStateStore implements OAuthStateStore {
       throw err;
     }
   }
+
+  async peekBinding(stateHash: Buffer): Promise<StateBinding | null> {
+    // Pre-authentication read (documented tenancy exception): ids only, no secrets.
+    const r = await this.pool.query<{
+      organization_id: string;
+      brand_id: string;
+      platform: Platform;
+      initiated_by_user_id: string;
+    }>(
+      `SELECT organization_id, brand_id, platform, initiated_by_user_id FROM oauth_state
+        WHERE state_hash = $1 AND expires_at > now()`,
+      [stateHash],
+    );
+    const row = r.rows[0];
+    return row
+      ? {
+          organizationId: row.organization_id,
+          brandId: row.brand_id,
+          platform: row.platform,
+          initiatedByUserId: row.initiated_by_user_id,
+        }
+      : null;
+  }
 }
