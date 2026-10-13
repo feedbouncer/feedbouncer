@@ -125,26 +125,32 @@ export class FacebookConnectService {
     if (!r.ok)
       throw r.reason === 'platform_error' ? new ApiError(502, 'platform_error') : notFound();
 
-    try {
-      for (const res of r.results) {
-        if (res.connectionId === null) continue;
-        if (res.status !== 'connected' && res.status !== 'reconnected') continue;
-        const scope: ConnectionScope = {
-          organizationId: actor.organizationId,
-          brandId: actor.brandId,
-          connectionId: res.connectionId,
-        };
-        await this.#afterConnect(producer, scope, res.wasReconnectRequired);
-      }
-    } catch (err) {
-      this.deps.log.error('facebook connect follow-up could not be queued', {
+    const failed: ConnectionScope[] = [];
+    for (const res of r.results) {
+      if (res.connectionId === null) continue;
+      if (res.status !== 'connected' && res.status !== 'reconnected') continue;
+      const scope: ConnectionScope = {
         organizationId: actor.organizationId,
         brandId: actor.brandId,
-        errorName: err instanceof Error ? err.name : 'NonError',
-      });
-      throw new ApiError(503, 'service_unavailable');
+        connectionId: res.connectionId,
+      };
+      try {
+        await this.#afterConnect(producer, scope, res.wasReconnectRequired);
+      } catch (err) {
+        this.deps.log.error('facebook connect follow-up could not be queued', {
+          organizationId: actor.organizationId,
+          brandId: actor.brandId,
+          errorName: err instanceof Error ? err.name : 'NonError',
+        });
+        failed.push(scope);
+      }
     }
-    return r.results;
+    if (failed.length === 0) return r.results;
+    // The grant is spent, so a retry cannot run setup again. Reconnecting can.
+    await Promise.all(
+      failed.map((scope) => stack.directory.markReauthRequired(scope, 'oauth_access_rejected')),
+    );
+    throw new ApiError(503, 'service_unavailable');
   }
 
   async #afterConnect(

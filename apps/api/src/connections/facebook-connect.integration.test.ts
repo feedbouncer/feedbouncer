@@ -1,6 +1,6 @@
 // The Facebook connect flow end to end over the API, with FakeGraph as the
 // platform behind SafeHttp: authorize -> consent -> callback -> select -> connect.
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import { INGEST_JOB } from '@feedbouncer/comments';
 import { Secret } from '@feedbouncer/service-runtime';
@@ -163,6 +163,24 @@ describe('facebook connect flow', () => {
     // The grant is single-use.
     const again = await call('GET', `${base(org)}/facebook/grants/${grantId}`, org.owner);
     expect(again.status).toBe(404);
+  });
+
+  it('setup that cannot be queued after connect leaves the page needing reconnect, and reconnecting subscribes it', async () => {
+    const { pageId } = graph.addPage(fbUserId, { name: 'Bakery' });
+    const grantId = await grantFor(org);
+    const spy = vi.spyOn(api.deps.producer!, 'enqueue').mockRejectedValueOnce(new Error('down'));
+    const r = await call('POST', `${base(org)}/facebook/grants/${grantId}/connect`, org.owner, {
+      pageIds: [pageId],
+    });
+    spy.mockRestore();
+    expect(r.status).toBe(503);
+
+    const listed = (await listConnections(org)).find((c) => c.externalAccountId === pageId);
+    expect(listed).toMatchObject({ status: 'needs_reconnect' });
+
+    const again = await connectPage(org, pageId, { reconnectConnectionId: listed!.id });
+    expect(again).toMatchObject({ status: 'reconnected', connectionId: listed!.id });
+    expect(await lifecycleJobs(listed!.id)).toHaveLength(1);
   });
 
   it('declined permission -> redirect with error=missing_permissions&missing=pages_messaging and no connection rows', async () => {
