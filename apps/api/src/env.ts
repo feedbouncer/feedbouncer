@@ -105,7 +105,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     }),
     trustProxyHops: readInt(env, 'TRUST_PROXY_HOPS', { min: 0, max: 5, fallback: 0 }),
     encryption: loadEncryptionKeyring(env, appEnv, opts.warn),
-    facebook: parseFacebookEnv(env),
+    facebook: parseFacebookEnv(env, opts.warn),
     jobs: loadJobsConfig(env),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),

@@ -11,6 +11,8 @@ export const PLACEHOLDER_VALUES: ReadonlySet<string> = new Set([
   'dev-only-redis-password',
   'dev-only-auth-secret-change-me-0123456789',
   'dev-only-ci-postgres',
+  'dev-only-replace-with-the-meta-app-secret',
+  'dev-only-replace-with-a-random-token',
   DEV_EXAMPLE_ENCRYPTION_KEY,
 ]);
 

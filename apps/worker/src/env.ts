@@ -89,7 +89,7 @@ export function loadWorkerEnv(
   const appEnv = readAppEnv(env);
   const databaseUrl = readUrl(env, 'DATABASE_URL', PG_PROTOCOLS);
   const redisUrl = readUrl(env, 'REDIS_URL', REDIS_PROTOCOLS);
-  const facebook = parseFacebookEnv(env);
+  const facebook = parseFacebookEnv(env, opts.warn);
   const mail = facebook ? readMailConfig(env) : null;
   checkNotPlaceholder(appEnv, 'DATABASE_URL', databaseUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);
