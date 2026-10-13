@@ -1,4 +1,5 @@
 import * as z from 'zod';
+import type { Platform } from '@feedbouncer/connectors';
 import { JobError, type JobDefinition, type RetryPolicy } from '@feedbouncer/jobs';
 
 // Generic external-id shape (Graph ids are digits and underscores). Only safe
@@ -28,6 +29,7 @@ export const INGEST_JOB = {
       ? `${p.commentExternalId}:updated:${p.platformEventSec}`
       : `${p.commentExternalId}:${p.event}`,
   policy: { maxAttempts: 8 } satisfies Partial<RetryPolicy>,
+  platforms: ['facebook'] as readonly Platform[] | 'all',
 };
 
 /** For processes that enqueue but never run jobs (the API): same type, payload and key; no handler. */
@@ -36,13 +38,14 @@ export function enqueueOnly<P>(spec: {
   payload: z.ZodType<P>;
   externalRef(p: P): string;
   policy?: Partial<RetryPolicy>;
+  platforms: readonly Platform[] | 'all';
 }): JobDefinition<P> {
   return {
     type: spec.type,
     payload: spec.payload,
     externalRef: (p) => spec.externalRef(p),
     ...(spec.policy ? { policy: spec.policy } : {}),
-    platforms: ['facebook'],
+    platforms: spec.platforms,
     handle: async () => {
       throw new JobError('non_retryable', 'not_a_worker');
     },

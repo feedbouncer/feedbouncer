@@ -5,7 +5,12 @@
 // one that started later, and deletes are terminal.
 import { clampLag } from '@feedbouncer/service-runtime';
 import { JobError, type JobDefinition } from '@feedbouncer/jobs';
-import type { Clock, ConnectionDirectory, ConnectorRuntime, Platform } from '@feedbouncer/connectors';
+import type {
+  Clock,
+  ConnectionDirectory,
+  ConnectorRuntime,
+  Platform,
+} from '@feedbouncer/connectors';
 import type { PgCommentStore } from '../store.js';
 import { INGEST_JOB, type IngestPayload } from './specs.js';
 
@@ -24,7 +29,6 @@ export function ingestCommentJob(d: {
 }): JobDefinition<IngestPayload> {
   return {
     ...INGEST_JOB,
-    platforms: ['facebook'],
     handle: async (ctx, p) => {
       const rec = await d.directory.load(ctx.scope);
       if (!rec) throw new JobError('non_retryable', 'connection_not_found');

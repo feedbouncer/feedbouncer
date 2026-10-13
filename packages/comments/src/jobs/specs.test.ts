@@ -45,9 +45,9 @@ describe('INGEST_JOB', () => {
     });
     expect(INGEST_JOB.payload.safeParse(long).success).toBe(true);
     expect(EXTERNAL_REF.test(INGEST_JOB.externalRef(long))).toBe(true);
-    expect(INGEST_JOB.payload.safeParse({ ...long, commentExternalId: 'x'.repeat(201) }).success).toBe(
-      false,
-    );
+    expect(
+      INGEST_JOB.payload.safeParse({ ...long, commentExternalId: 'x'.repeat(201) }).success,
+    ).toBe(false);
   });
 
   it('retries up to 8 times', () => expect(INGEST_JOB.policy).toEqual({ maxAttempts: 8 }));
@@ -56,12 +56,21 @@ describe('INGEST_JOB', () => {
 describe('job definitions', () => {
   it('enqueueOnly keeps type, payload, key and policy and refuses to run', async () => {
     const def = enqueueOnly(INGEST_JOB);
-    expect(def).toMatchObject({ type: INGEST_JOB.type, platforms: ['facebook'], policy: { maxAttempts: 8 } });
+    expect(def).toMatchObject({
+      type: INGEST_JOB.type,
+      platforms: ['facebook'],
+      policy: { maxAttempts: 8 },
+    });
     expect(def.payload).toBe(INGEST_JOB.payload);
     expect(def.externalRef(p())).toBe('900_1_7:created');
     const err = await def.handle({} as JobContext, p()).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(JobError);
     expect(err).toMatchObject({ kind: 'non_retryable', code: 'not_a_worker' });
+  });
+
+  it('enqueueOnly takes its platforms from the spec', () => {
+    expect(enqueueOnly({ ...INGEST_JOB, platforms: ['youtube'] }).platforms).toEqual(['youtube']);
+    expect(enqueueOnly({ ...INGEST_JOB, platforms: 'all' }).platforms).toBe('all');
   });
 
   it('both definitions register (job type names are snake_case)', () => {
