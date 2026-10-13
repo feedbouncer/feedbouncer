@@ -246,6 +246,15 @@ describe('MemoryConnectionDirectory (facebook pages additions)', () => {
     expect(d.statusReason(sc.connectionId)).toBe('user_disconnected');
   });
 
+  it('disconnect marks a connection revoked for another reason user_disconnected, once', async () => {
+    const d = new MemoryConnectionDirectory();
+    const sc = { organizationId: 'org-a', brandId: 'brand-a', connectionId: 'c-gone' };
+    d.seed({ scope: sc, platform: 'facebook', externalAccountId: 'p9', status: 'revoked' });
+    expect(await d.disconnect(sc, 'user-a')).toBe(true);
+    expect(d.statusReason(sc.connectionId)).toBe('user_disconnected');
+    expect(await d.disconnect(sc, 'user-a')).toBe(false);
+  });
+
   it('disconnect ignores a scope from another tenant', async () => {
     const d = new MemoryConnectionDirectory();
     const { scope: sc } = await d.upsertPending(fbPending('org-a', 'brand-a', 'p1'));

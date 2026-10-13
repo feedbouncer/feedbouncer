@@ -44,7 +44,7 @@ export interface ConnectionDirectory {
     platform: Platform,
     externalAccountId: string,
   ): Promise<ConnectionRecord | null>;
-  /** Marks revoked/user_disconnected and audits; false if already revoked or not in scope. */
+  /** Marks revoked/user_disconnected and audits; false if already user_disconnected or not in scope. */
   disconnect(scope: ConnectionScope, actorUserId: string): Promise<boolean>;
 }
 /** Thrown by `upsertPending` when the account is already live in another workspace. */

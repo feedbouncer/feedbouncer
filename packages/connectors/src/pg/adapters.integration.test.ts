@@ -649,6 +649,27 @@ describe('PgConnectionDirectory (facebook pages additions)', () => {
     expect(audit.rows.map((r) => r.action)).toContain('connection.disconnected');
   });
 
+  it('disconnect marks a connection revoked for another reason user_disconnected, once', async () => {
+    const page = `5${Date.now()}`;
+    const { scope } = await dir.upsertPending(fb(a, page, null));
+    await h.c.query(
+      `UPDATE connection SET status = 'revoked', status_reason = NULL WHERE id = $1`,
+      [scope.connectionId],
+    );
+    expect(await dir.disconnect({ ...scope, brandId: b.brandId }, b.userId)).toBe(false);
+    expect(await dir.disconnect(scope, a.userId)).toBe(true);
+    expect(await dir.disconnect(scope, a.userId)).toBe(false);
+    const row = await h.c.query('SELECT status, status_reason FROM connection WHERE id = $1', [
+      scope.connectionId,
+    ]);
+    expect(row.rows[0]).toEqual({ status: 'revoked', status_reason: 'user_disconnected' });
+    const audit = await h.c.query(
+      `SELECT count(*)::int AS n FROM audit_event WHERE subject_id = $1 AND action = 'connection.disconnected'`,
+      [scope.connectionId],
+    );
+    expect(audit.rows[0].n).toBe(1);
+  });
+
   it('disconnect cannot touch another tenant', async () => {
     const page = `8${Date.now()}`;
     const { scope } = await dir.upsertPending(fb(a, page, null));

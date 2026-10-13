@@ -139,7 +139,8 @@ export class PgConnectionDirectory implements ConnectionDirectory {
     return withTransaction(this.pool, async (c) => {
       const r = await c.query<{ platform: string }>(
         `UPDATE connection SET status = 'revoked', status_reason = 'user_disconnected'
-          WHERE id = $3 AND organization_id = $1 AND brand_id = $2 AND status <> 'revoked'
+          WHERE id = $3 AND organization_id = $1 AND brand_id = $2
+            AND (status <> 'revoked' OR status_reason IS DISTINCT FROM 'user_disconnected')
         RETURNING platform`,
         [scope.organizationId, scope.brandId, scope.connectionId],
       );

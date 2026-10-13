@@ -136,7 +136,12 @@ export class MemoryConnectionDirectory implements ConnectionDirectory {
   async disconnect(scope: ConnectionScope, actorUserId: string): Promise<boolean> {
     void actorUserId; // the Pg adapter audits the actor; memory keeps no audit trail
     const row = this.#rows.get(scope.connectionId);
-    if (!row || !sameScope(row.rec.scope, scope) || row.rec.status === 'revoked') return false;
+    if (
+      !row ||
+      !sameScope(row.rec.scope, scope) ||
+      (row.rec.status === 'revoked' && row.reason === 'user_disconnected')
+    )
+      return false;
     this.#rows.set(scope.connectionId, {
       rec: { ...row.rec, status: 'revoked' },
       reason: 'user_disconnected',
