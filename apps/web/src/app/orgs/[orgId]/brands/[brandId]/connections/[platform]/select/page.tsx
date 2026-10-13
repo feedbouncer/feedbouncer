@@ -20,7 +20,7 @@ export default async function SelectAccountsPage({
   const { grant } = await searchParams;
   if (!isConnectable(platform) || !isUuid(orgId) || !isUuid(brandId) || !isUuid(grant)) notFound();
   const copy = PLATFORM_COPY[platform];
-  const title = platform === 'facebook' ? 'Choose Pages' : `Choose ${copy.accountNoun}s`;
+  const title = copy.pickerTitle;
   await requireMe(`/orgs/${orgId}/brands/${brandId}/connections/${platform}/select?grant=${grant}`);
   const r = await serverGet<{ accounts: PickerAccount[] }>(
     `/api/v1/orgs/${orgId}/brands/${brandId}/connections/${platform}/grants/${grant}`,

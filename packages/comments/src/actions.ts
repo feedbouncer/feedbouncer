@@ -50,14 +50,14 @@ export type RefusalCode =
   | 'connection_needs_reconnect'
   | 'connection_inactive'
   | 'unsupported'
-  | 'request_key_conflict'
-  /** Longer than the platform accepts for this kind of reply (code points). */
-  | 'text_too_long';
+  | 'request_key_conflict';
 
 export type RequestActionResult =
   /** `recorded`: the outcome was known up front (noop / not_eligible); nothing was sent. */
   | { readonly status: 'accepted' | 'recorded'; readonly action: ModerationActionView }
-  | { readonly status: 'refused'; readonly code: RefusalCode };
+  | { readonly status: 'refused'; readonly code: RefusalCode }
+  /** Longer than the platform accepts for this kind of reply; `max` is the limit in code points. */
+  | { readonly status: 'refused'; readonly code: 'text_too_long'; readonly max: number };
 
 export const REQUEST_KEY = /^[A-Za-z0-9._:-]{1,128}$/;
 export const REPLY_KINDS: ReadonlySet<ActionKind> = new Set(['public_reply', 'private_reply']);
@@ -199,11 +199,10 @@ export class ModerationActions {
       now: new Date(this.d.clock.now()),
     });
     if (e.verdict === 'unsupported') return refused('unsupported');
-    if (
-      text !== null &&
-      [...text].length > resolveConstraints(caps).maxReplyChars[i.kind as ResponseKind]
-    )
-      return refused('text_too_long');
+    if (text !== null) {
+      const max = resolveConstraints(caps).maxReplyChars[i.kind as ResponseKind];
+      if ([...text].length > max) return { status: 'refused', code: 'text_too_long', max };
+    }
 
     return this.#insert(
       i,

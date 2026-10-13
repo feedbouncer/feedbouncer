@@ -1,5 +1,5 @@
 // Logic behind AccountPicker, kept free of React so it can be tested directly.
-import { outcomeText } from './messages';
+import { outcomeSentence, outcomeText } from './messages';
 import type { ConnectablePlatform } from './platforms';
 
 /** One account offered after sign-in (GET .../connections/:platform/grants/:grantId). */
@@ -34,11 +34,7 @@ export function accountNotes(a: PickerAccount, platform: ConnectablePlatform): s
   if (!a.eligible)
     return [own(INELIGIBLE, a.ineligibleReason) ?? 'You need a role that can moderate this Page'];
   if (a.connection === 'elsewhere')
-    return [
-      platform === 'facebook'
-        ? 'Already connected in another FeedBouncer workspace'
-        : outcomeText('connected_elsewhere', platform),
-    ];
+    return [outcomeSentence('connected_elsewhere', platform)];
   const notes: string[] = [];
   if (a.connection === 'this_brand') notes.push('Connected; selecting it refreshes access');
   for (const l of a.limitations) {

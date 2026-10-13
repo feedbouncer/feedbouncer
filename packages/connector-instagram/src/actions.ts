@@ -31,12 +31,12 @@ type Now = () => number;
 
 const success = (body: unknown) => (body as { success?: unknown } | null)?.success === true;
 
-/** Maps a Graph failure through the Instagram table; only ConnectorErrors are refined. */
-function refine(e: unknown, op: IgOp): { notEligible: string } | never {
+/** The not-eligible code for a Graph failure; any other failure is thrown, mapped through the Instagram table. */
+function refine(e: unknown, op: IgOp): string {
   if (!(e instanceof ConnectorError)) throw e;
   const mapped = mapInstagramError(e, op);
   if ('throw' in mapped) throw mapped.throw;
-  return mapped;
+  return mapped.notEligible;
 }
 
 export function act(
@@ -62,9 +62,9 @@ export function act(
       return { status: 'applied', platformActionId: null };
     } catch (e) {
       if (e instanceof ConnectorError && e.kind === 'not_found') return { status: 'not_found' };
-      if (!(e instanceof ConnectorError)) throw e;
-      const mapped = mapInstagramError(e, 'moderate');
-      throw 'throw' in mapped ? mapped.throw : e;
+      // Moderation has no not-eligible outcomes, so this always throws.
+      refine(e, 'moderate');
+      throw e;
     }
   };
 }
@@ -107,8 +107,7 @@ export function respond(
       return { status: 'sent', platformRef: null };
     } catch (e) {
       if (e instanceof ConnectorError && e.kind === 'not_found') return { status: 'not_found' };
-      const mapped = refine(e, kind);
-      return { status: 'not_eligible', code: mapped.notEligible };
+      return { status: 'not_eligible', code: refine(e, kind) };
     }
   };
 }

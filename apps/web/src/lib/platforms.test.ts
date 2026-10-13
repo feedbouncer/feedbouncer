@@ -38,6 +38,7 @@ describe('PLATFORM_COPY', () => {
       label: 'Instagram',
       accountNoun: 'Instagram account',
       connectLabel: 'Connect Instagram account',
+      pickerTitle: 'Choose Instagram accounts',
       viewOn: 'View on Instagram',
       deleteConfirm: "Delete this comment on Instagram? This can't be undone.",
       pickerIntro: 'Choose the Facebook Page your Instagram professional account is linked to.',

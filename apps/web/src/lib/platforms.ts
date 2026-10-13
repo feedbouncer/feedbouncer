@@ -12,6 +12,7 @@ export interface PlatformCopy {
   label: string;
   accountNoun: string;
   connectLabel: string;
+  pickerTitle: string;
   viewOn: string;
   deleteConfirm: string;
   pickerIntro: string;
@@ -23,6 +24,7 @@ export const PLATFORM_COPY: Record<ConnectablePlatform, PlatformCopy> = {
     label: 'Facebook',
     accountNoun: 'Facebook Page',
     connectLabel: 'Connect Facebook Page',
+    pickerTitle: 'Choose Pages',
     viewOn: 'View on Facebook',
     deleteConfirm: 'Delete this comment on Facebook? This cannot be undone.',
     pickerIntro: 'Choose the Facebook Pages to connect.',
@@ -33,6 +35,7 @@ export const PLATFORM_COPY: Record<ConnectablePlatform, PlatformCopy> = {
     label: 'Instagram',
     accountNoun: 'Instagram account',
     connectLabel: 'Connect Instagram account',
+    pickerTitle: 'Choose Instagram accounts',
     viewOn: 'View on Instagram',
     deleteConfirm: "Delete this comment on Instagram? This can't be undone.",
     pickerIntro: 'Choose the Facebook Page your Instagram professional account is linked to.',

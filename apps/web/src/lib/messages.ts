@@ -86,8 +86,8 @@ const PLATFORM_OUTCOMES: Record<string, Record<string, string>> = {
 const INSTAGRAM_ERROR = /^instagram_error_(\d{1,10})_(\d{1,10})$/;
 
 const STATUS_REASONS: Record<string, string> = {
-  oauth_not_refreshable: 'Facebook access was lost or expired. Reconnect to resume moderation.',
-  oauth_access_rejected: 'Facebook access was lost or expired. Reconnect to resume moderation.',
+  oauth_not_refreshable: 'Access was lost or expired. Reconnect to resume moderation.',
+  oauth_access_rejected: 'Access was lost or expired. Reconnect to resume moderation.',
   setup_not_queued:
     'The connection was saved but setup could not be started. Reconnect to finish connecting.',
   page_role_lost: 'You no longer have a moderator role on this Page.',

@@ -585,16 +585,19 @@ describe('ModerationActions.request', () => {
     expect(await request(commentId, 'public_reply', { text: '😀'.repeat(2201) })).toEqual({
       status: 'refused',
       code: 'text_too_long',
+      max: 2200,
     });
     expect(await request(commentId, 'private_reply', { text: 'x'.repeat(1001) })).toEqual({
       status: 'refused',
       code: 'text_too_long',
+      max: 1000,
     });
     // Refused before anything is recorded, even when the outcome would have been a noop.
     const deleted = await seedIgComment({ state: 'deleted' });
     expect(await request(deleted, 'public_reply', { text: 'y'.repeat(2201) })).toEqual({
       status: 'refused',
       code: 'text_too_long',
+      max: 2200,
     });
     expect(await rowsFor(commentId)).toHaveLength(0);
     expect(await rowsFor(deleted)).toHaveLength(0);

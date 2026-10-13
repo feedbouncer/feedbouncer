@@ -9,13 +9,9 @@ import {
   type ActionKind,
   type CommentRow,
   type ModerationActionView,
-  type RequestActionResult,
+  type RefusalCode,
 } from '@feedbouncer/comments';
-import {
-  systemClock,
-  type ConnectorCapabilities,
-  type ResponseKind,
-} from '@feedbouncer/connectors';
+import { systemClock, type ConnectorCapabilities } from '@feedbouncer/connectors';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
@@ -56,14 +52,13 @@ export interface ListCommentsQuery {
 const MIN_UUID = '00000000-0000-0000-0000-000000000000';
 
 const REFUSALS: Record<
-  Exclude<Extract<RequestActionResult, { status: 'refused' }>['code'], 'not_found'>,
+  Exclude<RefusalCode, 'not_found'>,
   [number, ErrorCode]
 > = {
   unsupported: [422, 'unsupported_action'],
   request_key_conflict: [409, 'request_key_conflict'],
   connection_needs_reconnect: [409, 'connection_needs_reconnect'],
   connection_inactive: [409, 'connection_inactive'],
-  text_too_long: [422, 'text_too_long'],
 };
 
 /** Used when the platform's connector is not registered (e.g. Instagram disabled after connecting). */
@@ -82,8 +77,8 @@ function availability(
 ): Record<ActionKind, ActionAvailability> {
   const blocked = connectionRefusal(c.connectionStatus);
   if (blocked) return unavailable(blocked);
-  if (!caps) return unavailable('platform_not_configured');
-  return { ...availabilityFor({ comment: eligibilityComment(c), caps, now }) };
+  if (!caps) return unavailable('unsupported');
+  return availabilityFor({ comment: eligibilityComment(c), caps, now });
 }
 
 const toView = (
@@ -104,12 +99,7 @@ const toView = (
   isOwnAccount: c.isOwnAccount,
   mediaExternalId: c.sourceExternalId,
   availability: availability(c, caps, now),
-  replyLimits: caps
-    ? {
-        public_reply: resolveConstraints(caps).maxReplyChars.public_reply,
-        private_reply: resolveConstraints(caps).maxReplyChars.private_reply,
-      }
-    : { ...DEFAULT_REPLY_LIMITS },
+  replyLimits: caps ? { ...resolveConstraints(caps).maxReplyChars } : { ...DEFAULT_REPLY_LIMITS },
 });
 
 @Injectable()
@@ -170,23 +160,11 @@ export class CommentsService {
     });
     if (r.status === 'refused') {
       if (r.code === 'not_found') throw notFound();
-      const [status, code] = REFUSALS[r.code];
       if (r.code === 'text_too_long')
-        throw new ApiError(status, code, undefined, await this.#max(scope, commentId, body.kind));
+        throw new ApiError(422, 'text_too_long', undefined, { max: r.max });
+      const [status, code] = REFUSALS[r.code];
       throw new ApiError(status, code);
     }
     return { status: r.status === 'accepted' ? 202 : 200, action: r.action };
-  }
-
-  /** The limit the refused reply exceeded, for the 422 body. */
-  async #max(
-    scope: Awaited<ReturnType<typeof requireBrand>>,
-    commentId: string,
-    kind: ActionKind,
-  ): Promise<{ max: number }> {
-    const comment = await this.#configured().store.load(scope, commentId);
-    const caps = comment && this.deps.connectors?.registry.get(comment.platform)?.capabilities;
-    const limits = caps ? resolveConstraints(caps).maxReplyChars : DEFAULT_REPLY_LIMITS;
-    return { max: limits[kind as ResponseKind] };
   }
 }

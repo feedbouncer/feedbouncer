@@ -7,22 +7,16 @@ export function CommentLinks(props: {
   permalink: string | null;
   mediaExternalId: string;
 }) {
-  const href = isConnectable(props.platform) ? viewOnUrl(props.platform, props.permalink) : null;
-  const post = `On post ${props.mediaExternalId}`;
+  const copy = isConnectable(props.platform) ? PLATFORM_COPY[props.platform] : null;
+  const href = copy ? viewOnUrl(props.platform, props.permalink) : null;
   return (
     <p>
-      {href ? (
-        <a href={href} rel="noopener noreferrer" target="_blank">
-          {post}
-        </a>
-      ) : (
-        <span>{post}</span>
-      )}
-      {href && isConnectable(props.platform) ? (
+      <span>{`On post ${props.mediaExternalId}`}</span>
+      {href && copy ? (
         <>
           {' · '}
           <a href={href} rel="noopener noreferrer" target="_blank">
-            {PLATFORM_COPY[props.platform].viewOn}
+            {copy.viewOn}
           </a>
         </>
       ) : null}

@@ -15,12 +15,9 @@ export class ConnectablePlatformPipe implements PipeTransform<unknown, Platform>
   constructor(@Inject(DEPS) private readonly deps: AppDeps) {}
 
   transform(value: unknown): Platform {
-    const registry = this.deps.connectors?.registry;
     if (
-      registry &&
       isPlatform(value) &&
-      registry.platforms().includes(value) &&
-      registry.require(value).capabilities.accountSelection === 'multiple'
+      this.deps.connectors?.registry.get(value)?.capabilities.accountSelection === 'multiple'
     )
       return value;
     throw new ApiError(404, 'platform_not_configured');

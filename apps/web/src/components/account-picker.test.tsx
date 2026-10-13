@@ -87,7 +87,7 @@ describe('accountNotes', () => {
       "Private replies won't be available",
     ]);
     expect(accountNotes({ ...IG, connection: 'elsewhere' }, 'facebook')).toEqual([
-      'Already connected in another FeedBouncer workspace',
+      'Already connected in another FeedBouncer workspace.',
     ]);
   });
   it('uses the Instagram wording for an account connected elsewhere', () => {

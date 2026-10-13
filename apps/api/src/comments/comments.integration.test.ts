@@ -660,7 +660,7 @@ describe('comments: instagram platform, media and availability', () => {
     expect(got.body).toBe(text);
   });
 
-  it('with the platform connector not registered every action is platform_not_configured and limits are the defaults', async () => {
+  it('with the platform connector not registered every action is unsupported, as POST refuses it, and limits are the defaults', async () => {
     const ig = await connectedInstagram();
     const c = await igComment(ig);
     const registry = api.deps.connectors!.registry;
@@ -673,7 +673,7 @@ describe('comments: instagram platform, media and availability', () => {
       for (const kind of ACTION_KINDS)
         expect(got.availability[kind], kind).toEqual({
           available: false,
-          reason: 'platform_not_configured',
+          reason: 'unsupported',
         });
       expect(got.replyLimits).toEqual({ public_reply: 8000, private_reply: 8000 });
     } finally {

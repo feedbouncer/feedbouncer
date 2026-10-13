@@ -298,7 +298,7 @@ Known platform limits the code applies:
 
 Stored comments and the action history are kept after a connection is
 disconnected. Tokens are deleted. How this lines up with the data-deletion
-page is an open question, owned by the Phase 3 retention item.
+page is an open question.
 
 ## Troubleshooting
 

@@ -69,15 +69,14 @@ describe('CommentLinks', () => {
     }
   });
 
-  it('links View on Instagram and the post for an https permalink', () => {
+  it('links only View on Instagram for an https permalink; the post id is plain text', () => {
     const p = 'https://www.instagram.com/p/abc/';
     const html = links(p);
     expect(html).toContain(
       `<a href="${p}" rel="noopener noreferrer" target="_blank">View on Instagram</a>`,
     );
-    expect(html).toContain(
-      `<a href="${p}" rel="noopener noreferrer" target="_blank">On post 17900000000000009</a>`,
-    );
+    expect(html.match(/<a /g)).toHaveLength(1);
+    expect(html).toContain('<span>On post 17900000000000009</span>');
   });
 
   it('uses the platform copy for Facebook', () => {

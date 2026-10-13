@@ -59,11 +59,9 @@ export class OAuthConnectService {
     return { stack: this.stack, producer: this.producer };
   }
 
-  /** Scopes and authorization hosts come from the connector, so each platform keeps its own. */
+  /** Scopes and authorization hosts come from the connector, so each platform keeps its own. The route's pipe has checked it is registered. */
   #capabilities(platform: Platform) {
-    const c = this.deps.connectors?.registry.get(platform);
-    if (!c) throw new ApiError(404, 'platform_not_configured');
-    return c.capabilities;
+    return this.deps.connectors!.registry.require(platform).capabilities;
   }
 
   async #actor(org: OrgContext, brandId: unknown): Promise<OAuthActor> {
@@ -78,6 +76,7 @@ export class OAuthConnectService {
     reconnectConnectionId: string | undefined,
   ): Promise<string> {
     const { stack } = this.#configured();
+    const { authorizationHosts } = this.#capabilities(platform);
     const actor = await this.#actor(org, brandId);
     try {
       const { authorizationUrl } = await stack.oauth.start(
@@ -85,8 +84,7 @@ export class OAuthConnectService {
         platform,
         reconnectConnectionId === undefined ? {} : { reconnectConnectionId },
       );
-      return assertAllowedUrl(authorizationUrl, this.#capabilities(platform).authorizationHosts)
-        .href;
+      return assertAllowedUrl(authorizationUrl, authorizationHosts).href;
     } catch (err) {
       // Not this brand's connection to reconnect.
       if (err instanceof OAuthAccessDeniedError) throw notFound();
