@@ -92,13 +92,19 @@ export function assembleStack(
     observer?: ConnectorCallObserver;
     webhookObserver?: WebhookObserver;
     sync?: SyncRecorder;
+    /** Replaces the global fetch under every SafeHttp the framework builds (fake platform doubles). */
+    fetch?: typeof fetch;
   } = {},
 ): Stack {
   const { log, lines } = capturingLogger();
   const clock = opts.clock ?? systemClock;
   const registry = new ConnectorRegistry();
   registry.register(connector);
-  const http = (c: Connector) => createSafeHttp({ allowedHosts: c.capabilities.apiHosts });
+  const http = (c: Connector) =>
+    createSafeHttp({
+      allowedHosts: c.capabilities.apiHosts,
+      ...(opts.fetch ? { fetch: opts.fetch } : {}),
+    });
   const tokens = new TokenManager({
     vault: ports.vault,
     directory: ports.directory,
@@ -154,7 +160,12 @@ export function assembleStack(
 
 export async function createMemoryStack(
   connector: Connector,
-  opts: { webhookSecret: string | null; redirectUri: string; clock?: Clock },
+  opts: {
+    webhookSecret: string | null;
+    redirectUri: string;
+    clock?: Clock;
+    fetch?: typeof fetch;
+  },
 ): Promise<Stack> {
   const clock = opts.clock ?? systemClock;
   const actor = { userId: 'user-a', organizationId: 'org-a', brandId: 'brand-a' };
@@ -180,7 +191,7 @@ export async function createMemoryStack(
       faults: { failNextAccessWrite: () => vault.failNextWrite('access') },
     },
     opts.redirectUri,
-    { clock },
+    { clock, ...(opts.fetch ? { fetch: opts.fetch } : {}) },
   );
 }
 
