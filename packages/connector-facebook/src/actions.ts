@@ -15,6 +15,7 @@ import {
 import type { FacebookConfig } from './config.js';
 import { callFor } from './comments.js';
 import { GRAPH_ID, graphErrorCodes, graphId, graphRequest } from './graph.js';
+import { subscribePageFields, unsubscribePageFields } from './subscriptions.js';
 
 type Now = () => number;
 
@@ -188,19 +189,13 @@ export async function respond(
 export function lifecycle(cfg: FacebookConfig, now: Now): ConnectorLifecycle {
   return {
     async onConnected(ctx) {
-      const r = await graphRequest(callFor(cfg, now, ctx), {
-        method: 'POST',
-        path: [graphId(ctx.externalAccountId), 'subscribed_apps'],
-        form: { subscribed_fields: 'feed' },
-      });
-      if (!success(r.body)) throw new ConnectorError('transient', 'subscription_not_confirmed');
+      await subscribePageFields(callFor(cfg, now, ctx), ctx.externalAccountId, cfg.appId, ['feed']);
     },
     async onDisconnected(ctx) {
       try {
-        await graphRequest(callFor(cfg, now, ctx), {
-          method: 'DELETE',
-          path: [graphId(ctx.externalAccountId), 'subscribed_apps'],
-        });
+        await unsubscribePageFields(callFor(cfg, now, ctx), ctx.externalAccountId, cfg.appId, [
+          'feed',
+        ]);
       } catch (err) {
         // Access already gone (token revoked, role removed, Page deleted): nothing left to unsubscribe.
         if (

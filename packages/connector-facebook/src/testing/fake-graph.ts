@@ -16,7 +16,7 @@ interface Page {
   userId: string;
   tasks: string[];
   token: string;
-  subscribed: boolean;
+  subscriptions: Map<string, string[]>; // app id -> subscribed fields
   blocked: Set<string>;
 }
 interface Comment {
@@ -107,7 +107,7 @@ export class FakeGraph {
       userId,
       tasks: opts.tasks ?? ['MODERATE', 'MESSAGING'],
       token,
-      subscribed: false,
+      subscriptions: new Map(),
       blocked: new Set(),
     });
     return { pageId: id, pageToken: token };
@@ -210,7 +210,28 @@ export class FakeGraph {
   }
 
   subscribed(pageId: string): boolean {
-    return this.pages.get(pageId)?.subscribed ?? false;
+    return this.subscribedFields(pageId).length > 0;
+  }
+
+  /** Fields this app is subscribed to on the Page; [] when not subscribed. */
+  subscribedFields(pageId: string): readonly string[] {
+    return [...(this.pages.get(pageId)?.subscriptions.get(this.appId) ?? [])];
+  }
+
+  setSubscription(pageId: string, appId: string, fields: readonly string[]): void {
+    const page = this.pages.get(pageId);
+    if (!page) throw new Error('unknown page');
+    page.subscriptions.set(appId, [...fields]);
+  }
+
+  /** Same as setSubscription; named for tests about subscriptions owned by another app. */
+  setOtherAppSubscription(pageId: string, appId: string, fields: readonly string[]): void {
+    this.setSubscription(pageId, appId, fields);
+  }
+
+  /** The app secret, for building appsecret_proof in test call helpers. */
+  appSecretValue(): string {
+    return this.appSecret;
   }
 
   /** Every token and code ever issued, plus the app secret. */
@@ -389,6 +410,10 @@ export class FakeGraph {
   ): Response {
     const missing = () => this.error(100, 33);
     const denied = () => this.error(200);
+    // `me` with a Page token addresses that Page's subscriptions.
+    if (path[0] === 'me' && path[1] === 'subscribed_apps' && who.kind === 'page') {
+      path = [who.id, 'subscribed_apps'];
+    }
     const [first, second] = path;
 
     if (first === 'me' && path.length === 1 && method === 'GET') {
@@ -496,12 +521,23 @@ export class FakeGraph {
         return this.error(100);
       }
       case 'subscribed_apps': {
+        if (method === 'GET') {
+          const data = [...page.subscriptions].map(([id, subscribed_fields]) => ({
+            id,
+            name: 'x',
+            subscribed_fields,
+          }));
+          return this.reply(200, { data });
+        }
         if (method === 'POST') {
-          page.subscribed = true;
+          // Graph replaces the calling app's field list; merging is the client's job.
+          const fields = (form.get('subscribed_fields') ?? '').split(',').filter(Boolean);
+          if (fields.length === 0) return this.error(100);
+          page.subscriptions.set(this.appId, fields);
           return this.reply(200, { success: true });
         }
         if (method === 'DELETE') {
-          page.subscribed = false;
+          page.subscriptions.delete(this.appId);
           return this.reply(200, { success: true });
         }
         return this.error(100);
