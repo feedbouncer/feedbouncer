@@ -82,6 +82,7 @@ const payload = (
   commentExternalId: c.commentId,
   event,
   platformEventSec: sec(atMs),
+  changeId: '0123456789abcdef',
 });
 const rowsFor = async (externalId: string) =>
   (await pool.query('SELECT id FROM comment WHERE external_id = $1', [externalId])).rows;

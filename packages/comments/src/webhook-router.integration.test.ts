@@ -89,6 +89,7 @@ describe('routeWebhookDelivery', () => {
           commentExternalId: '900_1_1',
           event: 'created',
           platformEventSec: expect.any(Number),
+          changeId: expect.stringMatching(/^[0-9a-f]{16}$/),
         },
       ],
       [
@@ -99,6 +100,7 @@ describe('routeWebhookDelivery', () => {
           commentExternalId: '901_1_1',
           event: 'updated',
           platformEventSec: 1_760_000_100,
+          changeId: expect.stringMatching(/^[0-9a-f]{16}$/),
         },
       ],
     ]);
@@ -111,6 +113,30 @@ describe('routeWebhookDelivery', () => {
       platform: 'facebook',
       count: 1,
     });
+  });
+
+  it('gives two same-second edits of one comment different change ids, stable across redelivery', async () => {
+    const enqueue = producerOk();
+    const route = routeWebhookDelivery({
+      directory: new PgConnectionDirectory(pool),
+      producer: { enqueue },
+      log,
+    });
+    const events = [
+      ev('900', '900_1', '900_1_6', 'comment.updated', 1_760_000_300),
+      ev('900', '900_1', '900_1_6', 'comment.updated', 1_760_000_300),
+    ];
+    const delivery = {
+      platform: 'facebook',
+      connectionId: null,
+      deliveryKey: 'k5',
+      events,
+    } as const;
+    await route(delivery);
+    await route(delivery);
+    const ids = enqueue.mock.calls.map(([r]) => (r.payload as { changeId: string }).changeId);
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(ids.slice(2)).toEqual(ids.slice(0, 2));
   });
 
   it('maps deletes and looks each page up once per delivery', async () => {

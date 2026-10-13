@@ -74,6 +74,7 @@ async function ingestComment(c: { postId: string; commentId: string }): Promise<
       commentExternalId: c.commentId,
       event: 'created',
       platformEventSec: Math.floor(nowMs / 1000),
+      changeId: '0123456789abcdef',
     }),
   );
   return r.commentId as string;

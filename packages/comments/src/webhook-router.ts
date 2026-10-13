@@ -1,6 +1,7 @@
 // Turns a verified webhook delivery into ingest jobs. Each event goes to the
 // single live connection for its account, whichever workspace owns it; events
 // for accounts with no live connection are dropped and counted.
+import { createHash } from 'node:crypto';
 import type {
   ConnectionDirectory,
   ConnectionRecord,
@@ -25,7 +26,7 @@ export function routeWebhookDelivery(d: {
   return async (v) => {
     const live = new Map<string, ConnectionRecord | null>();
     let unrouted = 0;
-    for (const e of v.events) {
+    for (const [index, e] of v.events.entries()) {
       let rec = live.get(e.externalAccountId);
       if (rec === undefined) {
         rec = await d.directory.findLiveByAccount(v.platform, e.externalAccountId);
@@ -40,6 +41,10 @@ export function routeWebhookDelivery(d: {
         commentExternalId: e.ref.externalId,
         event: EVENTS[e.type],
         platformEventSec: Math.max(1, Math.floor(e.occurredAt.getTime() / 1000)),
+        changeId: createHash('sha256')
+          .update(`${v.deliveryKey}:${index}`)
+          .digest('hex')
+          .slice(0, 16),
       };
       // Throws on failure: the gate's ledger then leaves the delivery unprocessed and the platform retries.
       await d.producer.enqueue({

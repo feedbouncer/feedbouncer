@@ -14,16 +14,23 @@ const p = (over: Partial<IngestPayload> = {}): IngestPayload => ({
   commentExternalId: '900_1_7',
   event: 'created',
   platformEventSec: 1_760_000_000,
+  changeId: '0123456789abcdef',
   ...over,
 });
 
 describe('INGEST_JOB', () => {
-  it('keys created/deleted by comment and edits by the platform event time', () => {
+  it('keys created/deleted by comment and edits by event time and change', () => {
     expect(INGEST_JOB.externalRef(p())).toBe('900_1_7:created');
     expect(INGEST_JOB.externalRef(p({ event: 'deleted' }))).toBe('900_1_7:deleted');
     expect(INGEST_JOB.externalRef(p({ event: 'updated', platformEventSec: 1_760_000_123 }))).toBe(
-      '900_1_7:updated:1760000123',
+      '900_1_7:updated:1760000123:0123456789abcdef',
     );
+  });
+
+  it('keeps two edits in the same second distinct', () => {
+    const hide = p({ event: 'updated', changeId: 'aaaaaaaaaaaaaaaa' });
+    const unhide = p({ event: 'updated', changeId: 'bbbbbbbbbbbbbbbb' });
+    expect(INGEST_JOB.externalRef(hide)).not.toBe(INGEST_JOB.externalRef(unhide));
   });
 
   it('accepts Graph ids and rejects anything else', () => {
@@ -39,6 +46,7 @@ describe('INGEST_JOB', () => {
       p({ platformEventSec: 0 }),
       p({ platformEventSec: 1.5 }),
       p({ platformEventSec: 10_000_000_001 }),
+      p({ changeId: 'not-hex' }),
     ])
       expect(INGEST_JOB.payload.safeParse(bad).success).toBe(false);
   });

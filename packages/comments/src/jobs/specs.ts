@@ -4,7 +4,7 @@ import { JobError, type JobDefinition, type RetryPolicy } from '@feedbouncer/job
 
 // Generic external-id shape (Graph ids are digits and underscores). Only safe
 // characters, so ids can join the idempotency ref. The comment id is capped at
-// 200 so `${id}:updated:${sec}` always fits the 256-character ref limit.
+// 200 so `${id}:updated:${sec}:${changeId}` always fits the 256-character ref limit.
 const ID = z
   .string()
   .min(1)
@@ -17,6 +17,8 @@ export const ingestPayload = z.strictObject({
   event: z.enum(['created', 'updated', 'deleted']),
   /** The platform's own event time (seconds). Part of an edit's identity, stable across retries. */
   platformEventSec: z.number().int().min(1).max(10_000_000_000),
+  /** Identifies this change within its delivery (hash of delivery key and position), stable across redelivery. Separates edits that share a second. */
+  changeId: z.string().regex(/^[0-9a-f]{16}$/),
 });
 export type IngestPayload = z.infer<typeof ingestPayload>;
 
@@ -26,7 +28,7 @@ export const INGEST_JOB = {
   payload: ingestPayload,
   externalRef: (p: IngestPayload): string =>
     p.event === 'updated'
-      ? `${p.commentExternalId}:updated:${p.platformEventSec}`
+      ? `${p.commentExternalId}:updated:${p.platformEventSec}:${p.changeId}`
       : `${p.commentExternalId}:${p.event}`,
   policy: { maxAttempts: 8 } satisfies Partial<RetryPolicy>,
   platforms: ['facebook'] as readonly Platform[] | 'all',
