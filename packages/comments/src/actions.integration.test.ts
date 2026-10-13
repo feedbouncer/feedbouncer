@@ -186,6 +186,20 @@ describe('ModerationActions.request', () => {
     expect(enqueue).toHaveBeenCalledTimes(2);
   });
 
+  it('marks the action failed when it cannot be queued, so a private reply can be retried', async () => {
+    const commentId = await seedComment();
+    enqueue.mockRejectedValueOnce(new Error('redis down'));
+    await expect(request(commentId, 'private_reply', { text: 'hello' })).rejects.toThrow(
+      'redis down',
+    );
+    const rows = await rowsFor(commentId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: 'failed', outcome_code: 'enqueue_failed' });
+
+    const retry = await request(commentId, 'private_reply', { text: 'hello' });
+    expect(retry).toMatchObject({ status: 'accepted', action: { status: 'pending' } });
+  });
+
   it('request key reused for another kind -> refused request_key_conflict', async () => {
     const commentId = await seedComment();
     const requestKey = key();
@@ -409,20 +423,6 @@ describe('ModerationActions.request', () => {
       }),
     ).toEqual({ status: 'refused', code: 'unsupported' });
     expect(await rowsFor(commentId)).toHaveLength(0);
-  });
-
-  it('enqueue failure leaves a pending row; retry with the same key re-enqueues', async () => {
-    const commentId = await seedComment();
-    const requestKey = key();
-    enqueue.mockRejectedValueOnce(new Error('job queue unavailable'));
-    await expect(request(commentId, 'delete', { requestKey })).rejects.toThrow(
-      'job queue unavailable',
-    );
-    expect(await rowsFor(commentId)).toMatchObject([{ status: 'pending', kind: 'delete' }]);
-    const r = await request(commentId, 'delete', { requestKey });
-    expect(r).toMatchObject({ status: 'accepted', action: { status: 'pending' } });
-    expect(await rowsFor(commentId)).toHaveLength(1);
-    expect(enqueue).toHaveBeenCalledTimes(2);
   });
 
   it('rejects malformed request keys and reply text before touching storage', async () => {

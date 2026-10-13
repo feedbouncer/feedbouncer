@@ -303,8 +303,37 @@ export class ModerationActions {
       status: action.status,
     });
     if (action.status !== 'pending') return { status: 'recorded', action };
-    await this.#enqueue(i.scope, c, action.id);
+    try {
+      await this.#enqueue(i.scope, c, action.id);
+    } catch (err) {
+      // Nothing will run it, and a pending private reply would block later ones.
+      await this.#markEnqueueFailed(i, action);
+      throw err;
+    }
     return { status: 'accepted', action };
+  }
+
+  async #markEnqueueFailed(i: Request, action: ModerationActionView): Promise<void> {
+    await withTransaction(this.d.pool, async (tx) => {
+      const u = await tx.query(
+        `UPDATE moderation_action
+            SET status = 'failed', outcome_code = 'enqueue_failed', completed_at = now()
+          WHERE id = $3 AND organization_id = $1 AND brand_id = $2 AND status = 'pending'`,
+        [i.scope.organizationId, i.scope.brandId, action.id],
+      );
+      if (u.rowCount === 0) return;
+      await recordActionAudit(tx, {
+        organizationId: i.scope.organizationId,
+        brandId: i.scope.brandId,
+        actionId: action.id,
+        commentId: action.commentId,
+        kind: action.kind,
+        actorType: action.actorType,
+        actorUserId: action.actorUserId,
+        status: 'failed',
+        outcomeCode: 'enqueue_failed',
+      });
+    });
   }
 
   async #replay(
