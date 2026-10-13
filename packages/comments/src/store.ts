@@ -33,6 +33,8 @@ export interface CommentRow {
   readonly authorName: string | null;
   readonly body: string;
   readonly platformState: PlatformState;
+  /** State of the stored parent comment; null for a top-level comment or a parent not stored yet. */
+  readonly parentPlatformState: PlatformState | null;
   readonly postedAt: Date;
   readonly permalink: string | null;
   readonly isOwnAccount: boolean;
@@ -54,7 +56,8 @@ const outOfScope = () => new Error('comment store: connection is not in the give
 const ROW_SQL = `
   SELECT c.id, c.connection_id, cn.platform, s.external_id AS source_external_id, c.external_id,
          c.parent_external_id, c.parent_comment_id, a.external_id AS author_external_id,
-         a.display_name AS author_name, c.body, c.platform_state, c.posted_at, c.permalink,
+         a.display_name AS author_name, c.body, c.platform_state,
+         p.platform_state AS parent_platform_state, c.posted_at, c.permalink,
          c.is_own_account, cn.status AS connection_status,
          EXISTS (SELECT 1 FROM moderation_action ma
                   WHERE ma.comment_id = c.id AND ma.organization_id = c.organization_id
@@ -64,7 +67,8 @@ const ROW_SQL = `
     FROM comment c
     JOIN source s ON s.id = c.source_id AND s.organization_id = c.organization_id AND s.brand_id = c.brand_id
     JOIN connection cn ON cn.id = c.connection_id AND cn.organization_id = c.organization_id AND cn.brand_id = c.brand_id
-    LEFT JOIN author a ON a.id = c.author_id AND a.connection_id = c.connection_id`;
+    LEFT JOIN author a ON a.id = c.author_id AND a.connection_id = c.connection_id
+    LEFT JOIN comment p ON p.id = c.parent_comment_id AND p.organization_id = c.organization_id AND p.brand_id = c.brand_id`;
 
 const toRow = (r: Record<string, unknown>): CommentRow => ({
   id: r.id as string,
@@ -78,6 +82,7 @@ const toRow = (r: Record<string, unknown>): CommentRow => ({
   authorName: (r.author_name as string | null) ?? null,
   body: r.body as string,
   platformState: r.platform_state as PlatformState,
+  parentPlatformState: (r.parent_platform_state as PlatformState | null) ?? null,
   postedAt: r.posted_at as Date,
   permalink: (r.permalink as string | null) ?? null,
   isOwnAccount: r.is_own_account as boolean,

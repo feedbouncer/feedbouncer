@@ -21,7 +21,7 @@ import type { JobProducer } from '@feedbouncer/jobs';
 import { UUID, type Logger } from '@feedbouncer/service-runtime';
 import type { BrandScope, CommentRow, PgCommentStore } from './store.js';
 import { EXECUTE_JOB } from './jobs/specs.js';
-import { evaluateEligibility, resolveConstraints } from './eligibility.js';
+import { eligibilityComment, evaluateEligibility, resolveConstraints } from './eligibility.js';
 
 export const ACTION_KINDS = [
   'hide',
@@ -205,7 +205,7 @@ export class ModerationActions {
     const e = evaluateEligibility({
       kind: i.kind,
       actorType: i.actor.type,
-      comment: { ...comment, hasAuthor: comment.authorExternalId !== null },
+      comment: eligibilityComment(comment),
       caps,
       now: new Date(this.d.clock.now()),
     });

@@ -404,6 +404,7 @@ describe('comment ingest job on instagram', () => {
       authorName: 'fan.account',
       body: 'agreed',
       platformState: 'hidden',
+      parentPlatformState: null,
       postedAt: graphSecond(createdAtMs),
       permalink: `https://www.instagram.com/p/${top.mediaId}/`,
       isOwnAccount: false,
@@ -412,7 +413,10 @@ describe('comment ingest job on instagram', () => {
     });
     // The parent arriving later links the stored reply to it.
     const parent = await runIg(igPayload(top, 'created'));
-    expect((await store.load(t, r.commentId as string))?.parentCommentId).toBe(parent.commentId);
+    expect(await store.load(t, r.commentId as string)).toMatchObject({
+      parentCommentId: parent.commentId,
+      parentPlatformState: 'visible',
+    });
     expect(events.at(-1)).toMatchObject({ platform: 'instagram', outcome: 'created' });
   });
 

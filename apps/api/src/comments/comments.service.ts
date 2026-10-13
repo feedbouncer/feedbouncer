@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   ACTION_KINDS,
   availabilityFor,
+  eligibilityComment,
   resolveConstraints,
   type ActionAvailability,
   type ActionKind,
@@ -88,7 +89,7 @@ const toView = (
   availability: caps
     ? {
         ...availabilityFor({
-          comment: { ...c, hasAuthor: c.authorExternalId !== null },
+          comment: eligibilityComment(c),
           caps,
           now,
         }),

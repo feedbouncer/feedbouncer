@@ -7,9 +7,11 @@
 import {
   PRIVATE_REPLY_WINDOW_MS,
   type ConnectorCapabilities,
+  type PlatformState,
   type ResponseKind,
 } from '@feedbouncer/connectors';
 import { ACTION_KINDS, AUTHOR_KINDS, type ActionActor, type ActionKind } from './actions.js';
+import type { CommentRow } from './store.js';
 
 /** The generic reply limit (replyTextSchema). */
 const DEFAULT_MAX_REPLY_CHARS = 8000;
@@ -45,6 +47,27 @@ export interface EligibilityComment {
   readonly postedAt: Date;
   /** A private reply to this comment is pending or applied. */
   readonly privateReplied: boolean;
+  /**
+   * State of the comment a public reply is actually posted on. Threads are one
+   * level deep, so a reply to a nested comment goes on its top-level parent and
+   * this is the parent's state. Absent or null when that comment is not stored:
+   * the comment's own state is used then.
+   */
+  readonly replyTargetPlatformState?: PlatformState | null;
+}
+
+/** The eligibility view of a stored comment. Actions and the comments list both use it, so they agree. */
+export function eligibilityComment(row: CommentRow): EligibilityComment {
+  return {
+    platformState: row.platformState,
+    isOwnAccount: row.isOwnAccount,
+    hasAuthor: row.authorExternalId !== null,
+    parentExternalId: row.parentExternalId,
+    postedAt: row.postedAt,
+    privateReplied: row.privateReplied,
+    replyTargetPlatformState:
+      row.parentExternalId !== null ? row.parentPlatformState : row.platformState,
+  };
 }
 
 export type Eligibility =
@@ -89,7 +112,11 @@ export function evaluateEligibility({
     return no('own_comment_always_visible');
   if (byAuthor && c.isOwnAccount) return no('author_is_page');
   if ((byAuthor || kind === 'private_reply') && !c.hasAuthor) return no('author_unavailable');
-  if (kind === 'public_reply' && c.platformState === 'hidden' && !k.publicReplyOnHidden)
+  if (
+    kind === 'public_reply' &&
+    (c.replyTargetPlatformState ?? c.platformState) === 'hidden' &&
+    !k.publicReplyOnHidden
+  )
     return no('reply_to_hidden_comment');
   if (kind === 'private_reply') {
     if (c.parentExternalId !== null && k.privateReplyTopLevelOnly)

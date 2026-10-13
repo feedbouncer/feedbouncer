@@ -43,12 +43,18 @@ async function connectedPage(
 /** A comment on the Page in FakeGraph, stored as ingest would store it. */
 async function comment(
   p: { pageId: string; scope: ConnectionScope },
-  o: { message?: string; postedAt?: Date; state?: 'visible' | 'hidden' } = {},
-): Promise<{ id: string; externalId: string }> {
+  o: {
+    message?: string;
+    postedAt?: Date;
+    state?: 'visible' | 'hidden';
+    parent?: { externalId: string; postId: string };
+  } = {},
+): Promise<{ id: string; externalId: string; postId: string }> {
   const postedAt = o.postedAt ?? new Date();
   const c = graph.addComment(p.pageId, {
     message: o.message ?? 'hello',
     createdAtMs: postedAt.getTime(),
+    ...(o.parent && { parentId: o.parent.externalId, postId: o.parent.postId }),
   });
   const authorId = String(3_000_000_000 + Math.floor(Math.random() * 1_000_000));
   const r = await api.deps.comments!.store.upsertFromPlatform(
@@ -56,7 +62,7 @@ async function comment(
     {
       externalId: c.commentId,
       sourceExternalId: c.postId,
-      parentExternalId: null,
+      parentExternalId: o.parent?.externalId ?? null,
       author: { externalId: authorId, displayName: `Author ${authorId}`, profileUrl: null },
       body: o.message ?? 'hello',
       postedAt,
@@ -65,7 +71,7 @@ async function comment(
     },
     { ownAccountExternalId: p.pageId, syncedAt: new Date() },
   );
-  return { id: r.commentId, externalId: c.commentId };
+  return { id: r.commentId, externalId: c.commentId, postId: c.postId };
 }
 
 const base = () => `/api/v1/orgs/${org.orgId}/brands/${org.brandId}`;
@@ -404,6 +410,30 @@ describe('comments: instagram platform, media and availability', () => {
     expect(a.unhide).toEqual({ available: true });
   });
 
+  it('a visible nested comment under a hidden parent: instagram public_reply unavailable (the reply goes on the parent), facebook unchanged', async () => {
+    const ig = await connectedInstagram();
+    const igTop = await igComment(ig, { state: 'hidden' });
+    const igNested = await igComment(ig, { parent: igTop });
+    const fbPage = await connectedPage();
+    const fbTop = await comment(fbPage, { state: 'hidden' });
+    const fbNested = await comment(fbPage, { parent: fbTop });
+    const all = await listed();
+    expect(all.get(igNested.id)!.availability.public_reply).toEqual({
+      available: false,
+      reason: 'reply_to_hidden_comment',
+    });
+    expect(all.get(fbNested.id)!.availability.public_reply).toEqual({ available: true });
+
+    const r = await act(igNested.id, { kind: 'public_reply', requestKey: key(), text: 'hi' });
+    expect(r.status).toBe(200);
+    expect(r.body.action).toMatchObject({
+      status: 'not_eligible',
+      outcomeCode: 'reply_to_hidden_comment',
+    });
+    const f = await act(fbNested.id, { kind: 'public_reply', requestKey: key(), text: 'hi' });
+    expect(f.status).toBe(202);
+  });
+
   it('availability turns private_reply off after one is sent (private_reply_already_sent)', async () => {
     const ig = await connectedInstagram();
     const c = await igComment(ig);
@@ -420,10 +450,15 @@ describe('comments: instagram platform, media and availability', () => {
     const ig = await connectedInstagram();
     const fbPage = await connectedPage();
     const top = await igComment(ig);
+    const hiddenTop = await igComment(ig, { state: 'hidden' });
+    const fbHiddenTop = await comment(fbPage, { state: 'hidden' });
     const states = [
       await igComment(ig),
       await igComment(ig, { state: 'hidden' }),
       await igComment(ig, { parent: top }),
+      await igComment(ig, { parent: hiddenTop }),
+      await igComment(ig, { parent: top, state: 'hidden' }),
+      await comment(fbPage, { parent: fbHiddenTop }),
       await igComment(ig, { own: true }),
       await igComment(ig, { postedAt: new Date(Date.now() - 8 * DAY) }),
       await comment(fbPage),
