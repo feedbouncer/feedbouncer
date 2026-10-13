@@ -19,6 +19,7 @@ import {
 } from '@feedbouncer/connectors';
 import type { JobProducer } from '@feedbouncer/jobs';
 import { UUID, type Logger } from '@feedbouncer/service-runtime';
+import { ACTION_KINDS, type ActionActor, type ActionKind } from './action-kinds.js';
 import type { BrandScope, CommentRow, PgCommentStore } from './store.js';
 import { EXECUTE_JOB } from './jobs/specs.js';
 import {
@@ -28,21 +29,6 @@ import {
   resolveConstraints,
 } from './eligibility.js';
 
-export const ACTION_KINDS = [
-  'hide',
-  'unhide',
-  'delete',
-  'ban_author',
-  'unban_author',
-  'public_reply',
-  'private_reply',
-] as const;
-export type ActionKind = (typeof ACTION_KINDS)[number];
-export type ActionActor =
-  | { type: 'user'; userId: string }
-  | { type: 'rule'; ruleId: string }
-  | { type: 'classifier' }
-  | { type: 'system' };
 export type ActionStatus = 'pending' | 'applied' | 'noop' | 'not_eligible' | 'failed';
 
 export interface ModerationActionView {
@@ -75,7 +61,6 @@ export type RequestActionResult =
 
 export const REQUEST_KEY = /^[A-Za-z0-9._:-]{1,128}$/;
 export const REPLY_KINDS: ReadonlySet<ActionKind> = new Set(['public_reply', 'private_reply']);
-export const AUTHOR_KINDS: ReadonlySet<ActionKind> = new Set(['ban_author', 'unban_author']);
 const REQUEST_KEY_UNIQUE = 'moderation_action_organization_id_request_key_key';
 const PRIVATE_REPLY_ONCE = 'moderation_action_private_reply_once_key';
 

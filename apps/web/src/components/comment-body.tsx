@@ -12,7 +12,6 @@ export function CommentBody({ body }: { body: string }) {
     <>
       <p
         dir="auto"
-        className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
         style={{
           whiteSpace: 'pre-wrap',
           overflowWrap: 'anywhere',

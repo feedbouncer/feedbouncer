@@ -20,5 +20,3 @@ export function viewOnUrl(platform: string, raw: string | null): string | null {
   const domain = HOSTS[platform]!;
   return host === domain || host.endsWith(`.${domain}`) ? raw : null;
 }
-
-export const facebookPermalink = (raw: string | null): string | null => viewOnUrl('facebook', raw);

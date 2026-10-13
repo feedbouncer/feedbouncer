@@ -20,6 +20,7 @@ import {
   ConnectorError,
   toConnectorError,
   type ActionResult,
+  type Clock,
   type CommentRef,
   type ConnectionClient,
   type ConnectorErrorInfo,
@@ -31,13 +32,8 @@ import {
 import { JobError, type JobDefinition, type JobProducer, type JobResult } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
-import {
-  AUTHOR_KINDS,
-  recordActionAudit,
-  type ActionActor,
-  type ActionKind,
-  type ActionStatus,
-} from '../actions.js';
+import { AUTHOR_KINDS, type ActionActor, type ActionKind } from '../action-kinds.js';
+import { recordActionAudit, type ActionStatus } from '../actions.js';
 import { setCommentPlatformState } from '../store.js';
 import { EXECUTE_JOB, INGEST_JOB, type ExecutePayload, type IngestPayload } from './specs.js';
 
@@ -290,7 +286,7 @@ async function finish(
 
 /** Re-reads the comment through the ingest job. Failures are logged, never thrown. */
 async function enqueueResync(
-  d: { producer: Pick<JobProducer, 'enqueue'>; log: Logger },
+  d: { producer: Pick<JobProducer, 'enqueue'>; log: Logger; clock: Clock },
   scope: ConnectionScope,
   platform: Platform,
   a: LoadedAction,
@@ -299,7 +295,7 @@ async function enqueueResync(
     sourceExternalId: a.sourceExternalId,
     commentExternalId: a.commentExternalId,
     event: 'updated',
-    platformEventSec: Math.floor(Date.now() / 1000),
+    platformEventSec: Math.floor(d.clock.now() / 1000),
     // The ingest change id is 16 hex characters; derived from the action so it is stable.
     changeId: createHash('sha256').update(`resync_${a.id}`).digest('hex').slice(0, 16),
   };
@@ -325,6 +321,7 @@ export function executeActionJob(d: {
   log: Logger;
   /** Enqueues the resync ingest after outcomes the platform decided. */
   producer: Pick<JobProducer, 'enqueue'>;
+  clock: Clock;
 }): JobDefinition<ExecutePayload> {
   return {
     ...EXECUTE_JOB,

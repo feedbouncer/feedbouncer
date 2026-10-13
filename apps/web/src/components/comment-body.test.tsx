@@ -16,9 +16,7 @@ describe('CommentBody', () => {
     const long = 'x'.repeat(9_990) + ' end ✓ 🙂';
     for (const text of [rtl, emoji, mention, long]) {
       const html = body(text);
-      expect(html).toMatch(
-        /<p dir="auto" class="whitespace-pre-wrap break-words \[overflow-wrap:anywhere\]"/,
-      );
+      expect(html).toMatch(/<p dir="auto" style="white-space:pre-wrap;overflow-wrap:anywhere/);
       // Every character is in the DOM, even for the collapsed one.
       expect(html).toContain(text);
     }

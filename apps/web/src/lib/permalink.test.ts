@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { facebookPermalink } from './permalink';
+import { viewOnUrl } from './permalink';
 
-describe('facebookPermalink', () => {
+describe('viewOnUrl (facebook)', () => {
   it.each([
     'https://facebook.com/page/posts/1',
     'https://www.facebook.com/page/posts/1?comment_id=2',
     'https://m.facebook.com/x',
   ])('accepts %s', (u) => {
-    expect(facebookPermalink(u)).toBe(u);
+    expect(viewOnUrl('facebook', u)).toBe(u);
   });
 
   it.each([
@@ -23,6 +23,6 @@ describe('facebookPermalink', () => {
     'https://facebook.com:8443/x',
     'not a url',
   ])('rejects %s', (u) => {
-    expect(facebookPermalink(u)).toBeNull();
+    expect(viewOnUrl('facebook', u)).toBeNull();
   });
 });

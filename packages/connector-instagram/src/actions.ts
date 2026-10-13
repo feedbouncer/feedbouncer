@@ -62,8 +62,9 @@ export function act(
       return { status: 'applied', platformActionId: null };
     } catch (e) {
       if (e instanceof ConnectorError && e.kind === 'not_found') return { status: 'not_found' };
-      // 'moderate' has no ineligible rows, so refine() always throws here.
-      return refine(e, 'moderate') as never;
+      if (!(e instanceof ConnectorError)) throw e;
+      const mapped = mapInstagramError(e, 'moderate');
+      throw 'throw' in mapped ? mapped.throw : e;
     }
   };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConnectorCapabilities } from '@feedbouncer/connectors';
-import { ACTION_KINDS } from './actions.js';
+import { ACTION_KINDS } from './action-kinds.js';
 import {
   availabilityFor,
   evaluateEligibility,

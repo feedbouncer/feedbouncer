@@ -81,7 +81,7 @@ export function buildMetaDeps(d: {
     // One Meta app signs both platforms' webhooks and owns both OAuth clients.
     appSecrets: new Map([
       ['facebook', fb.appSecret],
-      ['instagram', fb.appSecret],
+      ...(env.instagram ? ([['instagram', fb.appSecret]] as const) : []),
     ]),
     redirectUri: (p) => new URL(`/api/v1/oauth/${p}/callback`, env.publicWebUrl).href,
     log,

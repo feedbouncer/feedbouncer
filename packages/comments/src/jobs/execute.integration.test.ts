@@ -33,7 +33,8 @@ import { CredentialStore, type ConnectionScope } from '@feedbouncer/secrets';
 import { testKeyring } from '@feedbouncer/secrets/testing';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { PgCommentStore } from '../store.js';
-import { ModerationActions, type ActionKind } from '../actions.js';
+import type { ActionKind } from '../action-kinds.js';
+import { ModerationActions } from '../actions.js';
 import { ingestCommentJob } from './ingest.js';
 import { executeActionJob } from './execute.js';
 import { EXECUTE_JOB, INGEST_JOB } from './specs.js';
@@ -213,6 +214,7 @@ beforeEach(async () => {
     runtime,
     log: createLogger('comments-execute-test', 'info', (l) => lines.push(l)),
     producer: { enqueue: resync },
+    clock,
   });
 
   const c = graph.addComment(pageId, { message: 'spam here', createdAtMs: nowMs - 60_000 });
@@ -252,6 +254,7 @@ describe('moderation execute job', () => {
   it('delete of a comment already gone on Facebook -> noop comment_gone, comment marked deleted', async () => {
     const actionId = await requestAction(seeded.id, 'delete');
     graph.removeComment(seeded.commentId);
+    nowMs += 3_600_000;
     expect(await run(actionId)).toEqual({
       status: 'noop',
       outcomeCode: 'comment_gone',
@@ -269,7 +272,11 @@ describe('moderation execute job', () => {
       scope,
       platform: 'facebook',
       type: INGEST_JOB.type,
-      payload: { sourceExternalId: seeded.postId, commentExternalId: seeded.commentId },
+      payload: {
+        sourceExternalId: seeded.postId,
+        commentExternalId: seeded.commentId,
+        platformEventSec: Math.floor(nowMs / 1000),
+      },
     });
   });
 

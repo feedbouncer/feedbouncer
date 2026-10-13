@@ -11,7 +11,7 @@ import {
   type PlatformState,
   type ResponseKind,
 } from '@feedbouncer/connectors';
-import { ACTION_KINDS, AUTHOR_KINDS, type ActionActor, type ActionKind } from './actions.js';
+import { ACTION_KINDS, AUTHOR_KINDS, type ActionActor, type ActionKind } from './action-kinds.js';
 import type { CommentRow } from './store.js';
 
 /** The generic reply limit (replyTextSchema). */

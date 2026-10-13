@@ -59,6 +59,7 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       runtime: deps.runtime,
       log: deps.log,
       producer: deps.producer,
+      clock: deps.clock,
     }),
   );
   registry.register(connectionLifecycleJob({ runtime: deps.runtime, log: deps.log }));

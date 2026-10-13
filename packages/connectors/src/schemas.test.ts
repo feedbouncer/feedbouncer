@@ -98,6 +98,10 @@ describe('reply text', () => {
   ])('rejects %s', (_n, t) => {
     expect(replyTextSchema.safeParse(t).success).toBe(false);
   });
+  it('counts the limit in code points, so 8000 emoji pass and 8001 do not', () => {
+    expect(replyTextSchema.safeParse('😀'.repeat(8000)).success).toBe(true);
+    expect(replyTextSchema.safeParse('😀'.repeat(8001)).success).toBe(false);
+  });
   it('trims and keeps newlines and tabs', () => {
     expect(replyTextSchema.parse('  hi\n\tthere  ')).toBe('hi\n\tthere');
   });

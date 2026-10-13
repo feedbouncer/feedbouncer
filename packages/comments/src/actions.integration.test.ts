@@ -16,7 +16,8 @@ import { createInstagramConnector } from '@feedbouncer/connector-instagram';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { PgCommentStore } from './store.js';
-import { ModerationActions, type ActionActor, type ActionKind } from './actions.js';
+import type { ActionActor, ActionKind } from './action-kinds.js';
+import { ModerationActions } from './actions.js';
 import { EXECUTE_JOB } from './jobs/specs.js';
 
 const PAGE = '1000000001';

@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import { ACTION_KINDS, EXECUTE_JOB, executeActionJob } from '@feedbouncer/comments';
+import { systemClock } from '@feedbouncer/connectors';
 import type { JobContext } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
@@ -105,6 +106,7 @@ async function runExecuteJob(
     runtime: api.deps.connectors!.stack.runtime,
     log: api.deps.log,
     producer: api.deps.producer!,
+    clock: systemClock,
   });
   return job.handle(ctx, EXECUTE_JOB.payload.parse(ledger.rows[0]!.payload));
 }
