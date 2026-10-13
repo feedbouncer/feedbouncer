@@ -35,7 +35,7 @@ pnpm test
 | `apps/worker`                 | Background worker that runs queued jobs                                 |
 | `apps/placeholder-app`        | Minimal app used as the template for new apps and Docker images         |
 | `packages/authz`              | Roles and authorization checks                                          |
-| `packages/comments`           | Comment storage and ingestion jobs                                      |
+| `packages/comments`           | Comments: storage, moderation, lifecycle, webhooks, reconnect emails    |
 | `packages/connector-facebook` | Facebook Pages connector: OAuth, comments, moderation actions           |
 | `packages/connectors`         | Contract and shared services for platform connectors                    |
 | `packages/db`                 | Postgres schema, migrations and the migration CLI                       |
