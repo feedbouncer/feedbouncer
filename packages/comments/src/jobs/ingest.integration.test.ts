@@ -244,7 +244,7 @@ describe('comment ingest job', () => {
     expect(events.map((e) => e.outcome)).toEqual(['gone']);
   });
 
-  it('Review Focus 4: remove processed first, then a late created job -> stays deleted', async () => {
+  it('remove processed first, then a late created job -> stays deleted', async () => {
     const c = graph.addComment(pageId, { message: 'spam' });
     const d = await run(payload(c, 'deleted'));
     expect(d.outcome).toBe('deleted');
@@ -259,7 +259,7 @@ describe('comment ingest job', () => {
     expect(await rowsFor(c.commentId)).toHaveLength(1);
   });
 
-  it('Review Focus 4: remove processed while an earlier edit fetch is in flight -> stays deleted', async () => {
+  it('remove processed while an earlier edit fetch is in flight -> stays deleted', async () => {
     const c = graph.addComment(pageId, { message: 'v1' });
     const { commentId } = await run(payload(c, 'created'));
     graph.editComment(c.commentId, 'v2');

@@ -66,7 +66,7 @@ describe('parseFeedWebhook', () => {
     );
   });
 
-  it('drops events with non-conforming ids (Review Focus 1)', () => {
+  it('drops events with non-conforming ids', () => {
     const hostile = ['../me/accounts', '1?fields=access_token', '1#', 'https://evil.example/x', 7];
     for (const id of hostile) {
       expect(parseFeedWebhook(body([comment({ verb: 'add', comment_id: id })]))).toEqual([]);

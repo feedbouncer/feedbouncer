@@ -214,7 +214,7 @@ describe('account selection', () => {
   });
 });
 
-describe('a failed token write or activation does not leave the page held (D21)', () => {
+describe('a failed token write or activation does not leave the page held', () => {
   it('revokes the fresh pending row when the token write throws', async () => {
     const { stack, state } = await setup();
     const g = (await stack.oauth.complete(stack.actor, 'facebook', { state, code: 'c' })) as {
@@ -269,7 +269,7 @@ describe('a failed token write or activation does not leave the page held (D21)'
   });
 });
 
-describe('Review Focus 5: cross-user / cross-brand use', () => {
+describe('cross-user / cross-brand use', () => {
   it('another user cannot complete the state, and it stays usable for the owner', async () => {
     const { stack, state } = await setup();
     stack.memberships.grant!(stack.actor.organizationId, stack.actor.brandId, 'user-b', 'admin');
