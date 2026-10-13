@@ -1,7 +1,7 @@
-// Keeps the community-health files honest: they exist, links resolve (including
-// from .github/, where only absolute repo URLs work), commands they name are real
-// scripts, the license is consistent, and nothing placeholder- or secret-shaped
-// ships. Later sections are appended per file; keep the helpers at the top.
+// Keeps the community-health files honest. Each check applies to the files that are
+// present: links resolve (including from .github/, where only absolute repo URLs
+// work), commands they name are real scripts, issue forms follow GitHub's rules, and
+// nothing placeholder- or secret-shaped ships.
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';

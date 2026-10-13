@@ -19,13 +19,7 @@ test('every emitted metric is documented', () => {
 });
 
 test('every health state and env var is documented', () => {
-  for (const s of [
-    'pending_first_sync',
-    'healthy',
-    'degraded',
-    'needs_reconnection',
-    'disabled',
-  ]) {
+  for (const s of ['pending_first_sync', 'healthy', 'degraded', 'needs_reconnection', 'disabled']) {
     assert.ok(doc.includes(`\`${s}\``), s);
   }
   for (const v of [
