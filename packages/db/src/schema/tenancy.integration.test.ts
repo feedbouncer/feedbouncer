@@ -61,18 +61,15 @@ describe('tenancy', () => {
   });
 
   it('the same platform account may be connected under two brands, but only once per brand', async () => {
-    await ctx.c.query(
-      "INSERT INTO connection (organization_id, brand_id, platform, external_account_id) VALUES ($1, $2, 'facebook', 'page-a')",
-      [b.organizationId, b.brandId],
-    );
-    await expectPgError(
+    // Not facebook: a live Facebook Page is unique across tenants (facebook-pages.integration.test.ts).
+    const insert = (t: Tenant) =>
       ctx.c.query(
-        "INSERT INTO connection (organization_id, brand_id, platform, external_account_id) VALUES ($1, $2, 'facebook', 'page-a')",
-        [a.organizationId, a.brandId],
-      ),
-      '23505',
-      'connection_brand_id_platform_external_account_id_key',
-    );
+        "INSERT INTO connection (organization_id, brand_id, platform, external_account_id) VALUES ($1, $2, 'youtube', 'channel-a')",
+        [t.organizationId, t.brandId],
+      );
+    await insert(b);
+    await insert(a);
+    await expectPgError(insert(a), '23505', 'connection_brand_id_platform_external_account_id_key');
   });
 
   it('updated_at moves on update and created_at does not', async () => {

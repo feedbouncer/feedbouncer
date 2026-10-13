@@ -18,7 +18,11 @@ export type CredentialKind = (typeof CREDENTIAL_KINDS)[number];
 
 // Envelope-only kinds are sealed outside connection_secret (e.g. oauth_state).
 // connectionId in EnvelopeContext is the bound record id for those kinds.
-export const ENVELOPE_KINDS = [...CREDENTIAL_KINDS, 'oauth_pkce_verifier'] as const;
+export const ENVELOPE_KINDS = [
+  ...CREDENTIAL_KINDS,
+  'oauth_pkce_verifier',
+  'oauth_grant_token',
+] as const;
 export type EnvelopeKind = (typeof ENVELOPE_KINDS)[number];
 
 export interface EnvelopeContext {

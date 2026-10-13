@@ -21,6 +21,7 @@ const MATRIX: Record<Capability, Record<Role, boolean>> = {
   'invitation.read': { owner: true, admin: true, member: false },
   'connection.manage': { owner: true, admin: true, member: false },
   'connection.read': { owner: true, admin: true, member: false },
+  'comment.moderate': { owner: true, admin: true, member: true },
   'org.update': { owner: true, admin: true, member: false },
   'org.transfer_ownership': { owner: true, admin: false, member: false },
   'org.delete': { owner: true, admin: false, member: false },
@@ -31,6 +32,13 @@ describe('capability matrix (brief "Roles" table)', () => {
     for (const role of ROLES)
       it(`${role} ${row[role] ? 'can' : 'cannot'} ${cap}`, () =>
         expect(can(role, cap as Capability)).toBe(row[role]));
+});
+
+describe('comment moderation', () => {
+  it('every role can moderate comments, only owner/admin manage connections', () => {
+    for (const r of ROLES) expect(can(r, 'comment.moderate')).toBe(true);
+    expect(can('member', 'connection.manage')).toBe(false);
+  });
 });
 
 describe('canChangeRole', () => {
