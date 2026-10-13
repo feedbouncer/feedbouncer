@@ -97,6 +97,25 @@ describe('parseFeedWebhook', () => {
     expect(parseFeedWebhook(body([comment({ verb: 'add', created_time: 'soon' })]))).toEqual([]);
   });
 
+  it('ignores unknown and prototype-named verbs', () => {
+    expect(parseFeedWebhook(body([comment({ verb: 'foo' })]))).toEqual([]);
+    for (const verb of ['__proto__', 'constructor', 'toString']) {
+      expect(parseFeedWebhook(body([comment({ verb })]))).toEqual([]);
+    }
+  });
+
+  it('drops updated/deleted events when entry.time is unusable', () => {
+    for (const time of ['soon', null, -5, 0]) {
+      const b = body(
+        ['edited', 'hide', 'unhide', 'remove'].map((verb) => comment({ verb })),
+        { time },
+      );
+      expect(parseFeedWebhook(b)).toEqual([]);
+    }
+    const created = parseFeedWebhook(body([comment({ verb: 'add' })], { time: 'soon' }));
+    expect(created.map((e) => e.type)).toEqual(['comment.created']);
+  });
+
   it('returns [] for malformed JSON and caps at 1000 events', () => {
     expect(parseFeedWebhook(Buffer.from('{nope'))).toEqual([]);
     expect(
