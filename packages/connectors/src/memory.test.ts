@@ -294,6 +294,18 @@ describe('MemoryConnectionDirectory (facebook pages additions)', () => {
       ConnectionTakenError,
     );
   });
+
+  it('upsertPending throws ConnectionTakenError when another brand holds the instagram account', async () => {
+    const d = new MemoryConnectionDirectory();
+    const ig = (organizationId: string, brandId: string) => ({
+      ...fbPending(organizationId, brandId, '17800000000000001'),
+      platform: 'instagram' as const,
+    });
+    await d.upsertPending(ig('org-a', 'brand-a'));
+    await expect(d.upsertPending(ig('org-b', 'brand-b'))).rejects.toBeInstanceOf(
+      ConnectionTakenError,
+    );
+  });
 });
 
 describe('MemoryOAuthStateStore.peekBinding', () => {
