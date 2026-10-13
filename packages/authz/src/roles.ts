@@ -16,7 +16,8 @@ export type Capability =
   | 'member.change_role'
   | 'invitation.read'
   | 'connection.read'
-  | 'connection.manage';
+  | 'connection.manage'
+  | 'comment.moderate';
 
 const ALL: readonly Role[] = ROLES;
 const MANAGERS: readonly Role[] = ['owner', 'admin'];
@@ -34,6 +35,7 @@ const GRANTS: Readonly<Record<Capability, readonly Role[]>> = {
   'invitation.read': MANAGERS,
   'connection.read': MANAGERS,
   'connection.manage': MANAGERS,
+  'comment.moderate': ALL,
   'org.transfer_ownership': OWNERS,
   'org.delete': OWNERS,
 };

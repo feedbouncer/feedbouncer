@@ -4,20 +4,24 @@ import { randomUUID } from 'node:crypto';
 import type { Role } from '@feedbouncer/authz';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { ErrorClass, Secret } from '@feedbouncer/service-runtime';
-import type {
-  ConnectionDirectory,
-  ConnectionRecord,
-  CredentialVault,
-  DeliveryLedger,
-  MembershipReader,
-  OAuthStateStore,
-  PendingAuthorization,
-  ReauthReason,
-  RefreshLock,
-  StateBinding,
-  SyncRecorder,
-  TokenRecord,
-  WebhookSecretSource,
+import { systemClock, type Clock } from './clock.js';
+import {
+  ConnectionTakenError,
+  type ConnectionDirectory,
+  type ConnectionRecord,
+  type CredentialVault,
+  type DeliveryLedger,
+  type MembershipReader,
+  type OAuthGrantStore,
+  type OAuthStateStore,
+  type PendingGrant,
+  type PendingAuthorization,
+  type ReauthReason,
+  type RefreshLock,
+  type StateBinding,
+  type SyncRecorder,
+  type TokenRecord,
+  type WebhookSecretSource,
 } from './ports.js';
 import { scopeKey } from './scope.js';
 import type { Platform } from './types.js';
@@ -62,7 +66,8 @@ export class MemoryConnectionDirectory implements ConnectionDirectory {
     displayName: string | null;
     grantedScopes: readonly string[];
   }) {
-    for (const { rec } of this.#rows.values())
+    for (const row of this.#rows.values()) {
+      const { rec } = row;
       if (
         rec.scope.brandId === i.brandId &&
         rec.platform === i.platform &&
@@ -70,8 +75,23 @@ export class MemoryConnectionDirectory implements ConnectionDirectory {
       ) {
         if (rec.scope.organizationId !== i.organizationId)
           throw new Error('brand belongs to another organization');
+        if (rec.status === 'revoked' && row.reason === 'user_disconnected') {
+          this.#rows.set(rec.scope.connectionId, {
+            rec: { ...rec, status: 'reconnect_required' },
+            reason: 'oauth_pending',
+          });
+        }
         return { scope: rec.scope, created: false };
       }
+    }
+    if (i.platform === 'facebook')
+      for (const { rec } of this.#rows.values())
+        if (
+          rec.platform === 'facebook' &&
+          rec.externalAccountId === i.externalAccountId &&
+          rec.status !== 'revoked'
+        )
+          throw new ConnectionTakenError();
     const scope = {
       organizationId: i.organizationId,
       brandId: i.brandId,
@@ -101,6 +121,44 @@ export class MemoryConnectionDirectory implements ConnectionDirectory {
     this.#rows.set(scope.connectionId, { rec: { ...row.rec, status: 'active' }, reason: null });
     return true;
   }
+  async findLiveByAccount(
+    platform: Platform,
+    externalAccountId: string,
+  ): Promise<ConnectionRecord | null> {
+    const live = [...this.#rows.values()].filter(
+      ({ rec }) =>
+        rec.platform === platform &&
+        rec.externalAccountId === externalAccountId &&
+        rec.status !== 'revoked',
+    );
+    return live.length === 1 ? live[0]!.rec : null;
+  }
+  async findLiveByAccounts(
+    platform: Platform,
+    externalAccountIds: readonly string[],
+  ): Promise<ReadonlyMap<string, ConnectionRecord>> {
+    const found = new Map<string, ConnectionRecord>();
+    for (const id of externalAccountIds) {
+      const rec = await this.findLiveByAccount(platform, id);
+      if (rec) found.set(id, rec);
+    }
+    return found;
+  }
+  async disconnect(scope: ConnectionScope, actorUserId: string): Promise<boolean> {
+    void actorUserId; // the Pg adapter audits the actor; memory keeps no audit trail
+    const row = this.#rows.get(scope.connectionId);
+    if (
+      !row ||
+      !sameScope(row.rec.scope, scope) ||
+      (row.rec.status === 'revoked' && row.reason === 'user_disconnected')
+    )
+      return false;
+    this.#rows.set(scope.connectionId, {
+      rec: { ...row.rec, status: 'revoked' },
+      reason: 'user_disconnected',
+    });
+    return true;
+  }
 }
 
 export class MemoryCredentialVault implements CredentialVault {
@@ -118,6 +176,9 @@ export class MemoryCredentialVault implements CredentialVault {
   }
   async writeAccessToken(scope: ConnectionScope, t: TokenRecord): Promise<void> {
     this.#write(scope, 'access', t);
+  }
+  async deleteTokens(scope: ConnectionScope): Promise<void> {
+    this.#tokens.delete(scopeKey(scope));
   }
   #write(scope: ConnectionScope, kind: 'access' | 'refresh', t: TokenRecord): void {
     if (this.#failNext.delete(kind)) throw new Error('simulated storage failure');
@@ -143,6 +204,7 @@ export class MemoryRefreshLock implements RefreshLock {
 
 export class MemoryOAuthStateStore implements OAuthStateStore {
   readonly #rows = new Map<string, PendingAuthorization>();
+  constructor(private readonly clock: Clock = systemClock) {}
   size(): number {
     return this.#rows.size;
   }
@@ -162,6 +224,43 @@ export class MemoryOAuthStateStore implements OAuthStateStore {
       return null;
     this.#rows.delete(k);
     return p;
+  }
+  async peekBinding(stateHash: Buffer): Promise<StateBinding | null> {
+    const p = this.#rows.get(stateHash.toString('hex'));
+    if (!p || p.expiresAt.getTime() <= this.clock.now()) return null;
+    return {
+      organizationId: p.organizationId,
+      brandId: p.brandId,
+      platform: p.platform,
+      initiatedByUserId: p.initiatedByUserId,
+    };
+  }
+}
+
+export class MemoryOAuthGrantStore implements OAuthGrantStore {
+  readonly #rows = new Map<string, PendingGrant>();
+  constructor(private readonly clock: Clock = systemClock) {}
+
+  async save(g: PendingGrant): Promise<void> {
+    this.#rows.set(g.id, g);
+  }
+  async load(id: string, b: StateBinding): Promise<PendingGrant | null> {
+    const g = this.#rows.get(id);
+    if (
+      !g ||
+      g.organizationId !== b.organizationId ||
+      g.brandId !== b.brandId ||
+      g.platform !== b.platform ||
+      g.initiatedByUserId !== b.initiatedByUserId ||
+      g.expiresAt.getTime() <= this.clock.now()
+    )
+      return null;
+    return g;
+  }
+  async consume(id: string, b: StateBinding): Promise<PendingGrant | null> {
+    const g = await this.load(id, b);
+    if (g) this.#rows.delete(id);
+    return g;
   }
 }
 

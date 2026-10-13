@@ -1,12 +1,19 @@
 import Link from 'next/link';
 import { ApiForm } from '../../components/api-form';
+import { messageFor } from '../../lib/messages';
 import { requireMe } from '../../lib/server-api';
 
-export default async function OrgsPage() {
+export default async function OrgsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const me = await requireMe('/orgs');
+  const { error } = await searchParams;
   return (
     <main>
       <h1>My organizations</h1>
+      {error === 'oauth_rejected' ? <p role="alert">{messageFor('oauth_rejected')}</p> : null}
       {!me.user.emailVerified ? (
         <section>
           <p>Verify your email to create or join an organization.</p>

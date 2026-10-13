@@ -28,23 +28,25 @@ pnpm test
 
 ## Repository layout
 
-| Path                       | What it is                                                              |
-| -------------------------- | ----------------------------------------------------------------------- |
-| `apps/api`                 | HTTP API (NestJS on Fastify): accounts, organizations, brands, health   |
-| `apps/web`                 | Web app (Next.js)                                                       |
-| `apps/worker`              | Background worker that runs queued jobs                                 |
-| `apps/placeholder-app`     | Minimal app used as the template for new apps and Docker images         |
-| `packages/authz`           | Roles and authorization checks                                          |
-| `packages/connectors`      | Contract and shared services for platform connectors                    |
-| `packages/db`              | Postgres schema, migrations and the migration CLI                       |
-| `packages/jobs`            | Job queue: per-platform queues, retries, dead-letter queue, idempotency |
-| `packages/mailer`          | Transactional email                                                     |
-| `packages/observability`   | Structured logs, traces, metrics and connector health                   |
-| `packages/placeholder`     | Minimal package used as the template for new packages                   |
-| `packages/secrets`         | Envelope encryption for stored credentials and key management           |
-| `packages/service-runtime` | Shared service startup, configuration, health and error handling        |
-| `docs/`                    | Operations and developer guides                                         |
-| `scripts/`                 | CI guard tests and dev-stack smoke scripts                              |
+| Path                          | What it is                                                              |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| `apps/api`                    | HTTP API (NestJS on Fastify): accounts, organizations, brands, health   |
+| `apps/web`                    | Web app (Next.js)                                                       |
+| `apps/worker`                 | Background worker that runs queued jobs                                 |
+| `apps/placeholder-app`        | Minimal app used as the template for new apps and Docker images         |
+| `packages/authz`              | Roles and authorization checks                                          |
+| `packages/comments`           | Comments: storage, moderation, lifecycle, webhooks, reconnect emails    |
+| `packages/connector-facebook` | Facebook Pages connector: OAuth, comments, moderation actions           |
+| `packages/connectors`         | Contract and shared services for platform connectors                    |
+| `packages/db`                 | Postgres schema, migrations and the migration CLI                       |
+| `packages/jobs`               | Job queue: per-platform queues, retries, dead-letter queue, idempotency |
+| `packages/mailer`             | Transactional email                                                     |
+| `packages/observability`      | Structured logs, traces, metrics and connector health                   |
+| `packages/placeholder`        | Minimal package used as the template for new packages                   |
+| `packages/secrets`            | Envelope encryption for stored credentials and key management           |
+| `packages/service-runtime`    | Shared service startup, configuration, health and error handling        |
+| `docs/`                       | Operations and developer guides                                         |
+| `scripts/`                    | CI guard tests and dev-stack smoke scripts                              |
 
 ## Local stack with Docker Compose
 
@@ -85,6 +87,10 @@ Sign-up, email confirmation, password reset and invitations send real emails. In
 - **`AUTH_SECRET`** signs session cookies and is required (at least 32 characters). `.env.example` has a development-only value; for anything else generate one with `openssl rand -base64 48`.
 - **`PUBLIC_WEB_URL`** is set by compose to `http://localhost:<WEB_HOST_PORT>`. It must be the exact origin users type: cookies, the origin check on state-changing requests and the links in emails all depend on it. Browse the app as `localhost`, not `127.0.0.1`.
 - API settings such as `TRUST_PROXY_HOPS` (reverse proxies trusted for the client IP) and `MAIL_FROM`, plus the roles, routes and rate limits, are described in [apps/api/README.md](apps/api/README.md).
+
+### Facebook Pages (optional)
+
+The connector is off until `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` and `FACEBOOK_WEBHOOK_VERIFY_TOKEN` are set in `.env` (commented examples are in `.env.example`). Meta needs a public HTTPS URL for the webhook and the OAuth redirect, so a purely local stack cannot complete a real connection without a tunnel. The worker also needs `SMTP_URL` and `PUBLIC_WEB_URL` (compose sets both). Meta app setup, permissions, App Review and known limitations: [docs/connectors/facebook.md](docs/connectors/facebook.md).
 
 ### Stop, restart, reset
 

@@ -13,6 +13,7 @@ import {
   MemoryCredentialVault,
   MemoryDeliveryLedger,
   MemoryMembershipReader,
+  MemoryOAuthGrantStore,
   MemoryOAuthStateStore,
   MemoryRefreshLock,
   StaticWebhookSecrets,
@@ -23,6 +24,7 @@ import type {
   CredentialVault,
   DeliveryLedger,
   MembershipReader,
+  OAuthGrantStore,
   OAuthStateStore,
   RefreshLock,
   SyncRecorder,
@@ -46,6 +48,8 @@ export interface StackPorts {
   vault: CredentialVault;
   lock: RefreshLock;
   states: OAuthStateStore;
+  /** Needed only by multi-account (`accountSelection: 'multiple'`) connectors. */
+  grants?: OAuthGrantStore;
   memberships: MembershipReader & {
     grant?(
       organizationId: string,
@@ -88,13 +92,19 @@ export function assembleStack(
     observer?: ConnectorCallObserver;
     webhookObserver?: WebhookObserver;
     sync?: SyncRecorder;
+    /** Replaces the global fetch under every SafeHttp the framework builds (fake platform doubles). */
+    fetch?: typeof fetch;
   } = {},
 ): Stack {
   const { log, lines } = capturingLogger();
   const clock = opts.clock ?? systemClock;
   const registry = new ConnectorRegistry();
   registry.register(connector);
-  const http = (c: Connector) => createSafeHttp({ allowedHosts: c.capabilities.apiHosts });
+  const http = (c: Connector) =>
+    createSafeHttp({
+      allowedHosts: c.capabilities.apiHosts,
+      ...(opts.fetch ? { fetch: opts.fetch } : {}),
+    });
   const tokens = new TokenManager({
     vault: ports.vault,
     directory: ports.directory,
@@ -114,6 +124,7 @@ export function assembleStack(
     runtime: new ConnectorRuntime({
       registry,
       directory: ports.directory,
+      vault: ports.vault,
       tokens,
       budget: ports.budget,
       clock,
@@ -128,6 +139,7 @@ export function assembleStack(
       memberships: ports.memberships,
       directory: ports.directory,
       vault: ports.vault,
+      ...(ports.grants ? { grants: ports.grants } : {}),
       clock,
       log,
       redirectUri: () => redirectUri,
@@ -148,8 +160,14 @@ export function assembleStack(
 
 export async function createMemoryStack(
   connector: Connector,
-  opts: { webhookSecret: string | null; redirectUri: string },
+  opts: {
+    webhookSecret: string | null;
+    redirectUri: string;
+    clock?: Clock;
+    fetch?: typeof fetch;
+  },
 ): Promise<Stack> {
+  const clock = opts.clock ?? systemClock;
   const actor = { userId: 'user-a', organizationId: 'org-a', brandId: 'brand-a' };
   const memberships = new MemoryMembershipReader();
   memberships.grant(actor.organizationId, actor.brandId, actor.userId, 'admin');
@@ -163,7 +181,8 @@ export async function createMemoryStack(
       directory: new MemoryConnectionDirectory(),
       vault,
       lock: new MemoryRefreshLock(),
-      states: new MemoryOAuthStateStore(),
+      states: new MemoryOAuthStateStore(clock),
+      grants: new MemoryOAuthGrantStore(clock),
       memberships,
       ledger: new MemoryDeliveryLedger(),
       budget: memoryBudget(),
@@ -172,6 +191,7 @@ export async function createMemoryStack(
       faults: { failNextAccessWrite: () => vault.failNextWrite('access') },
     },
     opts.redirectUri,
+    { clock, ...(opts.fetch ? { fetch: opts.fetch } : {}) },
   );
 }
 

@@ -210,6 +210,52 @@ describe('failure bookkeeping and DLQ', () => {
     const replayed = await ledger.replay(filter, 1_000);
     expect(replayed.map((r) => r.id).sort()).toEqual(ids.slice(0, 2).sort());
   });
+  it('replay filter narrows to one connection', async () => {
+    // Two connections of one organization: t's facebook connection (A) and its youtube one (B).
+    const insertOn = async (connectionId: string, platform: 'facebook' | 'youtube') => {
+      const r = await ledger.insert({
+        scope: { ...scopeOf(t), connectionId },
+        platform,
+        jobType: 'scripted',
+        idempotencyKey: key(),
+        payloadJson: '{"ref":"r"}',
+        ttlMs: 86_400_000,
+        traceContext: null,
+      });
+      if (r.status !== 'inserted') throw new Error(`expected insert, got ${r.status}`);
+      return r.id;
+    };
+    const connA = t.connectionId;
+    const jobOnA = await insertOn(connA, 'facebook');
+    const jobOnB = await insertOn(t.youtubeConnectionId, 'youtube');
+    for (const id of [jobOnA, jobOnB]) {
+      await claimed(id);
+      await ledger.deadLetter(id, 'w1', {
+        reason: 'needs_reconnection',
+        resolution: null,
+        errorKind: 'needs_reconnection',
+        errorCode: 'reauthorization_required',
+        countsAsFailure: false,
+        retentionMs: 86_400_000,
+      });
+    }
+    const requeued = await ledger.replay(
+      {
+        organizationId: t.organizationId,
+        connectionId: connA,
+        reason: 'needs_reconnection',
+        limit: 10,
+      },
+      86_400_000,
+    );
+    expect(requeued.map((r) => r.id)).toEqual([jobOnA]);
+    expect(await ledger.get(jobOnB)).toMatchObject({ state: 'dead_lettered' });
+  });
+  it('rejects an invalid connectionId filter without echoing it', async () => {
+    await expect(
+      ledger.listDeadLetters({ connectionId: "x' OR 1=1 --", limit: 10 }),
+    ).rejects.toThrow('invalid filter: connectionId');
+  });
   it('rejects invalid filter values without echoing them', async () => {
     await expect(
       ledger.listDeadLetters({ organizationId: "x' OR 1=1 --", limit: 10 }),

@@ -1,17 +1,35 @@
 import { hostname } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { Worker } from 'bullmq';
+import {
+  EmailReconnectNotifier,
+  NotifyingConnectionDirectory,
+  PgCommentStore,
+} from '@feedbouncer/comments';
+import {
+  PgSyncRecorder,
+  buildPgConnectorStack,
+  systemClock,
+  type ConnectionDirectory,
+} from '@feedbouncer/connectors';
 import { createPool, runJobOnce } from '@feedbouncer/db';
 import {
   JobMetrics,
   JobProducer,
+  JobRegistry,
   JobWorkers,
   PgJobLedger,
   QueueSet,
   createProducerConnection,
   createWorkerConnection,
 } from '@feedbouncer/jobs';
-import { startMetricsServer } from '@feedbouncer/observability';
+import { createSmtpMailer } from '@feedbouncer/mailer';
+import {
+  promConnectorObserver,
+  promIngestObserver,
+  promWebhookObserver,
+  startMetricsServer,
+} from '@feedbouncer/observability';
 import { reportKeyCoverage } from '@feedbouncer/secrets';
 import {
   createLogger,
@@ -44,8 +62,7 @@ for (const w of configWarnings) log.warn(w, { appEnv: env.appEnv });
 logConfigurationLoaded(log, env);
 try {
   const workerId = hostname();
-  const connectors = buildConnectorRegistry();
-  const jobs = buildJobRegistry();
+  const connectors = buildConnectorRegistry(env);
   // One Postgres client per concurrent job on a registered platform, capped.
   const jobConsumerConnections = Math.min(
     32,
@@ -55,6 +72,12 @@ try {
     applicationName: 'feedbouncer-worker',
     max: env.concurrency + 2 + jobConsumerConnections,
     onIdleError: (err) => log.warn('postgres idle client error', errorFields(err)),
+  });
+  // PgRefreshLock holds a session per refresh, so it gets a small pool of its own.
+  const lockPool = createPool(env.databaseUrl, {
+    applicationName: 'feedbouncer-worker-locks',
+    max: 4,
+    onIdleError: (err) => log.warn('postgres lock pool idle client error', errorFields(err)),
   });
   const ledger = new PgJobLedger(pool);
   // Tracing registers its global provider here, before any span-producing code
@@ -67,6 +90,43 @@ try {
     ['redis producer', producerRedis],
   ] as const) {
     client.on('error', (err) => log.warn(`${name} connection error`, errorFields(err)));
+  }
+
+  const { facebook, mail } = env;
+  // Mail is only configured (and only needed) alongside the Facebook connector.
+  const mailer = mail ? createSmtpMailer(mail.smtpUrl, mail.mailFrom) : null;
+  let jobs = new JobRegistry();
+  if (facebook && mail && mailer) {
+    const stack = buildPgConnectorStack({
+      pool,
+      lockPool,
+      redis: producerRedis,
+      redisPrefix: env.jobs.prefix,
+      keys: env.encryption,
+      registry: connectors,
+      appSecrets: new Map([['facebook', facebook.appSecret]]),
+      redirectUri: () => new URL('/api/v1/oauth/facebook/callback', mail.publicWebUrl).href,
+      log,
+      workerId,
+      observer: promConnectorObserver(telemetry.metrics),
+      webhookObserver: promWebhookObserver(telemetry.metrics),
+      sync: new PgSyncRecorder(pool),
+      wrapDirectory: (dir: ConnectionDirectory) =>
+        new NotifyingConnectionDirectory(
+          dir,
+          new EmailReconnectNotifier({ pool, mailer, publicWebUrl: mail.publicWebUrl, log }),
+          log,
+        ),
+    });
+    jobs = buildJobRegistry({
+      runtime: stack.runtime,
+      directory: stack.directory,
+      store: new PgCommentStore(pool),
+      pool,
+      clock: systemClock,
+      log,
+      ingestObserver: promIngestObserver(telemetry.metrics),
+    });
   }
 
   const worker = new Worker(
@@ -133,7 +193,8 @@ try {
     await Promise.all([worker.close(), jobWorkers.close()]);
     await queues.close();
     await health.close();
-    await Promise.allSettled([pool.end(), redis.quit(), producerRedis.quit()]);
+    mailer?.close();
+    await Promise.allSettled([pool.end(), lockPool.end(), redis.quit(), producerRedis.quit()]);
     await metricsServer?.close();
     await telemetry.tracing.shutdown();
   }, log);

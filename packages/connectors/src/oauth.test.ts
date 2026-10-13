@@ -140,7 +140,7 @@ describe('OAuthFlow.start', () => {
       state: stateOf(first.authorizationUrl),
       code: 'c',
     });
-    if (!done.ok) throw new Error('setup');
+    if (!done.ok || done.kind !== 'connected') throw new Error('setup');
     await expect(
       flow.start({ ...alice, brandId: 'b2' }, 'youtube', {
         reconnectConnectionId: done.connectionId,
@@ -156,7 +156,7 @@ describe('OAuthFlow.complete', () => {
       state: stateOf(authorizationUrl),
       code: 'auth-code-SENTINEL',
     });
-    expect(res).toMatchObject({ ok: true, created: true });
+    expect(res).toMatchObject({ ok: true, kind: 'connected', created: true });
     const [{ code, codeVerifier }] = exchange.mock.calls[0] as [
       { code: Secret; codeVerifier: Secret },
     ];
@@ -164,7 +164,7 @@ describe('OAuthFlow.complete', () => {
     expect(createHash('sha256').update(codeVerifier.reveal()).digest('base64url')).toBe(
       authorizationUrl.searchParams.get('code_challenge'),
     );
-    if (!res.ok) return;
+    if (!res.ok || res.kind !== 'connected') return;
     const scope = { organizationId: 'o1', brandId: 'b1', connectionId: res.connectionId };
     expect((await directory.load(scope))?.status).toBe('active');
     expect((await vault.readTokens(scope)).refresh?.value.reveal()).toBe('refresh-SENTINEL');
@@ -250,7 +250,7 @@ describe('OAuthFlow.complete', () => {
       state: stateOf(first.authorizationUrl),
       code: 'c',
     });
-    if (!done.ok) throw new Error('setup');
+    if (!done.ok || done.kind !== 'connected') throw new Error('setup');
     const again = await flow.start(alice, 'youtube', { reconnectConnectionId: done.connectionId });
     exchange.mockResolvedValueOnce({
       tokens: {
@@ -274,7 +274,7 @@ describe('OAuthFlow.complete', () => {
         state: stateOf(first.authorizationUrl),
         code: 'c',
       });
-      if (!done.ok) throw new Error('setup');
+      if (!done.ok || done.kind !== 'connected') throw new Error('setup');
       const scope = { organizationId: 'o1', brandId: 'b1', connectionId: done.connectionId };
       return { scope, rec: (await directory.load(scope))! };
     };
@@ -396,7 +396,7 @@ describe('OAuthFlow.complete', () => {
       code: 'auth-code',
     });
     expect(res).toMatchObject({ ok: true });
-    if (!res.ok) return;
+    if (!res.ok || res.kind !== 'connected') return;
     const t = await vault.readTokens({
       organizationId: 'o1',
       brandId: 'b1',

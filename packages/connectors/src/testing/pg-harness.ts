@@ -20,6 +20,7 @@ import {
   PgCredentialVault,
   PgDeliveryLedger,
   PgMembershipReader,
+  PgOAuthGrantStore,
   PgOAuthStateStore,
   PgRefreshLock,
   PgWebhookSecrets,
@@ -65,6 +66,9 @@ class FaultInjectingVault implements CredentialVault {
       throw new Error('simulated storage failure');
     }
     return this.inner.writeAccessToken(scope, t);
+  }
+  deleteTokens(scope: ConnectionScope) {
+    return this.inner.deleteTokens(scope);
   }
 }
 
@@ -139,6 +143,8 @@ export async function createPgHarness(flavor: 'push' | 'poll'): Promise<Conforma
     accessTokenTtlMs: 3_600_000,
     webhookSecret,
     redirectUri,
+    // Facebook accounts are unique across tenants, and harnesses share one database.
+    accountIdPrefix: label,
   });
   const connector = createReferenceConnector(platform, { flavor, redirectUri });
 
@@ -156,6 +162,7 @@ export async function createPgHarness(flavor: 'push' | 'poll'): Promise<Conforma
       vault,
       lock: new PgRefreshLock(lockPool),
       states: new PgOAuthStateStore(pool, keys),
+      grants: new PgOAuthGrantStore(pool, keys),
       memberships: new GrantingMembershipReader(pool),
       ledger: new PgDeliveryLedger(pool, `conformance-${label}`),
       budget: redisBudget(redis, budgetPrefix),

@@ -39,6 +39,21 @@ describe('validateConnector', () => {
 
   it.each([
     ['unknown platform', { ...base(), platform: 'myspace' as never }, /platform/],
+    ['required scope not requested', withCaps({ requiredScopes: ['other'] }), /requiredScopes/],
+    [
+      'multiple selection without listAccounts',
+      withCaps({ accountSelection: 'multiple' }),
+      /accountSelection/,
+    ],
+    ['responses without respond()', withCaps({ responses: ['public_reply'] }), /responses/],
+    [
+      'unknown response kind',
+      {
+        ...withCaps({ responses: ['dm' as never] }),
+        respond: async () => ({ status: 'not_found' as const }),
+      },
+      /responses/,
+    ],
     ['unknown action', withCaps({ actions: ['hide', 'nuke' as never] }), /actions/],
     ['duplicate action', withCaps({ actions: ['hide', 'hide'] }), /actions/],
     [
@@ -98,5 +113,19 @@ describe('ConnectorRegistry', () => {
     } catch (e) {
       expect((e as ConnectorError).kind).toBe('unsupported');
     }
+  });
+
+  it('accepts the full extended shape', () => {
+    const c: Connector = {
+      ...withCaps({
+        requiredScopes: ['comments'],
+        accountSelection: 'multiple',
+        responses: ['public_reply', 'private_reply'],
+      }),
+      listAccounts: async () => [],
+      respond: async () => ({ status: 'not_found' }),
+      lifecycle: { onConnected: async () => {}, onDisconnected: async () => {} },
+    };
+    expect(() => validateConnector(c)).not.toThrow();
   });
 });

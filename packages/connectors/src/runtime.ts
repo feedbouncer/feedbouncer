@@ -29,6 +29,7 @@ import {
   recordSync,
   type ConnectionDirectory,
   type ConnectionRecord,
+  type CredentialVault,
   type SyncRecorder,
 } from './ports.js';
 import type { ConnectorRegistry } from './registry.js';
@@ -41,6 +42,7 @@ import {
   externalIdSchema,
   parseComment,
   parsePage,
+  respondRequestSchema,
   sourceSchema,
 } from './schemas.js';
 import type { TokenManager } from './tokens.js';
@@ -56,9 +58,18 @@ import {
   type Page,
   type Platform,
   type Priority,
+  type RespondRequest,
+  type RespondResult,
+  type ResponseKind,
 } from './types.js';
 
-export type ConnectorOperation = 'list_sources' | 'list_comments' | 'get_comment' | 'act';
+export type ConnectorOperation =
+  | 'list_sources'
+  | 'list_comments'
+  | 'get_comment'
+  | 'act'
+  | 'respond'
+  | 'lifecycle';
 export interface ConnectorCallEvent {
   readonly platform: Platform;
   readonly operation: ConnectorOperation;
@@ -73,6 +84,8 @@ export interface ConnectorCallObserver {
 export interface RuntimeDeps {
   registry: ConnectorRegistry;
   directory: ConnectionDirectory;
+  /** Needed only by `teardown`, which reads tokens of revoked connections directly. */
+  vault?: CredentialVault;
   tokens: TokenManager;
   budget: RateBudget;
   clock: Clock;
@@ -93,8 +106,81 @@ export class ConnectorRuntime {
     if (!rec) throw new ConnectorError('not_found', 'connection_not_found');
     return new ConnectionClient(this.d, this.d.registry.require(rec.platform), scope);
   }
+
+  /**
+   * Platform-side cleanup after a local disconnect, then removal of the stored
+   * credentials. Runs only on revoked connections; reads the access token
+   * straight from the vault (no refresh, no status check, no budget).
+   * Credentials are kept only when the platform call fails retryably and
+   * `final` is not set, so the caller's retry can finish the cleanup. Pass
+   * `final` on the last attempt: the credentials go either way, including
+   * when the vault read itself fails.
+   */
+  async teardown(
+    scope: ConnectionScope,
+    opts: { final?: boolean } = {},
+  ): Promise<'done' | 'no_token' | 'no_lifecycle'> {
+    const vault = this.d.vault;
+    if (!vault) throw new ConnectorError('permanent', 'teardown_unavailable');
+    const fields = { connectionId: scope.connectionId };
+    const loadRevoked = async () => {
+      const current = await viaPort(this.d.log, fields, () => this.d.directory.load(scope));
+      if (!current) throw new ConnectorError('not_found', 'connection_not_found');
+      if (current.status !== 'revoked')
+        throw new ConnectorError('permanent', 'connection_not_revoked');
+      return current;
+    };
+    const rec = await loadRevoked();
+    const connector = this.d.registry.require(rec.platform);
+    // A reconnect can land at any point of the teardown. Re-checking right before
+    // each destructive step keeps a reconnected Page's webhooks and new token.
+    const forget = async () => {
+      await loadRevoked();
+      await viaPort(this.d.log, fields, () => vault.deleteTokens(scope));
+    };
+    const lifecycle = connector.lifecycle;
+    if (!lifecycle) {
+      await forget();
+      return 'no_lifecycle';
+    }
+    let access;
+    try {
+      ({ access } = await viaPort(this.d.log, fields, () => vault.readTokens(scope)));
+    } catch (err) {
+      if (opts.final) await forget();
+      throw err;
+    }
+    if (!access) {
+      await forget();
+      return 'no_token';
+    }
+    await loadRevoked();
+    try {
+      await lifecycle.onDisconnected({
+        accessToken: access.value,
+        externalAccountId: rec.externalAccountId,
+        http: this.d.http(connector),
+        signal: AbortSignal.timeout(this.d.callTimeoutMs ?? 15_000),
+        reportQuota: async () => {},
+      });
+    } catch (err) {
+      const ce = toConnectorError(err);
+      this.d.log.warn('connector teardown failed', {
+        platform: rec.platform,
+        connectionId: scope.connectionId,
+        kind: ce.kind,
+        errorCode: ce.code,
+        ...(ce === err ? {} : { errorName: errorName(err) }),
+      });
+      if (opts.final || (ce.kind !== 'transient' && ce.kind !== 'rate_limited')) await forget();
+      throw ce;
+    }
+    await forget();
+    return 'done';
+  }
 }
 
+const SNAKE_CODE = /^[a-z][a-z0-9_]{0,62}$/;
 const invalidRequest = () => new ConnectorError('permanent', 'invalid_request');
 const errorName = (err: unknown) => (err instanceof Error ? err.name : 'NonError');
 
@@ -128,6 +214,13 @@ export class ConnectionClient {
 
   supports(action: ModerationAction): boolean {
     return this.capabilities.actions.includes(action);
+  }
+
+  supportsResponse(kind: ResponseKind): boolean {
+    return (
+      (this.capabilities.responses ?? []).includes(kind) &&
+      typeof this.connector.respond === 'function'
+    );
   }
 
   async listSources(cursor: string | null): Promise<Page<NormalizedSource>> {
@@ -245,6 +338,83 @@ export class ConnectionClient {
     }
   }
 
+  /** Never throws for platform outcomes; they are encoded in the result. Runs at urgent priority. */
+  respond(req: RespondRequest): Promise<RespondResult> {
+    return withSpan(
+      'moderation.respond',
+      { attributes: { 'feedbouncer.platform': this.platform, 'feedbouncer.action': req.kind } },
+      async (span) => {
+        const result = await this.#respondInner(req);
+        setSpanAttributes(span, {
+          'feedbouncer.action.status': result.status,
+          'feedbouncer.error.code':
+            result.status === 'failed'
+              ? result.error.code
+              : result.status === 'not_eligible'
+                ? result.code
+                : null,
+        });
+        // As in act(): failures are recorded here because #respondInner turns throws into results.
+        if (
+          result.status === 'failed' &&
+          result.error.code !== 'budget_exhausted' &&
+          result.error.code !== 'invalid_respond_request'
+        ) {
+          const e = result.error;
+          const ids = this.#ids();
+          recordSync(this.d.sync, this.d.log, ids, (s) =>
+            s.failure(ids.connectionId, {
+              code: e.code,
+              errorClass: errorClassFor(e.kind, e.reauthorize),
+            }),
+          );
+        }
+        return result;
+      },
+    );
+  }
+
+  async #respondInner(raw: RespondRequest): Promise<RespondResult> {
+    const parsed = respondRequestSchema.safeParse(raw);
+    if (!parsed.success)
+      return {
+        status: 'failed',
+        request: raw,
+        error: new ConnectorError('permanent', 'invalid_respond_request').info(),
+      };
+    const req = parsed.data;
+    if (!this.supportsResponse(req.kind)) return { status: 'unsupported', request: req };
+    const respond = this.connector.respond!.bind(this.connector);
+    try {
+      const out = await this.#call('urgent', 'respond', (ctx) => respond(ctx, req));
+      if (out?.status === 'not_found') return { status: 'not_found', request: req };
+      if (out?.status === 'not_eligible') {
+        if (typeof out.code !== 'string' || !SNAKE_CODE.test(out.code))
+          throw new ConnectorError('permanent', 'invalid_connector_output');
+        return { status: 'not_eligible', request: req, code: out.code };
+      }
+      if (out?.status !== 'sent') throw new ConnectorError('permanent', 'invalid_connector_output');
+      const ref =
+        typeof out.platformRef === 'string' && externalIdSchema.safeParse(out.platformRef).success
+          ? out.platformRef
+          : null;
+      return { status: 'sent', request: req, platformRef: ref };
+    } catch (err) {
+      const ce = toConnectorError(err);
+      if (ce.kind === 'not_found' && ce.code !== 'connection_not_found')
+        return { status: 'not_found', request: req };
+      if (ce.kind === 'unsupported') return { status: 'unsupported', request: req };
+      return { status: 'failed', request: req, error: ce.info() };
+    }
+  }
+
+  /** Calls `lifecycle.onConnected`; a no-op without a lifecycle. Errors propagate. */
+  async setup(): Promise<void> {
+    const lc = this.connector.lifecycle;
+    if (!lc) return;
+    await this.#call('urgent', 'lifecycle', (ctx) => lc.onConnected(ctx));
+  }
+
   /** Foreign errors are replaced, never wrapped; only the error name is logged. */
   #replace(err: unknown): ConnectorError {
     const ce = toConnectorError(err);
@@ -286,13 +456,13 @@ export class ConnectionClient {
         try {
           const out = await this.#callInner(priority, op);
           this.#observe(operation, 'ok', started);
-          if (operation !== 'act')
+          if (operation !== 'act' && operation !== 'respond')
             recordSync(this.d.sync, this.d.log, ids, (s) => s.success(ids.connectionId));
           return out;
         } catch (err) {
           const ce = err instanceof ConnectorError ? err : null;
           this.#observe(operation, ce?.kind ?? 'permanent', started);
-          if (ce && operation !== 'act') {
+          if (ce && operation !== 'act' && operation !== 'respond') {
             if (ce.kind === 'not_found' && ce.code !== 'connection_not_found') {
               // The platform answered: a missing comment or source is not a sync failure.
               recordSync(this.d.sync, this.d.log, ids, (s) => s.success(ids.connectionId));

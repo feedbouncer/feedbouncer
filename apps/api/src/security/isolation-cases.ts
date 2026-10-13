@@ -6,6 +6,10 @@ export interface IsolationFixture {
   bInvitationId: string;
   /** The emailed token of B's pending invitation, which is for another address. */
   bInvitationToken: string;
+  /** B's Facebook connection, a comment on it, and a pending OAuth grant of B's owner. */
+  bConnectionId: string;
+  bCommentId: string;
+  bGrantId: string;
 }
 
 export interface IsolationCase {
@@ -69,6 +73,51 @@ export const CASES: IsolationCase[] = [
     route: 'GET /api/v1/orgs/:orgId/brands/:brandId/connections/health',
     name: "connection health of another tenant's brand",
     url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/connections/health`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/connections/facebook/authorize',
+    name: 'authorize B brand under A path',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/connections/facebook/authorize`,
+    body: () => ({}),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/connections/facebook/grants/:grantId',
+    name: "B's grant under A's brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections/facebook/grants/${f.bGrantId}`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/connections/facebook/grants/:grantId/connect',
+    name: "connect with B's grant",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections/facebook/grants/${f.bGrantId}/connect`,
+    body: () => ({ pageIds: ['1'] }),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/connections',
+    name: 'list B connections',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/brands/${f.B.brandId}/connections`,
+  },
+  {
+    route: 'DELETE /api/v1/orgs/:orgId/brands/:brandId/connections/:connectionId',
+    name: 'disconnect B connection under A brand',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections/${f.bConnectionId}`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/comments',
+    name: 'list B comments',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/brands/${f.B.brandId}/comments`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/comments/:commentId/actions',
+    name: "B comment's actions under A brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/comments/${f.bCommentId}/actions`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/comments/:commentId/actions',
+    name: 'hide B comment under A brand',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/comments/${f.bCommentId}/actions`,
+    body: () => ({ kind: 'hide', requestKey: 'iso-1' }),
   },
   {
     route: 'GET /api/v1/orgs/:orgId/members',
@@ -147,7 +196,16 @@ export const ACCOUNT_ROUTES = [
   'POST /api/v1/orgs',
   'POST /api/v1/invitations/lookup',
   'POST /api/v1/invitations/accept',
+  /** The OAuth redirect lands here; the organization comes from the user's own pending state. */
+  'GET /api/v1/oauth/facebook/callback',
 ];
+
+/**
+ * /api/v1 routes with no session that authenticate by platform signature or
+ * verify token instead. Each declares `config.publicWebhook`, which also exempts
+ * it from the Origin check; the route inventory test pins both lists.
+ */
+export const PUBLIC_ROUTES = ['GET /api/v1/webhooks/facebook', 'POST /api/v1/webhooks/facebook'];
 
 /** The Better Auth endpoints the /api/auth proxy forwards; everything else is a 404. */
 export const PROXY_ROUTES = [

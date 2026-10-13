@@ -73,3 +73,20 @@ export function renderInvitation(p: {
     html: page(`Join ${org}`, [intro], { label: 'Accept invitation', url: p.url }),
   };
 }
+
+export function renderReconnectRequired(p: {
+  brandName: string;
+  accountName: string | null;
+  platformLabel: string;
+  settingsUrl: string;
+}): Body {
+  const brand = headerSafe(p.brandName);
+  const account = p.accountName ? headerSafe(p.accountName) : '';
+  const which = account ? `${p.platformLabel} "${account}"` : `a ${p.platformLabel}`;
+  const intro = `FeedBouncer lost access to ${which} connected to ${brand}. Comments on it cannot be moderated until it is reconnected.`;
+  return {
+    subject: `Action needed: reconnect a ${headerSafe(p.platformLabel)} in FeedBouncer`,
+    text: `${intro}\n\n${p.settingsUrl}\n`,
+    html: page('Reconnect required', [intro], { label: 'Open connections', url: p.settingsUrl }),
+  };
+}

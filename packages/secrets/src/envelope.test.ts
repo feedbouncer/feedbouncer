@@ -32,6 +32,17 @@ const ctx: EnvelopeContext = {
 };
 
 describe('envelope v1', () => {
+  it('seals and opens oauth_grant_token, bound to its record id', async () => {
+    const gctx = {
+      organizationId: 'org',
+      connectionId: 'grant-1',
+      kind: 'oauth_grant_token' as const,
+    };
+    const { blob } = await seal(ringK1, new Secret('EAAG-user-token'), gctx);
+    expect((await open(ringK1, blob, gctx)).reveal()).toBe('EAAG-user-token');
+    await expect(open(ringK1, blob, { ...gctx, connectionId: 'grant-2' })).rejects.toThrow();
+  });
+
   it('round-trips and records the key id', async () => {
     const { keyId, blob } = await seal(ringK1, new Secret(TOKEN), ctx);
     expect(keyId).toBe('k1');

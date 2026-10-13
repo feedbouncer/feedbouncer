@@ -17,8 +17,10 @@ credentials cannot be recovered.**
 
 Settings that accept `<NAME>_FILE`:
 
-- API: `DATABASE_URL`, `REDIS_URL`, `AUTH_SECRET`, `SMTP_URL`, `FB_ENCRYPTION_KEYS`.
-- Worker: `DATABASE_URL`, `REDIS_URL`, `FB_ENCRYPTION_KEYS`.
+- API: `DATABASE_URL`, `REDIS_URL`, `AUTH_SECRET`, `SMTP_URL`, `FB_ENCRYPTION_KEYS`,
+  `FACEBOOK_APP_SECRET`, `FACEBOOK_WEBHOOK_VERIFY_TOKEN`.
+- Worker: `DATABASE_URL`, `REDIS_URL`, `SMTP_URL`, `FB_ENCRYPTION_KEYS`,
+  `FACEBOOK_APP_SECRET`, `FACEBOOK_WEBHOOK_VERIFY_TOKEN`.
 - `pnpm secrets` commands: `DATABASE_URL`, `FB_ENCRYPTION_KEYS`.
 
 `FB_ENCRYPTION_ACTIVE_KEY_ID` is a key id, not a secret, so it has no `_FILE`
@@ -230,6 +232,22 @@ These rows (`oauth_state`) are not counted by `pnpm secrets status`, and
 `reencrypt` does not touch them, so a key reported as "safe to remove" can
 still have pending flows. Removing it costs those users one restart. Waiting
 10 minutes after the last use of a retired key avoids even that.
+
+## Pending account-selection grants
+
+Platforms where one authorization covers several accounts (Facebook Pages)
+keep the person's user token between the OAuth callback and the moment they
+pick accounts. That token is sealed as an `oauth_grant_token` envelope, bound
+to the grant row, with the same key ring. A grant lives at most 30 minutes, is
+single use, and expired rows are deleted the next time one is saved.
+
+Like pending OAuth flows, these rows are not counted by `pnpm secrets status`
+and `reencrypt` does not touch them. If you remove an encryption key while a
+grant sealed under it is pending, opening it fails closed and the user starts
+the connection again. Nothing else is affected. Waiting 30 minutes after the
+last use of a retired key avoids even that. The Facebook app secret and webhook
+verify token are not stored in the database; they come from the environment
+(or `_FILE`) and are rotated by changing them there and restarting.
 
 ## Tampered or corrupted credentials
 

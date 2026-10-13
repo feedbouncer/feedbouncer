@@ -135,6 +135,8 @@ so the database refuses cross-tenant links.
 | `connection`        | A connected platform account for a brand. `status` includes `reconnect_required` (with `status_reason`, e.g. `credential_tampered`).                                   | `organization_id`, `brand_id`          | `(brand_id, platform, external_account_id)` |
 | `connection_secret` | Envelope-encrypted platform credential (`access_token`, `refresh_token`, `webhook_secret`). Ciphertext only; see `docs/operations/secrets.md`.                         | org, brand, connection                 | `(connection_id, kind)`                     |
 | `oauth_state`       | Pending OAuth authorization: SHA-256 of the state, envelope-encrypted PKCE verifier, single-use, at most 1 h.                                                          | org, brand, user (optional connection) | `state_hash`                                |
+| `oauth_grant`       | Multi-account OAuth grant: user token envelope-encrypted (`oauth_grant_token`), single-use pick-a-page step, at most 1 h.                                              | org, brand, user (optional connection) | none (`id`)                                 |
+| `moderation_action` | A platform moderation action on a comment. Status: `pending`, then `applied`, `noop`, `not_eligible` or `failed`. One private reply per comment.                       | org, brand, connection                 | `(organization_id, request_key)`            |
 | `source`            | A post, ad, video or thread on a connection.                                                                                                                           | org, brand, connection                 | `(connection_id, external_id)`              |
 | `author`            | A commenter's platform identity, scoped to a connection (platform user IDs are not global).                                                                            | org, brand, connection                 | `(connection_id, external_id)`              |
 | `comment`           | A comment on a source. `body` is unbounded text. Optional parent in the same source.                                                                                   | org, brand, connection, source         | `(source_id, external_id)`                  |
@@ -145,6 +147,15 @@ so the database refuses cross-tenant links.
 | `connection_sync`   | Last sync outcome per connection (observability). No secrets or content.                                                                                               | org, brand, connection                 | `connection_id`                             |
 | `processed_job`     | Idempotency ledger for background jobs (system table, no tenant).                                                                                                      | none                                   | `(queue, job_id)`                           |
 
+Facebook Pages: at most one live (non-`revoked`) `facebook` connection may own a
+Page across all tenants (`connection_facebook_live_external_account_id_key`),
+because Meta allows one app subscription per Page. Revoked connections keep their
+history and do not count.
+
+`comment` also carries `is_own_account` (the author is the connected account),
+`permalink` (https URL, at most 2048 characters) and `platform_synced_at` (last
+time the platform copy was read).
+
 `connection.granted_scopes` holds the OAuth scopes the platform granted (at most
 100, no NULL elements).
 
@@ -152,8 +163,9 @@ so the database refuses cross-tenant links.
 
 - `credential_unknown_key`, `credential_tampered`, `credential_malformed`: set by
   `@feedbouncer/secrets` when a stored credential cannot be read.
+- `user_disconnected`: the user disconnected the connection (status `revoked`).
 - `oauth_pending`, `oauth_refresh_rejected`, `oauth_access_rejected`,
-  `oauth_not_refreshable`: set by `@feedbouncer/connectors`.
+  `oauth_not_refreshable`, `setup_not_queued`: set by `@feedbouncer/connectors`.
 
 `pnpm secrets recheck-connections` only reverses `credential_*`; `oauth_*` is
 reversed by re-authorizing the connection.

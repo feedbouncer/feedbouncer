@@ -12,6 +12,7 @@ export interface FbMetrics {
   readonly webhookDeliveries: Counter<'platform' | 'outcome'>;
   readonly webhookEvents: Counter<'platform'>;
   readonly webhookEventDelay: Histogram<'platform'>;
+  readonly commentIngestLag: Histogram<'platform' | 'outcome'>;
   readonly httpRequests: Counter<'method' | 'route' | 'status_class'>;
   readonly httpDuration: Histogram<'method' | 'route'>;
   readonly collectErrors: Counter<'collector'>;
@@ -74,6 +75,13 @@ export function createMetrics(service: 'api' | 'worker'): FbMetrics {
       name: 'feedbouncer_webhook_event_delay_seconds',
       help: 'Platform event time to receipt; negative skew is clamped to 0.',
       labelNames: ['platform'] as const,
+      buckets: WAIT,
+      registers: r,
+    }),
+    commentIngestLag: new Histogram({
+      name: 'feedbouncer_comment_ingest_lag_seconds',
+      help: 'Platform event time to comment ingested, by ingest outcome; negative skew is clamped to 0.',
+      labelNames: ['platform', 'outcome'] as const,
       buckets: WAIT,
       registers: r,
     }),

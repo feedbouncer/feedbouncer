@@ -15,9 +15,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@feedbouncer/comments": "workspace:*",
+    "@feedbouncer/connector-facebook": "workspace:*",
     "@feedbouncer/connectors": "workspace:*",
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/jobs": "workspace:*",
+    "@feedbouncer/mailer": "workspace:*",
     "@feedbouncer/observability": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",

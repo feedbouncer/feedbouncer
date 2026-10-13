@@ -1,3 +1,4 @@
+import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { EnvError } from '@feedbouncer/service-runtime';
 import { randomKeyEntry } from '@feedbouncer/secrets/testing';
@@ -131,6 +132,46 @@ describe('loadApiEnv', () => {
       const msg = messageOf(() => load({ ...base, SMTP_URL: 'http://u:hunter2@mail:25' }));
       expect(msg).toMatch(/SMTP_URL must use one of smtp:, smtps:/);
       expect(msg).not.toContain('hunter2');
+    });
+  });
+
+  describe('facebook and jobs', () => {
+    const facebook = {
+      FACEBOOK_APP_ID: '1234567890',
+      FACEBOOK_APP_SECRET: 'sentinel-fb-app-secret-0123456789',
+      FACEBOOK_WEBHOOK_VERIFY_TOKEN: 'sentinel-fb-verify-token-0123456789',
+    };
+    it('leaves facebook null when FACEBOOK_APP_ID is unset', () => {
+      expect(load(base).facebook).toBeNull();
+    });
+    it('parses a full facebook config and the job queue prefix', () => {
+      const env = load({ ...base, ...facebook, JOB_QUEUE_PREFIX: 'jobs' });
+      expect(env.facebook?.appId).toBe('1234567890');
+      expect(env.facebook?.appSecret.reveal()).toBe(facebook.FACEBOOK_APP_SECRET);
+      expect(env.jobs.prefix).toBe('jobs');
+    });
+    it('fails fast on a partial facebook config', () => {
+      expect(() => load({ ...base, FACEBOOK_APP_ID: '1234567890' })).toThrow(/FACEBOOK_APP_SECRET/);
+    });
+    it('honours FACEBOOK_APP_SECRET_FILE', () => {
+      const fs = { size: () => 29, read: () => 'file-secret-0123456789abcdef\n' };
+      const env = loadApiEnv(
+        {
+          ...base,
+          ...facebook,
+          FACEBOOK_APP_SECRET: undefined,
+          FACEBOOK_APP_SECRET_FILE: '/run/s',
+        },
+        { warn: () => {}, fs },
+      );
+      expect(env.facebook?.appSecret.reveal()).toBe('file-secret-0123456789abcdef');
+    });
+    it('never serializes the facebook secrets', () => {
+      const env = load({ ...base, ...facebook });
+      for (const out of [JSON.stringify(env), inspect(env, { depth: 10, showHidden: true })]) {
+        expect(out).not.toContain(facebook.FACEBOOK_APP_SECRET);
+        expect(out).not.toContain(facebook.FACEBOOK_WEBHOOK_VERIFY_TOKEN);
+      }
     });
   });
 

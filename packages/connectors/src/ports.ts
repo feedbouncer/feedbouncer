@@ -14,6 +14,7 @@ export const REAUTH_REASONS = [
   'oauth_refresh_rejected',
   'oauth_access_rejected',
   'oauth_not_refreshable',
+  'setup_not_queued',
 ] as const;
 export type ReauthReason = (typeof REAUTH_REASONS)[number];
 export interface ConnectionDirectory {
@@ -33,6 +34,32 @@ export interface ConnectionDirectory {
    * Resolves true only when the row ended up active.
    */
   activate(scope: ConnectionScope, actorUserId: string): Promise<boolean>;
+  /**
+   * Cross-tenant lookup (documented tenancy exception): the single non-revoked
+   * connection for an account, whichever workspace owns it. Permitted callers:
+   * webhook routing, after the signature verified; and OAuth account listing and
+   * connecting, to detect a Page that is already connected elsewhere. Callers
+   * must not expose the record to the requesting tenant.
+   */
+  findLiveByAccount(
+    platform: Platform,
+    externalAccountId: string,
+  ): Promise<ConnectionRecord | null>;
+  /** `findLiveByAccount` for many accounts at once; accounts without a live connection are absent. */
+  findLiveByAccounts(
+    platform: Platform,
+    externalAccountIds: readonly string[],
+  ): Promise<ReadonlyMap<string, ConnectionRecord>>;
+  /** Marks revoked/user_disconnected and audits; false if already user_disconnected or not in scope. */
+  disconnect(scope: ConnectionScope, actorUserId: string): Promise<boolean>;
+}
+/** Thrown by `upsertPending` when the account is already live in another workspace. */
+export class ConnectionTakenError extends Error {
+  override name = 'ConnectionTakenError';
+  readonly code = 'connected_elsewhere';
+  constructor() {
+    super('This account is already connected in another workspace.');
+  }
 }
 export interface TokenRecord {
   readonly value: Secret;
@@ -44,6 +71,8 @@ export interface CredentialVault {
   ): Promise<{ access: TokenRecord | null; refresh: TokenRecord | null }>;
   writeRefreshToken(scope: ConnectionScope, t: TokenRecord): Promise<void>;
   writeAccessToken(scope: ConnectionScope, t: TokenRecord): Promise<void>;
+  /** Removes every stored credential of the connection (teardown). Idempotent. */
+  deleteTokens(scope: ConnectionScope): Promise<void>;
 }
 export interface RefreshLock {
   run<T>(scope: ConnectionScope, fn: () => Promise<T>): Promise<T>;
@@ -70,6 +99,26 @@ export interface OAuthStateStore {
   save(stateHash: Buffer, p: PendingAuthorization): Promise<void>;
   /** Atomically deletes and returns the row iff hash AND binding match; otherwise null and nothing is deleted. */
   consume(stateHash: Buffer, binding: StateBinding): Promise<PendingAuthorization | null>;
+  /** Pre-auth read of who started this flow; never returns secrets; expired rows return null. */
+  peekBinding(stateHash: Buffer): Promise<StateBinding | null>;
+}
+export interface PendingGrant {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly brandId: string;
+  readonly platform: Platform;
+  readonly initiatedByUserId: string;
+  readonly reconnectConnectionId: string | null;
+  readonly userToken: Secret;
+  readonly grantedScopes: readonly string[];
+  readonly expiresAt: Date;
+}
+export interface OAuthGrantStore {
+  save(g: PendingGrant): Promise<void>;
+  /** Binding mismatch or expiry returns null without consuming. */
+  load(id: string, binding: StateBinding): Promise<PendingGrant | null>;
+  /** Atomic delete-returning; binding mismatch consumes nothing. */
+  consume(id: string, binding: StateBinding): Promise<PendingGrant | null>;
 }
 export interface MembershipReader {
   roleInBrand(organizationId: string, brandId: string, userId: string): Promise<Role | null>;

@@ -30,7 +30,14 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
       <ul>
         {brandList.map((b) => (
           <li key={b.id}>
-            <span>{b.name}</span>
+            <span>{b.name}</span>{' '}
+            <Link href={`/orgs/${orgId}/brands/${b.id}/comments`}>Comments</Link>
+            {canEdit ? (
+              <>
+                {' '}
+                <Link href={`/orgs/${orgId}/brands/${b.id}/connections`}>Connections</Link>
+              </>
+            ) : null}
             {canEdit ? (
               <>
                 <ApiForm

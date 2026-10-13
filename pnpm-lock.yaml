@@ -149,9 +149,21 @@ importers:
       '@feedbouncer/authz':
         specifier: workspace:*
         version: link:../../packages/authz
+      '@feedbouncer/comments':
+        specifier: workspace:*
+        version: link:../../packages/comments
+      '@feedbouncer/connector-facebook':
+        specifier: workspace:*
+        version: link:../../packages/connector-facebook
+      '@feedbouncer/connectors':
+        specifier: workspace:*
+        version: link:../../packages/connectors
       '@feedbouncer/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@feedbouncer/jobs':
+        specifier: workspace:*
+        version: link:../../packages/jobs
       '@feedbouncer/mailer':
         specifier: workspace:*
         version: link:../../packages/mailer
@@ -260,6 +272,12 @@ importers:
 
   apps/worker:
     dependencies:
+      '@feedbouncer/comments':
+        specifier: workspace:*
+        version: link:../../packages/comments
+      '@feedbouncer/connector-facebook':
+        specifier: workspace:*
+        version: link:../../packages/connector-facebook
       '@feedbouncer/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
@@ -269,6 +287,9 @@ importers:
       '@feedbouncer/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@feedbouncer/mailer':
+        specifier: workspace:*
+        version: link:../../packages/mailer
       '@feedbouncer/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -293,6 +314,59 @@ importers:
         version: 4.23.15
 
   packages/authz: {}
+
+  packages/comments:
+    dependencies:
+      '@feedbouncer/connectors':
+        specifier: workspace:*
+        version: link:../connectors
+      '@feedbouncer/db':
+        specifier: workspace:*
+        version: link:../db
+      '@feedbouncer/jobs':
+        specifier: workspace:*
+        version: link:../jobs
+      '@feedbouncer/mailer':
+        specifier: workspace:*
+        version: link:../mailer
+      '@feedbouncer/secrets':
+        specifier: workspace:*
+        version: link:../secrets
+      '@feedbouncer/service-runtime':
+        specifier: workspace:*
+        version: link:../service-runtime
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@feedbouncer/connector-facebook':
+        specifier: workspace:*
+        version: link:../connector-facebook
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+
+  packages/connector-facebook:
+    dependencies:
+      '@feedbouncer/connectors':
+        specifier: workspace:*
+        version: link:../connectors
+      '@feedbouncer/service-runtime':
+        specifier: workspace:*
+        version: link:../service-runtime
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
 
   packages/connectors:
     dependencies:

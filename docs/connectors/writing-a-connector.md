@@ -23,9 +23,10 @@ is the template; the excerpts below are lines from it.
 The moderation core only ever uses `ConnectorRuntime` and `ConnectionClient`.
 It never calls a connector directly.
 
-No API routes ship with the framework yet. `OAuthFlow` checks brand membership
-and the `connection.manage` capability itself, so a route added later cannot
-skip it.
+The framework ships no HTTP routes. The API app owns them (OAuth start and
+callback, the account picker, the webhook receiver); `OAuthFlow` checks brand
+membership and the `connection.manage` capability itself, so a route cannot
+skip it. The Facebook routes in `apps/api` are the worked example.
 
 ## Declaring capabilities
 
@@ -158,6 +159,50 @@ What the framework does around it:
   connection is terminal: it is never reactivated. A `revoked` or `paused`
   connection gets `connection_inactive` and no tokens are stored.
 
+## Multi-account authorization (`accountSelection`, `listAccounts`)
+
+By default one authorization yields one account: `exchangeCode` returns it and
+`OAuthFlow.complete` connects it. Some platforms grant several accounts at once
+(Facebook: every Page the person manages, each with its own token). Declare
+`accountSelection: 'multiple'` and implement `listAccounts`.
+
+- `exchangeCode` still returns a `TokenSet` (here, the user token) and an
+  `AuthorizedAccount` for the person who authorized.
+- `OAuthFlow.complete` then stores the user token as a grant, sealed under
+  the `oauth_grant_token` envelope kind and bound to the user, brand and
+  platform, and returns `kind: 'account_selection'` with a grant id instead of
+  connecting anything. The grant is single use and lives 30 minutes by default
+  (`grantTtlMs`).
+- `listAccounts(userToken, ctx)` returns a `GrantableAccount` per account the
+  token can act for: the platform id, a display name, the account's own
+  `accessToken`, whether it is `eligible` (with an `ineligibleReason` code when
+  not) and any `limitations` (snake_case codes for things that work only
+  partly, such as `no_messaging_task`). It is called when the picker is shown
+  and again when accounts are connected, and is never cached.
+- `OAuthFlow.listGrantAccounts` and `OAuthFlow.connectAccounts` back the picker
+  and the connect step. Each chosen account becomes its own connection with its
+  own encrypted token. A result per account reports `connected`,
+  `reconnected`, `not_eligible`, `not_found`, `connected_elsewhere` or
+  `connection_inactive`.
+- A platform account can be live in only one workspace. The directory's
+  `findLiveByAccount` (the one cross-tenant lookup) reports it so the picker
+  can mark it, and the connect step enforces it.
+
+Set `tokens.refreshable: false` when the account tokens do not refresh. An
+access token the platform rejects then moves the connection to
+`reconnect_required` instead of attempting a refresh.
+
+## Required scopes
+
+`defaultScopes` is what the authorization asks for. `requiredScopes` is the
+subset without which the connection is unusable, and must be listed in
+`defaultScopes` (`validateConnector` checks). When the platform reports what was
+actually granted, `OAuthFlow.complete` compares it with `requiredScopes` and, if
+any is missing, ends the flow with `missing_permissions` and the missing names,
+storing no tokens. The names are the connector's own, never platform text, so
+they are safe to show. A connector that does not set `requiredScopes` accepts
+whatever was granted.
+
 ## Token refresh
 
 `refreshTokens` receives the stored refresh token and returns a new
@@ -254,7 +299,7 @@ or `{ status: 'not_found' }`.
   inverse is in your declared `actions`, and to `null` otherwise.
 - Actions your capabilities do not list return `unsupported` before any
   platform call. `ConnectionClient.act` never throws for platform outcomes.
-- There is no `reply` action yet.
+- Replies are not actions. See "Replies (`respond`)".
 
 ```ts from=reference/connector.ts
 async act(ctx, req) {
@@ -269,20 +314,41 @@ async act(ctx, req) {
 },
 ```
 
+## Replies (`respond`)
+
+Replies are a separate method from `act`, because they send user-written text
+and have platform eligibility rules that are not errors. Declare which kinds
+the platform supports in `capabilities.responses` (`public_reply`,
+`private_reply`) and implement `respond(ctx, req)`.
+
+- `req` is a `RespondRequest`: the kind, a `CommentRef` target and plain text.
+  The framework validates it first (1 to 8000 characters after trim, no NUL)
+  and never calls the connector with anything else. Send it as plain text; the
+  UI renders it as text too.
+- Return `{ status: 'sent', platformRef }`, `{ status: 'not_found' }` when the
+  comment is gone, or `{ status: 'not_eligible', code }` when the platform
+  refuses for a policy reason: the window closed, already replied, the author
+  cannot be messaged. The code is a snake_case reason, not platform text.
+  Never retry inside `respond`.
+- A kind you do not declare returns `unsupported` before any platform call.
+- `PRIVATE_REPLY_WINDOW_MS` (7 days) is the shared private-reply window the
+  moderation core checks before it calls you.
+- Calls are urgent priority and use the same budget as `act`.
+
 ## Webhooks
 
 Declare `webhook: WebhookSpec` when `ingestion` is not `polling`.
 
-| Field                       | Meaning                                                                                 |
-| --------------------------- | --------------------------------------------------------------------------------------- |
-| `signature.header`          | Header carrying the HMAC-SHA256 digest.                                                 |
-| `signature.prefix`          | Literal prefix before the digest (`sha256=`), may be empty.                             |
-| `signature.encoding`        | `hex` or `base64`.                                                                      |
-| `signature.timestampHeader` | Header with the signed timestamp in epoch seconds, or `null` if the platform has none.  |
-| `signature.signedPayload`   | Builds the exact bytes the platform signed from the raw body and the timestamp.         |
-| `toleranceSec`              | Accepted clock distance for the timestamp, 1 to 600. Only used with a timestamp header. |
-| `secretSource`              | `app` (one secret per platform app) or `connection` (a secret per connected account).   |
-| `parse`                     | Turns a verified raw body into `InboundEvent`s.                                         |
+| Field                       | Meaning                                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `signature.header`          | Header carrying the HMAC-SHA256 digest.                                                                |
+| `signature.prefix`          | Literal prefix before the digest (`sha256=`), may be empty.                                            |
+| `signature.encoding`        | `hex` or `base64`.                                                                                     |
+| `signature.timestampHeader` | Header with the signed timestamp in epoch seconds, or `null` if the platform has none.                 |
+| `signature.signedPayload`   | Builds the exact bytes the platform signed from the raw body and the timestamp.                        |
+| `toleranceSec`              | Accepted clock distance for the timestamp, 1 to 600. Required with a timestamp header; omit otherwise. |
+| `secretSource`              | `app` (one secret per platform app) or `connection` (a secret per connected account).                  |
+| `parse`                     | Turns a verified raw body into `InboundEvent`s.                                                        |
 
 Choose `connection` when the platform signs with a per-account secret. Events
 in a delivery signed with a connection's own secret but naming another account
@@ -316,8 +382,46 @@ no signed timestamp (Meta, for example) gets replay protection only from that
 record.
 
 The platform's verification handshake (Meta's `hub.challenge`, for example)
-is not part of the gate. It belongs to the receiver route, which ships with
-the first real connector.
+is not part of the gate. It belongs to the receiver route; the Facebook route
+in `apps/api` is the example.
+
+## Lifecycle hooks
+
+A connector that must do platform-side work when a connection is made or
+removed (Facebook subscribes the Page to the app's webhook) declares
+`lifecycle: ConnectorLifecycle`.
+
+- `onConnected(ctx)` runs after every connect and reconnect, from a job so a
+  slow platform cannot fail the user's request. It must be idempotent.
+- `onDisconnected(ctx)` runs after the connection has been revoked locally. It
+  is idempotent and best-effort: when the token no longer works the framework
+  still deletes the stored credentials and finishes.
+- Both receive an ordinary `CallContext`, so the same budget, `SafeHttp` and
+  error mapping apply. Do not read or write the database from a hook.
+
+## Webhook routing for app-secret platforms
+
+With `secretSource: 'app'` the platform signs every delivery with one app-wide
+secret and one delivery can carry events for many accounts, in many
+workspaces. The gate therefore verifies the signature before it knows who the
+events are for, and routing happens after:
+
+- `parse` returns `InboundEvent`s, each with its own `externalAccountId`. Drop
+  events whose ids do not have the platform's expected shape in `parse`; they
+  can be attacker-influenced even when the signature is valid.
+- The receiver passes the verified delivery to a router, which looks up the
+  one live connection for each account with `findLiveByAccount` and enqueues
+  work for that connection's own scope. Events for an account with no live
+  connection are dropped and counted. A `reconnect_required` connection still
+  receives its events: the work is held and replayed once it reconnects.
+- Make the receiver respond quickly and do the platform fetches in jobs. A
+  failing router must fail the request so the platform redelivers; the gate
+  leaves the delivery unprocessed in that case.
+- The verification handshake (Meta's `hub.challenge`) is not part of the gate.
+  It belongs to the receiver route, together with its verify token.
+
+`routeWebhookDelivery` in `@feedbouncer/comments` is the router the Facebook
+route uses.
 
 ## Rate limits
 
@@ -438,6 +542,14 @@ runConnectorConformance('my-platform', makeHarness);
 
 The suite covers OAuth, refresh and rotation, reads, actions, budgets, webhooks and secret
 hygiene.
+
+The generic suite assumes one account per authorization and refreshable
+tokens. A connector with `accountSelection: 'multiple'`, tokens that do not
+refresh, or replies and lifecycle hooks cannot use it as is. The Facebook
+connector instead runs its own contract suite
+(`packages/connector-facebook/src/contract.test.ts`) against an in-memory
+Graph double, covering selection, non-refreshable tokens, replies, lifecycle
+and webhooks. Use it as the pattern for such platforms.
 
 A port set of your own (a custom adapter set) must supply `faults`, whose
 `failNextAccessWrite()` makes the next access-token write throw once, and

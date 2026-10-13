@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { ConnectorError } from './errors.js';
-import { commentSchema, parseComment, parsePage } from './schemas.js';
+import {
+  actionRequestSchema,
+  commentSchema,
+  parseComment,
+  parsePage,
+  replyTextSchema,
+  respondRequestSchema,
+} from './schemas.js';
 
 const good = {
   externalId: 'c1',
@@ -78,5 +85,48 @@ describe('parsePage', () => {
     expect(() => parsePage(commentSchema, { items: [], nextCursor: 'x'.repeat(2049) })).toThrow(
       ConnectorError,
     );
+  });
+});
+
+describe('reply text', () => {
+  it.each([
+    ['empty', ''],
+    ['whitespace only', '   \n '],
+    ['too long', 'x'.repeat(8001)],
+    ['NUL', 'a\u0000b'],
+    ['bell control char', 'a\u0007b'],
+  ])('rejects %s', (_n, t) => {
+    expect(replyTextSchema.safeParse(t).success).toBe(false);
+  });
+  it('trims and keeps newlines and tabs', () => {
+    expect(replyTextSchema.parse('  hi\n\tthere  ')).toBe('hi\n\tthere');
+  });
+  it('keeps markup as plain text (escaping is the renderer\u2019s job)', () => {
+    expect(replyTextSchema.parse('<script>x</script>')).toBe('<script>x</script>');
+  });
+});
+
+describe('respond request', () => {
+  it('rejects unknown kinds and extra keys', () => {
+    const target = { sourceExternalId: 's', externalId: 'c' };
+    expect(respondRequestSchema.safeParse({ kind: 'dm', target, text: 'x' }).success).toBe(false);
+    expect(
+      respondRequestSchema.safeParse({ kind: 'public_reply', target, text: 'x', extra: 1 }).success,
+    ).toBe(false);
+  });
+});
+
+describe('action request authorExternalId', () => {
+  const target = { sourceExternalId: 's', externalId: 'c' };
+  it('is optional and validated', () => {
+    expect(actionRequestSchema.safeParse({ action: 'ban_author', target }).success).toBe(true);
+    expect(
+      actionRequestSchema.safeParse({ action: 'ban_author', target, authorExternalId: 'u1' })
+        .success,
+    ).toBe(true);
+    expect(
+      actionRequestSchema.safeParse({ action: 'ban_author', target, authorExternalId: 'u\n1' })
+        .success,
+    ).toBe(false);
   });
 });

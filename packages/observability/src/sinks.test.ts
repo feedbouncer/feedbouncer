@@ -1,6 +1,11 @@
 import { expect, it } from 'vitest';
 import { createMetrics } from './metrics.js';
-import { promConnectorObserver, promJobSink, promWebhookObserver } from './sinks.js';
+import {
+  promConnectorObserver,
+  promIngestObserver,
+  promJobSink,
+  promWebhookObserver,
+} from './sinks.js';
 
 it('maps job events, waits, connector calls and webhooks onto the registry', async () => {
   const m = createMetrics('worker');
@@ -39,4 +44,19 @@ it('maps job events, waits, connector calls and webhooks onto the registry', asy
   expect(t).toMatch(
     /feedbouncer_telemetry_negative_lag_total\{[^}]*source="webhook_event"[^}]*\} 1/,
   );
+});
+
+it('records comment ingest lag in seconds by platform and outcome', async () => {
+  const m = createMetrics('worker');
+  const o = promIngestObserver(m);
+  o.onIngested({ platform: 'facebook', lagMs: 2500, outcome: 'created' });
+  o.onIngested({ platform: 'facebook', lagMs: 0, outcome: 'stale' });
+  const t = await m.registry.metrics();
+  expect(t).toMatch(
+    /feedbouncer_comment_ingest_lag_seconds_count\{[^}]*platform="facebook"[^}]*outcome="created"[^}]*\} 1/,
+  );
+  expect(t).toMatch(
+    /feedbouncer_comment_ingest_lag_seconds_sum\{[^}]*outcome="created"[^}]*\} 2\.5/,
+  );
+  expect(t).toMatch(/feedbouncer_comment_ingest_lag_seconds_count\{[^}]*outcome="stale"[^}]*\} 1/);
 });

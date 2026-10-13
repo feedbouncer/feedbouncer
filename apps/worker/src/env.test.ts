@@ -10,6 +10,13 @@ const base = {
   REDIS_URL: 'redis://:dev-only-pw@redis:6379/0',
   FB_ENCRYPTION_KEYS: randomKeyEntry('k1'),
   FB_ENCRYPTION_ACTIVE_KEY_ID: 'k1',
+  SMTP_URL: 'smtp://mailpit:1025',
+  PUBLIC_WEB_URL: 'https://app.example.com',
+};
+const facebook = {
+  FACEBOOK_APP_ID: '1234567890',
+  FACEBOOK_APP_SECRET: 'sentinel-fb-app-secret-0123456789',
+  FACEBOOK_WEBHOOK_VERIFY_TOKEN: 'sentinel-fb-verify-token-0123456789',
 };
 const opts = { warn: () => {} };
 const load = (env: Record<string, string | undefined>) => loadWorkerEnv(env, opts);
@@ -100,5 +107,58 @@ describe('loadWorkerEnv', () => {
         expect(out).not.toContain(s);
     }
     expect(env.databaseUrl.password).toBe('sentinel-db-pw-123');
+  });
+
+  describe('facebook, mail and public url', () => {
+    it('leaves facebook null when FACEBOOK_APP_ID is unset', () => {
+      expect(load(base).facebook).toBeNull();
+    });
+    it('parses a full facebook config', () => {
+      const env = load({ ...base, ...facebook });
+      expect(env.facebook?.appId).toBe('1234567890');
+      expect(env.facebook?.graphVersion).toBe('v26.0');
+      expect(env.facebook?.appSecret.reveal()).toBe(facebook.FACEBOOK_APP_SECRET);
+    });
+    it('fails fast on a partial facebook config', () => {
+      expect(() => load({ ...base, FACEBOOK_APP_ID: '1234567890' })).toThrow(/FACEBOOK_APP_SECRET/);
+    });
+    it('honours FACEBOOK_APP_SECRET_FILE', () => {
+      const rest = { ...facebook, FACEBOOK_APP_SECRET: undefined };
+      const fs = { size: () => 29, read: () => 'file-secret-0123456789abcdef\n' };
+      const env = loadWorkerEnv(
+        { ...base, ...rest, FACEBOOK_APP_SECRET_FILE: '/run/s' },
+        { warn: () => {}, fs },
+      );
+      expect(env.facebook?.appSecret.reveal()).toBe('file-secret-0123456789abcdef');
+    });
+    it('never serializes the facebook secrets', () => {
+      const env = load({ ...base, ...facebook });
+      for (const out of [JSON.stringify(env), inspect(env, { depth: 10, showHidden: true })]) {
+        expect(out).not.toContain(facebook.FACEBOOK_APP_SECRET);
+        expect(out).not.toContain(facebook.FACEBOOK_WEBHOOK_VERIFY_TOKEN);
+      }
+    });
+    it('reads smtp, mail sender and public web url', () => {
+      const env = load({ ...base, ...facebook, MAIL_FROM: 'FB <fb@example.com>' });
+      expect(env.mail?.smtpUrl.href).toBe('smtp://mailpit:1025');
+      expect(env.mail?.mailFrom).toBe('FB <fb@example.com>');
+      expect(env.mail?.publicWebUrl.origin).toBe('https://app.example.com');
+    });
+    it('loads without SMTP_URL and PUBLIC_WEB_URL when facebook is not configured', () => {
+      const env = load(without('SMTP_URL', 'PUBLIC_WEB_URL'));
+      expect(env.facebook).toBeNull();
+      expect(env.mail).toBeNull();
+    });
+    it('requires SMTP_URL and PUBLIC_WEB_URL when facebook is configured', () => {
+      expect(() => load({ ...without('SMTP_URL'), ...facebook })).toThrow(/SMTP_URL is not set/);
+      expect(() => load({ ...without('PUBLIC_WEB_URL'), ...facebook })).toThrow(
+        /PUBLIC_WEB_URL is not set/,
+      );
+    });
+    it('rejects a public web url that is not an origin', () => {
+      expect(() =>
+        load({ ...base, ...facebook, PUBLIC_WEB_URL: 'https://app.example.com/x' }),
+      ).toThrow(/PUBLIC_WEB_URL must be an origin/);
+    });
   });
 });
