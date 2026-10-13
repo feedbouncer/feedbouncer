@@ -1,5 +1,5 @@
 import type { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common';
-import { Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { defer, lastValueFrom, type Observable } from 'rxjs';
 import {
   SpanKind,
@@ -7,33 +7,21 @@ import {
   setSpanAttributes,
   withLogContext,
   withSpan,
+  type Span,
 } from '@feedbouncer/service-runtime';
+import { ApiError } from './errors.js';
 import type { TracedRequest } from './traced-request.js';
 
-// Span bookkeeping must never change the response or replace the original error.
-type Span = Parameters<typeof setSpanAttributes>[0];
-const recordStatus = (span: Span, status: () => number): void => {
-  try {
-    setSpanAttributes(span, { 'http.response.status_code': status() });
-  } catch {
-    // Dropped on purpose.
-  }
+const recordStatus = (span: Span, statusCode: number): void => {
+  setSpanAttributes(span, { 'http.response.status_code': statusCode });
 };
 
-const isClientError = (e: unknown): boolean => {
-  try {
-    return statusOf(e) < 500;
-  } catch {
-    return false;
-  }
-};
+const isClientError = (e: unknown): boolean => statusOf(e) < 500;
 
 const statusOf = (e: unknown): number => {
-  const s =
-    typeof (e as { getStatus?: unknown })?.getStatus === 'function'
-      ? (e as { getStatus(): number }).getStatus()
-      : (e as { status?: unknown })?.status;
-  return typeof s === 'number' ? s : 500;
+  if (e instanceof ApiError) return e.status;
+  if (e instanceof HttpException) return e.getStatus();
+  return 500;
 };
 
 /**
@@ -65,10 +53,10 @@ export class TraceInterceptor implements NestInterceptor {
               req.fbTrace = currentTraceIds() ?? undefined;
               try {
                 const value = await lastValueFrom(next.handle(), { defaultValue: undefined });
-                recordStatus(span, () => http.getResponse<{ statusCode: number }>().statusCode);
+                recordStatus(span, http.getResponse<{ statusCode: number }>().statusCode);
                 return value;
               } catch (e) {
-                recordStatus(span, () => statusOf(e));
+                recordStatus(span, statusOf(e));
                 throw e;
               }
             },

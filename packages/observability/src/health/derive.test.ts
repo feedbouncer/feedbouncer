@@ -15,11 +15,9 @@ const base: ConnectionFacts = {
   platform: 'youtube',
   status: 'active',
   statusReason: null,
-  createdAt: min(600),
   lastSuccessAt: min(5),
   lastFailureAt: null,
   lastErrorCode: null,
-  lastErrorClass: null,
   consecutiveFailures: 0,
   oldestQueuedAt: null,
   accessTokenExpiresAt: null,
@@ -35,24 +33,22 @@ describe('deriveConnectionHealth', () => {
   it('an idle but syncing connector is healthy (no queued work, recent success)', () =>
     expect(d({ lastSuccessAt: min(59) }).status).toBe('healthy'));
   it('new connection with no sync yet is pending_first_sync, not lagging', () =>
-    expect(d({ createdAt: min(2), lastSuccessAt: null })).toMatchObject({
+    expect(d({ lastSuccessAt: null })).toMatchObject({
       status: 'pending_first_sync',
       stalenessMs: null,
     }));
   it('a connection with no recorded sync stays pending_first_sync however old it is', () =>
-    expect(d({ createdAt: min(120), lastSuccessAt: null })).toMatchObject({
+    expect(d({ lastSuccessAt: null })).toMatchObject({
       status: 'pending_first_sync',
       reason: 'pending_first_sync',
     }));
   it('a never-synced connection failing repeatedly is degraded early', () =>
     expect(
       d({
-        createdAt: min(2),
         lastSuccessAt: null,
         consecutiveFailures: 3,
         lastFailureAt: min(1),
         lastErrorCode: 'upstream_5xx',
-        lastErrorClass: 'retryable',
       }),
     ).toMatchObject({
       status: 'degraded',
@@ -75,7 +71,6 @@ describe('deriveConnectionHealth', () => {
       d({
         consecutiveFailures: 3,
         lastErrorCode: 'oauth_access_rejected',
-        lastErrorClass: 'non_retryable',
         lastFailureAt: min(1),
       }).status,
     ).toBe('degraded'));

@@ -457,9 +457,6 @@ importers:
         specifier: 8.23.1
         version: 8.23.1
     devDependencies:
-      '@feedbouncer/secrets':
-        specifier: workspace:*
-        version: link:../secrets
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6

@@ -29,12 +29,8 @@ export function registerRequestLog(
           ...(trace ? { trace_id: trace.trace_id, span_id: trace.span_id } : {}),
         }),
     );
-    try {
-      const statusClass = `${Math.floor(reply.statusCode / 100)}xx`;
-      metrics.httpRequests.inc({ method: request.method, route, status_class: statusClass });
-      metrics.httpDuration.observe({ method: request.method, route }, reply.elapsedTime / 1000);
-    } catch {
-      // Telemetry never fails a response.
-    }
+    const statusClass = `${Math.floor(reply.statusCode / 100)}xx`;
+    metrics.httpRequests.inc({ method: request.method, route, status_class: statusClass });
+    metrics.httpDuration.observe({ method: request.method, route }, reply.elapsedTime / 1000);
   });
 }

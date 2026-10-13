@@ -1,12 +1,11 @@
 import type pg from 'pg';
 import type { Platform } from '@feedbouncer/connectors';
 import { boundedQuery } from '@feedbouncer/db';
-import type { ErrorClass } from '@feedbouncer/service-runtime';
 import { deriveConnectionHealth, type ConnectionHealth, type HealthPolicy } from './derive.js';
 
 export const HEALTH_SQL = `
-  SELECT c.id, c.organization_id, c.brand_id, c.platform, c.status, c.status_reason, c.created_at,
-         s.last_success_at, s.last_failure_at, s.last_error_code, s.last_error_class,
+  SELECT c.id, c.organization_id, c.brand_id, c.platform, c.status, c.status_reason,
+         s.last_success_at, s.last_failure_at, s.last_error_code,
          COALESCE(s.consecutive_failures, 0) AS consecutive_failures,
          (SELECT min(j.created_at) FROM job_ledger j WHERE j.connection_id = c.id AND j.state = 'queued') AS oldest_queued_at,
          a.expires_at AS access_expires_at, (a.id IS NOT NULL) AS has_access,
@@ -26,11 +25,9 @@ interface Rec {
   platform: Platform;
   status: 'active' | 'paused' | 'revoked' | 'error' | 'reconnect_required';
   status_reason: string | null;
-  created_at: Date;
   last_success_at: Date | null;
   last_failure_at: Date | null;
   last_error_code: string | null;
-  last_error_class: ErrorClass | null;
   consecutive_failures: number;
   oldest_queued_at: Date | null;
   access_expires_at: Date | null;
@@ -71,11 +68,9 @@ export class PgHealthReader implements HealthReader {
         platform: r.platform,
         status: r.status,
         statusReason: r.status_reason,
-        createdAt: r.created_at,
         lastSuccessAt: r.last_success_at,
         lastFailureAt: r.last_failure_at,
         lastErrorCode: r.last_error_code,
-        lastErrorClass: r.last_error_class,
         consecutiveFailures: r.consecutive_failures,
         oldestQueuedAt: r.oldest_queued_at,
         accessTokenExpiresAt: r.access_expires_at,

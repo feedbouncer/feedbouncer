@@ -1,5 +1,4 @@
 import { REAUTH_REASONS, type Platform } from '@feedbouncer/connectors';
-import type { ErrorClass } from '@feedbouncer/service-runtime';
 
 export const HEALTH_STATUSES = [
   'pending_first_sync',
@@ -43,11 +42,9 @@ export interface ConnectionFacts {
   readonly platform: Platform;
   readonly status: 'active' | 'paused' | 'revoked' | 'error' | 'reconnect_required';
   readonly statusReason: string | null;
-  readonly createdAt: Date;
   readonly lastSuccessAt: Date | null;
   readonly lastFailureAt: Date | null;
   readonly lastErrorCode: string | null;
-  readonly lastErrorClass: ErrorClass | null;
   readonly consecutiveFailures: number;
   readonly oldestQueuedAt: Date | null;
   readonly accessTokenExpiresAt: Date | null;
@@ -101,10 +98,9 @@ export function deriveConnectionHealth(
     stalenessMs,
     ingestLagMs,
   });
-  const rule = (status: HealthStatus, reason: HealthReason) => out(status, reason);
   const expired = (t: Date | null) => t !== null && t.getTime() <= now.getTime();
 
-  if (f.status === 'paused' || f.status === 'revoked') return rule('disabled', f.status);
+  if (f.status === 'paused' || f.status === 'revoked') return out('disabled', f.status);
   if (f.status === 'reconnect_required') {
     return out('needs_reconnection', f.statusReason ?? 'reconnect_required');
   }
@@ -113,16 +109,16 @@ export function deriveConnectionHealth(
     expired(f.accessTokenExpiresAt) &&
     (!f.hasRefreshToken || expired(f.refreshTokenExpiresAt))
   ) {
-    return rule('needs_reconnection', 'token_expired');
+    return out('needs_reconnection', 'token_expired');
   }
   if (f.status === 'error') return out('degraded', f.statusReason ?? 'connection_error');
   const failing = f.consecutiveFailures >= p.failuresDegraded;
   if (f.lastSuccessAt === null) {
-    if (failing) return rule('degraded', 'recent_failures');
-    return rule('pending_first_sync', 'pending_first_sync');
+    if (failing) return out('degraded', 'recent_failures');
+    return out('pending_first_sync', 'pending_first_sync');
   }
-  if (failing) return rule('degraded', 'recent_failures');
-  if ((stalenessMs ?? 0) > p.staleAfterMs(f.platform)) return rule('degraded', 'sync_stale');
-  if (ingestLagMs > p.lagDegradedMs) return rule('degraded', 'ingest_lag');
-  return rule('healthy', 'ok');
+  if (failing) return out('degraded', 'recent_failures');
+  if ((stalenessMs ?? 0) > p.staleAfterMs(f.platform)) return out('degraded', 'sync_stale');
+  if (ingestLagMs > p.lagDegradedMs) return out('degraded', 'ingest_lag');
+  return out('healthy', 'ok');
 }
