@@ -5,11 +5,9 @@
 // window. A failure always writes and re-opens the window so the streak reset
 // of the next success is not swallowed.
 import type pg from 'pg';
-import type { ErrorClass } from '@feedbouncer/service-runtime';
+import { ERROR_CODE, UUID, type ErrorClass } from '@feedbouncer/service-runtime';
 import type { SyncRecorder } from '../ports.js';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const CODE = /^[a-z][a-z0-9_]{0,62}$/;
 const MAX_TRACKED = 10_000;
 
 const SUCCESS_SQL = `
@@ -54,7 +52,7 @@ export class PgSyncRecorder implements SyncRecorder {
     this.#lastSuccess.delete(connectionId);
     await this.pool.query(FAILURE_SQL, [
       connectionId,
-      CODE.test(f.code) ? f.code : 'unspecified',
+      ERROR_CODE.test(f.code) ? f.code : 'unspecified',
       f.errorClass,
     ]);
   }

@@ -1,7 +1,7 @@
 // The shared error taxonomy. Messages are built ONLY from the kind and a
 // validated snake_case code, so a ConnectorError can never carry a token,
 // URL or platform response text. Foreign errors are replaced, not wrapped.
-import type { ErrorClass } from '@feedbouncer/service-runtime';
+import { ERROR_CODE, type ErrorClass } from '@feedbouncer/service-runtime';
 
 export const CONNECTOR_ERROR_KINDS = [
   'auth_expired',
@@ -13,7 +13,6 @@ export const CONNECTOR_ERROR_KINDS = [
 ] as const;
 export type ConnectorErrorKind = (typeof CONNECTOR_ERROR_KINDS)[number];
 
-const CODE = /^[a-z][a-z0-9_]{0,62}$/;
 const MAX_RETRY_AFTER_MS = 86_400_000;
 
 export interface ConnectorErrorInfo {
@@ -34,7 +33,7 @@ export class ConnectorError extends Error {
     code: string,
     opts: { retryAfterMs?: number; reauthorize?: boolean } = {},
   ) {
-    const safe = CODE.test(code) ? code : 'unspecified';
+    const safe = ERROR_CODE.test(code) ? code : 'unspecified';
     super(`${kind}: ${safe}`);
     this.code = safe;
     const r = opts.retryAfterMs;

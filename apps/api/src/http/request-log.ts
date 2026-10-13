@@ -25,7 +25,6 @@ export function registerRequestLog(
           route,
           status: reply.statusCode,
           ms: Math.round(reply.elapsedTime),
-          requestId: request.id,
           ...(trace ? { trace_id: trace.trace_id, span_id: trace.span_id } : {}),
         }),
     );

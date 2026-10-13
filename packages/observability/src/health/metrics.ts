@@ -9,66 +9,46 @@ const DEFAULT_CACHE_MS = 10_000;
 const DEFAULT_TIMEOUT_MS = 5_000;
 
 /**
- * Shares one in-flight load between all gauges of a scrape and keeps a settled value for
- * ttlMs. A failure (including timeout) is retried on the next scrape.
- */
-function cached<T>(load: () => Promise<T>, ttlMs: number, timeoutMs: number): () => Promise<T> {
-  let at = -Infinity;
-  let value: Promise<T> | undefined;
-  let pending = false;
-  return () => {
-    const now = Date.now();
-    if (!value || (!pending && now - at >= ttlMs)) {
-      let started: Promise<T>;
-      try {
-        started = withTimeout(load(), timeoutMs, 'collect');
-      } catch (err) {
-        started = Promise.reject(err);
-      }
-      value = started;
-      pending = true;
-      at = now;
-      const settle = (ok: boolean) => {
-        if (value !== started) return;
-        pending = false;
-        at = ok ? Date.now() : -Infinity;
-      };
-      started.then(
-        () => settle(true),
-        () => settle(false),
-      );
-    }
-    return value;
-  };
-}
-
-/**
- * Returns a loader for the shared snapshot that resolves to null when it failed. Each
- * failed load is counted once (however many gauges await it) and logged at warn. The
- * loader also runs before every scrape, so a failure is counted in that same scrape.
+ * One shared snapshot per collector: loaded at most once per ttlMs, with concurrent scrapes
+ * and gauges awaiting the same load. A failed or timed-out load is counted and logged once,
+ * leaves the snapshot empty (so the gauges are omitted) and is retried on the next scrape.
+ * The counter's scrape hook awaits the same load, so a failure shows up in that scrape.
  */
 function snapshotLoader<T>(
   m: FbMetrics,
   log: Logger,
   collector: 'connector_health' | 'queues',
-  snapshot: () => Promise<T>,
+  load: () => Promise<T>,
+  o: { cacheMs?: number; timeoutMs?: number },
 ): () => Promise<T | null> {
-  const seen = new WeakSet<object>();
-  const load = async (): Promise<T | null> => {
-    const p = snapshot();
-    try {
-      return await p;
-    } catch (err) {
-      if (!seen.has(p)) {
-        seen.add(p);
-        m.collectErrors.inc({ collector });
-        log.warn('telemetry.collect_failed', { collector, ...errorFields(err) });
-      }
-      return null;
+  const ttlMs = o.cacheMs ?? DEFAULT_CACHE_MS;
+  const timeoutMs = o.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  let value: T | null = null;
+  let loadedAt = -Infinity;
+  let inflight: Promise<void> | undefined;
+
+  const read = async (): Promise<T | null> => {
+    if (!inflight && Date.now() - loadedAt >= ttlMs) {
+      inflight = withTimeout(Promise.resolve().then(load), timeoutMs, 'collect')
+        .then((v) => {
+          value = v;
+          loadedAt = Date.now();
+        })
+        .catch((err: unknown) => {
+          value = null;
+          loadedAt = -Infinity;
+          m.collectErrors.inc({ collector });
+          log.warn('telemetry.collect_failed', { collector, ...errorFields(err) });
+        })
+        .finally(() => {
+          inflight = undefined;
+        });
     }
+    await inflight;
+    return value;
   };
-  m.scrapeHooks.push(async () => void (await load()));
-  return load;
+  m.scrapeHooks.push(async () => void (await read()));
+  return read;
 }
 
 /** A gauge that is cleared and refilled from the snapshot on every scrape; absent when it failed. */
@@ -95,16 +75,7 @@ export function registerConnectorHealthMetrics(
   reader: HealthReader,
   o: { maxSeries: number; cacheMs?: number; timeoutMs?: number; log: Logger },
 ): void {
-  const load = snapshotLoader(
-    m,
-    o.log,
-    'connector_health',
-    cached(
-      () => reader.all(o.maxSeries),
-      o.cacheMs ?? DEFAULT_CACHE_MS,
-      o.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-    ),
-  );
+  const load = snapshotLoader(m, o.log, 'connector_health', () => reader.all(o.maxSeries), o);
   const labels = ['connection_id', 'platform'] as const;
   const ids = (h: ConnectionHealth) => ({ connection_id: h.connectionId, platform: h.platform });
   snapshotGauge(
@@ -198,12 +169,7 @@ export function registerQueueMetrics(
   stats: () => Promise<readonly QueueStat[]>,
   o: { cacheMs?: number; timeoutMs?: number; log: Logger },
 ): void {
-  const load = snapshotLoader(
-    m,
-    o.log,
-    'queues',
-    cached(stats, o.cacheMs ?? DEFAULT_CACHE_MS, o.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-  );
+  const load = snapshotLoader(m, o.log, 'queues', stats, o);
   snapshotGauge(
     m,
     load,
