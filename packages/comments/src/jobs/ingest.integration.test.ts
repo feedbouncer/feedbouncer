@@ -452,6 +452,20 @@ describe('comment ingest job on instagram', () => {
     });
   });
 
+  it('instagram: own comment whose from.id is a different (scoped) id is still flagged via user.id', async () => {
+    const c = graph.addIgComment(igUserId, {
+      authorId: igUserId,
+      fromId: '17841400000005555',
+      text: 'thanks again',
+    });
+    const r = await runIg(igPayload(c, 'created'));
+    expect(await store.load(t, r.commentId as string)).toMatchObject({
+      isOwnAccount: true,
+      authorExternalId: igUserId,
+      authorName: 'shop.official',
+    });
+  });
+
   it('instagram: emoji / RTL / 10k-char / NUL text round-trips intact (NUL -> U+FFFD)', async () => {
     const cases: [string, string][] = [
       ['👍🏽 family 👨‍👩‍👧 flag 🇮🇱', '👍🏽 family 👨‍👩‍👧 flag 🇮🇱'],

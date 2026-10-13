@@ -33,3 +33,4 @@ the code paths named there are the ones to revisit when it is.
 | V6  | `media{id,permalink}` expands on IG comment                                                     | `unverified` | `IG_COMMENT_FIELDS`                                         |
 | V7  | Public reply / private reply max length                                                         | `unverified` | `IG_LIMITS`                                                 |
 | V8  | Our own API reply triggers a comments webhook                                                   | `unverified` | docs only                                                   |
+| V9  | Own comments carry `user.id` equal to the account id (own-account detection)                    | `unverified` | `toNormalizedIgComment`                                     |

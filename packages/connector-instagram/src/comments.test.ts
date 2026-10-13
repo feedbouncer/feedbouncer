@@ -200,6 +200,36 @@ describe('toNormalizedIgComment', () => {
     });
   });
 
+  it('prefers user.id over a different from.id: user is only present on the account\'s own comments', () => {
+    const c = toNormalizedIgComment(
+      rawComment({
+        from: { id: '17841400000000777', username: 'shop.official' },
+        user: { id: '17841400000000001' },
+        username: 'shop.official',
+      }),
+      null,
+    )!;
+    expect(c.author).toEqual({
+      externalId: '17841400000000001',
+      displayName: 'shop.official',
+      profileUrl: 'https://www.instagram.com/shop.official/',
+    });
+  });
+
+  it('ignores a user.id that is not a Graph id and keeps from.id', () => {
+    const c = toNormalizedIgComment(rawComment({ user: { id: '1/../2' } }), null)!;
+    expect(c.author?.externalId).toBe('17841400000000009');
+  });
+
+  it('without user, the author is from.id', () => {
+    const c = toNormalizedIgComment(rawComment(), null)!;
+    expect(c.author).toEqual({
+      externalId: '17841400000000009',
+      displayName: 'fan',
+      profileUrl: 'https://www.instagram.com/fan/',
+    });
+  });
+
   it('has a null author when no valid id is present', () => {
     expect(
       toNormalizedIgComment(rawComment({ from: { id: 'x/y', username: 'fan' } }), null)!.author,

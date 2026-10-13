@@ -51,7 +51,10 @@ export function toNormalizedIgComment(
 
   const from = isObj(raw.from) ? raw.from : null;
   const user = isObj(raw.user) ? raw.user : null;
-  const authorId = gid(from?.id) ?? (from ? null : gid(user?.id));
+  // Graph returns `user` only when the account itself wrote the comment, and
+  // its id is the account id; `from.id` may be a scoped id. Prefer `user.id` so
+  // own-account detection compares like with like. UNVERIFIED (V9 in the README).
+  const authorId = gid(user?.id) ?? gid(from?.id);
   let author: NormalizedComment['author'] = null;
   if (authorId) {
     const name =

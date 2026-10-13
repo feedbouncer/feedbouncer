@@ -36,6 +36,8 @@ interface IgComment {
   mediaId: string;
   parentId: string | null;
   authorId: string;
+  /** What Graph reports as `from.id`; may differ from authorId (app-scoped id). */
+  fromId: string;
   username: string;
   text: string;
   createdAtMs: number;
@@ -101,6 +103,8 @@ export function linkedAccount(
 export interface AddIgCommentOptions {
   mediaId?: string;
   authorId?: string;
+  /** The `from.id` Graph reports, when it differs from authorId (defaults to authorId). */
+  fromId?: string;
   username?: string;
   parentId?: string;
   text?: string;
@@ -128,6 +132,7 @@ export function addIgComment(
     mediaId: mid,
     parentId: o.parentId ?? null,
     authorId,
+    fromId: o.fromId ?? authorId,
     username: o.username ?? (authorId === igUserId ? account.username : `user${s.seq}`),
     text: o.text ?? 'hello',
     createdAtMs: o.createdAtMs ?? now,
@@ -242,7 +247,9 @@ export function routeInstagram(
     id: c.id,
     text: c.text,
     timestamp: host.graphTime(c.createdAtMs),
-    from: { id: c.authorId, username: c.username },
+    from: { id: c.fromId, username: c.username },
+    // Graph adds `user` only when the account itself wrote the comment.
+    ...(c.authorId === c.igUserId ? { user: { id: c.authorId } } : {}),
     username: c.username,
     hidden: c.hidden,
     ...(c.parentId ? { parent_id: c.parentId } : {}),

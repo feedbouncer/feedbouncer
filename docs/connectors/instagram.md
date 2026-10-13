@@ -9,7 +9,7 @@ sign-in flow and its webhook secret with the [Facebook connector](facebook.md).
 
 > **Verification status.** No Meta test app was available when this connector
 > was written, so none of the platform behaviour it depends on has been
-> observed. Eight questions (V1 to V8 in the package README) are marked
+> observed. Nine questions (V1 to V9 in the package README) are marked
 > `unverified`. Where this page describes one of them, it says so. Treat those
 > statements as assumptions until the table in the README is filled in.
 
@@ -270,6 +270,12 @@ README table):
 - **V6, V8:** that `media{id,permalink}` expands on a comment, and whether our
   own reply triggers a `comments` webhook (the ingest job is idempotent either
   way).
+- **V9, own comments:** that Graph returns `user` on a comment only when the
+  account itself wrote it, with `user.id` equal to the account id. The author
+  id is taken from `user.id` when present (otherwise `from.id`), and a comment
+  counts as the account's own when that id matches the connected account. If
+  `user` is missing, own comments whose `from.id` is a scoped id are not
+  recognised as the account's own.
 
 Known platform limits the code applies:
 
