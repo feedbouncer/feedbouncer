@@ -348,6 +348,14 @@ async function igComment(
   return { id: r.commentId, externalId: c.commentId, mediaId: c.mediaId };
 }
 
+async function setConnectionStatus(connectionId: string, status: 'reconnect_required' | 'paused') {
+  await api.pool.query(`UPDATE connection SET status = $2, status_reason = $3 WHERE id = $1`, [
+    connectionId,
+    status,
+    status === 'reconnect_required' ? 'oauth_access_rejected' : null,
+  ]);
+}
+
 interface ListedComment {
   id: string;
   platform: string;
@@ -434,6 +442,19 @@ describe('comments: instagram platform, media and availability', () => {
     expect(f.status).toBe(202);
   });
 
+  it('a connection that needs reconnecting or is paused makes every action unavailable with that reason', async () => {
+    const ig = await connectedInstagram();
+    const c = await igComment(ig);
+    await setConnectionStatus(ig.scope.connectionId, 'reconnect_required');
+    expect(Object.values((await listed()).get(c.id)!.availability)).toEqual(
+      ACTION_KINDS.map(() => ({ available: false, reason: 'connection_needs_reconnect' })),
+    );
+    await setConnectionStatus(ig.scope.connectionId, 'paused');
+    expect(Object.values((await listed()).get(c.id)!.availability)).toEqual(
+      ACTION_KINDS.map(() => ({ available: false, reason: 'connection_inactive' })),
+    );
+  });
+
   it('availability turns private_reply off after one is sent (private_reply_already_sent)', async () => {
     const ig = await connectedInstagram();
     const c = await igComment(ig);
@@ -470,10 +491,16 @@ describe('comments: instagram platform, media and availability', () => {
       (await act(withPrivateReply.id, { kind: 'private_reply', requestKey: key(), text: 'x' }))
         .status,
     ).toBe(202);
-    const subjects = [...states, withPrivateReply];
+    // Connections that cannot act: every action is refused with the connection's reason.
+    const igStale = await connectedInstagram();
+    const fbPaused = await connectedPage();
+    const onInactive = [await igComment(igStale), await comment(fbPaused)];
+    await setConnectionStatus(igStale.scope.connectionId, 'reconnect_required');
+    await setConnectionStatus(fbPaused.scope.connectionId, 'paused');
+    const subjects = [...states, withPrivateReply, ...onInactive];
 
     const before = await listed();
-    const seen = { available: 0, noop: 0, notEligible: 0, unsupported: 0 };
+    const seen = { available: 0, noop: 0, notEligible: 0, unsupported: 0, connection: 0 };
     for (const s of subjects) {
       for (const kind of ACTION_KINDS) {
         const avail = before.get(s.id)!.availability[kind]!;
@@ -488,6 +515,13 @@ describe('comments: instagram platform, media and availability', () => {
           expect(r.status, label).toBe(202);
           expect(r.body.action.status, label).toBe('pending');
           seen.available++;
+        } else if (
+          avail.reason === 'connection_needs_reconnect' ||
+          avail.reason === 'connection_inactive'
+        ) {
+          expect(r.status, label).toBe(409);
+          expect(r.body.error.code, label).toBe(avail.reason);
+          seen.connection++;
         } else if (avail.reason === 'unsupported') {
           expect(r.status, label).toBe(422);
           expect(r.body.error.code, label).toBe('unsupported_action');
@@ -505,6 +539,7 @@ describe('comments: instagram platform, media and availability', () => {
     expect(seen.noop).toBeGreaterThan(0);
     expect(seen.notEligible).toBeGreaterThan(0);
     expect(seen.unsupported).toBeGreaterThan(0);
+    expect(seen.connection).toBe(onInactive.length * ACTION_KINDS.length);
   });
 
   it('POST a 2201-code-point instagram reply -> 422 text_too_long with max 2200, nothing recorded', async () => {

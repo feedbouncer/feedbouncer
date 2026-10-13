@@ -58,6 +58,7 @@ const OUTCOMES: Record<string, string> = {
   not_eligible: 'you need a role that can moderate this Page',
   not_found: 'this Page was not found in your Facebook account',
   connection_inactive: 'this connection is not active',
+  connection_needs_reconnect: 'this connection needs to be reconnected first',
   // Full sentences, shown as they are.
   own_comment_always_visible: "Instagram always shows your own comments, so they can't be hidden.",
   reply_to_hidden_comment: "Instagram doesn't allow replies to hidden comments. Unhide it first.",

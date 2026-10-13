@@ -157,6 +157,12 @@ describe('outcomeSentence', () => {
   it('turns a fragment into a sentence', () => {
     expect(outcomeSentence('comment_gone')).toBe('The comment no longer exists.');
   });
+  it('explains why an action is unavailable on a connection that cannot act', () => {
+    expect(outcomeSentence('connection_needs_reconnect')).toBe(
+      'This connection needs to be reconnected first.',
+    );
+    expect(outcomeSentence('connection_inactive')).toBe('This connection is not active.');
+  });
   it('keeps a full sentence unchanged', () => {
     expect(outcomeSentence('reply_to_hidden_comment')).toBe(
       "Instagram doesn't allow replies to hidden comments. Unhide it first.",

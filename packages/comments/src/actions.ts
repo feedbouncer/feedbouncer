@@ -21,7 +21,12 @@ import type { JobProducer } from '@feedbouncer/jobs';
 import { UUID, type Logger } from '@feedbouncer/service-runtime';
 import type { BrandScope, CommentRow, PgCommentStore } from './store.js';
 import { EXECUTE_JOB } from './jobs/specs.js';
-import { eligibilityComment, evaluateEligibility, resolveConstraints } from './eligibility.js';
+import {
+  connectionRefusal,
+  eligibilityComment,
+  evaluateEligibility,
+  resolveConstraints,
+} from './eligibility.js';
 
 export const ACTION_KINDS = [
   'hide',
@@ -194,9 +199,8 @@ export class ModerationActions {
     const existing = await this.#byKey(i.scope, i.requestKey);
     if (existing) return this.#replay(existing, i, comment);
 
-    if (comment.connectionStatus === 'reconnect_required')
-      return refused('connection_needs_reconnect');
-    if (comment.connectionStatus !== 'active') return refused('connection_inactive');
+    const blocked = connectionRefusal(comment.connectionStatus);
+    if (blocked) return refused(blocked);
 
     const caps = this.d.capabilities(comment.platform);
     if (!caps) return refused('unsupported');

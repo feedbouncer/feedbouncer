@@ -6,6 +6,7 @@
 // behaviour.
 import {
   PRIVATE_REPLY_WINDOW_MS,
+  type ConnectionStatus,
   type ConnectorCapabilities,
   type PlatformState,
   type ResponseKind,
@@ -54,6 +55,14 @@ export interface EligibilityComment {
    * the comment's own state is used then.
    */
   readonly replyTargetPlatformState?: PlatformState | null;
+}
+
+/** Why nothing can be requested on a connection right now; null when it is active. */
+export function connectionRefusal(
+  status: ConnectionStatus,
+): 'connection_needs_reconnect' | 'connection_inactive' | null {
+  if (status === 'active') return null;
+  return status === 'reconnect_required' ? 'connection_needs_reconnect' : 'connection_inactive';
 }
 
 /** The eligibility view of a stored comment. Actions and the comments list both use it, so they agree. */

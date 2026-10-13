@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   ACTION_KINDS,
   availabilityFor,
+  connectionRefusal,
   eligibilityComment,
   resolveConstraints,
   type ActionAvailability,
@@ -67,7 +68,23 @@ const REFUSALS: Record<
 
 /** Used when the platform's connector is not registered (e.g. Instagram disabled after connecting). */
 const DEFAULT_REPLY_LIMITS = { public_reply: 8000, private_reply: 8000 } as const;
-const NOT_CONFIGURED: ActionAvailability = { available: false, reason: 'platform_not_configured' };
+
+const unavailable = (reason: string) =>
+  Object.fromEntries(
+    ACTION_KINDS.map((k): [ActionKind, ActionAvailability] => [k, { available: false, reason }]),
+  ) as Record<ActionKind, ActionAvailability>;
+
+/** Same order as POST actions: the connection's state first, then the platform, then the comment. */
+function availability(
+  c: CommentRow,
+  caps: ConnectorCapabilities | undefined,
+  now: Date,
+): Record<ActionKind, ActionAvailability> {
+  const blocked = connectionRefusal(c.connectionStatus);
+  if (blocked) return unavailable(blocked);
+  if (!caps) return unavailable('platform_not_configured');
+  return { ...availabilityFor({ comment: eligibilityComment(c), caps, now }) };
+}
 
 const toView = (
   c: CommentRow,
@@ -86,18 +103,7 @@ const toView = (
   permalink: c.permalink,
   isOwnAccount: c.isOwnAccount,
   mediaExternalId: c.sourceExternalId,
-  availability: caps
-    ? {
-        ...availabilityFor({
-          comment: eligibilityComment(c),
-          caps,
-          now,
-        }),
-      }
-    : (Object.fromEntries(ACTION_KINDS.map((k) => [k, NOT_CONFIGURED])) as Record<
-        ActionKind,
-        ActionAvailability
-      >),
+  availability: availability(c, caps, now),
   replyLimits: caps
     ? {
         public_reply: resolveConstraints(caps).maxReplyChars.public_reply,
