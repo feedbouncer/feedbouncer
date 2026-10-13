@@ -24,6 +24,7 @@ import { JobError, type JobDefinition, type JobResult } from '@feedbouncer/jobs'
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
 import {
+  AUTHOR_KINDS,
   recordActionAudit,
   type ActionActor,
   type ActionKind,
@@ -86,7 +87,6 @@ const done = (status: Terminal, code: string | null = null): Final => ({
   commentState: null,
 });
 const gone = (): Final => ({ ...done('noop', 'comment_gone'), commentState: 'deleted' });
-const AUTHOR_KINDS: ReadonlySet<ActionKind> = new Set(['ban_author', 'unban_author']);
 
 /** A failed platform call: a final outcome, or an error to rethrow (after recording `final`, if set). */
 type FailureOutcome = { final: Final; rethrow?: ConnectorError } | { rethrow: ConnectorError };

@@ -14,9 +14,10 @@ import {
   type Clock,
   type ConnectorCapabilities,
   type Platform,
+  PRIVATE_REPLY_WINDOW_MS,
 } from '@feedbouncer/connectors';
 import type { JobProducer } from '@feedbouncer/jobs';
-import type { Logger } from '@feedbouncer/service-runtime';
+import { UUID, type Logger } from '@feedbouncer/service-runtime';
 import type { BrandScope, CommentRow, PgCommentStore } from './store.js';
 import { EXECUTE_JOB } from './jobs/specs.js';
 
@@ -63,13 +64,9 @@ export type RequestActionResult =
   | { readonly status: 'accepted' | 'recorded'; readonly action: ModerationActionView }
   | { readonly status: 'refused'; readonly code: RefusalCode };
 
-/** Facebook accepts a private reply only within 7 days of the comment. */
-export const PRIVATE_REPLY_WINDOW_MS = 7 * 86_400_000;
-
 const REQUEST_KEY = /^[A-Za-z0-9._:-]{1,128}$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REPLY_KINDS: ReadonlySet<ActionKind> = new Set(['public_reply', 'private_reply']);
-const AUTHOR_KINDS: ReadonlySet<ActionKind> = new Set(['ban_author', 'unban_author']);
+export const AUTHOR_KINDS: ReadonlySet<ActionKind> = new Set(['ban_author', 'unban_author']);
 const REQUEST_KEY_UNIQUE = 'moderation_action_organization_id_request_key_key';
 const PRIVATE_REPLY_ONCE = 'moderation_action_private_reply_once_key';
 

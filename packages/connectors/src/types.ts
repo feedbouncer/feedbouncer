@@ -123,6 +123,9 @@ export interface RateLimitPolicy {
   readonly defaultRetryAfterMs: number;
 }
 
+/** How long after a comment is posted a platform still accepts a private reply to it (Facebook: 7 days). */
+export const PRIVATE_REPLY_WINDOW_MS = 7 * 86_400_000;
+
 export interface ConnectorCapabilities {
   readonly actions: readonly ModerationAction[];
   readonly listSources: boolean;

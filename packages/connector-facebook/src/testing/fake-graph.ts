@@ -2,10 +2,9 @@
 // OAuth code/token exchange, Bearer + appsecret_proof checks, token-to-Page
 // binding, error injection and a call log that never holds a token.
 import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { PRIVATE_REPLY_WINDOW_MS } from '@feedbouncer/connectors';
 
 const HOST = 'graph.facebook.com';
-const DAY_MS = 86_400_000;
-const PRIVATE_REPLY_WINDOW_MS = 7 * DAY_MS;
 
 interface User {
   id: string;

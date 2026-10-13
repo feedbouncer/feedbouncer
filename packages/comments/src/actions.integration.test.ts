@@ -5,17 +5,17 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import type pg from 'pg';
 import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
-import type { Clock, ConnectorCapabilities, NormalizedComment } from '@feedbouncer/connectors';
+import {
+  PRIVATE_REPLY_WINDOW_MS,
+  type Clock,
+  type ConnectorCapabilities,
+  type NormalizedComment,
+} from '@feedbouncer/connectors';
 import { createFacebookConnector } from '@feedbouncer/connector-facebook';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { PgCommentStore } from './store.js';
-import {
-  ModerationActions,
-  PRIVATE_REPLY_WINDOW_MS,
-  type ActionActor,
-  type ActionKind,
-} from './actions.js';
+import { ModerationActions, type ActionActor, type ActionKind } from './actions.js';
 import { EXECUTE_JOB } from './jobs/specs.js';
 
 const PAGE = '1000000001';

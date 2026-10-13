@@ -3,6 +3,7 @@
 // will not open. Single-use: consume() is one atomic DELETE ... RETURNING.
 import type pg from 'pg';
 import { CredentialUnreadableError, open, seal, type KeyProvider } from '@feedbouncer/secrets';
+import { UUID } from '@feedbouncer/service-runtime';
 import type { OAuthGrantStore, PendingGrant, StateBinding } from '../ports.js';
 import type { Platform } from '../types.js';
 import { noNul } from './sanitize.js';
@@ -60,7 +61,7 @@ export class PgOAuthGrantStore implements OAuthGrantStore {
   }
 
   async #one(sql: string, id: string, b: StateBinding): Promise<PendingGrant | null> {
-    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+    if (!UUID.test(id)) return null;
     const r = await this.pool.query<Row>(sql, [
       id,
       b.organizationId,

@@ -14,6 +14,7 @@ import type {
   PlatformState,
 } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
+import { UUID } from '@feedbouncer/service-runtime';
 
 export interface BrandScope {
   readonly organizationId: string;
@@ -46,7 +47,6 @@ export interface CommentCursor {
 
 /** Postgres text cannot hold NUL; same replacement as the connector boundary. */
 const noNul = (s: string): string => s.replaceAll('\u0000', '�');
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const outOfScope = () => new Error('comment store: connection is not in the given scope');
 
 const ROW_SQL = `
