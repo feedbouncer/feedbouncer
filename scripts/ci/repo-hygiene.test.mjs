@@ -7,6 +7,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { parse } from 'yaml';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const REPO_URL = 'https://github.com/feed-bouncer-hq/feed-bouncer';
@@ -187,3 +188,91 @@ function assertPnpmCommandsExist(rel) {
 
 // The existing README already names many commands, so this guard is useful from day one.
 test('pnpm commands named in README exist', () => assertPnpmCommandsExist('README.md'));
+
+const PVR_URL = `${REPO_URL}/security/advisories/new`;
+
+// --- Issue forms and PR template ---
+const FORM_TYPES = new Set(['markdown', 'textarea', 'input', 'dropdown', 'checkboxes']);
+
+function assertValidForm(rel) {
+  const form = parse(read(rel));
+  for (const k of ['name', 'description']) assert.equal(typeof form[k], 'string', `${rel}: ${k}`);
+  assert.ok(Array.isArray(form.body) && form.body.length > 0, `${rel}: body`);
+  const ids = new Set();
+  let fields = 0;
+  for (const el of form.body) {
+    assert.ok(FORM_TYPES.has(el.type), `${rel}: unknown type ${el.type}`);
+    if (el.type === 'markdown') {
+      assert.equal(typeof el.attributes?.value, 'string', `${rel}: markdown value`);
+      continue;
+    }
+    fields += 1;
+    assert.equal(typeof el.attributes?.label, 'string', `${rel}: label`);
+    if (el.id !== undefined) {
+      assert.match(el.id, /^[a-z0-9_-]+$/, `${rel}: id ${el.id}`);
+      assert.ok(!ids.has(el.id), `${rel}: duplicate id ${el.id}`);
+      ids.add(el.id);
+    }
+    if (el.type === 'dropdown' || el.type === 'checkboxes')
+      assert.ok(el.attributes.options?.length > 0, `${rel}: options`);
+  }
+  assert.ok(fields > 0, `${rel}: needs at least one non-markdown field`);
+  return { form, ids };
+}
+
+const requiredIds = (form) =>
+  new Set(form.body.filter((e) => e.validations?.required).map((e) => e.id));
+
+test('bug report form collects version, steps, expected/actual and logs safely', () => {
+  const rel = '.github/ISSUE_TEMPLATE/bug_report.yml';
+  const { form, ids } = assertValidForm(rel);
+  for (const id of ['version', 'steps', 'expected', 'actual', 'logs'])
+    assert.ok(ids.has(id), `missing ${id}`);
+  const req = requiredIds(form);
+  for (const id of ['version', 'steps', 'expected', 'actual'])
+    assert.ok(req.has(id), `${id} must be required`);
+  const logs = form.body.find((e) => e.id === 'logs');
+  assert.match(logs.attributes.description, /token|secret/i, 'logs field must warn about secrets');
+  const redact = form.body.find((e) => e.id === 'redaction');
+  assert.ok(
+    redact?.attributes.options.every((o) => o.required),
+    'redaction checkboxes must be required',
+  );
+  assert.ok(read(rel).includes(PVR_URL), 'bug form must point security reports to PVR');
+});
+
+test('feature request form asks for the problem and proposed behavior', () => {
+  const { form } = assertValidForm('.github/ISSUE_TEMPLATE/feature_request.yml');
+  const req = requiredIds(form);
+  for (const id of ['problem', 'proposal']) assert.ok(req.has(id), `${id} must be required`);
+});
+
+test('chooser disables blank issues and routes security reports privately', () => {
+  const cfg = parse(read('.github/ISSUE_TEMPLATE/config.yml'));
+  assert.deepEqual(Object.keys(cfg).sort(), ['blank_issues_enabled', 'contact_links']);
+  assert.equal(cfg.blank_issues_enabled, false);
+  for (const l of cfg.contact_links) {
+    for (const k of ['name', 'url', 'about'])
+      assert.equal(typeof l[k], 'string', `contact link ${k}`);
+    assert.match(l.url, /^https:\/\//);
+  }
+  assert.ok(
+    cfg.contact_links.some((l) => l.url === PVR_URL),
+    'a contact link must be the PVR form',
+  );
+});
+
+test('PR template has summary, linked issue and a tests/docs checklist', () => {
+  const text = `\n${read('.github/pull_request_template.md')}`;
+  for (const h of ['## Summary', '## Linked issue', '## Checklist'])
+    assert.ok(text.includes(`\n${h}\n`), `missing ${h}`);
+  const boxes = [...text.matchAll(/^- \[ \] (.+)$/gm)].map((m) => m[1]);
+  assert.ok(
+    boxes.some((b) => /test/i.test(b)),
+    'checklist needs a tests item',
+  );
+  assert.ok(
+    boxes.some((b) => /doc/i.test(b)),
+    'checklist needs a docs item',
+  );
+});

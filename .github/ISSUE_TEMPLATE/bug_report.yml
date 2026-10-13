@@ -1,0 +1,65 @@
+name: Bug report
+description: Something in FeedBouncer does not work as documented.
+title: '[Bug]: '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        **Security problem?** Do not file it here. Report it privately: https://github.com/feed-bouncer-hq/feed-bouncer/security/advisories/new
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: The commit SHA you are running (`git rev-parse --short HEAD`). There are no releases yet.
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: How are you running it?
+      options:
+        - Docker Compose dev stack (docker compose up)
+        - pnpm workspace on the host
+        - Other (describe below)
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste log lines (for example `docker compose logs api`). Remove access tokens, secrets, passwords, cookies and other people's personal data first.
+      render: shell
+  - type: checkboxes
+    id: redaction
+    attributes:
+      label: Before submitting
+      options:
+        - label: I removed tokens, secrets and personal data from everything above.
+          required: true
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
