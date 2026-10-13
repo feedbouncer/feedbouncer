@@ -434,7 +434,7 @@ describe('expired credentials', () => {
       connector.platform,
       await driver.consent(authorizationUrl, account),
     );
-    if (!done.ok) throw new Error('connect failed');
+    if (!done.ok || done.kind !== 'connected') throw new Error('connect failed');
     const source = await driver.seedSource(account);
     const [comment] = await driver.seedComments(account, source, 1);
     const stackScope = {

@@ -87,6 +87,7 @@ it('webhook -> enqueue -> run (retry) -> moderation.apply share one trace; dupli
     await act.driver.consent(authorizationUrl, actAccount),
   );
   if (!done.ok) throw new Error(done.reason);
+  if (done.kind !== 'connected') throw new Error(done.kind);
   const actScope = {
     organizationId: act.stack.actor.organizationId,
     brandId: act.stack.actor.brandId,

@@ -39,6 +39,7 @@ async function connected(flavor: 'push' | 'poll') {
   const { code, state } = await h.driver.consent(authorizationUrl, account);
   const done = await stack.oauth.complete(stack.actor, h.connector.platform, { code, state });
   if (!done.ok) throw new Error(done.reason);
+  if (done.kind !== 'connected') throw new Error(done.kind);
   const scope = {
     organizationId: stack.actor.organizationId,
     brandId: stack.actor.brandId,
@@ -133,6 +134,7 @@ it('an observer or recorder that throws never fails the call', async () => {
   const q = await h.driver.consent(authorizationUrl, account);
   const done = await stack.oauth.complete(stack.actor, h.connector.platform, q);
   if (!done.ok) throw new Error(done.reason);
+  if (done.kind !== 'connected') throw new Error(done.kind);
   const client = await stack.runtime.connect({
     organizationId: stack.actor.organizationId,
     brandId: stack.actor.brandId,

@@ -170,6 +170,7 @@ export function runConnectorConformance(
         code,
       });
       if (!done.ok) throw new Error(`OAuth setup failed: ${done.reason}`);
+      if (done.kind !== 'connected') throw new Error(`OAuth setup failed: ${done.kind}`);
       scope = {
         organizationId: h.stack.actor.organizationId,
         brandId: h.stack.actor.brandId,
@@ -193,7 +194,7 @@ export function runConnectorConformance(
       it('rejects a replayed callback without a second code exchange', async () => {
         const q = await begin();
         const first = await h.stack.oauth.complete(h.stack.actor, h.connector.platform, q);
-        expect(first).toMatchObject({ ok: true, created: false });
+        expect(first).toMatchObject({ ok: true, kind: 'connected', created: false });
         const exchanges = await h.driver.calls('token');
         const replay = await h.stack.oauth.complete(h.stack.actor, h.connector.platform, q);
         expect(replay).toEqual({ ok: false, reason: 'rejected' });
@@ -229,6 +230,7 @@ export function runConnectorConformance(
         expect(await h.driver.calls('token')).toBe(exchanges);
         expect(await h.stack.oauth.complete(h.stack.actor, h.connector.platform, q)).toMatchObject({
           ok: true,
+          kind: 'connected',
         });
       });
     });

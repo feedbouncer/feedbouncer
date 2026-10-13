@@ -43,6 +43,7 @@ it('known secrets, auth headers and comment bodies never reach logs, spans, metr
       await h.driver.consent(authorizationUrl, account),
     );
     if (!done.ok) throw new Error(done.reason);
+    if (done.kind !== 'connected') throw new Error(done.kind);
     const scope = {
       organizationId: stack.actor.organizationId,
       brandId: stack.actor.brandId,

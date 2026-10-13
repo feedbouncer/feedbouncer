@@ -8,6 +8,7 @@ it('a contended refresh logs one refresh and one line per waiter', async () => {
   const q = await h.driver.consent(authorizationUrl, account);
   const done = await h.stack.oauth.complete(h.stack.actor, h.connector.platform, q);
   if (!done.ok) throw new Error(done.reason);
+  if (done.kind !== 'connected') throw new Error(done.kind);
   const scope = {
     organizationId: h.stack.actor.organizationId,
     brandId: h.stack.actor.brandId,
