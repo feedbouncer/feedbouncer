@@ -294,6 +294,43 @@ importers:
 
   packages/authz: {}
 
+  packages/comments:
+    dependencies:
+      '@feedbouncer/connectors':
+        specifier: workspace:*
+        version: link:../connectors
+      '@feedbouncer/db':
+        specifier: workspace:*
+        version: link:../db
+      '@feedbouncer/jobs':
+        specifier: workspace:*
+        version: link:../jobs
+      '@feedbouncer/mailer':
+        specifier: workspace:*
+        version: link:../mailer
+      '@feedbouncer/secrets':
+        specifier: workspace:*
+        version: link:../secrets
+      '@feedbouncer/service-runtime':
+        specifier: workspace:*
+        version: link:../service-runtime
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@feedbouncer/connector-facebook':
+        specifier: workspace:*
+        version: link:../connector-facebook
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+
   packages/connector-facebook:
     dependencies:
       '@feedbouncer/connectors':
