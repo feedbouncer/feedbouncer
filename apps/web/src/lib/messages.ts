@@ -62,6 +62,8 @@ const OUTCOMES: Record<string, string> = {
 const STATUS_REASONS: Record<string, string> = {
   oauth_not_refreshable: 'Facebook access was lost or expired. Reconnect to resume moderation.',
   oauth_access_rejected: 'Facebook access was lost or expired. Reconnect to resume moderation.',
+  setup_not_queued:
+    'The connection was saved but setup could not be started. Reconnect to finish connecting.',
   page_role_lost: 'You no longer have a moderator role on this Page.',
 };
 

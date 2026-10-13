@@ -148,7 +148,7 @@ export class FacebookConnectService {
     if (failed.length === 0) return r.results;
     // The grant is spent, so a retry cannot run setup again. Reconnecting can.
     await Promise.all(
-      failed.map((scope) => stack.directory.markReauthRequired(scope, 'oauth_access_rejected')),
+      failed.map((scope) => stack.directory.markReauthRequired(scope, 'setup_not_queued')),
     );
     throw new ApiError(503, 'service_unavailable');
   }

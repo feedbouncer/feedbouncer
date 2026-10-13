@@ -176,7 +176,7 @@ describe('facebook connect flow', () => {
     expect(r.status).toBe(503);
 
     const listed = (await listConnections(org)).find((c) => c.externalAccountId === pageId);
-    expect(listed).toMatchObject({ status: 'needs_reconnect' });
+    expect(listed).toMatchObject({ status: 'needs_reconnect', statusReason: 'setup_not_queued' });
 
     const again = await connectPage(org, pageId, { reconnectConnectionId: listed!.id });
     expect(again).toMatchObject({ status: 'reconnected', connectionId: listed!.id });
@@ -397,9 +397,7 @@ describe('facebook connect flow', () => {
       `UPDATE connection SET status = 'revoked', status_reason = NULL WHERE id = $1`,
       [connectionId],
     );
-    expect((await listConnections(org)).find((c) => c.id === connectionId)?.status).toBe(
-      'needs_reconnect',
-    );
+    expect((await listConnections(org)).find((c) => c.id === connectionId)?.status).toBe('error');
     expect((await call('DELETE', `${base(org)}/${connectionId}`, org.owner)).status).toBe(204);
     expect((await listConnections(org)).map((c) => c.id)).not.toContain(connectionId);
     const row = await api.pool.query(`SELECT status, status_reason FROM connection WHERE id = $1`, [

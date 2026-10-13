@@ -206,6 +206,33 @@ describe('lifecycle', () => {
     expect((await stack.vault.readTokens(scope)).access?.value.reveal()).toBe('PAGE-TOKEN');
   });
 
+  it('teardown leaves a page alone when it is reconnected while the teardown runs', async () => {
+    const c = connector();
+    const { stack, scope } = await connected(c);
+    await stack.directory.disconnect(scope, stack.actor.userId);
+    const read = vi.spyOn(stack.vault, 'readTokens');
+    read.mockImplementationOnce(async (s) => {
+      const tokens = await stack.vault.readTokens(s);
+      await stack.directory.upsertPending({
+        organizationId: scope.organizationId,
+        brandId: scope.brandId,
+        platform: 'facebook',
+        externalAccountId: '900',
+        displayName: null,
+        grantedScopes: ['s'],
+      });
+      await stack.vault.writeAccessToken(s, { value: new Secret('NEW-TOKEN'), expiresAt: null });
+      await stack.directory.activate(s, stack.actor.userId);
+      return tokens;
+    });
+    await expect(stack.runtime.teardown(scope)).rejects.toMatchObject({
+      kind: 'permanent',
+      code: 'connection_not_revoked',
+    });
+    expect(c.lifecycle!.onDisconnected).not.toHaveBeenCalled();
+    expect((await stack.vault.readTokens(scope)).access?.value.reveal()).toBe('NEW-TOKEN');
+  });
+
   it('teardown throws not_found for an unknown connection', async () => {
     const { stack, scope } = await connected(connector());
     await expect(

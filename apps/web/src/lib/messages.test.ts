@@ -54,7 +54,7 @@ describe('statusReasonText', () => {
   it('returns null for no reason', () => {
     expect(statusReasonText(null)).toBeNull();
   });
-  it.each(['oauth_not_refreshable', 'oauth_access_rejected', 'page_role_lost'])(
+  it.each(['oauth_not_refreshable', 'oauth_access_rejected', 'page_role_lost', 'setup_not_queued'])(
     'has a specific text for %s',
     (code) => {
       expect(statusReasonText(code)).not.toBe(statusReasonText('definitely_not_a_code'));

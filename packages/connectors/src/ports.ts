@@ -14,6 +14,7 @@ export const REAUTH_REASONS = [
   'oauth_refresh_rejected',
   'oauth_access_rejected',
   'oauth_not_refreshable',
+  'setup_not_queued',
 ] as const;
 export type ReauthReason = (typeof REAUTH_REASONS)[number];
 export interface ConnectionDirectory {

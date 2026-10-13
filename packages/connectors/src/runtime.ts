@@ -123,11 +123,21 @@ export class ConnectorRuntime {
     const vault = this.d.vault;
     if (!vault) throw new ConnectorError('permanent', 'teardown_unavailable');
     const fields = { connectionId: scope.connectionId };
-    const rec = await viaPort(this.d.log, fields, () => this.d.directory.load(scope));
-    if (!rec) throw new ConnectorError('not_found', 'connection_not_found');
-    if (rec.status !== 'revoked') throw new ConnectorError('permanent', 'connection_not_revoked');
+    const loadRevoked = async () => {
+      const current = await viaPort(this.d.log, fields, () => this.d.directory.load(scope));
+      if (!current) throw new ConnectorError('not_found', 'connection_not_found');
+      if (current.status !== 'revoked')
+        throw new ConnectorError('permanent', 'connection_not_revoked');
+      return current;
+    };
+    const rec = await loadRevoked();
     const connector = this.d.registry.require(rec.platform);
-    const forget = () => viaPort(this.d.log, fields, () => vault.deleteTokens(scope));
+    // A reconnect can land at any point of the teardown. Re-checking right before
+    // each destructive step keeps a reconnected Page's webhooks and new token.
+    const forget = async () => {
+      await loadRevoked();
+      await viaPort(this.d.log, fields, () => vault.deleteTokens(scope));
+    };
     const lifecycle = connector.lifecycle;
     if (!lifecycle) {
       await forget();
@@ -144,6 +154,7 @@ export class ConnectorRuntime {
       await forget();
       return 'no_token';
     }
+    await loadRevoked();
     try {
       await lifecycle.onDisconnected({
         accessToken: access.value,

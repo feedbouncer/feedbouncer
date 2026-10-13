@@ -165,7 +165,7 @@ time the platform copy was read).
   `@feedbouncer/secrets` when a stored credential cannot be read.
 - `user_disconnected`: the user disconnected the connection (status `revoked`).
 - `oauth_pending`, `oauth_refresh_rejected`, `oauth_access_rejected`,
-  `oauth_not_refreshable`: set by `@feedbouncer/connectors`.
+  `oauth_not_refreshable`, `setup_not_queued`: set by `@feedbouncer/connectors`.
 
 `pnpm secrets recheck-connections` only reverses `credential_*`; `oauth_*` is
 reversed by re-authorizing the connection.
