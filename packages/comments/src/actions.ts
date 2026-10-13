@@ -1,7 +1,8 @@
 // Moderation action requests. A request is checked against the stored comment
 // and connection before anything is sent; outcomes known up front (nothing to
-// do, not allowed) are recorded without a platform call. Everything else is
-// stored as `pending` and executed by the `moderation_execute` job.
+// do, not allowed; see eligibility.ts) are recorded without a platform call.
+// Everything else is stored as `pending` and executed by the
+// `moderation_execute` job.
 // Requests are idempotent per (organization, request key): a retry returns the
 // stored action and, while it is still pending, re-enqueues it (the job is
 // deduplicated by action id). Every statement is filtered by organization_id +
@@ -14,12 +15,13 @@ import {
   type Clock,
   type ConnectorCapabilities,
   type Platform,
-  PRIVATE_REPLY_WINDOW_MS,
+  type ResponseKind,
 } from '@feedbouncer/connectors';
 import type { JobProducer } from '@feedbouncer/jobs';
 import { UUID, type Logger } from '@feedbouncer/service-runtime';
 import type { BrandScope, CommentRow, PgCommentStore } from './store.js';
 import { EXECUTE_JOB } from './jobs/specs.js';
+import { evaluateEligibility, resolveConstraints } from './eligibility.js';
 
 export const ACTION_KINDS = [
   'hide',
@@ -57,7 +59,9 @@ export type RefusalCode =
   | 'connection_needs_reconnect'
   | 'connection_inactive'
   | 'unsupported'
-  | 'request_key_conflict';
+  | 'request_key_conflict'
+  /** Longer than the platform accepts for this kind of reply (code points). */
+  | 'text_too_long';
 
 export type RequestActionResult =
   /** `recorded`: the outcome was known up front (noop / not_eligible); nothing was sent. */
@@ -195,10 +199,29 @@ export class ModerationActions {
     if (comment.connectionStatus !== 'active') return refused('connection_inactive');
 
     const caps = this.d.capabilities(comment.platform);
-    const supported: readonly string[] = [...(caps?.actions ?? []), ...(caps?.responses ?? [])];
-    if (!supported.includes(i.kind)) return refused('unsupported');
+    if (!caps) return refused('unsupported');
+    // privateReplied was read with the comment; two racing private replies are
+    // still caught by the unique index on insert.
+    const e = evaluateEligibility({
+      kind: i.kind,
+      actorType: i.actor.type,
+      comment: { ...comment, hasAuthor: comment.authorExternalId !== null },
+      caps,
+      now: new Date(this.d.clock.now()),
+    });
+    if (e.verdict === 'unsupported') return refused('unsupported');
+    if (
+      text !== null &&
+      [...text].length > resolveConstraints(caps).maxReplyChars[i.kind as ResponseKind]
+    )
+      return refused('text_too_long');
 
-    return this.#insert(i, comment, text, await this.#precheck(i, comment));
+    return this.#insert(
+      i,
+      comment,
+      text,
+      e.verdict === 'ok' ? { status: 'pending', code: null } : { status: e.verdict, code: e.code },
+    );
   }
 
   async list(scope: BrandScope, commentId: string): Promise<ModerationActionView[]> {
@@ -210,37 +233,6 @@ export class ModerationActions {
       [scope.organizationId, scope.brandId, commentId],
     );
     return r.rows.map(toView);
-  }
-
-  /** Outcomes known without asking the platform. */
-  async #precheck(i: Request, c: CommentRow): Promise<Verdict> {
-    // Bans are against the author, so a deleted comment does not make them moot.
-    if (c.platformState === 'deleted' && !AUTHOR_KINDS.has(i.kind))
-      return { status: 'noop', code: 'already_deleted' };
-    if (i.kind === 'hide' && c.platformState === 'hidden')
-      return { status: 'noop', code: 'already_hidden' };
-    if (i.kind === 'unhide' && c.platformState === 'visible')
-      return { status: 'noop', code: 'already_visible' };
-
-    const notEligible = (code: string): Verdict => ({ status: 'not_eligible', code });
-    if ((i.actor.type === 'rule' || i.actor.type === 'classifier') && c.isOwnAccount)
-      return notEligible('own_account_comment');
-    if (AUTHOR_KINDS.has(i.kind) && c.isOwnAccount) return notEligible('author_is_page');
-    if ((AUTHOR_KINDS.has(i.kind) || i.kind === 'private_reply') && c.authorExternalId === null)
-      return notEligible('author_unavailable');
-    if (i.kind === 'private_reply') {
-      if (this.d.clock.now() >= c.postedAt.getTime() + PRIVATE_REPLY_WINDOW_MS)
-        return notEligible('private_reply_window_closed');
-      const sent = await this.d.pool.query(
-        `SELECT 1 FROM moderation_action
-          WHERE organization_id = $1 AND brand_id = $2 AND comment_id = $3
-            AND kind = 'private_reply' AND status IN ('pending', 'applied')
-          LIMIT 1`,
-        [i.scope.organizationId, i.scope.brandId, c.id],
-      );
-      if (sent.rows.length > 0) return notEligible('private_reply_already_sent');
-    }
-    return { status: 'pending', code: null };
   }
 
   async #insert(

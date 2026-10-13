@@ -37,6 +37,8 @@ export interface CommentRow {
   readonly permalink: string | null;
   readonly isOwnAccount: boolean;
   readonly connectionStatus: ConnectionStatus;
+  /** A private reply to this comment is pending or applied (the platform allows one). */
+  readonly privateReplied: boolean;
 }
 
 /** Position in the newest-first listing: the last row of the previous page. */
@@ -53,7 +55,12 @@ const ROW_SQL = `
   SELECT c.id, c.connection_id, cn.platform, s.external_id AS source_external_id, c.external_id,
          c.parent_external_id, c.parent_comment_id, a.external_id AS author_external_id,
          a.display_name AS author_name, c.body, c.platform_state, c.posted_at, c.permalink,
-         c.is_own_account, cn.status AS connection_status
+         c.is_own_account, cn.status AS connection_status,
+         EXISTS (SELECT 1 FROM moderation_action ma
+                  WHERE ma.comment_id = c.id AND ma.organization_id = c.organization_id
+                    AND ma.brand_id = c.brand_id
+                    AND ma.kind = 'private_reply' AND ma.status IN ('pending', 'applied'))
+           AS private_replied
     FROM comment c
     JOIN source s ON s.id = c.source_id AND s.organization_id = c.organization_id AND s.brand_id = c.brand_id
     JOIN connection cn ON cn.id = c.connection_id AND cn.organization_id = c.organization_id AND cn.brand_id = c.brand_id
@@ -75,6 +82,7 @@ const toRow = (r: Record<string, unknown>): CommentRow => ({
   permalink: (r.permalink as string | null) ?? null,
   isOwnAccount: r.is_own_account as boolean,
   connectionStatus: r.connection_status as ConnectionStatus,
+  privateReplied: r.private_replied as boolean,
 });
 
 const ids = (s: ConnectionScope) => [s.organizationId, s.brandId, s.connectionId];

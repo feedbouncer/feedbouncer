@@ -8,19 +8,27 @@
 //   own earlier attempt.
 // The status update, the comment state and the audit record are written in
 // one transaction, and only while the action is still pending.
+// When the platform's answer shows our stored copy is out of date (the comment
+// is gone, a reply was refused, a permanent error), the comment is re-read by
+// enqueueing an ingest job: owners can hide or delete in the platform's own app
+// without any webhook. That enqueue is best-effort and never changes the
+// recorded outcome.
+import { createHash } from 'node:crypto';
 import type pg from 'pg';
 import { withTransaction } from '@feedbouncer/db';
 import {
   ConnectorError,
   toConnectorError,
   type ActionResult,
+  type CommentRef,
   type ConnectionClient,
   type ConnectorErrorInfo,
   type ConnectorRuntime,
+  type Platform,
   type PlatformState,
   type RespondResult,
 } from '@feedbouncer/connectors';
-import { JobError, type JobDefinition, type JobResult } from '@feedbouncer/jobs';
+import { JobError, type JobDefinition, type JobProducer, type JobResult } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
 import {
@@ -31,7 +39,7 @@ import {
   type ActionStatus,
 } from '../actions.js';
 import { setCommentPlatformState } from '../store.js';
-import { EXECUTE_JOB, type ExecutePayload } from './specs.js';
+import { EXECUTE_JOB, INGEST_JOB, type ExecutePayload, type IngestPayload } from './specs.js';
 
 type Terminal = Exclude<ActionStatus, 'pending'>;
 
@@ -41,6 +49,8 @@ interface Final {
   readonly platformRef: string | null;
   readonly undo: ActionKind | null;
   readonly commentState: PlatformState | null;
+  /** The platform's answer means our copy of the comment may be stale: re-read it. */
+  readonly resync: boolean;
 }
 
 interface LoadedAction {
@@ -85,8 +95,13 @@ const done = (status: Terminal, code: string | null = null): Final => ({
   platformRef: null,
   undo: null,
   commentState: null,
+  resync: false,
 });
-const gone = (): Final => ({ ...done('noop', 'comment_gone'), commentState: 'deleted' });
+const gone = (): Final => ({
+  ...done('noop', 'comment_gone'),
+  commentState: 'deleted',
+  resync: true,
+});
 
 /** A failed platform call: a final outcome, or an error to rethrow (after recording `final`, if set). */
 type FailureOutcome = { final: Final; rethrow?: ConnectorError } | { rethrow: ConnectorError };
@@ -105,7 +120,7 @@ function mapFailure(e: ConnectorErrorInfo, attempt: number): FailureOutcome {
       return { final: done('failed', e.code), rethrow };
     return { rethrow };
   }
-  return { final: done('failed', e.code) };
+  return { final: { ...done('failed', e.code), resync: e.kind === 'permanent' } };
 }
 
 function mapAct(r: ActionResult, kind: ActionKind, attempt: number): FailureOutcome {
@@ -119,6 +134,7 @@ function mapAct(r: ActionResult, kind: ActionKind, attempt: number): FailureOutc
           platformRef: r.platformActionId,
           undo: undo !== undefined && UNDO_KINDS.has(undo) ? (undo as ActionKind) : null,
           commentState: STATE_AFTER[kind] ?? null,
+          resync: false,
         },
       };
     }
@@ -144,7 +160,7 @@ function mapRespond(r: RespondResult, attempt: number): FailureOutcome {
         final:
           r.code === 'private_reply_already_sent' && attempt > 1
             ? done('applied')
-            : done('not_eligible', r.code),
+            : { ...done('not_eligible', r.code), resync: true },
       };
     case 'unsupported':
       return { final: done('failed', 'unsupported') };
@@ -194,21 +210,25 @@ async function loadForExecution(
 }
 
 /**
- * Our reply already in the thread: written by the Page, same text, posted no
- * earlier than the action was requested. Returns its id, null when absent, or
- * the failure of the lookup itself.
+ * Our reply already in the thread: written by the connected account, same
+ * text, posted no earlier than the action was requested. Returns its id, null
+ * when absent, or the failure of the lookup itself. Connectors with a replies
+ * listing (Instagram) are asked for the replies under the comment; otherwise
+ * the comment is listed as a source (Facebook).
  */
 async function findOwnReply(
   client: ConnectionClient,
-  targetExternalId: string,
+  target: CommentRef,
   a: LoadedAction,
 ): Promise<string | null | { failed: ConnectorErrorInfo }> {
   try {
-    const page = await client.listComments({
-      sourceExternalId: targetExternalId,
-      cursor: null,
-      limit: OWN_REPLY_SCAN,
-    });
+    const page =
+      (await client.listReplies({ parent: target, cursor: null, limit: OWN_REPLY_SCAN })) ??
+      (await client.listComments({
+        sourceExternalId: target.externalId,
+        cursor: null,
+        limit: OWN_REPLY_SCAN,
+      }));
     const since = a.createdAt.getTime() - OWN_REPLY_SKEW_MS;
     const hit = page.items.find(
       (c) =>
@@ -225,12 +245,13 @@ async function findOwnReply(
   }
 }
 
+/** `recorded` is false when another run recorded the outcome first. */
 async function finish(
   pool: pg.Pool,
   scope: ConnectionScope,
   a: LoadedAction,
   f: Final,
-): Promise<JobResult> {
+): Promise<{ result: JobResult; recorded: boolean }> {
   return withTransaction(pool, async (tx) => {
     const ids = [scope.organizationId, scope.brandId, scope.connectionId, a.id];
     const u = await tx.query(
@@ -248,7 +269,7 @@ async function finish(
           WHERE id = $4 AND organization_id = $1 AND brand_id = $2 AND connection_id = $3`,
         ids,
       );
-      return { status: cur.rows[0]?.status ?? null };
+      return { result: { status: cur.rows[0]?.status ?? null }, recorded: false };
     }
     if (f.commentState !== null)
       await setCommentPlatformState(tx, scope, a.commentId, f.commentState);
@@ -263,14 +284,47 @@ async function finish(
       status: f.status,
       outcomeCode: f.code,
     });
-    return { status: f.status, outcomeCode: f.code, undo: f.undo };
+    return { result: { status: f.status, outcomeCode: f.code, undo: f.undo }, recorded: true };
   });
+}
+
+/** Re-reads the comment through the ingest job. Failures are logged, never thrown. */
+async function enqueueResync(
+  d: { producer: Pick<JobProducer, 'enqueue'>; log: Logger },
+  scope: ConnectionScope,
+  platform: Platform,
+  a: LoadedAction,
+): Promise<void> {
+  const payload: IngestPayload = {
+    sourceExternalId: a.sourceExternalId,
+    commentExternalId: a.commentExternalId,
+    event: 'updated',
+    platformEventSec: Math.floor(Date.now() / 1000),
+    // The ingest change id is 16 hex characters; derived from the action so it is stable.
+    changeId: createHash('sha256').update(`resync_${a.id}`).digest('hex').slice(0, 16),
+  };
+  try {
+    await d.producer.enqueue({
+      scope: {
+        organizationId: scope.organizationId,
+        brandId: scope.brandId,
+        connectionId: scope.connectionId,
+      },
+      platform,
+      type: INGEST_JOB.type,
+      payload,
+    });
+  } catch {
+    d.log.warn('moderation.resync_not_queued', { actionId: a.id });
+  }
 }
 
 export function executeActionJob(d: {
   pool: pg.Pool;
   runtime: ConnectorRuntime;
   log: Logger;
+  /** Enqueues the resync ingest after outcomes the platform decided. */
+  producer: Pick<JobProducer, 'enqueue'>;
 }): JobDefinition<ExecutePayload> {
   return {
     ...EXECUTE_JOB,
@@ -284,14 +338,14 @@ export function executeActionJob(d: {
       let outcome: FailureOutcome;
       if (a.kind === 'public_reply' || a.kind === 'private_reply') {
         if (a.replyText === null) throw new JobError('non_retryable', 'reply_text_missing');
-        // Facebook threads are one level deep: a reply to a reply goes on the top-level comment.
+        // Facebook and Instagram threads are one level deep; replies to a reply go on the top-level comment.
         const target =
           a.kind === 'public_reply' && a.parentExternalId !== null
             ? { ...commentRef, externalId: a.parentExternalId }
             : commentRef;
         const existing =
           a.kind === 'public_reply' && ctx.attempt > 1
-            ? await findOwnReply(client, target.externalId, a)
+            ? await findOwnReply(client, target, a)
             : null;
         if (typeof existing === 'string') {
           outcome = { final: { ...done('applied'), platformRef: existing } };
@@ -311,13 +365,14 @@ export function executeActionJob(d: {
       }
 
       if (!('final' in outcome)) throw outcome.rethrow;
-      const result = await finish(d.pool, ctx.scope, a, outcome.final);
+      const { result, recorded } = await finish(d.pool, ctx.scope, a, outcome.final);
       d.log.info('moderation action completed', {
         actionId: a.id,
         kind: a.kind,
         status: outcome.final.status,
         outcomeCode: outcome.final.code,
       });
+      if (recorded && outcome.final.resync) await enqueueResync(d, ctx.scope, ctx.platform, a);
       if (outcome.rethrow) throw outcome.rethrow;
       return result;
     },

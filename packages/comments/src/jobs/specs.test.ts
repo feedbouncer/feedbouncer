@@ -124,7 +124,7 @@ describe('job definitions', () => {
     const def = enqueueOnly(INGEST_JOB);
     expect(def).toMatchObject({
       type: INGEST_JOB.type,
-      platforms: ['facebook'],
+      platforms: ['facebook', 'instagram'],
       policy: { maxAttempts: 8 },
     });
     expect(def.payload).toBe(INGEST_JOB.payload);
@@ -132,6 +132,17 @@ describe('job definitions', () => {
     const err = await def.handle({} as JobContext, p()).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(JobError);
     expect(err).toMatchObject({ kind: 'non_retryable', code: 'not_a_worker' });
+  });
+
+  it('ingest and execute run for facebook and instagram only', () => {
+    const r = new JobRegistry();
+    r.register(enqueueOnly(INGEST_JOB));
+    r.register(enqueueOnly(EXECUTE_JOB));
+    for (const type of [INGEST_JOB.type, EXECUTE_JOB.type]) {
+      expect(r.supports(type, 'facebook')).toBe(true);
+      expect(r.supports(type, 'instagram')).toBe(true);
+      expect(r.supports(type, 'tiktok')).toBe(false);
+    }
   });
 
   it('enqueueOnly takes its platforms from the spec', () => {

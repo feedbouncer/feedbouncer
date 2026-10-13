@@ -9,6 +9,7 @@
     { "path": "../connectors/tsconfig.build.json" },
     { "path": "../jobs/tsconfig.build.json" },
     { "path": "../mailer/tsconfig.build.json" },
-    { "path": "../connector-facebook/tsconfig.build.json" }
+    { "path": "../connector-facebook/tsconfig.build.json" },
+    { "path": "../connector-instagram/tsconfig.build.json" }
   ]
 }

@@ -76,6 +76,7 @@ describe('PgCommentStore', () => {
       permalink: 'https://www.facebook.com/x',
       isOwnAccount: false,
       connectionStatus: 'active',
+      privateReplied: false,
     });
   });
 
