@@ -109,6 +109,37 @@ describe('loadWorkerEnv', () => {
     expect(env.databaseUrl.password).toBe('sentinel-db-pw-123');
   });
 
+  describe('instagram', () => {
+    it('leaves instagram null unless INSTAGRAM_CONNECTOR_ENABLED=true', () => {
+      expect(load({ ...base, ...facebook }).instagram).toBeNull();
+      expect(load({ ...base, ...facebook, INSTAGRAM_CONNECTOR_ENABLED: 'false' }).instagram).toBe(
+        null,
+      );
+    });
+    it('shares the facebook meta app when enabled', () => {
+      const env = load({ ...base, ...facebook, INSTAGRAM_CONNECTOR_ENABLED: 'true' });
+      expect(env.instagram?.meta).toBe(env.facebook);
+      expect(JSON.stringify(env)).toContain('"instagramEnabled":true');
+      expect(JSON.stringify(env)).not.toContain(facebook.FACEBOOK_APP_SECRET);
+    });
+    it('INSTAGRAM_CONNECTOR_ENABLED=true without facebook config fails startup', () => {
+      expect(messageOf(() => load({ ...base, INSTAGRAM_CONNECTOR_ENABLED: 'true' }))).toMatch(
+        /INSTAGRAM_CONNECTOR_ENABLED=true requires .*FACEBOOK_APP_ID/,
+      );
+    });
+    it('reads per-platform job concurrency and stale threshold for instagram', () => {
+      const env = load({
+        ...base,
+        JOB_CONCURRENCY_INSTAGRAM: '5',
+        CONNECTOR_STALE_AFTER_SECONDS_INSTAGRAM: '7200',
+      });
+      expect(env.jobs.concurrency.instagram).toBe(5);
+      expect(env.jobs.concurrency.facebook).toBe(2);
+      expect(env.health.staleAfterMs('instagram')).toBe(7_200_000);
+      expect(env.health.staleAfterMs('facebook')).toBe(3_600_000);
+    });
+  });
+
   describe('facebook, mail and public url', () => {
     it('leaves facebook null when FACEBOOK_APP_ID is unset', () => {
       expect(load(base).facebook).toBeNull();

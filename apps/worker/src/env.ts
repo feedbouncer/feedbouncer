@@ -21,6 +21,7 @@ import {
   parseFacebookEnv,
   type FacebookConfig,
 } from '@feedbouncer/connector-facebook';
+import { parseInstagramEnv, type InstagramConfig } from '@feedbouncer/connector-instagram';
 import { loadJobsConfig, type JobsConfig } from '@feedbouncer/jobs';
 import {
   loadHealthPolicy,
@@ -55,6 +56,8 @@ export interface WorkerEnv {
   readonly health: HealthPolicy;
   /** Null when FACEBOOK_APP_ID is unset: the connector is not enabled. */
   readonly facebook: FacebookConfig | null;
+  /** Null unless INSTAGRAM_CONNECTOR_ENABLED=true; runs on the Facebook Meta app, so it requires it. */
+  readonly instagram: InstagramConfig | null;
   /** Null unless Facebook is configured: only the Facebook connector sends mail or needs the web origin. */
   readonly mail: WorkerMailConfig | null;
 }
@@ -90,6 +93,7 @@ export function loadWorkerEnv(
   const databaseUrl = readUrl(env, 'DATABASE_URL', PG_PROTOCOLS);
   const redisUrl = readUrl(env, 'REDIS_URL', REDIS_PROTOCOLS);
   const facebook = parseFacebookEnv(env, opts.warn);
+  const instagram = parseInstagramEnv(env, facebook);
   const mail = facebook ? readMailConfig(env) : null;
   checkNotPlaceholder(appEnv, 'DATABASE_URL', databaseUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);
@@ -105,6 +109,7 @@ export function loadWorkerEnv(
     telemetry: loadTelemetryConfig(env, 'worker'),
     health: loadHealthPolicy(env),
     facebook,
+    instagram,
     mail,
   };
   // A whole-config dump (JSON, util.inspect) must never carry URL passwords or keys.
@@ -115,6 +120,7 @@ export function loadWorkerEnv(
     logLevel: config.logLevel,
     publicWebUrl: mail?.publicWebUrl.origin ?? null,
     facebookEnabled: config.facebook !== null,
+    instagramEnabled: config.instagram !== null,
     activeKeyId: config.encryption.activeKeyId,
     jobQueuePrefix: config.jobs.prefix,
     jobDlqRetentionDays: config.jobs.dlqRetentionMs / 86_400_000,
