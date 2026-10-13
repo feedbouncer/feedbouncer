@@ -372,6 +372,38 @@ describe('facebook connect flow', () => {
     expect((await call('DELETE', `${base(org)}/${connectionId}`, org.member)).status).toBe(403);
   });
 
+  it('disconnecting a connection revoked for another reason removes it, audits it and queues one teardown', async () => {
+    const { pageId } = graph.addPage(fbUserId, { name: 'Gone' });
+    const { connectionId } = await connectPage(org, pageId);
+    await api.pool.query(
+      `UPDATE connection SET status = 'revoked', status_reason = NULL WHERE id = $1`,
+      [connectionId],
+    );
+    expect((await listConnections(org)).find((c) => c.id === connectionId)?.status).toBe(
+      'needs_reconnect',
+    );
+    expect((await call('DELETE', `${base(org)}/${connectionId}`, org.owner)).status).toBe(204);
+    expect((await listConnections(org)).map((c) => c.id)).not.toContain(connectionId);
+    const row = await api.pool.query(`SELECT status, status_reason FROM connection WHERE id = $1`, [
+      connectionId,
+    ]);
+    expect(row.rows[0]).toEqual({ status: 'revoked', status_reason: 'user_disconnected' });
+    const disconnected = await api.pool.query<{ sequence: string; actor_user_id: string }>(
+      `SELECT sequence, actor_user_id FROM audit_event
+        WHERE subject_id = $1 AND action = 'connection.disconnected'`,
+      [connectionId],
+    );
+    expect(disconnected.rows).toHaveLength(1);
+    expect(disconnected.rows[0]!.actor_user_id).toBe(org.owner.userId);
+    const teardown = { op: 'teardown', nonce: `${connectionId}:${disconnected.rows[0]!.sequence}` };
+    const teardowns = async () =>
+      (await lifecycleJobs(connectionId!)).filter((p) => p.op === 'teardown');
+    expect(await teardowns()).toEqual([teardown]);
+    expect((await call('DELETE', `${base(org)}/${connectionId}`, org.owner)).status).toBe(204);
+    expect(await teardowns()).toEqual([teardown]);
+    expect((await call('DELETE', `${base(other)}/${connectionId}`, other.owner)).status).toBe(404);
+  });
+
   it('no response body or log line contains any FakeGraph-issued secret', () => {
     const secrets = graph.issuedSecrets();
     expect(secrets.length).toBeGreaterThan(5);
