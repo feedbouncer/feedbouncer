@@ -34,8 +34,11 @@ export interface ConnectionDirectory {
    */
   activate(scope: ConnectionScope, actorUserId: string): Promise<boolean>;
   /**
-   * Pre-authentication lookup (documented tenancy exception), used only after a
-   * webhook signature verified: the single non-revoked connection for an account.
+   * Cross-tenant lookup (documented tenancy exception): the single non-revoked
+   * connection for an account, whichever workspace owns it. Permitted callers:
+   * webhook routing, after the signature verified; and OAuth account listing and
+   * connecting, to detect a Page that is already connected elsewhere. Callers
+   * must not expose the record to the requesting tenant.
    */
   findLiveByAccount(
     platform: Platform,

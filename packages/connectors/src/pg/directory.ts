@@ -111,8 +111,9 @@ export class PgConnectionDirectory implements ConnectionDirectory {
     platform: Platform,
     externalAccountId: string,
   ): Promise<ConnectionRecord | null> {
-    // Pre-authentication lookup (documented tenancy exception): runs only after the
-    // webhook signature verified, and returns at most one row by the live-page index.
+    // Cross-tenant lookup (documented tenancy exception). Callers: webhook routing
+    // after signature verification, and OAuth account listing/connect to detect a
+    // Page already connected elsewhere. Returns at most one row by the live-page index.
     const r = await this.pool.query<{
       id: string;
       organization_id: string;
