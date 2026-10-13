@@ -56,10 +56,14 @@ describe('one live facebook connection per page', () => {
 
   it('does not constrain other platforms', async () => {
     for (const t of [a, b])
-      await query(
-        `INSERT INTO connection (organization_id, brand_id, platform, external_account_id) VALUES ($1,$2,'youtube','same-channel')`,
-        [t.organizationId, t.brandId],
-      );
+      expect(
+        await code(
+          query(
+            `INSERT INTO connection (organization_id, brand_id, platform, external_account_id) VALUES ($1,$2,'youtube','same-channel')`,
+            [t.organizationId, t.brandId],
+          ),
+        ),
+      ).toBe('ok');
   });
 });
 
