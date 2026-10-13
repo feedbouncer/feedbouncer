@@ -52,7 +52,7 @@ export function toNormalizedComment(
   };
 }
 
-export const callFor =(cfg: FacebookConfig, nowMs: () => number, ctx: CallContext): GraphCall => ({
+export const callFor = (cfg: FacebookConfig, nowMs: () => number, ctx: CallContext): GraphCall => ({
   http: ctx.http,
   signal: ctx.signal,
   version: cfg.graphVersion,
