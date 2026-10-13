@@ -238,7 +238,7 @@ export class WebhookGate {
     if (spec.signature.timestampHeader !== null) {
       ts = header(spec.signature.timestampHeader);
       if (ts === null || !/^\d{1,12}$/.test(ts)) return fail('timestamp_missing');
-      if (Math.abs(this.d.clock.now() / 1000 - Number(ts)) > spec.toleranceSec)
+      if (!(Math.abs(this.d.clock.now() / 1000 - Number(ts)) <= (spec.toleranceSec ?? 0)))
         return fail('timestamp_stale');
     }
 

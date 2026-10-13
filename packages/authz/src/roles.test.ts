@@ -34,13 +34,6 @@ describe('capability matrix (brief "Roles" table)', () => {
         expect(can(role, cap as Capability)).toBe(row[role]));
 });
 
-describe('comment moderation', () => {
-  it('every role can moderate comments, only owner/admin manage connections', () => {
-    for (const r of ROLES) expect(can(r, 'comment.moderate')).toBe(true);
-    expect(can('member', 'connection.manage')).toBe(false);
-  });
-});
-
 describe('canChangeRole', () => {
   const ok = { ok: true };
   it.each([

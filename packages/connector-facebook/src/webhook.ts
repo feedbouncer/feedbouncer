@@ -64,7 +64,6 @@ export const facebookWebhookSpec: WebhookSpec = {
     signedPayload: (raw) => raw,
   },
   // Meta signs no timestamp; replay protection is the permanent dedupe record.
-  toleranceSec: 300,
   parse: parseFeedWebhook,
 };
 

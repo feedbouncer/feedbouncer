@@ -82,7 +82,8 @@ export interface WebhookSpec {
     readonly timestampHeader: string | null;
     signedPayload(rawBody: Buffer, timestamp: string | null): Buffer;
   };
-  readonly toleranceSec: number;
+  /** Accepted clock distance for the signed timestamp. Required with `timestampHeader`, unused without. */
+  readonly toleranceSec?: number;
   /** Receives only bodies whose signature already verified. */
   parse(rawBody: Buffer): readonly InboundEvent[];
 }

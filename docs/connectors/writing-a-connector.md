@@ -273,16 +273,16 @@ async act(ctx, req) {
 
 Declare `webhook: WebhookSpec` when `ingestion` is not `polling`.
 
-| Field                       | Meaning                                                                                 |
-| --------------------------- | --------------------------------------------------------------------------------------- |
-| `signature.header`          | Header carrying the HMAC-SHA256 digest.                                                 |
-| `signature.prefix`          | Literal prefix before the digest (`sha256=`), may be empty.                             |
-| `signature.encoding`        | `hex` or `base64`.                                                                      |
-| `signature.timestampHeader` | Header with the signed timestamp in epoch seconds, or `null` if the platform has none.  |
-| `signature.signedPayload`   | Builds the exact bytes the platform signed from the raw body and the timestamp.         |
-| `toleranceSec`              | Accepted clock distance for the timestamp, 1 to 600. Only used with a timestamp header. |
-| `secretSource`              | `app` (one secret per platform app) or `connection` (a secret per connected account).   |
-| `parse`                     | Turns a verified raw body into `InboundEvent`s.                                         |
+| Field                       | Meaning                                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `signature.header`          | Header carrying the HMAC-SHA256 digest.                                                                |
+| `signature.prefix`          | Literal prefix before the digest (`sha256=`), may be empty.                                            |
+| `signature.encoding`        | `hex` or `base64`.                                                                                     |
+| `signature.timestampHeader` | Header with the signed timestamp in epoch seconds, or `null` if the platform has none.                 |
+| `signature.signedPayload`   | Builds the exact bytes the platform signed from the raw body and the timestamp.                        |
+| `toleranceSec`              | Accepted clock distance for the timestamp, 1 to 600. Required with a timestamp header; omit otherwise. |
+| `secretSource`              | `app` (one secret per platform app) or `connection` (a secret per connected account).                  |
+| `parse`                     | Turns a verified raw body into `InboundEvent`s.                                                        |
 
 Choose `connection` when the platform signs with a per-account secret. Events
 in a delivery signed with a connection's own secret but naming another account
