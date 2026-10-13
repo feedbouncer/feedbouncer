@@ -314,6 +314,26 @@ async act(ctx, req) {
 },
 ```
 
+## Action constraints (`capabilities.constraints`)
+
+Whether an action can apply to a stored comment is decided once, in the
+moderation core, from the stored comment and your capabilities. It runs before
+any platform call, records the up-front outcome, and is also what the comment
+list shows as per-action availability. Platforms differ, so declare their rules
+in `capabilities.constraints`. Every member is optional, and absent means the
+Facebook-like default.
+
+| Member                     | Default       | Meaning                                                                                       |
+| -------------------------- | ------------- | --------------------------------------------------------------------------------------------- |
+| `privateReplyWindowMs`     | 7 days        | How long after posting a private reply is allowed.                                            |
+| `privateReplyTopLevelOnly` | `false`       | Private replies to nested comments are `private_reply_nested_comment`.                        |
+| `publicReplyOnHidden`      | `true`        | `false` refuses public replies to hidden comments (`reply_to_hidden_comment`).                |
+| `hideOwnAccountComments`   | `true`        | `false` refuses hide and unhide of the account's own comments (`own_comment_always_visible`). |
+| `maxReplyChars`            | 8000 per kind | Maximum code points per response kind. Longer text is `reply_too_long`.                       |
+
+Constraints are for rules you know in advance. A refusal that only the
+platform can decide still comes back from `respond` as `not_eligible`.
+
 ## Replies (`respond`)
 
 Replies are a separate method from `act`, because they send user-written text
@@ -334,6 +354,19 @@ the platform supports in `capabilities.responses` (`public_reply`,
 - `PRIVATE_REPLY_WINDOW_MS` (7 days) is the shared private-reply window the
   moderation core checks before it calls you.
 - Calls are urgent priority and use the same budget as `act`.
+
+## `listReplies`
+
+Some platforms do not expose replies through
+`listComments({ sourceExternalId: commentId })`. Implement the optional
+`listReplies(ctx, { parent, cursor, limit })` to return the replies under one
+comment, with the same paging and validation rules as `listComments`. The
+runtime returns `null` without any I/O when it is absent.
+
+The moderation core uses it to recover a public reply after a crash: on a
+retry it lists the parent's most recent replies and looks for the account's own
+reply with the same text, so that a reply that did succeed is recorded and not
+posted a second time.
 
 ## Webhooks
 
@@ -422,6 +455,21 @@ events are for, and routing happens after:
 
 `routeWebhookDelivery` in `@feedbouncer/comments` is the router the Facebook
 route uses.
+
+## Sharing a webhook subscription host (field-merging)
+
+Some platforms keep one subscription per app and per host object, with a
+single list of subscribed fields that each write replaces. When two connectors
+use the same host (Facebook and Instagram both subscribe the same Facebook
+Page), they must not overwrite each other's fields.
+
+- Never write a fixed list. Read the current list, add or remove only your
+  own fields, and write back the union.
+- Delete the subscription only when no field is left.
+- Make both directions idempotent, so a repeated lifecycle job is harmless.
+- `subscribePageFields` and `unsubscribePageFields` in
+  `@feedbouncer/connector-facebook` do this for Meta Pages. The Facebook
+  connector owns `feed` and the Instagram connector owns `comments`.
 
 ## Rate limits
 
