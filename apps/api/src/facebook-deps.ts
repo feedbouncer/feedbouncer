@@ -50,6 +50,8 @@ export function buildFacebookDeps(d: {
   pool: pg.Pool;
   log: Logger;
   metrics: FbMetrics;
+  /** Tests only: the platform double behind SafeHttp. */
+  fetch?: typeof fetch;
 }): FacebookDeps | null {
   const { env, pool, log, metrics } = d;
   const fb = env.facebook;
@@ -78,6 +80,7 @@ export function buildFacebookDeps(d: {
     workerId: `api-${hostname()}`,
     observer: promConnectorObserver(metrics),
     webhookObserver: promWebhookObserver(metrics),
+    ...(d.fetch && { fetch: d.fetch }),
   });
   // Same job types and keys as the worker's registry, without handlers.
   const jobs = new JobRegistry();

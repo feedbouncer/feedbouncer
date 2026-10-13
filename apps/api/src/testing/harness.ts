@@ -77,12 +77,16 @@ export interface TestApi {
 
 /**
  * `deps` replaces individual AppDeps built by the harness (e.g. a failing
- * producer). Facebook-backed deps exist only when `overrides.facebook` is set.
+ * producer). Facebook-backed deps exist only when `overrides.facebook` is set;
+ * `fetch` (e.g. FakeGraph's) then replaces the network behind their SafeHttp.
  */
 export async function startTestApi(
   overrides: Partial<ApiEnv> = {},
-  depsOverrides: Partial<Pick<AppDeps, 'connectors' | 'producer' | 'comments'>> = {},
+  depsOverrides: Partial<Pick<AppDeps, 'connectors' | 'producer' | 'comments'>> & {
+    fetch?: typeof fetch;
+  } = {},
 ): Promise<TestApi> {
+  const { fetch: graphFetch, ...appDepsOverrides } = depsOverrides;
   const redisRaw = process.env.REDIS_URL;
   if (!redisRaw) {
     throw new Error(
@@ -117,7 +121,13 @@ export async function startTestApi(
   const redisKeyPrefix = `fbtest:${randomUUID()}:`;
   const mailer = new MemoryMailer();
   const metrics = createMetrics('api');
-  const facebook: FacebookDeps | null = buildFacebookDeps({ env, pool, log, metrics });
+  const facebook: FacebookDeps | null = buildFacebookDeps({
+    env,
+    pool,
+    log,
+    metrics,
+    ...(graphFetch && { fetch: graphFetch }),
+  });
   const deps: AppDeps = {
     env,
     pool,
@@ -130,7 +140,7 @@ export async function startTestApi(
     connectors: facebook?.connectors ?? null,
     producer: facebook?.producer ?? null,
     comments: facebook?.comments ?? null,
-    ...depsOverrides,
+    ...appDepsOverrides,
   };
   let app: NestFastifyApplication;
   try {
