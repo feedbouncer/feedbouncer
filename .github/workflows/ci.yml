@@ -251,6 +251,10 @@ jobs:
         run: pnpm turbo run build --filter=@feedbouncer/observability...
       - name: Observability integration tests
         run: pnpm --filter @feedbouncer/observability test:integration
+      - name: Build comments and dependencies
+        run: pnpm turbo run build --filter=@feedbouncer/comments...
+      - name: Comment store and ingest job integration tests
+        run: pnpm --filter @feedbouncer/comments test:integration
 
   compose-smoke:
     name: Compose smoke
