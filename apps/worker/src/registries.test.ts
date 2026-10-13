@@ -33,7 +33,4 @@ describe('buildJobRegistry', () => {
     for (const t of ['comment_ingest', 'moderation_execute', 'connection_lifecycle'])
       expect(jobs.supports(t, 'facebook')).toBe(true);
   });
-  it('registers nothing without dependencies', () => {
-    expect(buildJobRegistry(null).supports('comment_ingest', 'facebook')).toBe(false);
-  });
 });

@@ -37,9 +37,8 @@ export function buildConnectorRegistry(cfg: {
 }
 
 /** Job types the worker executes. See docs/jobs/defining-a-job.md. */
-export function buildJobRegistry(deps: WorkerJobDeps | null): JobRegistry {
+export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
   const registry = new JobRegistry();
-  if (!deps) return registry;
   registry.register(
     ingestCommentJob({
       runtime: deps.runtime,

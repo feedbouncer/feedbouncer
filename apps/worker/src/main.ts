@@ -16,6 +16,7 @@ import { createPool, runJobOnce } from '@feedbouncer/db';
 import {
   JobMetrics,
   JobProducer,
+  JobRegistry,
   JobWorkers,
   PgJobLedger,
   QueueSet,
@@ -94,41 +95,39 @@ try {
   const { facebook, mail } = env;
   // Mail is only configured (and only needed) alongside the Facebook connector.
   const mailer = mail ? createSmtpMailer(mail.smtpUrl, mail.mailFrom) : null;
-  const stack = buildPgConnectorStack({
-    pool,
-    lockPool,
-    redis: producerRedis,
-    redisPrefix: env.jobs.prefix,
-    keys: env.encryption,
-    registry: connectors,
-    appSecrets: facebook ? new Map([['facebook', facebook.appSecret]]) : new Map(),
-    redirectUri: () =>
-      new URL('/api/v1/oauth/facebook/callback', mail?.publicWebUrl ?? 'http://localhost').href,
-    log,
-    workerId,
-    observer: promConnectorObserver(telemetry.metrics),
-    webhookObserver: promWebhookObserver(telemetry.metrics),
-    sync: new PgSyncRecorder(pool),
-    ...(mail && mailer
-      ? {
-          wrapDirectory: (dir: ConnectionDirectory) =>
-            new NotifyingConnectionDirectory(
-              dir,
-              new EmailReconnectNotifier({ pool, mailer, publicWebUrl: mail.publicWebUrl, log }),
-              log,
-            ),
-        }
-      : {}),
-  });
-  const jobs = buildJobRegistry({
-    runtime: stack.runtime,
-    directory: stack.directory,
-    store: new PgCommentStore(pool),
-    pool,
-    clock: systemClock,
-    log,
-    ingestObserver: promIngestObserver(telemetry.metrics),
-  });
+  let jobs = new JobRegistry();
+  if (facebook && mail && mailer) {
+    const stack = buildPgConnectorStack({
+      pool,
+      lockPool,
+      redis: producerRedis,
+      redisPrefix: env.jobs.prefix,
+      keys: env.encryption,
+      registry: connectors,
+      appSecrets: new Map([['facebook', facebook.appSecret]]),
+      redirectUri: () => new URL('/api/v1/oauth/facebook/callback', mail.publicWebUrl).href,
+      log,
+      workerId,
+      observer: promConnectorObserver(telemetry.metrics),
+      webhookObserver: promWebhookObserver(telemetry.metrics),
+      sync: new PgSyncRecorder(pool),
+      wrapDirectory: (dir: ConnectionDirectory) =>
+        new NotifyingConnectionDirectory(
+          dir,
+          new EmailReconnectNotifier({ pool, mailer, publicWebUrl: mail.publicWebUrl, log }),
+          log,
+        ),
+    });
+    jobs = buildJobRegistry({
+      runtime: stack.runtime,
+      directory: stack.directory,
+      store: new PgCommentStore(pool),
+      pool,
+      clock: systemClock,
+      log,
+      ingestObserver: promIngestObserver(telemetry.metrics),
+    });
+  }
 
   const worker = new Worker(
     SYSTEM_QUEUE,
