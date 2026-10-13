@@ -39,10 +39,9 @@ export interface ListCommentsQuery {
 const MIN_UUID = '00000000-0000-0000-0000-000000000000';
 
 const REFUSALS: Record<
-  Extract<RequestActionResult, { status: 'refused' }>['code'],
+  Exclude<Extract<RequestActionResult, { status: 'refused' }>['code'], 'not_found'>,
   [number, ErrorCode]
 > = {
-  not_found: [404, 'not_found'],
   unsupported: [422, 'unsupported_action'],
   request_key_conflict: [409, 'request_key_conflict'],
   connection_needs_reconnect: [409, 'connection_needs_reconnect'],
@@ -118,8 +117,9 @@ export class CommentsService {
       ...(body.text !== undefined && { text: body.text }),
     });
     if (r.status === 'refused') {
+      if (r.code === 'not_found') throw notFound();
       const [status, code] = REFUSALS[r.code];
-      throw code === 'not_found' ? notFound() : new ApiError(status, code);
+      throw new ApiError(status, code);
     }
     return { status: r.status === 'accepted' ? 202 : 200, action: r.action };
   }

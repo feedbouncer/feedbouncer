@@ -12,15 +12,13 @@ import {
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { ACTION_KINDS } from '@feedbouncer/comments';
+import { ACTION_KINDS, REPLY_KINDS, REQUEST_KEY } from '@feedbouncer/comments';
 import { replyTextSchema } from '@feedbouncer/connectors';
 import { SessionGuard } from '../auth/session.guard.js';
 import { parseBody, parseUuidOr404, zUuid } from '../http/validation.js';
 import { RequireCapability } from '../tenancy/capability.decorator.js';
 import { OrgAccessGuard, type OrgRequest } from '../tenancy/org-access.guard.js';
 import { CommentsService } from './comments.service.js';
-
-const REPLY_KINDS: ReadonlySet<string> = new Set(['public_reply', 'private_reply']);
 
 const ListQuery = z.strictObject({
   before: z.iso.datetime({ offset: true }).optional(),
@@ -32,7 +30,7 @@ const ListQuery = z.strictObject({
 const ActionBody = z
   .strictObject({
     kind: z.enum(ACTION_KINDS),
-    requestKey: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/),
+    requestKey: z.string().regex(REQUEST_KEY),
     text: replyTextSchema.optional(),
   })
   .refine((b) => REPLY_KINDS.has(b.kind) === (b.text !== undefined), { path: ['text'] });

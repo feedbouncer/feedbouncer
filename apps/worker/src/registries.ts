@@ -1,10 +1,10 @@
 import { createFacebookConnector, type FacebookConfig } from '@feedbouncer/connector-facebook';
 import {
-  PgCommentStore,
   executeActionJob,
   ingestCommentJob,
   connectionLifecycleJob,
   type IngestObserver,
+  type PgCommentStore,
 } from '@feedbouncer/comments';
 import {
   ConnectorRegistry,
