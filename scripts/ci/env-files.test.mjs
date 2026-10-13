@@ -53,10 +53,7 @@ test('the tracked-env-file guard rejects a populated env file that is force-adde
     await writeFile(join(dir, 'prod.env'), 'FB_ENCRYPTION_KEYS=prod:abc\n');
     await writeFile(join(dir, '.env.example'), 'AUTH_SECRET=dev-only-x\n');
     await run('git', ['add', '-f', '.env.production', 'prod.env', '.env.example'], { cwd: dir });
-    assert.deepEqual(envFileOffenders(await trackedFiles(dir)).sort(), [
-      '.env.production',
-      'prod.env',
-    ]);
+    assert.deepEqual(envFileOffenders(await trackedFiles(dir)).sort(), ['.env.production', 'prod.env']);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -167,11 +164,9 @@ test('ESLint catches indirect ways of reading process.env', async () => {
     'globalThis.process.env': 'export const x = globalThis.process.env.FOO;\n',
     'global.process.env': 'export const x = global.process.env;\n',
     'bracket access': "export const x = process['env'].FOO;\n",
-    "import { env } from 'node:process'":
-      "import { env } from 'node:process';\nexport const x = env.FOO;\n",
+    "import { env } from 'node:process'": "import { env } from 'node:process';\nexport const x = env.FOO;\n",
     "import { env } from 'process'": "import { env } from 'process';\nexport const x = env.FOO;\n",
-    "import * as p from 'node:process'":
-      "import * as p from 'node:process';\nexport const x = p.env.FOO;\n",
+    "import * as p from 'node:process'": "import * as p from 'node:process';\nexport const x = p.env.FOO;\n",
     'const p = process': 'const p = process;\nexport const x = p.env.FOO;\n',
     'const { env } = process': 'const { env } = process;\nexport const x = env.FOO;\n',
   };
@@ -180,10 +175,6 @@ test('ESLint catches indirect ways of reading process.env', async () => {
   }
   // Same forms stay allowed where process.env is exempt.
   for (const [name, source] of Object.entries(forms)) {
-    assert.doesNotMatch(
-      await lintOutput('apps/api/', 'src/main.ts', source),
-      RESTRICTED,
-      `${name} in main.ts`,
-    );
+    assert.doesNotMatch(await lintOutput('apps/api/', 'src/main.ts', source), RESTRICTED, `${name} in main.ts`);
   }
 });

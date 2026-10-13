@@ -1,8 +1,9 @@
-// Keeps the community-health files honest. Each check applies to the files that are
-// present: links resolve (including from .github/, where only absolute repo URLs
-// work), commands they name are real scripts, issue forms follow GitHub's rules, and
-// nothing placeholder- or secret-shaped ships.
+// Keeps the community-health files honest: they all exist, their links resolve
+// (including from .github/, where only absolute repo URLs work), commands they name
+// are real scripts, issue forms follow GitHub's rules, and nothing placeholder- or
+// secret-shaped ships.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { test } from 'node:test';
@@ -26,6 +27,54 @@ const COMMUNITY_FILES = [
   '.github/pull_request_template.md',
 ];
 const present = () => COMMUNITY_FILES.filter((f) => existsSync(abs(f)));
+
+test('every community-health file exists', () => {
+  for (const f of COMMUNITY_FILES) assert.ok(existsSync(abs(f)), `missing ${f}`);
+});
+
+// --- License ---
+const LICENSE_MARKERS = {
+  'AGPL-3.0-only': [
+    'GNU AFFERO GENERAL PUBLIC LICENSE',
+    'Version 3, 19 November 2007',
+    'END OF TERMS AND CONDITIONS',
+  ],
+};
+// sha256 of the canonical file as downloaded from the license steward (gnu.org). To
+// change LICENSE, re-download it; never hand-edit.
+const LICENSE_SHA256 = '0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0';
+// The AGPL text has no holder slot, so the notice lives in the README.
+const COPYRIGHT_LINE = 'Copyright (C) 2026 FeedBouncer';
+
+test('LICENSE is the unmodified canonical text of the declared license', () => {
+  const declared = JSON.parse(read('package.json')).license;
+  assert.ok(LICENSE_MARKERS[declared], `unexpected root license ${declared}`);
+  const text = read('LICENSE');
+  for (const m of LICENSE_MARKERS[declared]) assert.ok(text.includes(m), `LICENSE lacks "${m}"`);
+  assert.equal(
+    createHash('sha256')
+      .update(readFileSync(abs('LICENSE')))
+      .digest('hex'),
+    LICENSE_SHA256,
+  );
+});
+
+test('every workspace manifest declares the root license', () => {
+  const declared = JSON.parse(read('package.json')).license;
+  for (const f of workspaceManifests())
+    assert.equal(JSON.parse(read(f)).license, declared, `${f} license field`);
+});
+
+// --- Code of conduct ---
+const CONDUCT_EMAIL = 'conduct@feedbouncer.com';
+
+test('CODE_OF_CONDUCT.md is the Contributor Covenant with a real contact', () => {
+  const text = read('CODE_OF_CONDUCT.md');
+  assert.match(text, /Contributor Covenant/);
+  assert.match(text, /contributor-covenant\.org\/version\/\d/);
+  assert.ok(text.includes(CONDUCT_EMAIL), 'enforcement contact missing');
+  assert.ok(!/\[NOTE:/i.test(text), 'unfilled template note left in the code of conduct');
+});
 
 function workspaceManifests() {
   return ['apps', 'packages'].flatMap((dir) =>
@@ -92,7 +141,6 @@ const PLACEHOLDERS = [
   /https?:\/\/(?:www\.)?example\.(?:com|org|net)\b/i,
   /\[INSERT[^\]]*\]/i,
   /<your[- ][a-z -]+>/i,
-  /<D[1-6]_[A-Z_]+>/,
 ];
 const PERSONAL_PATHS = [/\/Users\/[A-Za-z]/, /\/home\/[a-z][\w-]*\//, /[A-Z]:\\Users\\/];
 const SECRET_SHAPES = [
@@ -321,9 +369,12 @@ test('README introduces the project, keeps operational sections and links commun
     '## Continuous integration',
     '## Contributing',
     '## Security',
+    '## License',
   ]);
-  for (const target of ['CONTRIBUTING.md', 'SECURITY.md'])
+  for (const target of ['CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', 'SECURITY.md'])
     assert.ok(text.includes(`](${target})`), `README must link ${target}`);
+  assert.ok(text.includes('](LICENSE)'), 'README must link LICENSE');
+  assert.ok(text.includes(COPYRIGHT_LINE), 'README must carry the copyright notice');
   assert.match(text, /not affiliated with or endorsed by/i, 'platform non-endorsement statement');
 });
 

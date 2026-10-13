@@ -191,10 +191,16 @@ Three more jobs: `Compose config` (static validation of the compose files, inclu
 
 ## Contributing
 
-Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), which covers setup, conventions and the checks a pull request must pass.
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), which covers setup, conventions and the checks a pull request must pass. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 Found a bug or have an idea? [Open an issue](https://github.com/feed-bouncer-hq/feed-bouncer/issues/new/choose).
 
 ## Security
 
 Please report vulnerabilities privately. See [SECURITY.md](SECURITY.md). Do not open a public issue.
+
+## License
+
+FeedBouncer is licensed under the GNU Affero General Public License v3.0 only (`AGPL-3.0-only`). See [LICENSE](LICENSE).
+
+Copyright (C) 2026 FeedBouncer
