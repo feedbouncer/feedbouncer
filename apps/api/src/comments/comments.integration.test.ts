@@ -467,7 +467,7 @@ describe('comments: instagram platform, media and availability', () => {
     });
   });
 
-  it('an action marked available by the list is accepted by POST actions, and one marked unavailable is recorded with that same reason (Review Focus 3)', async () => {
+  it('an action marked available by the list is accepted by POST actions, and one marked unavailable is recorded with that same reason', async () => {
     const ig = await connectedInstagram();
     const fbPage = await connectedPage();
     const top = await igComment(ig);
@@ -611,7 +611,7 @@ describe('comments: instagram platform, media and availability', () => {
     });
   });
 
-  it('brand B moderator gets 404 on brand A instagram comment actions and never sees A comments in its list (Review Focus 4)', async () => {
+  it('brand B moderator gets 404 on brand A instagram comment actions and never sees A comments in its list', async () => {
     const ig = await connectedInstagram();
     const c = await igComment(ig, { text: 'secret of brand A' });
     const other = await orgWithRoles(api, 'cmtb');

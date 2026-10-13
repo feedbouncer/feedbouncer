@@ -637,7 +637,7 @@ describe('ModerationActions.request', () => {
     });
   });
 
-  it('instagram: comment in brand A requested from brand B scope -> refused not_found (Review Focus 4)', async () => {
+  it('instagram: comment in brand A requested from brand B scope -> refused not_found', async () => {
     const commentId = await seedIgComment();
     const brandB = await ctx.c.query<{ id: string }>(
       'INSERT INTO brand (organization_id, name) VALUES ($1, $2) RETURNING id',

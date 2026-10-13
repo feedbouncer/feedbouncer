@@ -112,7 +112,7 @@ export async function listInstagramAccounts(
             accessToken: new Secret(p.access_token),
           }
         : {
-            externalAccountId: pageId, // placeholder; never connectable (Decision 2)
+            externalAccountId: pageId, // a Page with no linked Instagram account is listed but never connectable
             displayName: name,
             eligible: false,
             ineligibleReason: 'no_linked_instagram_account',

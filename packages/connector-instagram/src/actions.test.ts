@@ -282,7 +282,7 @@ describe('instagram lifecycle', () => {
     expect(graph.subscribedFields(pageId)).toEqual(['comments']);
   });
 
-  it('instagram teardown keeps facebook feed (Review Focus 1)', async () => {
+  it('instagram teardown keeps facebook feed', async () => {
     const { graph, pageId, ctx } = world();
     graph.setSubscription(pageId, APP_ID, ['feed']);
     await lifecycle(cfg, now).onConnected(ctx);

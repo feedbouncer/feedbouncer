@@ -219,7 +219,7 @@ describe('connection lifecycle job', () => {
     const joined = lines.join('\n');
     for (const s of graph.issuedSecrets()) expect(joined).not.toContain(s);
   });
-  it('instagram setup subscribes comments on the linked page; facebook teardown on the same page keeps it (Review Focus 1)', async () => {
+  it('instagram setup subscribes comments on the linked page; facebook teardown on the same page keeps it', async () => {
     // One Page, connected both as Facebook and (through its linked account) as Instagram.
     const fb = await connectedPage();
     await run(fb.scope, 'setup');

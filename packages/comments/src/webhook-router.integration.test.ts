@@ -251,7 +251,7 @@ describe('routeWebhookDelivery for instagram', () => {
     await insert(B, 'facebook', IG_A);
   });
 
-  it('instagram events route only to the live connection for that IG account; unknown accounts are logged unrouted (Review Focus 4)', async () => {
+  it('instagram events route only to the live connection for that IG account; unknown accounts are logged unrouted', async () => {
     lines.length = 0;
     const enqueue = producerOk();
     const route = routeWebhookDelivery({

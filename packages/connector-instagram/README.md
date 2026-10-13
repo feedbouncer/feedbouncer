@@ -21,7 +21,7 @@ For setup, permissions and limits, see
 behaviour that has not been observed against a live app is listed below, and
 the code paths named there are the ones to revisit when it is.
 
-## Verified behaviour (Graph v26.0, checked 2026-10-13)
+## Platform assumptions (not yet verified against Meta)
 
 | #   | Question                                                                                        | Result       | Code path affected                                          |
 | --- | ----------------------------------------------------------------------------------------------- | ------------ | ----------------------------------------------------------- |
