@@ -101,6 +101,9 @@ export class NotifyingConnectionDirectory implements ConnectionDirectory {
   findLiveByAccount(platform: Platform, externalAccountId: string) {
     return this.inner.findLiveByAccount(platform, externalAccountId);
   }
+  findLiveByAccounts(platform: Platform, externalAccountIds: readonly string[]) {
+    return this.inner.findLiveByAccounts(platform, externalAccountIds);
+  }
 
   disconnect(scope: ConnectionScope, actorUserId: string): Promise<boolean> {
     return this.inner.disconnect(scope, actorUserId);

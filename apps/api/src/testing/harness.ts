@@ -207,11 +207,10 @@ export async function startTestApi(
       await app.close();
       await facebook?.close();
       if (redis.status === 'ready') {
-        const queueKeys = await redis.keys(`${env.jobs.prefix}:*`);
-        if (queueKeys.length) await redis.del(...queueKeys);
-      }
-      if (redis.status === 'ready') {
-        const keys = await redis.keys(`${redisKeyPrefix}*`);
+        const keys = [
+          ...(await redis.keys(`${env.jobs.prefix}:*`)),
+          ...(await redis.keys(`${redisKeyPrefix}*`)),
+        ];
         if (keys.length) await redis.del(...keys);
         await redis.quit();
       } else {

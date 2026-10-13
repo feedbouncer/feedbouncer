@@ -635,6 +635,17 @@ describe('PgConnectionDirectory (facebook pages additions)', () => {
     grantedScopes,
   });
 
+  it('findLiveByAccounts returns only the accounts that are live', async () => {
+    const live = `8${Date.now()}`;
+    const gone = `9${Date.now()}`;
+    const { scope } = await dir.upsertPending(fb(a, live, 'L'));
+    const { scope: goneScope } = await dir.upsertPending(fb(a, gone, 'G'));
+    await dir.disconnect(goneScope, a.userId);
+    const found = await dir.findLiveByAccounts('facebook', [live, gone, '1']);
+    expect([...found.keys()]).toEqual([live]);
+    expect(found.get(live)?.scope).toEqual(scope);
+  });
+
   it('findLiveByAccount returns the live row and ignores revoked ones', async () => {
     const page = `7${Date.now()}`;
     const { scope } = await dir.upsertPending(fb(a, page, 'P'));

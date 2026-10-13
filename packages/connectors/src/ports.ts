@@ -44,6 +44,11 @@ export interface ConnectionDirectory {
     platform: Platform,
     externalAccountId: string,
   ): Promise<ConnectionRecord | null>;
+  /** `findLiveByAccount` for many accounts at once; accounts without a live connection are absent. */
+  findLiveByAccounts(
+    platform: Platform,
+    externalAccountIds: readonly string[],
+  ): Promise<ReadonlyMap<string, ConnectionRecord>>;
   /** Marks revoked/user_disconnected and audits; false if already user_disconnected or not in scope. */
   disconnect(scope: ConnectionScope, actorUserId: string): Promise<boolean>;
 }

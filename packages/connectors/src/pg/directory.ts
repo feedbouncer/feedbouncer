@@ -135,6 +135,43 @@ export class PgConnectionDirectory implements ConnectionDirectory {
     };
   }
 
+  async findLiveByAccounts(
+    platform: Platform,
+    externalAccountIds: readonly string[],
+  ): Promise<ReadonlyMap<string, ConnectionRecord>> {
+    // Same cross-tenant exception as findLiveByAccount.
+    const r = await this.pool.query<{
+      id: string;
+      organization_id: string;
+      brand_id: string;
+      status: ConnectionStatus;
+      external_account_id: string;
+    }>(
+      `SELECT id, organization_id, brand_id, status, external_account_id FROM connection
+        WHERE platform = $1 AND external_account_id = ANY($2::text[]) AND status <> 'revoked'`,
+      [platform, externalAccountIds],
+    );
+    const perAccount = new Map<string, typeof r.rows>();
+    for (const row of r.rows) {
+      perAccount.set(row.external_account_id, [
+        ...(perAccount.get(row.external_account_id) ?? []),
+        row,
+      ]);
+    }
+    const found = new Map<string, ConnectionRecord>();
+    for (const [externalAccountId, rows] of perAccount) {
+      if (rows.length !== 1) continue; // more than one live row: refuse to guess
+      const row = rows[0]!;
+      found.set(externalAccountId, {
+        scope: { organizationId: row.organization_id, brandId: row.brand_id, connectionId: row.id },
+        platform,
+        externalAccountId,
+        status: row.status,
+      });
+    }
+    return found;
+  }
+
   async disconnect(scope: ConnectionScope, actorUserId: string): Promise<boolean> {
     return withTransaction(this.pool, async (c) => {
       const r = await c.query<{ platform: string }>(

@@ -236,6 +236,16 @@ const fbPending = (
 });
 
 describe('MemoryConnectionDirectory (facebook pages additions)', () => {
+  it('findLiveByAccounts returns only the accounts that are live', async () => {
+    const d = new MemoryConnectionDirectory();
+    const { scope: live } = await d.upsertPending(fbPending('org-a', 'brand-a', 'p1', 'P'));
+    const { scope: gone } = await d.upsertPending(fbPending('org-a', 'brand-a', 'p2', 'Q'));
+    await d.disconnect(gone, 'user-a');
+    const found = await d.findLiveByAccounts('facebook', ['p1', 'p2', 'p3']);
+    expect([...found.keys()]).toEqual(['p1']);
+    expect(found.get('p1')?.scope).toEqual(live);
+  });
+
   it('findLiveByAccount returns the live row and ignores revoked ones', async () => {
     const d = new MemoryConnectionDirectory();
     const { scope: sc } = await d.upsertPending(fbPending('org-a', 'brand-a', 'p1', 'P'));

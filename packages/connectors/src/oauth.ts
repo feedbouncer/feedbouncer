@@ -384,9 +384,13 @@ export class OAuthFlow {
     if (!grant) return GRANT_REJECTED;
     const accounts = await this.#accounts(platform, grant.userToken);
     if (!accounts) return GRANT_PLATFORM_ERROR;
+    const liveByAccount = await this.d.directory.findLiveByAccounts(
+      platform,
+      accounts.map((a) => a.externalAccountId),
+    );
     const views: GrantAccountView[] = [];
     for (const a of accounts) {
-      const live = await this.d.directory.findLiveByAccount(platform, a.externalAccountId);
+      const live = liveByAccount.get(a.externalAccountId);
       const connection = !live
         ? null
         : live.scope.organizationId === actor.organizationId && live.scope.brandId === actor.brandId

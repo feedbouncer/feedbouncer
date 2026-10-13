@@ -133,6 +133,17 @@ export class MemoryConnectionDirectory implements ConnectionDirectory {
     );
     return live.length === 1 ? live[0]!.rec : null;
   }
+  async findLiveByAccounts(
+    platform: Platform,
+    externalAccountIds: readonly string[],
+  ): Promise<ReadonlyMap<string, ConnectionRecord>> {
+    const found = new Map<string, ConnectionRecord>();
+    for (const id of externalAccountIds) {
+      const rec = await this.findLiveByAccount(platform, id);
+      if (rec) found.set(id, rec);
+    }
+    return found;
+  }
   async disconnect(scope: ConnectionScope, actorUserId: string): Promise<boolean> {
     void actorUserId; // the Pg adapter audits the actor; memory keeps no audit trail
     const row = this.#rows.get(scope.connectionId);
