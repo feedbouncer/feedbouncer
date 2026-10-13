@@ -1,10 +1,15 @@
 // Page webhook subscriptions are per app, and Graph's POST replaces the app's
 // whole `subscribed_fields` list. Facebook and Instagram connections can share
 // one Page, so every change reads the current list and merges client-side.
+// There is no compare-and-set on Graph, so two connections changing the same
+// Page at once can overwrite each other: after each write the list is read
+// again and the merge repeated (a bounded number of times) until this call's
+// fields are in the state it asked for.
 import { ConnectorError } from '@feedbouncer/connectors';
 import { graphId, graphRequest, type GraphCall } from './graph.js';
 
 const FIELD = /^[a-z][a-z_]{0,63}$/;
+const MAX_WRITES = 3;
 const pageNode = (n: string) => (n === 'me' ? 'me' : graphId(n));
 const success = (body: unknown) => (body as { success?: unknown } | null)?.success === true;
 
@@ -36,6 +41,8 @@ async function replaceFields(call: GraphCall, node: string, fields: readonly str
   if (!success(r.body)) throw new ConnectorError('transient', 'subscription_not_confirmed');
 }
 
+const notConverged = () => new ConnectorError('transient', 'subscription_not_converged');
+
 /** Adds `fields` to this app's subscription on the Page (`node` = page id, or 'me' with a Page token). Idempotent. */
 export async function subscribePageFields(
   call: GraphCall,
@@ -45,10 +52,13 @@ export async function subscribePageFields(
 ): Promise<{ fields: readonly string[] }> {
   checkFields(fields);
   const target = pageNode(node);
-  const have = await currentFields(call, target, appId);
-  const next = [...new Set([...have, ...fields])].sort();
-  if (next.length !== have.length) await replaceFields(call, target, next);
-  return { fields: next };
+  for (let writes = 0; ; writes++) {
+    const have = await currentFields(call, target, appId);
+    const next = [...new Set([...have, ...fields])].sort();
+    if (next.length === have.length) return { fields: next };
+    if (writes === MAX_WRITES) throw notConverged();
+    await replaceFields(call, target, next);
+  }
 }
 
 /** Removes `fields`; DELETEs the subscription only if no field remains. Idempotent. */
@@ -60,14 +70,18 @@ export async function unsubscribePageFields(
 ): Promise<{ fields: readonly string[]; deleted: boolean }> {
   checkFields(fields);
   const target = pageNode(node);
-  const have = await currentFields(call, target, appId);
-  const next = have.filter((f) => !fields.includes(f)).sort();
-  if (next.length === have.length) return { fields: next, deleted: false };
-  if (next.length > 0) {
-    await replaceFields(call, target, next);
-    return { fields: next, deleted: false };
+  let deleted = false;
+  for (let writes = 0; ; writes++) {
+    const have = await currentFields(call, target, appId);
+    const next = have.filter((f) => !fields.includes(f)).sort();
+    if (next.length === have.length) return { fields: next, deleted: deleted && next.length === 0 };
+    if (writes === MAX_WRITES) throw notConverged();
+    if (next.length > 0) {
+      await replaceFields(call, target, next);
+      continue;
+    }
+    const r = await graphRequest(call, { method: 'DELETE', path: [target, 'subscribed_apps'] });
+    if (!success(r.body)) throw new ConnectorError('transient', 'subscription_not_confirmed');
+    deleted = true;
   }
-  const r = await graphRequest(call, { method: 'DELETE', path: [target, 'subscribed_apps'] });
-  if (!success(r.body)) throw new ConnectorError('transient', 'subscription_not_confirmed');
-  return { fields: [], deleted: true };
 }

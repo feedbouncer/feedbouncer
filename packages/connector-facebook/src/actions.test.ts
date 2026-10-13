@@ -356,15 +356,22 @@ describe('respond', () => {
 });
 
 describe('lifecycle', () => {
-  it('onConnected subscribes the page to feed', async () => {
+  it('onConnected subscribes the page to feed and reads the list back', async () => {
+    let fields: string[] = [];
     const { fetch, ctx } = graph({
-      'GET /v26.0/900/subscribed_apps': () => ({ data: [] }),
-      'POST /v26.0/900/subscribed_apps': () => ({ success: true }),
+      'GET /v26.0/900/subscribed_apps': () => ({
+        data: fields.length ? [{ id: cfg.appId, subscribed_fields: fields }] : [],
+      }),
+      'POST /v26.0/900/subscribed_apps': (_u, init) => {
+        fields = new URLSearchParams(String(init.body)).get('subscribed_fields')!.split(',');
+        return { success: true };
+      },
     });
     await expect(lifecycle(cfg, now).onConnected(ctx)).resolves.toBeUndefined();
     expect(calls(fetch)).toEqual([
       'GET /v26.0/900/subscribed_apps',
       'POST /v26.0/900/subscribed_apps',
+      'GET /v26.0/900/subscribed_apps',
     ]);
     expect(fetch.mock.calls[1]![1].body).toBe('subscribed_fields=feed');
   });
@@ -381,16 +388,21 @@ describe('lifecycle', () => {
   });
 
   it('onDisconnected deletes the subscription and treats auth/not_found errors as done', async () => {
+    let subscribed = true;
     const ok = graph({
       'GET /v26.0/900/subscribed_apps': () => ({
-        data: [{ id: cfg.appId, subscribed_fields: ['feed'] }],
+        data: subscribed ? [{ id: cfg.appId, subscribed_fields: ['feed'] }] : [],
       }),
-      'DELETE /v26.0/900/subscribed_apps': () => ({ success: true }),
+      'DELETE /v26.0/900/subscribed_apps': () => {
+        subscribed = false;
+        return { success: true };
+      },
     });
     await expect(lifecycle(cfg, now).onDisconnected(ok.ctx)).resolves.toBeUndefined();
     expect(calls(ok.fetch)).toEqual([
       'GET /v26.0/900/subscribed_apps',
       'DELETE /v26.0/900/subscribed_apps',
+      'GET /v26.0/900/subscribed_apps',
     ]);
 
     const revoked = failing('GET /v26.0/900/subscribed_apps', { code: 190 });
@@ -411,6 +423,57 @@ describe('lifecycle', () => {
     const unknown = failing('GET /v26.0/900/subscribed_apps', { code: 1 }, 500);
     await expect(lifecycle(cfg, now).onDisconnected(unknown.ctx)).rejects.toMatchObject({
       kind: 'transient',
+    });
+  });
+
+  it('onDisconnected treats a failed DELETE like a failed read: gone access is done, other errors propagate', async () => {
+    const deleteFails = (error: Record<string, unknown>, status: number) => {
+      const fetch = vi.fn(async (url: URL, init: RequestInit) => {
+        if (init.method === 'GET' && url.pathname === '/v26.0/900/subscribed_apps') {
+          return new Response(
+            JSON.stringify({ data: [{ id: cfg.appId, subscribed_fields: ['feed'] }] }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify({ error: { message: 'RAW-GRAPH-MESSAGE', ...error } }), {
+          status,
+        });
+      });
+      return {
+        fetch,
+        ctx: {
+          accessToken: new Secret('PAGE-TOKEN'),
+          externalAccountId: '900',
+          http: createSafeHttp({ allowedHosts: ['graph.facebook.com'], fetch: fetch as never }),
+          signal: AbortSignal.timeout(1000),
+          reportQuota: vi.fn(async () => undefined),
+        },
+      };
+    };
+
+    const revoked = deleteFails({ code: 190 }, 400);
+    await expect(lifecycle(cfg, now).onDisconnected(revoked.ctx)).resolves.toBeUndefined();
+    expect(calls(revoked.fetch)).toEqual([
+      'GET /v26.0/900/subscribed_apps',
+      'DELETE /v26.0/900/subscribed_apps',
+    ]);
+
+    const roleLost = deleteFails({ code: 200 }, 403);
+    await expect(lifecycle(cfg, now).onDisconnected(roleLost.ctx)).resolves.toBeUndefined();
+
+    const gone = deleteFails({ code: 100, error_subcode: 33 }, 404);
+    await expect(lifecycle(cfg, now).onDisconnected(gone.ctx)).resolves.toBeUndefined();
+
+    const down = deleteFails({ code: 2 }, 500);
+    await expect(lifecycle(cfg, now).onDisconnected(down.ctx)).rejects.toMatchObject({
+      kind: 'transient',
+      code: 'platform_unavailable',
+    });
+
+    const policy = deleteFails({ code: 368 }, 400);
+    await expect(lifecycle(cfg, now).onDisconnected(policy.ctx)).rejects.toMatchObject({
+      kind: 'permanent',
+      code: 'blocked_for_policy',
     });
   });
 
