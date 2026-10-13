@@ -10,8 +10,12 @@ listing, organic comment moderation and webhooks, built on
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `src/config.ts`    | `parseFacebookEnv`, `FACEBOOK_SCOPES`, `FACEBOOK_FILE_VARS`. Returns `null` when `FACEBOOK_APP_ID` is unset.                                                 |
 | `src/graph.ts`     | The only HTTP path to Graph: `graphRequest`, `graphId` path guard, `appSecretProof`, `mapGraphError`, BUC usage.                                             |
+| `src/oauth.ts`     | `buildAuthorizationUrl`, `exchangeCode` (short- to long-lived user token), `listAccounts` (Pages the user manages with their Page tokens).                   |
+| `src/comments.ts`  | `listComments`, `getComment`, `toNormalizedComment`: read and normalize Page post comments.                                                                  |
+| `src/webhook.ts`   | `facebookWebhookSpec` (HMAC signature, feed event `parseFeedWebhook`), `verifyHandshake` (subscribe challenge).                                              |
 | `src/actions.ts`   | `act` (hide, unhide, delete, ban/unban author), `respond` (public and private replies), `lifecycle` (feed webhook subscription), `PRIVATE_REPLY_INELIGIBLE`. |
 | `src/connector.ts` | `createFacebookConnector`: the `Connector` for the framework registry (tokens not refreshable, multiple Page selection).                                     |
+| `src/testing/`     | `./testing` export: `FakeGraph`, an in-memory Graph API (Pages, tokens, comments, webhooks) for tests of this package and its consumers.                     |
 
 ## Rules enforced here
 
