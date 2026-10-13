@@ -217,7 +217,9 @@ export class ModerationActions {
 
   /** Outcomes known without asking the platform. */
   async #precheck(i: Request, c: CommentRow): Promise<Verdict> {
-    if (c.platformState === 'deleted') return { status: 'noop', code: 'already_deleted' };
+    // Bans are against the author, so a deleted comment does not make them moot.
+    if (c.platformState === 'deleted' && !AUTHOR_KINDS.has(i.kind))
+      return { status: 'noop', code: 'already_deleted' };
     if (i.kind === 'hide' && c.platformState === 'hidden')
       return { status: 'noop', code: 'already_hidden' };
     if (i.kind === 'unhide' && c.platformState === 'visible')

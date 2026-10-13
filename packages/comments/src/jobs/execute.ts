@@ -29,7 +29,7 @@ import {
   type ActionKind,
   type ActionStatus,
 } from '../actions.js';
-import type { PgCommentStore } from '../store.js';
+import { setCommentPlatformState } from '../store.js';
 import { EXECUTE_JOB, type ExecutePayload } from './specs.js';
 
 type Terminal = Exclude<ActionStatus, 'pending'>;
@@ -86,6 +86,7 @@ const done = (status: Terminal, code: string | null = null): Final => ({
   commentState: null,
 });
 const gone = (): Final => ({ ...done('noop', 'comment_gone'), commentState: 'deleted' });
+const AUTHOR_KINDS: ReadonlySet<ActionKind> = new Set(['ban_author', 'unban_author']);
 
 /** A failed platform call: a final outcome, or an error to rethrow (after recording `final`, if set). */
 type FailureOutcome = { final: Final; rethrow?: ConnectorError } | { rethrow: ConnectorError };
@@ -122,7 +123,8 @@ function mapAct(r: ActionResult, kind: ActionKind, attempt: number): FailureOutc
       };
     }
     case 'not_found':
-      return { final: gone() };
+      // A ban targets the author: a missing author says nothing about the comment.
+      return { final: AUTHOR_KINDS.has(kind) ? done('failed', 'not_found') : gone() };
     case 'unsupported':
       return { final: done('failed', 'unsupported') };
     case 'failed':
@@ -248,14 +250,8 @@ async function finish(
       );
       return { status: cur.rows[0]?.status ?? null };
     }
-    if (f.commentState !== null) {
-      // Same rule as PgCommentStore.setPlatformState: never out of `deleted`.
-      await tx.query(
-        `UPDATE comment SET platform_state = CASE WHEN platform_state = 'deleted' THEN 'deleted' ELSE $5 END
-          WHERE id = $4 AND organization_id = $1 AND brand_id = $2 AND connection_id = $3`,
-        [scope.organizationId, scope.brandId, scope.connectionId, a.commentId, f.commentState],
-      );
-    }
+    if (f.commentState !== null)
+      await setCommentPlatformState(tx, scope, a.commentId, f.commentState);
     await recordActionAudit(tx, {
       organizationId: scope.organizationId,
       brandId: scope.brandId,
@@ -274,7 +270,6 @@ async function finish(
 export function executeActionJob(d: {
   pool: pg.Pool;
   runtime: ConnectorRuntime;
-  store: PgCommentStore;
   log: Logger;
 }): JobDefinition<ExecutePayload> {
   return {

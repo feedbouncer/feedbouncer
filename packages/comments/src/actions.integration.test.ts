@@ -221,10 +221,14 @@ describe('ModerationActions.request', () => {
     expect(enqueue).not.toHaveBeenCalled();
   });
 
-  it('any action on a deleted comment is noop already_deleted', async () => {
+  it('comment-targeted actions on a deleted comment are noop already_deleted', async () => {
     const commentId = await seedComment({ state: 'deleted' });
-    for (const kind of ['hide', 'unhide', 'delete', 'ban_author', 'public_reply'] as const) {
-      const r = await request(commentId, kind, kind === 'public_reply' ? { text: 'hi' } : {});
+    for (const kind of ['hide', 'unhide', 'delete', 'public_reply', 'private_reply'] as const) {
+      const r = await request(
+        commentId,
+        kind,
+        kind === 'public_reply' || kind === 'private_reply' ? { text: 'hi' } : {},
+      );
       expect(r).toMatchObject({
         status: 'recorded',
         action: { kind, status: 'noop', outcomeCode: 'already_deleted' },
@@ -234,6 +238,27 @@ describe('ModerationActions.request', () => {
       Array(5).fill('already_deleted'),
     );
     expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('ban and unban by author are accepted on a deleted comment', async () => {
+    const commentId = await seedComment({ state: 'deleted' });
+    for (const kind of ['ban_author', 'unban_author'] as const)
+      expect(await request(commentId, kind)).toMatchObject({
+        status: 'accepted',
+        action: { kind, status: 'pending', outcomeCode: null },
+      });
+    expect(enqueue).toHaveBeenCalledTimes(2);
+  });
+
+  it('a ban made before the comment was deleted can still be undone', async () => {
+    const commentId = await seedComment();
+    expect(await request(commentId, 'ban_author')).toMatchObject({ status: 'accepted' });
+    await pool.query(`UPDATE comment SET platform_state = 'deleted' WHERE id = $1`, [commentId]);
+    expect(await request(commentId, 'unban_author')).toMatchObject({
+      status: 'accepted',
+      action: { kind: 'unban_author', status: 'pending' },
+    });
+    expect(enqueue).toHaveBeenCalledTimes(2);
   });
 
   it('rule actor on a page-authored comment -> not_eligible own_account_comment', async () => {

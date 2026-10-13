@@ -4,7 +4,7 @@ import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import type { NormalizedComment } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import { PgCommentStore } from './store.js';
+import { PgCommentStore, setCommentPlatformState } from './store.js';
 
 let ctx: Awaited<ReturnType<typeof migratedDb>>;
 let pool: pg.Pool;
@@ -159,13 +159,13 @@ describe('PgCommentStore', () => {
     });
   });
 
-  it('setPlatformState follows our own actions but never revives a deleted comment', async () => {
+  it('setCommentPlatformState follows our own actions but never revives a deleted comment', async () => {
     const c = comment();
     const { commentId } = await store.upsertFromPlatform(scope(), c, own(1));
-    await store.setPlatformState(scope(), commentId, 'hidden');
+    await setCommentPlatformState(pool, scope(), commentId, 'hidden');
     expect((await store.load(t, commentId))?.platformState).toBe('hidden');
-    await store.setPlatformState(scope(), commentId, 'deleted');
-    await store.setPlatformState(scope(), commentId, 'visible');
+    await setCommentPlatformState(pool, scope(), commentId, 'deleted');
+    await setCommentPlatformState(pool, scope(), commentId, 'visible');
     expect((await store.load(t, commentId))?.platformState).toBe('deleted');
   });
 
@@ -290,7 +290,7 @@ describe('PgCommentStore', () => {
     const ref = { sourceExternalId: c.sourceExternalId, externalId: c.externalId };
     // Another tenant's scope sees its own (empty) world.
     expect(await store.markDeleted(scopeOf(other), ref, at(2))).toBeNull();
-    await store.setPlatformState(scopeOf(other), commentId, 'hidden');
+    await setCommentPlatformState(pool, scopeOf(other), commentId, 'hidden');
     expect((await store.load(t, commentId))?.platformState).toBe('visible');
     // A forged scope (our connection, their organization) is refused.
     const forged = { ...scope(), organizationId: other.organizationId, brandId: other.brandId };

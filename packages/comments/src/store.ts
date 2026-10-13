@@ -79,6 +79,24 @@ const toRow = (r: Record<string, unknown>): CommentRow => ({
 
 const ids = (s: ConnectionScope) => [s.organizationId, s.brandId, s.connectionId];
 
+/**
+ * After our own actions. Never moves a comment out of `deleted`. The one copy
+ * of that rule: used by the action executor inside its transaction.
+ */
+export async function setCommentPlatformState(
+  db: pg.Pool | pg.ClientBase,
+  scope: ConnectionScope,
+  commentId: string,
+  state: PlatformState,
+): Promise<void> {
+  if (!UUID.test(commentId)) return;
+  await db.query(
+    `UPDATE comment SET platform_state = CASE WHEN platform_state = 'deleted' THEN 'deleted' ELSE $5 END
+      WHERE id = $4 AND organization_id = $1 AND brand_id = $2 AND connection_id = $3`,
+    [...ids(scope), commentId, state],
+  );
+}
+
 async function upsertSource(
   tx: pg.ClientBase,
   scope: ConnectionScope,
@@ -247,20 +265,6 @@ export class PgCommentStore {
       await linkChildren(tx, scope, sourceId, r.rows[0].id, ref.externalId);
       return r.rows[0].id;
     });
-  }
-
-  /** After our own actions. Never moves a comment out of `deleted`. */
-  async setPlatformState(
-    scope: ConnectionScope,
-    commentId: string,
-    state: PlatformState,
-  ): Promise<void> {
-    if (!UUID.test(commentId)) return;
-    await this.pool.query(
-      `UPDATE comment SET platform_state = CASE WHEN platform_state = 'deleted' THEN 'deleted' ELSE $5 END
-        WHERE id = $4 AND organization_id = $1 AND brand_id = $2 AND connection_id = $3`,
-      [...ids(scope), commentId, state],
-    );
   }
 
   async load(scope: BrandScope, commentId: string): Promise<CommentRow | null> {

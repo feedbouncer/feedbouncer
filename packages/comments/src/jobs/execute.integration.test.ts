@@ -197,7 +197,7 @@ beforeEach(async () => {
     log,
   });
   ingest = ingestCommentJob({ runtime, directory, store, clock });
-  job = executeActionJob({ pool, runtime, store, log });
+  job = executeActionJob({ pool, runtime, log });
 
   const c = graph.addComment(pageId, { message: 'spam here', createdAtMs: nowMs - 60_000 });
   seeded = { ...c, id: await ingestComment(c) };
@@ -265,6 +265,24 @@ describe('moderation execute job', () => {
     });
     expect(graph.blocked(pageId)).toEqual([author]);
     expect(await actionRow(actionId)).toMatchObject({ platform_ref: author });
+  });
+
+  it('ban then unban by author id still work after the comment is deleted', async () => {
+    const author = (await store.load(t, seeded.id))?.authorExternalId;
+    expect(await run(await requestAction(seeded.id, 'ban_author'))).toMatchObject({
+      status: 'applied',
+    });
+    expect(await run(await requestAction(seeded.id, 'delete'))).toMatchObject({
+      status: 'applied',
+    });
+    expect(graph.blocked(pageId)).toEqual([author]);
+    expect(await run(await requestAction(seeded.id, 'unban_author'))).toEqual({
+      status: 'applied',
+      outcomeCode: null,
+      undo: 'ban_author',
+    });
+    expect(graph.blocked(pageId)).toEqual([]);
+    expect((await store.load(t, seeded.id))?.platformState).toBe('deleted');
   });
 
   it('a ban the platform refuses for the author is not_eligible with that code', async () => {
