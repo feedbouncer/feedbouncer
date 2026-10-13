@@ -305,6 +305,9 @@ importers:
       '@feedbouncer/jobs':
         specifier: workspace:*
         version: link:../jobs
+      '@feedbouncer/mailer':
+        specifier: workspace:*
+        version: link:../mailer
       '@feedbouncer/secrets':
         specifier: workspace:*
         version: link:../secrets
