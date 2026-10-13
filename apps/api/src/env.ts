@@ -19,6 +19,12 @@ import {
   type SecretFileSystem,
 } from '@feedbouncer/service-runtime';
 import {
+  FACEBOOK_FILE_VARS,
+  parseFacebookEnv,
+  type FacebookConfig,
+} from '@feedbouncer/connector-facebook';
+import { loadJobsConfig, type JobsConfig } from '@feedbouncer/jobs';
+import {
   loadHealthPolicy,
   loadTelemetryConfig,
   type HealthPolicy,
@@ -35,6 +41,7 @@ export const API_FILE_VARS = [
   'AUTH_SECRET',
   'SMTP_URL',
   ...ENCRYPTION_FILE_VARS,
+  ...FACEBOOK_FILE_VARS,
 ] as const;
 
 export interface ApiEnv {
@@ -53,6 +60,10 @@ export interface ApiEnv {
   readonly trustProxyHops: number;
   /** Deployment keys for stored platform credentials. Serializes without key material. */
   readonly encryption: Keyring;
+  /** Null when FACEBOOK_APP_ID is unset: the connector, its webhook route and its job producer are off. */
+  readonly facebook: FacebookConfig | null;
+  /** Queue prefix and dedup window, shared with the worker so both sides use the same queues. */
+  readonly jobs: JobsConfig;
   readonly telemetry: TelemetryConfig;
   readonly health: HealthPolicy;
 }
@@ -94,6 +105,8 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     }),
     trustProxyHops: readInt(env, 'TRUST_PROXY_HOPS', { min: 0, max: 5, fallback: 0 }),
     encryption: loadEncryptionKeyring(env, appEnv, opts.warn),
+    facebook: parseFacebookEnv(env),
+    jobs: loadJobsConfig(env),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),
   };
@@ -104,6 +117,8 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     logLevel: config.logLevel,
     publicWebUrl: publicWebUrl.origin,
     trustProxyHops: config.trustProxyHops,
+    facebookEnabled: config.facebook !== null,
+    jobQueuePrefix: config.jobs.prefix,
     activeKeyId: config.encryption.activeKeyId,
     metricsPort: config.telemetry.metrics.port,
     metricsHost: config.telemetry.metrics.host,

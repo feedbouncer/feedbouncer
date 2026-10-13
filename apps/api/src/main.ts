@@ -19,6 +19,7 @@ import {
   writeStartupConfigError,
 } from '@feedbouncer/service-runtime';
 import { buildApp } from './app.factory.js';
+import { buildFacebookDeps } from './facebook-deps.js';
 import { loadApiEnv, type ApiEnv } from './env.js';
 
 let env: ApiEnv;
@@ -46,9 +47,11 @@ const redis = new Redis(env.redisUrl.href, { maxRetriesPerRequest: 1, enableOffl
 redis.on('error', (err) => log.warn('redis connection error', errorFields(err)));
 const mailer = createSmtpMailer(env.smtpUrl, env.mailFrom);
 
+const facebook = buildFacebookDeps({ env, pool, log, metrics });
+
 async function closeResources(): Promise<void> {
   mailer.close();
-  await Promise.allSettled([pool.end(), redis.quit()]);
+  await Promise.allSettled([facebook?.close(), pool.end(), redis.quit()]);
 }
 
 try {
@@ -61,6 +64,9 @@ try {
     redisKeyPrefix: 'fb:',
     metrics,
     health: new PgHealthReader(pool, env.health),
+    connectors: facebook?.connectors ?? null,
+    producer: facebook?.producer ?? null,
+    comments: facebook?.comments ?? null,
   });
   await app.listen({ host: '0.0.0.0', port: env.port });
   log.info('api listening', { port: env.port });

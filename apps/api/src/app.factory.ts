@@ -8,6 +8,7 @@ import { registerRequestLog } from './http/request-log.js';
 import { TraceInterceptor } from './http/trace.interceptor.js';
 import { trustProxyHops } from './http/trust-proxy.js';
 import type { AppDeps } from './deps.js';
+import { registerFacebookWebhook } from './webhooks/facebook-webhook.plugin.js';
 
 export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
   const adapter = new FastifyAdapter({
@@ -34,6 +35,9 @@ export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
   fastify.addHook('onRequest', async (req, reply) => {
     // Every request, not a path prefix: Fastify decodes paths ("/%61pi" is
     // "/api"), so matching the raw URL would be bypassable. Safe methods pass.
+    // Routing runs before onRequest, so routeOptions.config is the matched
+    // route's own. Only signature-verified webhook routes opt out of the check.
+    if (req.routeOptions.config?.publicWebhook === true) return;
     if (!isTrustedOrigin(req.method, req.headers, webOrigin)) {
       const e = new ApiError(403, 'invalid_origin');
       return reply.status(e.status).header('cache-control', 'no-store').send(errorBody(e));
@@ -43,6 +47,7 @@ export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
     reply.header('x-content-type-options', 'nosniff');
     reply.header('cache-control', reply.getHeader('cache-control') ?? 'no-store');
   });
+  await registerFacebookWebhook(fastify, deps);
   registerRequestLog(fastify, deps.log, deps.metrics);
   app.useGlobalInterceptors(new TraceInterceptor());
   app.useGlobalFilters(new ApiErrorFilter(deps.log));

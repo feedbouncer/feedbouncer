@@ -149,6 +149,13 @@ export const ACCOUNT_ROUTES = [
   'POST /api/v1/invitations/accept',
 ];
 
+/**
+ * /api/v1 routes with no session that authenticate by platform signature or
+ * verify token instead. Each declares `config.publicWebhook`, which also exempts
+ * it from the Origin check; the route inventory test pins both lists.
+ */
+export const PUBLIC_ROUTES = ['GET /api/v1/webhooks/facebook', 'POST /api/v1/webhooks/facebook'];
+
 /** The Better Auth endpoints the /api/auth proxy forwards; everything else is a 404. */
 export const PROXY_ROUTES = [
   'GET /verify-email',

@@ -2,11 +2,12 @@
 // real Redis (keys isolated by a random prefix), with an in-memory mailer.
 // Requests go through fastify.inject, so no port is opened.
 // Needs DATABASE_URL (admin connection for scratch databases) and REDIS_URL.
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { Redis } from 'ioredis';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createPool } from '@feedbouncer/db';
+import { loadJobsConfig } from '@feedbouncer/jobs';
 import { migratedDb } from '@feedbouncer/db/testing';
 import { extractFirstUrl, MemoryMailer } from '@feedbouncer/mailer/testing';
 import { testKeyring } from '@feedbouncer/secrets/testing';
@@ -20,6 +21,7 @@ import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { buildApp } from '../app.factory.js';
 import type { AppDeps } from '../deps.js';
 import type { ApiEnv } from '../env.js';
+import { buildFacebookDeps, type FacebookDeps } from '../facebook-deps.js';
 
 export const WEB = 'http://localhost:3000';
 
@@ -30,6 +32,18 @@ export interface TestResponse {
   headers: Record<string, unknown>;
   /** The Set-Cookie name=value pairs of this response, joined for a Cookie header. */
   cookie: string | null;
+}
+
+export interface RawResponse {
+  status: number;
+  headers: Record<string, unknown>;
+  text: string;
+}
+
+export interface SeededFacebookConnection {
+  /** The numeric Page id the connection is bound to (the webhook entry id). */
+  pageId: string;
+  scope: { organizationId: string; brandId: string; connectionId: string };
 }
 
 export interface TestApi {
@@ -47,10 +61,28 @@ export interface TestApi {
     url: string,
     opts?: { body?: unknown; cookie?: string; headers?: Record<string, string> },
   ): Promise<TestResponse>;
+  /** No default Origin and no JSON parsing: the body is sent and returned as bytes/text. */
+  raw(
+    method: string,
+    url: string,
+    opts?: { body?: string; headers?: Record<string, string> },
+  ): Promise<RawResponse>;
+  /** Inserts an active Facebook connection with a random 15-digit Page id into an organization's brand. */
+  seedFacebookConnection(org: {
+    orgId: string;
+    brandId: string;
+  }): Promise<SeededFacebookConnection>;
   close(): Promise<void>;
 }
 
-export async function startTestApi(overrides: Partial<ApiEnv> = {}): Promise<TestApi> {
+/**
+ * `deps` replaces individual AppDeps built by the harness (e.g. a failing
+ * producer). Facebook-backed deps exist only when `overrides.facebook` is set.
+ */
+export async function startTestApi(
+  overrides: Partial<ApiEnv> = {},
+  depsOverrides: Partial<Pick<AppDeps, 'connectors' | 'producer' | 'comments'>> = {},
+): Promise<TestApi> {
   const redisRaw = process.env.REDIS_URL;
   if (!redisRaw) {
     throw new Error(
@@ -72,6 +104,9 @@ export async function startTestApi(overrides: Partial<ApiEnv> = {}): Promise<Tes
     encryption: testKeyring(),
     telemetry: loadTelemetryConfig({ METRICS_PORT: '0' }, 'api'),
     health: loadHealthPolicy({}),
+    facebook: null,
+    // A random queue prefix per app keeps tests from sharing BullMQ keys.
+    jobs: loadJobsConfig({ JOB_QUEUE_PREFIX: `t${randomUUID().replaceAll('-', '').slice(0, 20)}` }),
     ...overrides,
   };
   const logLines: string[] = [];
@@ -81,6 +116,8 @@ export async function startTestApi(overrides: Partial<ApiEnv> = {}): Promise<Tes
   redis.on('error', () => {}); // reported through /healthz; tests may point at a dead Redis
   const redisKeyPrefix = `fbtest:${randomUUID()}:`;
   const mailer = new MemoryMailer();
+  const metrics = createMetrics('api');
+  const facebook: FacebookDeps | null = buildFacebookDeps({ env, pool, log, metrics });
   const deps: AppDeps = {
     env,
     pool,
@@ -88,13 +125,18 @@ export async function startTestApi(overrides: Partial<ApiEnv> = {}): Promise<Tes
     mailer,
     log,
     redisKeyPrefix,
-    metrics: createMetrics('api'),
+    metrics,
     health: new PgHealthReader(pool, env.health),
+    connectors: facebook?.connectors ?? null,
+    producer: facebook?.producer ?? null,
+    comments: facebook?.comments ?? null,
+    ...depsOverrides,
   };
   let app: NestFastifyApplication;
   try {
     app = await buildApp(deps);
   } catch (err) {
+    await facebook?.close();
     redis.disconnect();
     await pool.end();
     await db.close();
@@ -130,8 +172,34 @@ export async function startTestApi(overrides: Partial<ApiEnv> = {}): Promise<Tes
       }
       return { status: res.statusCode, body, headers: res.headers, cookie: cookies || null };
     },
+    async raw(method, url, opts = {}) {
+      const res = await fastify.inject({
+        method: method as never,
+        url,
+        headers: opts.headers ?? {},
+        ...(opts.body === undefined ? {} : { payload: opts.body }),
+      });
+      return { status: res.statusCode, headers: res.headers, text: res.body };
+    },
+    async seedFacebookConnection(org) {
+      const pageId = `1${String(randomInt(0, 100_000_000_000_000)).padStart(14, '0')}`;
+      const { rows } = await pool.query<{ id: string }>(
+        `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, status)
+         VALUES ($1, $2, 'facebook', $3, 'active') RETURNING id`,
+        [org.orgId, org.brandId, pageId],
+      );
+      return {
+        pageId,
+        scope: { organizationId: org.orgId, brandId: org.brandId, connectionId: rows[0]!.id },
+      };
+    },
     async close() {
       await app.close();
+      await facebook?.close();
+      if (redis.status === 'ready') {
+        const queueKeys = await redis.keys(`${env.jobs.prefix}:*`);
+        if (queueKeys.length) await redis.del(...queueKeys);
+      }
       if (redis.status === 'ready') {
         const keys = await redis.keys(`${redisKeyPrefix}*`);
         if (keys.length) await redis.del(...keys);

@@ -2,16 +2,29 @@ import { RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
 import { DiscoveryService, MetadataScanner, ModulesContainer, Reflector } from '@nestjs/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { Secret } from '@feedbouncer/service-runtime';
 import { ROUTES } from '../auth/auth-proxy.controller.js';
 import { startTestApi, type TestApi } from '../testing/harness.js';
 import { CAPABILITY } from '../tenancy/capability.decorator.js';
-import { ACCOUNT_ROUTES, CASES, PROXY_ROUTES, TOKEN_CASES } from './isolation-cases.js';
+import {
+  ACCOUNT_ROUTES,
+  CASES,
+  PROXY_ROUTES,
+  PUBLIC_ROUTES,
+  TOKEN_CASES,
+} from './isolation-cases.js';
 
+const FACEBOOK = {
+  appId: '1112223334',
+  appSecret: new Secret('fb-app-secret-0123456789abcdef'),
+  graphVersion: 'v26.0',
+  webhookVerifyToken: new Secret('verify-token-0123456789'),
+};
 const COVERED_ROUTES = CASES.map((c) => c.route);
 
 let api: TestApi;
 beforeAll(async () => {
-  api = await startTestApi();
+  api = await startTestApi({ facebook: FACEBOOK });
 });
 afterAll(() => api.close());
 
@@ -33,9 +46,26 @@ function registered(): string[] {
 }
 
 describe('route inventory', () => {
-  it('every /api/v1 route is tenant-scoped (covered) or a known account route', () => {
+  it('every /api/v1 route is tenant-scoped (covered), a known account route or a signed public route', () => {
     const v1 = registered().filter((r) => r.includes(' /api/v1/'));
-    expect(v1.sort()).toEqual([...COVERED_ROUTES, ...ACCOUNT_ROUTES].sort());
+    expect(v1.sort()).toEqual([...COVERED_ROUTES, ...ACCOUNT_ROUTES, ...PUBLIC_ROUTES].sort());
+  });
+
+  it('exactly the public routes skip the Origin check', async () => {
+    // A state-changing request from a foreign origin must be refused before any
+    // handler runs; only the signature-verified webhook routes are exempt.
+    const exempt: string[] = [];
+    for (const route of registered()) {
+      const [method, path] = route.split(' ') as [string, string];
+      if (['GET', 'HEAD', 'OPTIONS'].includes(method)) continue; // never origin-checked
+      const url = path.replace(/:[A-Za-z]+/g, '00000000-0000-4000-8000-000000000000');
+      const r = await api.req(method, url.replace(/\*$/, 'x'), {
+        body: '{}',
+        headers: { origin: 'https://evil.example' },
+      });
+      if (r.body?.error?.code !== 'invalid_origin') exempt.push(route);
+    }
+    expect(exempt.sort()).toEqual(PUBLIC_ROUTES.filter((r) => r.startsWith('POST ')));
   });
 
   it('every invitation token route has a cross-organization case', () => {
