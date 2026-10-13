@@ -249,6 +249,27 @@ describe('lifecycle', () => {
     expect(await stack.vault.readTokens(scope)).toEqual({ access: null, refresh: null });
   });
 
+  it('teardown on the final attempt deletes tokens even when the vault read fails', async () => {
+    const { stack, scope } = await connected(connector());
+    await stack.directory.disconnect(scope, stack.actor.userId);
+    const read = vi.spyOn(stack.vault, 'readTokens').mockRejectedValueOnce(new Error('vault down'));
+    await expect(stack.runtime.teardown(scope, { final: true })).rejects.toMatchObject({
+      kind: 'transient',
+      code: 'storage_unavailable',
+    });
+    read.mockRestore();
+    expect(await stack.vault.readTokens(scope)).toEqual({ access: null, refresh: null });
+  });
+
+  it('teardown keeps tokens when the vault read fails before the final attempt', async () => {
+    const { stack, scope } = await connected(connector());
+    await stack.directory.disconnect(scope, stack.actor.userId);
+    const read = vi.spyOn(stack.vault, 'readTokens').mockRejectedValueOnce(new Error('vault down'));
+    await expect(stack.runtime.teardown(scope)).rejects.toMatchObject({ kind: 'transient' });
+    read.mockRestore();
+    expect((await stack.vault.readTokens(scope)).access).not.toBeNull();
+  });
+
   it('teardown deletes tokens on a non-retryable platform failure and rethrows', async () => {
     const c = connector({
       lifecycle: {

@@ -113,7 +113,8 @@ export class ConnectorRuntime {
    * straight from the vault (no refresh, no status check, no budget).
    * Credentials are kept only when the platform call fails retryably and
    * `final` is not set, so the caller's retry can finish the cleanup. Pass
-   * `final` on the last attempt: the credentials go either way.
+   * `final` on the last attempt: the credentials go either way, including
+   * when the vault read itself fails.
    */
   async teardown(
     scope: ConnectionScope,
@@ -132,7 +133,13 @@ export class ConnectorRuntime {
       await forget();
       return 'no_lifecycle';
     }
-    const { access } = await viaPort(this.d.log, fields, () => vault.readTokens(scope));
+    let access;
+    try {
+      ({ access } = await viaPort(this.d.log, fields, () => vault.readTokens(scope)));
+    } catch (err) {
+      if (opts.final) await forget();
+      throw err;
+    }
     if (!access) {
       await forget();
       return 'no_token';
