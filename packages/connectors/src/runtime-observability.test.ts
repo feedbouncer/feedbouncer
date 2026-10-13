@@ -62,7 +62,6 @@ it('a read emits a client span, an ok observation and a sync success', async () 
   expect(sync.events.at(-1)).toEqual({
     connectionId: scope.connectionId,
     kind: 'success',
-    source: 'read',
   });
 });
 

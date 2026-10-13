@@ -89,15 +89,12 @@ export interface WebhookSecretSource {
   ): Promise<{ secret: Secret; externalAccountId: string } | null>;
 }
 
-/** What a recorded sync outcome was derived from. */
-export type SyncSource = 'read' | 'webhook';
-
 /**
  * Records per-connection sync health. Implementations may throw or reject;
  * callers treat the recorder as best-effort telemetry and never fail work on it.
  */
 export interface SyncRecorder {
-  success(connectionId: string, source: SyncSource): Promise<void>;
+  success(connectionId: string): Promise<void>;
   failure(
     connectionId: string,
     f: { readonly code: string; readonly errorClass: ErrorClass },

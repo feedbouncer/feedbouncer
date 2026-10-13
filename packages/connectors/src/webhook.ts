@@ -165,7 +165,7 @@ export class WebhookGate {
                 error: err instanceof Error ? err.name : 'NonError',
               });
             try {
-              void this.d.sync.success(syncId, 'webhook').catch(warn);
+              void this.d.sync.success(syncId).catch(warn);
             } catch (err) {
               warn(err);
             }

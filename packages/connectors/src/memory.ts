@@ -16,7 +16,6 @@ import type {
   RefreshLock,
   StateBinding,
   SyncRecorder,
-  SyncSource,
   TokenRecord,
   WebhookSecretSource,
 } from './ports.js';
@@ -224,13 +223,12 @@ export class MemorySyncRecorder implements SyncRecorder {
   readonly events: Array<{
     connectionId: string;
     kind: 'success' | 'failure';
-    source?: SyncSource;
     code?: string;
     errorClass?: ErrorClass;
   }> = [];
 
-  async success(connectionId: string, source: SyncSource): Promise<void> {
-    this.events.push({ connectionId, kind: 'success', source });
+  async success(connectionId: string): Promise<void> {
+    this.events.push({ connectionId, kind: 'success' });
   }
 
   async failure(

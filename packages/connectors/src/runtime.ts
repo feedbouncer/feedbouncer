@@ -18,7 +18,12 @@ import {
 import type { RateBudget } from './budget.js';
 import type { Clock } from './clock.js';
 import type { CallContext, Connector } from './connector.js';
-import { ConnectorError, toConnectorError, type ConnectorErrorKind } from './errors.js';
+import {
+  ConnectorError,
+  errorClassFor,
+  toConnectorError,
+  type ConnectorErrorKind,
+} from './errors.js';
 import type { SafeHttp } from './http.js';
 import type { ConnectionDirectory, ConnectionRecord, SyncRecorder } from './ports.js';
 import type { ConnectorRegistry } from './registry.js';
@@ -190,9 +195,7 @@ export class ConnectionClient {
           result.error.code !== 'invalid_action_request'
         ) {
           const e = result.error;
-          const errorClass = new ConnectorError(e.kind, e.code, {
-            reauthorize: e.reauthorize,
-          }).errorClass;
+          const errorClass = errorClassFor(e.kind, e.reauthorize);
           this.#recordSync((s) => s.failure(this.scope.connectionId, { code: e.code, errorClass }));
         }
         return result;
@@ -275,7 +278,7 @@ export class ConnectionClient {
         try {
           const out = await this.#callInner(priority, op);
           this.#observe(operation, 'ok', started);
-          if (operation !== 'act') this.#recordSync((s) => s.success(ids.connectionId, 'read'));
+          if (operation !== 'act') this.#recordSync((s) => s.success(ids.connectionId));
           return out;
         } catch (err) {
           const ce = err instanceof ConnectorError ? err : null;
@@ -283,7 +286,7 @@ export class ConnectionClient {
           if (ce && operation !== 'act') {
             if (ce.kind === 'not_found' && ce.code !== 'connection_not_found') {
               // The platform answered: a missing comment or source is not a sync failure.
-              this.#recordSync((s) => s.success(ids.connectionId, 'read'));
+              this.#recordSync((s) => s.success(ids.connectionId));
             } else if (ce.code !== 'budget_exhausted') {
               this.#recordSync((s) =>
                 s.failure(ids.connectionId, { code: ce.code, errorClass: ce.errorClass }),

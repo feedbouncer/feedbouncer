@@ -14,9 +14,9 @@ export const HEALTH_SQL = `
     FROM connection c
     LEFT JOIN connection_sync s ON s.connection_id = c.id
     LEFT JOIN LATERAL (SELECT id, expires_at FROM connection_secret
-                        WHERE connection_id = c.id AND kind = 'access_token' ORDER BY created_at DESC LIMIT 1) a ON true
+                        WHERE connection_id = c.id AND kind = 'access_token' LIMIT 1) a ON true
     LEFT JOIN LATERAL (SELECT id, expires_at FROM connection_secret
-                        WHERE connection_id = c.id AND kind = 'refresh_token' ORDER BY created_at DESC LIMIT 1) r ON true`;
+                        WHERE connection_id = c.id AND kind = 'refresh_token' LIMIT 1) r ON true`;
 
 interface Rec {
   id: string;

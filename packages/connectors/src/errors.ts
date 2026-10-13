@@ -22,6 +22,19 @@ export interface ConnectorErrorInfo {
   readonly reauthorize: boolean;
 }
 
+export function errorClassFor(kind: ConnectorErrorKind, reauthorize: boolean): ErrorClass {
+  switch (kind) {
+    case 'transient':
+      return 'retryable';
+    case 'rate_limited':
+      return 'rate_limited';
+    case 'auth_expired':
+      return reauthorize ? 'needs_reconnection' : 'non_retryable';
+    default:
+      return 'non_retryable';
+  }
+}
+
 export class ConnectorError extends Error {
   override name = 'ConnectorError';
   readonly code: string;
@@ -50,16 +63,7 @@ export class ConnectorError extends Error {
 
   /** The job-layer failure class; `classifyFailure` in the jobs package agrees with it. */
   get errorClass(): ErrorClass {
-    switch (this.kind) {
-      case 'transient':
-        return 'retryable';
-      case 'rate_limited':
-        return 'rate_limited';
-      case 'auth_expired':
-        return this.reauthorize ? 'needs_reconnection' : 'non_retryable';
-      default:
-        return 'non_retryable';
-    }
+    return errorClassFor(this.kind, this.reauthorize);
   }
 
   info(): ConnectorErrorInfo {
