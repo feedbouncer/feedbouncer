@@ -88,6 +88,10 @@ Sign-up, email confirmation, password reset and invitations send real emails. In
 - **`PUBLIC_WEB_URL`** is set by compose to `http://localhost:<WEB_HOST_PORT>`. It must be the exact origin users type: cookies, the origin check on state-changing requests and the links in emails all depend on it. Browse the app as `localhost`, not `127.0.0.1`.
 - API settings such as `TRUST_PROXY_HOPS` (reverse proxies trusted for the client IP) and `MAIL_FROM`, plus the roles, routes and rate limits, are described in [apps/api/README.md](apps/api/README.md).
 
+### Facebook Pages (optional)
+
+The connector is off until `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` and `FACEBOOK_WEBHOOK_VERIFY_TOKEN` are set in `.env` (commented examples are in `.env.example`). Meta needs a public HTTPS URL for the webhook and the OAuth redirect, so a purely local stack cannot complete a real connection without a tunnel. The worker also needs `SMTP_URL` and `PUBLIC_WEB_URL` (compose sets both). Meta app setup, permissions, App Review and known limitations: [docs/connectors/facebook.md](docs/connectors/facebook.md).
+
 ### Stop, restart, reset
 
 | Command                  | Effect                                                                      |

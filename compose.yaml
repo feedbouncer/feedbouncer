@@ -22,6 +22,15 @@ x-secrets-env: &secrets-env
   FB_ENCRYPTION_KEYS: ${FB_ENCRYPTION_KEYS:?FB_ENCRYPTION_KEYS is not set - copy .env.example to .env}
   FB_ENCRYPTION_ACTIVE_KEY_ID: ${FB_ENCRYPTION_ACTIVE_KEY_ID:?FB_ENCRYPTION_ACTIVE_KEY_ID is not set - copy .env.example to .env}
 
+# Facebook Pages connector (docs/connectors/facebook.md). No defaults: with
+# FACEBOOK_APP_ID empty the connector, its webhook route and its jobs are off.
+# The api and the worker must share the app id and secret.
+x-facebook-env: &facebook-env
+  FACEBOOK_APP_ID: ${FACEBOOK_APP_ID:-}
+  FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET:-}
+  FACEBOOK_WEBHOOK_VERIFY_TOKEN: ${FACEBOOK_WEBHOOK_VERIFY_TOKEN:-}
+  FACEBOOK_GRAPH_API_VERSION: ${FACEBOOK_GRAPH_API_VERSION:-}
+
 x-node-service: &node-service
   init: true
   restart: on-failure:3
@@ -132,7 +141,7 @@ services:
       dockerfile: apps/api/Dockerfile
       target: dev
     environment:
-      <<: [*backend-env, *secrets-env]
+      <<: [*backend-env, *secrets-env, *facebook-env]
       # tsx watch gets no file events through Docker Desktop bind mounts.
       CHOKIDAR_USEPOLLING: '1'
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is not set - copy .env.example to .env}
@@ -151,6 +160,8 @@ services:
       - ./packages/db/src:/repo/packages/db/src:ro
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
       - ./packages/secrets/src:/repo/packages/secrets/src:ro
+      - ./packages/comments/src:/repo/packages/comments/src:ro
+      - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
       - ./packages/observability/src:/repo/packages/observability/src:ro
@@ -188,8 +199,13 @@ services:
       dockerfile: apps/worker/Dockerfile
       target: dev
     environment:
-      <<: [*backend-env, *secrets-env]
+      <<: [*backend-env, *secrets-env, *facebook-env]
       CHOKIDAR_USEPOLLING: '1'
+      # Reconnect notices go to the dev mail sink; links and the OAuth redirect
+      # URI are built from PUBLIC_WEB_URL, which must match the api's.
+      SMTP_URL: smtp://mailpit:1025
+      PUBLIC_WEB_URL: http://localhost:${WEB_HOST_PORT:-3000}
+      MAIL_FROM: ${MAIL_FROM:-}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
       # Empty means "use the default" (see docs/operations/job-queue.md).
       JOB_QUEUE_PREFIX: ${JOB_QUEUE_PREFIX:-}
@@ -206,8 +222,11 @@ services:
     volumes:
       - ./apps/worker/src:/repo/apps/worker/src:ro
       - ./packages/authz/src:/repo/packages/authz/src:ro
+      - ./packages/comments/src:/repo/packages/comments/src:ro
+      - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
+      - ./packages/mailer/src:/repo/packages/mailer/src:ro
       - ./packages/observability/src:/repo/packages/observability/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro

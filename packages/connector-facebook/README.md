@@ -4,6 +4,9 @@ Facebook Pages connector for the FeedBouncer connector framework: OAuth, Page
 listing, organic comment moderation and webhooks, built on
 [`@feedbouncer/connectors`](../connectors/README.md).
 
+Meta app setup, permissions, App Review, operation and known limitations:
+[docs/connectors/facebook.md](../../docs/connectors/facebook.md).
+
 ## Modules
 
 | File               | Responsibility                                                                                                                                               |
@@ -54,3 +57,12 @@ not observed. Replace them with what behaviour (d) records.
 | 10     | 2018278         | `private_reply_window_closed` | UNVERIFIED |
 | 551    | any             | `author_unavailable`          | UNVERIFIED |
 | 100    | 2018001         | `author_unavailable`          | UNVERIFIED |
+
+### Ban and unban by author (UNVERIFIED)
+
+`act` blocks and unblocks the comment's author with `POST`/`DELETE`
+`/{page-id}/blocked` and `user=<author id>`. Whether Facebook accepts every id
+type it returns as a commenter's `from.id` is not verified. A refusal (Graph
+`code` 100 or 210) is mapped to `author_not_bannable`, which the moderation core
+records as `not_eligible`, not as a failure. Record the observed behaviour here
+once checked.
