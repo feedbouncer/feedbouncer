@@ -126,6 +126,20 @@ export interface RateLimitPolicy {
 /** How long after a comment is posted a platform still accepts a private reply to it (Facebook: 7 days). */
 export const PRIVATE_REPLY_WINDOW_MS = 7 * 86_400_000;
 
+/** Per-platform limits on moderation actions. Every member is optional; absent means the default. */
+export interface ActionConstraints {
+  /** Default PRIVATE_REPLY_WINDOW_MS (7 days). */
+  readonly privateReplyWindowMs?: number;
+  /** Default false. Instagram: true. */
+  readonly privateReplyTopLevelOnly?: boolean;
+  /** Default true. Instagram: false ("cannot reply to hidden comments"). */
+  readonly publicReplyOnHidden?: boolean;
+  /** Default true. Instagram: false (owner's own comments are always displayed). */
+  readonly hideOwnAccountComments?: boolean;
+  /** Max code points per response kind. Default 8000 (replyTextSchema's limit). */
+  readonly maxReplyChars?: Readonly<Partial<Record<ResponseKind, number>>>;
+}
+
 export interface ConnectorCapabilities {
   readonly actions: readonly ModerationAction[];
   readonly listSources: boolean;
@@ -143,6 +157,8 @@ export interface ConnectorCapabilities {
   readonly accountSelection?: 'single' | 'multiple';
   /** Response kinds `respond()` supports (needs `respond`). Default none. */
   readonly responses?: readonly ResponseKind[];
+  /** Per-platform action limits; see `ActionConstraints`. Default: none. */
+  readonly constraints?: ActionConstraints;
   /** 1..500 */
   readonly maxPageSize: number;
 }

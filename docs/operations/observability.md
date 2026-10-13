@@ -133,7 +133,7 @@ configuration summary.
 | `webhook.receive`       | server   | Webhook gate (intake)       | A new root for every delivery. `feedbouncer.webhook.outcome`: `accepted`, `duplicate`, `rejected`. |
 | `job.enqueue`           | producer | Job producer                | Child of the active span; records `feedbouncer.job.deduplicated`.                                  |
 | `job.run`               | consumer | Job runner, one per attempt | `feedbouncer.job.attempt` is 1 for the first try. Retries are sibling spans in one trace.          |
-| `connector.<operation>` | client   | Platform calls              | `<operation>` is `list_sources`, `list_comments`, `get_comment` or `act`.                          |
+| `connector.<operation>` | client   | Platform calls              | `<operation>` is `list_sources`, `list_comments`, `list_replies`, `get_comment` or `act`.          |
 | `moderation.apply`      | internal | `ConnectionClient.act`      | Carries `feedbouncer.action` and `feedbouncer.action.status`.                                      |
 | `HTTP <method> <route>` | server   | API requests                | A new root per request; `<route>` is the route pattern, never the raw path.                        |
 
@@ -301,13 +301,13 @@ only increments the failure count, so it shows as `degraded` and not `needs_reco
 
 ### States and recovery
 
-| State                | Meaning                                                | What to do                                                                                                                                                                                |
-| -------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `healthy`            | Recent successful sync, no failure streak, no backlog. | Nothing.                                                                                                                                                                                  |
-| `pending_first_sync` | Connected, no successful read or webhook yet.          | Wait. It stays in this state until a sync outcome is recorded; there is no overdue timeout.                                                                                               |
-| `degraded`           | Working but not keeping up. Check `reason`.            | See the reason table below.                                                                                                                                                               |
+| State                | Meaning                                                | What to do                                                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `healthy`            | Recent successful sync, no failure streak, no backlog. | Nothing.                                                                                                                                                                                                      |
+| `pending_first_sync` | Connected, no successful read or webhook yet.          | Wait. It stays in this state until a sync outcome is recorded; there is no overdue timeout.                                                                                                                   |
+| `degraded`           | Working but not keeping up. Check `reason`.            | See the reason table below.                                                                                                                                                                                   |
 | `needs_reconnection` | The platform credentials are no longer usable.         | Reconnect from the brand's connections page. Reasons: `oauth_refresh_rejected`, `oauth_access_rejected`, `oauth_not_refreshable`, `setup_not_queued`, `token_expired`, `oauth_pending`, `reconnect_required`. |
-| `disabled`           | A user paused or revoked the connection.               | Nothing to fix; resume or reconnect it deliberately.                                                                                                                                      |
+| `disabled`           | A user paused or revoked the connection.               | Nothing to fix; resume or reconnect it deliberately.                                                                                                                                                          |
 
 | Degraded reason    | What to check                                                                                                                            |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |

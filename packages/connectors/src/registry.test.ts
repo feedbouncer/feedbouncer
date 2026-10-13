@@ -91,6 +91,28 @@ describe('validateConnector', () => {
     ],
     ['webhook ingestion without spec', withCaps({ ingestion: 'webhook' }), /webhook/],
     ['listSources flag without method', withCaps({ listSources: true }), /listSources/],
+    [
+      'zero private reply window',
+      withCaps({ constraints: { privateReplyWindowMs: 0 } }),
+      /constraints/,
+    ],
+    [
+      'reply limit above 8000',
+      {
+        ...withCaps({
+          responses: ['public_reply'],
+          constraints: { maxReplyChars: { public_reply: 9000 } },
+        }),
+        respond: async () => ({ status: 'not_found' as const }),
+      },
+      /constraints/,
+    ],
+    [
+      'reply limit for an undeclared response',
+      withCaps({ constraints: { maxReplyChars: { private_reply: 100 } } }),
+      /constraints/,
+    ],
+    ['listReplies is not a function', { ...withCaps({}), listReplies: 1 as never }, /listReplies/],
   ])('rejects %s', (_n, c, msg) => {
     expect(() => validateConnector(c)).toThrow(msg);
   });
@@ -125,6 +147,24 @@ describe('ConnectorRegistry', () => {
       listAccounts: async () => [],
       respond: async () => ({ status: 'not_found' }),
       lifecycle: { onConnected: async () => {}, onDisconnected: async () => {} },
+    };
+    expect(() => validateConnector(c)).not.toThrow();
+  });
+
+  it('accepts Instagram-style constraints', () => {
+    const c: Connector = {
+      ...withCaps({
+        responses: ['public_reply', 'private_reply'],
+        constraints: {
+          privateReplyWindowMs: 7 * 86_400_000,
+          privateReplyTopLevelOnly: true,
+          publicReplyOnHidden: false,
+          hideOwnAccountComments: false,
+          maxReplyChars: { public_reply: 2200, private_reply: 1000 },
+        },
+      }),
+      respond: async () => ({ status: 'not_found' }),
+      listReplies: async () => ({ items: [], nextCursor: null }),
     };
     expect(() => validateConnector(c)).not.toThrow();
   });

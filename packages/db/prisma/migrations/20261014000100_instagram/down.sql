@@ -1,0 +1,1 @@
+DROP INDEX connection_instagram_live_external_account_id_key;

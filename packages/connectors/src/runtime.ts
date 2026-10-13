@@ -66,6 +66,7 @@ import {
 export type ConnectorOperation =
   | 'list_sources'
   | 'list_comments'
+  | 'list_replies'
   | 'get_comment'
   | 'act'
   | 'respond'
@@ -251,6 +252,27 @@ export class ConnectionClient {
         cursor: req.cursor,
         limit,
       }),
+    );
+    return parsePage(commentSchema, raw);
+  }
+
+  /** Replies under one comment; `null` without any I/O when the connector has no `listReplies`. */
+  async listReplies(req: {
+    parent: CommentRef;
+    cursor: string | null;
+    limit?: number;
+  }): Promise<Page<NormalizedComment> | null> {
+    const op = this.connector.listReplies?.bind(this.connector);
+    if (!op) return null;
+    if (
+      !commentRefSchema.safeParse(req.parent).success ||
+      !cursorSchema.safeParse(req.cursor).success
+    )
+      throw invalidRequest();
+    const max = this.capabilities.maxPageSize;
+    const limit = Math.min(Math.max(Math.trunc(req.limit ?? max), 1), max);
+    const raw = await this.#call('bulk', 'list_replies', (ctx) =>
+      op(ctx, { parent: req.parent, cursor: req.cursor, limit }),
     );
     return parsePage(commentSchema, raw);
   }
