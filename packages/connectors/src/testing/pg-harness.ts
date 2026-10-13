@@ -67,6 +67,9 @@ class FaultInjectingVault implements CredentialVault {
     }
     return this.inner.writeAccessToken(scope, t);
   }
+  deleteTokens(scope: ConnectionScope) {
+    return this.inner.deleteTokens(scope);
+  }
 }
 
 /**

@@ -62,6 +62,8 @@ export interface CredentialVault {
   ): Promise<{ access: TokenRecord | null; refresh: TokenRecord | null }>;
   writeRefreshToken(scope: ConnectionScope, t: TokenRecord): Promise<void>;
   writeAccessToken(scope: ConnectionScope, t: TokenRecord): Promise<void>;
+  /** Removes every stored credential of the connection (teardown). Idempotent. */
+  deleteTokens(scope: ConnectionScope): Promise<void>;
 }
 export interface RefreshLock {
   run<T>(scope: ConnectionScope, fn: () => Promise<T>): Promise<T>;

@@ -153,6 +153,25 @@ describe('tenant isolation (every adapter)', () => {
     expect((await vault.readTokens(scopeOf(a))).refresh).toBeNull();
   });
 
+  it('PgCredentialVault.deleteTokens removes every credential row of its own connection only', async () => {
+    const t = await seedTenant(h.c, 'vault-delete');
+    await vault.writeAccessToken(scopeOf(t), { value: new Secret('del-access'), expiresAt: null });
+    await vault.writeRefreshToken(scopeOf(t), {
+      value: new Secret('del-refresh'),
+      expiresAt: null,
+    });
+    // a scope mixing tenants deletes nothing
+    await vault.deleteTokens({ ...scopeOf(b), connectionId: a.connectionId });
+    expect((await vault.readTokens(scopeOf(a))).access?.value.reveal()).toBe('tenant-a-access');
+    await vault.deleteTokens(scopeOf(t));
+    const rows = await h.c.query(
+      'SELECT count(*)::int AS n FROM connection_secret WHERE connection_id = $1',
+      [t.connectionId],
+    );
+    expect(rows.rows[0].n).toBe(0);
+    expect((await vault.readTokens(scopeOf(a))).access?.value.reveal()).toBe('tenant-a-access');
+  });
+
   it('PgOAuthStateStore.consume requires the full binding and is single-use under concurrency', async () => {
     const hash = randomBytes(32);
     await states.save(hash, pending(a));

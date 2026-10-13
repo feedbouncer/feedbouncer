@@ -161,6 +161,9 @@ export class MemoryCredentialVault implements CredentialVault {
   async writeAccessToken(scope: ConnectionScope, t: TokenRecord): Promise<void> {
     this.#write(scope, 'access', t);
   }
+  async deleteTokens(scope: ConnectionScope): Promise<void> {
+    this.#tokens.delete(scopeKey(scope));
+  }
   #write(scope: ConnectionScope, kind: 'access' | 'refresh', t: TokenRecord): void {
     if (this.#failNext.delete(kind)) throw new Error('simulated storage failure');
     const cur = this.#tokens.get(scopeKey(scope)) ?? { access: null, refresh: null };

@@ -57,4 +57,8 @@ export class PgCredentialVault implements CredentialVault {
   writeAccessToken(scope: ConnectionScope, t: TokenRecord): Promise<void> {
     return this.store.put(scope, 'access_token', t.value, t.expiresAt);
   }
+
+  async deleteTokens(scope: ConnectionScope): Promise<void> {
+    await this.store.delete(scope);
+  }
 }

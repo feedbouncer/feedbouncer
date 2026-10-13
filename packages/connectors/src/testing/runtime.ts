@@ -118,6 +118,7 @@ export function assembleStack(
     runtime: new ConnectorRuntime({
       registry,
       directory: ports.directory,
+      vault: ports.vault,
       tokens,
       budget: ports.budget,
       clock,

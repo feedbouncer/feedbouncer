@@ -72,6 +72,7 @@ export type InsertResult =
 export interface DlqFilter {
   readonly platform?: Platform;
   readonly organizationId?: string;
+  readonly connectionId?: string;
   readonly reason?: DeadLetterReason;
   readonly states?: readonly ('dead_lettered' | 'resolved')[];
   readonly since?: Date;
@@ -271,6 +272,7 @@ const bad = (field: string): never => {
 function buildFilter(f: DlqFilter, firstParam: number): { where: string; params: unknown[] } {
   if (f.platform !== undefined && !isPlatform(f.platform)) bad('platform');
   if (f.organizationId !== undefined && !UUID.test(f.organizationId)) bad('organizationId');
+  if (f.connectionId !== undefined && !UUID.test(f.connectionId)) bad('connectionId');
   if (f.reason !== undefined && !DEAD_LETTER_REASONS.includes(f.reason)) bad('reason');
   if (f.states !== undefined && !f.states.every((s) => DLQ_STATES.includes(s))) bad('states');
   if (f.since !== undefined && !(f.since instanceof Date && Number.isFinite(f.since.getTime()))) {
@@ -288,6 +290,9 @@ function buildFilter(f: DlqFilter, firstParam: number): { where: string; params:
   if (f.platform !== undefined) add((n) => ` AND platform = $${n}`, f.platform);
   if (f.organizationId !== undefined) {
     add((n) => ` AND organization_id = $${n}::uuid`, f.organizationId);
+  }
+  if (f.connectionId !== undefined) {
+    add((n) => ` AND connection_id = $${n}::uuid`, f.connectionId);
   }
   if (f.reason !== undefined) add((n) => ` AND dead_letter_reason = $${n}`, f.reason);
   if (f.since !== undefined) add((n) => ` AND dead_lettered_at >= $${n}`, f.since);
