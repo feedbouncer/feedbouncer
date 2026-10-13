@@ -1,6 +1,6 @@
 import type { Connector } from './connector.js';
 import { ConnectorError } from './errors.js';
-import { isPlatform, MODERATION_ACTIONS, type Platform } from './types.js';
+import { isPlatform, MODERATION_ACTIONS, RESPONSE_KINDS, type Platform } from './types.js';
 
 const HOST =
   /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
@@ -36,6 +36,25 @@ export function validateConnector(c: Connector): void {
   if (k.listSources !== (typeof c.listSources === 'function')) fail('capabilities.listSources');
   const wantsWebhook = k.ingestion !== 'polling';
   if (wantsWebhook !== (c.webhook !== undefined)) fail('webhook');
+  if (k.requiredScopes !== undefined && !k.requiredScopes.every((s) => k.defaultScopes.includes(s)))
+    fail('capabilities.requiredScopes');
+  const selection = k.accountSelection ?? 'single';
+  if (selection !== 'single' && selection !== 'multiple') fail('capabilities.accountSelection');
+  if ((selection === 'multiple') !== (typeof c.listAccounts === 'function'))
+    fail('capabilities.accountSelection');
+  const responses = k.responses ?? [];
+  if (
+    new Set(responses).size !== responses.length ||
+    responses.some((r) => !(RESPONSE_KINDS as readonly string[]).includes(r))
+  )
+    fail('capabilities.responses');
+  if (responses.length > 0 !== (typeof c.respond === 'function')) fail('capabilities.responses');
+  if (
+    c.lifecycle !== undefined &&
+    (typeof c.lifecycle.onConnected !== 'function' ||
+      typeof c.lifecycle.onDisconnected !== 'function')
+  )
+    fail('lifecycle');
   if (c.webhook) {
     const s = c.webhook.signature;
     if (!HEADER.test(s.header)) fail('webhook.signature.header');

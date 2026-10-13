@@ -69,6 +69,8 @@ export interface Page<T> {
 export interface ActionRequest {
   readonly action: ModerationAction;
   readonly target: CommentRef;
+  /** The comment author's platform id; needed by author-level actions such as ban. */
+  readonly authorExternalId?: string;
 }
 export type ActionResult =
   | {
@@ -82,6 +84,30 @@ export type ActionResult =
   | {
       readonly status: 'failed';
       readonly request: ActionRequest;
+      readonly error: ConnectorErrorInfo;
+    };
+
+export const RESPONSE_KINDS = ['public_reply', 'private_reply'] as const;
+export type ResponseKind = (typeof RESPONSE_KINDS)[number];
+
+export interface RespondRequest {
+  readonly kind: ResponseKind;
+  readonly target: CommentRef;
+  /** Plain text, 1..8000 characters after trim. */
+  readonly text: string;
+}
+export type RespondResult =
+  | {
+      readonly status: 'sent';
+      readonly request: RespondRequest;
+      readonly platformRef: string | null;
+    }
+  | { readonly status: 'not_found'; readonly request: RespondRequest }
+  | { readonly status: 'not_eligible'; readonly request: RespondRequest; readonly code: string }
+  | { readonly status: 'unsupported'; readonly request: RespondRequest }
+  | {
+      readonly status: 'failed';
+      readonly request: RespondRequest;
       readonly error: ConnectorErrorInfo;
     };
 
@@ -108,6 +134,12 @@ export interface ConnectorCapabilities {
   /** Lowercase hostnames allowed in the authorization URL. */
   readonly authorizationHosts: readonly string[];
   readonly defaultScopes: readonly string[];
+  /** Subset of `defaultScopes` without which the connection is unusable. */
+  readonly requiredScopes?: readonly string[];
+  /** `multiple` means the grant covers several accounts and the user picks (needs `listAccounts`). Default `single`. */
+  readonly accountSelection?: 'single' | 'multiple';
+  /** Response kinds `respond()` supports (needs `respond`). Default none. */
+  readonly responses?: readonly ResponseKind[];
   /** 1..500 */
   readonly maxPageSize: number;
 }

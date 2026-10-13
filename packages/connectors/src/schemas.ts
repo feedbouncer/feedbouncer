@@ -4,7 +4,8 @@
 // no input (zod issues are not attached), only the code invalid_connector_output.
 import * as z from 'zod';
 import { ConnectorError } from './errors.js';
-import { MODERATION_ACTIONS, type NormalizedComment, type Page } from './types.js';
+import { Secret } from '@feedbouncer/service-runtime';
+import { MODERATION_ACTIONS, RESPONSE_KINDS, type NormalizedComment, type Page } from './types.js';
 
 const NO_CONTROL = /^[^\u0000-\u001f\u007f]+$/;
 export const externalIdSchema = z.string().min(1).max(255).regex(NO_CONTROL);
@@ -51,6 +52,31 @@ export const commentRefSchema = z.strictObject({
 export const actionRequestSchema = z.strictObject({
   action: z.enum(MODERATION_ACTIONS),
   target: commentRefSchema,
+  authorExternalId: externalIdSchema.optional(),
+});
+
+const REPLY_FORBIDDEN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
+export const replyTextSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(8000)
+  .refine((s) => !REPLY_FORBIDDEN.test(s));
+
+export const respondRequestSchema = z.strictObject({
+  kind: z.enum(RESPONSE_KINDS),
+  target: commentRefSchema,
+  text: replyTextSchema,
+});
+
+const SNAKE = /^[a-z][a-z0-9_]{0,62}$/;
+export const grantableAccountSchema = z.strictObject({
+  externalAccountId: externalIdSchema,
+  displayName: z.string().max(500).nullable(),
+  eligible: z.boolean(),
+  ineligibleReason: z.string().regex(SNAKE).nullable(),
+  limitations: z.array(z.string().regex(SNAKE)).max(20),
+  accessToken: z.instanceof(Secret),
 });
 
 export const inboundEventsSchema = z

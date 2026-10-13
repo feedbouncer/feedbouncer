@@ -8,6 +8,7 @@ import type {
   NormalizedSource,
   Page,
   Platform,
+  RespondRequest,
 } from './types.js';
 
 export interface OAuthContext {
@@ -41,6 +42,29 @@ export interface CallContext {
 export type RawActionOutcome =
   | { readonly status: 'applied'; readonly platformActionId: string | null }
   | { readonly status: 'not_found' };
+
+export type RawRespondOutcome =
+  | { readonly status: 'sent'; readonly platformRef: string | null }
+  | { readonly status: 'not_found' }
+  | { readonly status: 'not_eligible'; readonly code: string };
+
+export interface GrantableAccount {
+  readonly externalAccountId: string;
+  readonly displayName: string | null;
+  readonly eligible: boolean;
+  /** snake_case code */
+  readonly ineligibleReason: string | null;
+  /** snake_case codes, e.g. `no_messaging_task` */
+  readonly limitations: readonly string[];
+  readonly accessToken: Secret;
+}
+
+export interface ConnectorLifecycle {
+  /** Idempotent. Called by a job after every (re)connect. */
+  onConnected(ctx: CallContext): Promise<void>;
+  /** Idempotent, best-effort. Called after the connection is revoked locally. */
+  onDisconnected(ctx: CallContext): Promise<void>;
+}
 
 export interface InboundEvent {
   readonly type: 'comment.created' | 'comment.updated' | 'comment.deleted';
@@ -105,6 +129,20 @@ export interface Connector {
    * repeated hide on a hidden comment is `applied`.
    */
   act(ctx: CallContext, req: ActionRequest): Promise<RawActionOutcome>;
+
+  /**
+   * Only for `accountSelection: 'multiple'`. Returns every account the user token can act for,
+   * with that account's own token. Called twice per connect (list, then connect), never cached.
+   */
+  listAccounts?(userToken: Secret, ctx: OAuthContext): Promise<readonly GrantableAccount[]>;
+
+  /**
+   * Return `not_eligible` with a snake_case code when the platform refuses for a policy reason
+   * (window closed, already replied). Never retry inside.
+   */
+  respond?(ctx: CallContext, req: RespondRequest): Promise<RawRespondOutcome>;
+
+  readonly lifecycle?: ConnectorLifecycle;
 
   readonly webhook?: WebhookSpec;
 }
