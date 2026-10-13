@@ -6,10 +6,12 @@ listing, organic comment moderation and webhooks, built on
 
 ## Modules
 
-| File            | Responsibility                                                                                                   |
-| --------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `src/config.ts` | `parseFacebookEnv`, `FACEBOOK_SCOPES`, `FACEBOOK_FILE_VARS`. Returns `null` when `FACEBOOK_APP_ID` is unset.     |
-| `src/graph.ts`  | The only HTTP path to Graph: `graphRequest`, `graphId` path guard, `appSecretProof`, `mapGraphError`, BUC usage. |
+| File               | Responsibility                                                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/config.ts`    | `parseFacebookEnv`, `FACEBOOK_SCOPES`, `FACEBOOK_FILE_VARS`. Returns `null` when `FACEBOOK_APP_ID` is unset.                                                 |
+| `src/graph.ts`     | The only HTTP path to Graph: `graphRequest`, `graphId` path guard, `appSecretProof`, `mapGraphError`, BUC usage.                                             |
+| `src/actions.ts`   | `act` (hide, unhide, delete, ban/unban author), `respond` (public and private replies), `lifecycle` (feed webhook subscription), `PRIVATE_REPLY_INELIGIBLE`. |
+| `src/connector.ts` | `createFacebookConnector`: the `Connector` for the framework registry (tokens not refreshable, multiple Page selection).                                     |
 
 ## Rules enforced here
 
@@ -35,3 +37,16 @@ or curl), then record the date and result here.
 | (b) | Graph accepts `Authorization: Bearer <token>` for GET, POST and DELETE.                                                                                                                                       | UNVERIFIED | `GET https://graph.facebook.com/v26.0/me` with the Bearer header, and one POST and one DELETE on a test comment.                                 | Stop and escalate. There is no URL-token fallback: tokens are never sent in a query string or logged URL.                                                                                       |
 | (c) | A short-lived user token exchanges via `grant_type=fb_exchange_token`; `GET /me/accounts` returns Page tokens; `GET /debug_token?input_token=<page token>` reports `expires_at: 0` (non-expiring Page token). | UNVERIFIED | Perform the exchange, list accounts, then debug the Page token. Send `client_secret` and the exchange token in a POST form body only.            | If Page tokens expire: add refresh handling and record the observed lifetime before shipping; do not assume non-expiring tokens.                                                                |
 | (d) | Private reply to a comment older than 7 days, and a second private reply to the same comment, are rejected with distinguishable `code`/`error_subcode`.                                                       | UNVERIFIED | Send a private reply to an 8-day-old comment, and a second one to the same comment. Record `code`/`error_subcode` for each.                      | Adjust `PRIVATE_REPLY_INELIGIBLE` (Task 9) to the observed values.                                                                                                                              |
+
+### Private-reply ineligibility codes (UNVERIFIED)
+
+`PRIVATE_REPLY_INELIGIBLE` in `src/actions.ts` maps Graph errors from
+`POST /{page-id}/messages` to `not_eligible` reasons. The values are assumed,
+not observed. Replace them with what behaviour (d) records.
+
+| `code` | `error_subcode` | Reason                        | Status     |
+| ------ | --------------- | ----------------------------- | ---------- |
+| 10900  | any             | `private_reply_already_sent`  | UNVERIFIED |
+| 10     | 2018278         | `private_reply_window_closed` | UNVERIFIED |
+| 551    | any             | `author_unavailable`          | UNVERIFIED |
+| 100    | 2018001         | `author_unavailable`          | UNVERIFIED |

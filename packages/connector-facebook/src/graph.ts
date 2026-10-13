@@ -114,6 +114,17 @@ export function mapGraphError(
   return new ConnectorError('permanent', 'graph_error');
 }
 
+// Numeric Graph codes travel beside the mapped error (never on it) so callers with
+// endpoint-specific tables (ban, private reply) can refine the outcome. Numbers are
+// safe to keep; the Graph message never is.
+const CODES = new WeakMap<ConnectorError, { code: number | null; subcode: number | null }>();
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/** The raw numeric `code`/`error_subcode` behind an error thrown by `graphRequest`, if any. */
+export const graphErrorCodes = (
+  e: ConnectorError,
+): { code: number | null; subcode: number | null } | null => CODES.get(e) ?? null;
+
 export async function graphRequest(call: GraphCall, req: GraphRequest): Promise<GraphResponse> {
   for (const s of req.path) {
     if (!SEGMENT.test(s)) throw new ConnectorError('permanent', 'invalid_graph_id');
@@ -147,13 +158,16 @@ export async function graphRequest(call: GraphCall, req: GraphRequest): Promise<
   const err = (parsed as { error?: unknown } | null)?.error;
   const errObj = typeof err === 'object' && err !== null ? err : null;
   if (res.status >= 400 || errObj !== null) {
-    throw mapGraphError(
-      errObj as { code?: unknown; error_subcode?: unknown; is_transient?: unknown } | null,
+    const e = errObj as { code?: unknown; error_subcode?: unknown; is_transient?: unknown } | null;
+    const mapped = mapGraphError(
+      e,
       res.status,
       usage,
       res.headers.get('retry-after'),
       call.nowMs(),
     );
+    CODES.set(mapped, { code: num(e?.code), subcode: num(e?.error_subcode) });
+    throw mapped;
   }
   if (parsed === null) throw new ConnectorError('transient', 'platform_unavailable');
   return { body: parsed, usage };

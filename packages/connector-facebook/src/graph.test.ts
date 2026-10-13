@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ConnectorError, createSafeHttp } from '@feedbouncer/connectors';
 import { Secret } from '@feedbouncer/service-runtime';
-import { appSecretProof, graphId, graphRequest, mapGraphError, parseBucUsage } from './graph.js';
+import {
+  appSecretProof,
+  graphErrorCodes,
+  graphId,
+  graphRequest,
+  mapGraphError,
+  parseBucUsage,
+} from './graph.js';
 
 const kind = (e: ConnectorError) => `${e.kind}/${e.code}`;
 const noUsage = { throttledForMs: null };
@@ -95,6 +102,16 @@ describe('graphRequest', () => {
     );
     expect(kind(err as ConnectorError)).toBe('auth_expired/token_expired');
     expect(JSON.stringify(err) + (err as Error).message).not.toContain('SENTINEL');
+    expect(graphErrorCodes(err as ConnectorError)).toEqual({ code: 190, subcode: 463 });
+  });
+
+  it('records null codes when the error body has none, and nothing for other errors', async () => {
+    const fetch = async () => new Response('oops', { status: 503 });
+    const err = await graphRequest(call(fetch as never), { method: 'GET', path: ['me'] }).catch(
+      (e: unknown) => e as ConnectorError,
+    );
+    expect(graphErrorCodes(err as ConnectorError)).toEqual({ code: null, subcode: null });
+    expect(graphErrorCodes(new ConnectorError('permanent', 'graph_error'))).toBeNull();
   });
 
   it('treats an empty 2xx body as transient', async () => {
