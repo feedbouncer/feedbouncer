@@ -11,8 +11,9 @@ Organic comments on a Facebook Page's posts come in, and five kinds of action
 go out. Nothing else.
 
 - **In:** new, edited, hidden and removed comments (including replies), through
-  the Page `feed` webhook. Each event is re-read from the Graph API before it is
-  stored, so what is stored is what Facebook reports now.
+  the Page `feed` webhook. Each event other than a delete is re-read from the Graph
+  API before it is stored, so what is stored is what Facebook reports now;
+  delete events are stored without a re-read.
 - **Out:** five actions: hide (and unhide), delete, ban (and unban) the
   comment's author, public reply, and private reply (a Messenger message sent
   in answer to a comment).
@@ -80,8 +81,9 @@ verify token for the handshake. Set all three on both so a deployment has one
 configuration. The app secret also verifies webhook signatures, so it must be
 the secret of the app that sends the webhooks.
 
-The worker additionally requires `SMTP_URL` and `PUBLIC_WEB_URL` (reconnect
-notices are emailed from it), and accepts `MAIL_FROM`. The local compose stack
+When Facebook is configured the worker also requires `SMTP_URL` and
+`PUBLIC_WEB_URL` (reconnect notices are emailed from it; without Facebook they
+are not needed), and accepts `MAIL_FROM`. The local compose stack
 passes the `FACEBOOK_*` variables through to the `api` and `worker` services
 with no defaults and points the worker at the Mailpit dev sink.
 
