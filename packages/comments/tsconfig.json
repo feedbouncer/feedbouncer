@@ -8,7 +8,6 @@
     { "path": "../secrets/tsconfig.build.json" },
     { "path": "../connectors/tsconfig.build.json" },
     { "path": "../jobs/tsconfig.build.json" },
-    { "path": "../mailer/tsconfig.build.json" },
     { "path": "../connector-facebook/tsconfig.build.json" }
   ]
 }

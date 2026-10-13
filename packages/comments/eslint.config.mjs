@@ -4,6 +4,7 @@ export default [
   ...baseConfig,
   restrictProcessEnv({
     exempt: ['src/**/*.test.ts'],
-    message: 'The comments package receives configuration from the app; never read process.env here.',
+    message:
+      'The comments package receives configuration from the app; never read process.env here.',
   }),
 ];
