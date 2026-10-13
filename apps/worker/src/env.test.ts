@@ -139,19 +139,26 @@ describe('loadWorkerEnv', () => {
       }
     });
     it('reads smtp, mail sender and public web url', () => {
-      const env = load({ ...base, MAIL_FROM: 'FB <fb@example.com>' });
-      expect(env.smtpUrl.href).toBe('smtp://mailpit:1025');
-      expect(env.mailFrom).toBe('FB <fb@example.com>');
-      expect(env.publicWebUrl.origin).toBe('https://app.example.com');
+      const env = load({ ...base, ...facebook, MAIL_FROM: 'FB <fb@example.com>' });
+      expect(env.mail?.smtpUrl.href).toBe('smtp://mailpit:1025');
+      expect(env.mail?.mailFrom).toBe('FB <fb@example.com>');
+      expect(env.mail?.publicWebUrl.origin).toBe('https://app.example.com');
     });
-    it('requires SMTP_URL and PUBLIC_WEB_URL', () => {
-      expect(() => load(without('SMTP_URL'))).toThrow(/SMTP_URL is not set/);
-      expect(() => load(without('PUBLIC_WEB_URL'))).toThrow(/PUBLIC_WEB_URL is not set/);
+    it('loads without SMTP_URL and PUBLIC_WEB_URL when facebook is not configured', () => {
+      const env = load(without('SMTP_URL', 'PUBLIC_WEB_URL'));
+      expect(env.facebook).toBeNull();
+      expect(env.mail).toBeNull();
+    });
+    it('requires SMTP_URL and PUBLIC_WEB_URL when facebook is configured', () => {
+      expect(() => load({ ...without('SMTP_URL'), ...facebook })).toThrow(/SMTP_URL is not set/);
+      expect(() => load({ ...without('PUBLIC_WEB_URL'), ...facebook })).toThrow(
+        /PUBLIC_WEB_URL is not set/,
+      );
     });
     it('rejects a public web url that is not an origin', () => {
-      expect(() => load({ ...base, PUBLIC_WEB_URL: 'https://app.example.com/x' })).toThrow(
-        /PUBLIC_WEB_URL must be an origin/,
-      );
+      expect(() =>
+        load({ ...base, ...facebook, PUBLIC_WEB_URL: 'https://app.example.com/x' }),
+      ).toThrow(/PUBLIC_WEB_URL must be an origin/);
     });
   });
 });

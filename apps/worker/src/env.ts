@@ -55,10 +55,29 @@ export interface WorkerEnv {
   readonly health: HealthPolicy;
   /** Null when FACEBOOK_APP_ID is unset: the connector is not enabled. */
   readonly facebook: FacebookConfig | null;
+  /** Null unless Facebook is configured: only the Facebook connector sends mail or needs the web origin. */
+  readonly mail: WorkerMailConfig | null;
+}
+
+export interface WorkerMailConfig {
   readonly smtpUrl: URL;
   readonly mailFrom: string;
   /** Origin of the web app, used to build links in notification emails and the OAuth redirect URI. */
   readonly publicWebUrl: URL;
+}
+
+function readMailConfig(env: Env): WorkerMailConfig {
+  const smtpUrl = readUrl(env, 'SMTP_URL', SMTP_PROTOCOLS);
+  const publicWebUrl = readUrl(env, 'PUBLIC_WEB_URL', HTTP_PROTOCOLS);
+  if (publicWebUrl.pathname !== '/' || publicWebUrl.search || publicWebUrl.hash) {
+    throw new EnvError('PUBLIC_WEB_URL must be an origin only, e.g. https://app.example.com');
+  }
+  const mailFrom = readString(env, 'MAIL_FROM', {
+    fallback: 'FeedBouncer <no-reply@localhost>',
+    maxLength: 200,
+    pattern: /^[^\r\n]+$/,
+  });
+  return { smtpUrl, mailFrom, publicWebUrl };
 }
 
 /** The worker's single typed configuration layer. Call once, from main.ts. */
@@ -70,11 +89,8 @@ export function loadWorkerEnv(
   const appEnv = readAppEnv(env);
   const databaseUrl = readUrl(env, 'DATABASE_URL', PG_PROTOCOLS);
   const redisUrl = readUrl(env, 'REDIS_URL', REDIS_PROTOCOLS);
-  const smtpUrl = readUrl(env, 'SMTP_URL', SMTP_PROTOCOLS);
-  const publicWebUrl = readUrl(env, 'PUBLIC_WEB_URL', HTTP_PROTOCOLS);
-  if (publicWebUrl.pathname !== '/' || publicWebUrl.search || publicWebUrl.hash) {
-    throw new EnvError('PUBLIC_WEB_URL must be an origin only, e.g. https://app.example.com');
-  }
+  const facebook = parseFacebookEnv(env);
+  const mail = facebook ? readMailConfig(env) : null;
   checkNotPlaceholder(appEnv, 'DATABASE_URL', databaseUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);
   const config: WorkerEnv = {
@@ -88,14 +104,8 @@ export function loadWorkerEnv(
     jobs: loadJobsConfig(env),
     telemetry: loadTelemetryConfig(env, 'worker'),
     health: loadHealthPolicy(env),
-    facebook: parseFacebookEnv(env),
-    smtpUrl,
-    mailFrom: readString(env, 'MAIL_FROM', {
-      fallback: 'FeedBouncer <no-reply@localhost>',
-      maxLength: 200,
-      pattern: /^[^\r\n]+$/,
-    }),
-    publicWebUrl,
+    facebook,
+    mail,
   };
   // A whole-config dump (JSON, util.inspect) must never carry URL passwords or keys.
   return redactOnSerialize(config, {
@@ -103,7 +113,7 @@ export function loadWorkerEnv(
     concurrency: config.concurrency,
     healthPort: config.healthPort,
     logLevel: config.logLevel,
-    publicWebUrl: publicWebUrl.origin,
+    publicWebUrl: mail?.publicWebUrl.origin ?? null,
     facebookEnabled: config.facebook !== null,
     activeKeyId: config.encryption.activeKeyId,
     jobQueuePrefix: config.jobs.prefix,

@@ -6,7 +6,12 @@ import {
   NotifyingConnectionDirectory,
   PgCommentStore,
 } from '@feedbouncer/comments';
-import { PgSyncRecorder, buildPgConnectorStack, systemClock } from '@feedbouncer/connectors';
+import {
+  PgSyncRecorder,
+  buildPgConnectorStack,
+  systemClock,
+  type ConnectionDirectory,
+} from '@feedbouncer/connectors';
 import { createPool, runJobOnce } from '@feedbouncer/db';
 import {
   JobMetrics,
@@ -86,7 +91,9 @@ try {
     client.on('error', (err) => log.warn(`${name} connection error`, errorFields(err)));
   }
 
-  const mailer = createSmtpMailer(env.smtpUrl, env.mailFrom);
+  const { facebook, mail } = env;
+  // Mail is only configured (and only needed) alongside the Facebook connector.
+  const mailer = mail ? createSmtpMailer(mail.smtpUrl, mail.mailFrom) : null;
   const stack = buildPgConnectorStack({
     pool,
     lockPool,
@@ -94,19 +101,24 @@ try {
     redisPrefix: env.jobs.prefix,
     keys: env.encryption,
     registry: connectors,
-    appSecrets: env.facebook ? new Map([['facebook', env.facebook.appSecret]]) : new Map(),
-    redirectUri: () => new URL('/api/v1/oauth/facebook/callback', env.publicWebUrl).href,
+    appSecrets: facebook ? new Map([['facebook', facebook.appSecret]]) : new Map(),
+    redirectUri: () =>
+      new URL('/api/v1/oauth/facebook/callback', mail?.publicWebUrl ?? 'http://localhost').href,
     log,
     workerId,
     observer: promConnectorObserver(telemetry.metrics),
     webhookObserver: promWebhookObserver(telemetry.metrics),
     sync: new PgSyncRecorder(pool),
-    wrapDirectory: (dir) =>
-      new NotifyingConnectionDirectory(
-        dir,
-        new EmailReconnectNotifier({ pool, mailer, publicWebUrl: env.publicWebUrl, log }),
-        log,
-      ),
+    ...(mail && mailer
+      ? {
+          wrapDirectory: (dir: ConnectionDirectory) =>
+            new NotifyingConnectionDirectory(
+              dir,
+              new EmailReconnectNotifier({ pool, mailer, publicWebUrl: mail.publicWebUrl, log }),
+              log,
+            ),
+        }
+      : {}),
   });
   const jobs = buildJobRegistry({
     runtime: stack.runtime,
@@ -182,7 +194,7 @@ try {
     await Promise.all([worker.close(), jobWorkers.close()]);
     await queues.close();
     await health.close();
-    mailer.close();
+    mailer?.close();
     await Promise.allSettled([pool.end(), lockPool.end(), redis.quit(), producerRedis.quit()]);
     await metricsServer?.close();
     await telemetry.tracing.shutdown();
