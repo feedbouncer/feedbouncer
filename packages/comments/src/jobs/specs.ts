@@ -63,6 +63,19 @@ export const LIFECYCLE_JOB = {
   platforms: 'all' as readonly Platform[] | 'all',
 };
 
+export const discoveryPayload = z.strictObject({ bucket: z.number().int().nonnegative() });
+export type DiscoveryPayload = z.infer<typeof discoveryPayload>;
+
+// One run lists every active ad of an ad account; `bucket` is a time slot
+// (scheduler-chosen) that makes each cycle a distinct ledger entry.
+export const DISCOVERY_JOB = {
+  type: 'ad_discovery' as const,
+  payload: discoveryPayload,
+  externalRef: (p: DiscoveryPayload): string => `discover:${p.bucket}`,
+  timeoutMs: 300_000,
+  platforms: ['meta_ads'] as readonly Platform[] | 'all',
+};
+
 /** For processes that enqueue but never run jobs (the API): same type, payload and key; no handler. */
 export function enqueueOnly<P>(spec: {
   type: string;

@@ -3,6 +3,7 @@ export * from './apply.js';
 export * from './ads/tracking.js';
 export * from './jobs/specs.js';
 export * from './jobs/ingest.js';
+export * from './jobs/discovery.js';
 export * from './action-kinds.js';
 export * from './actions.js';
 export * from './eligibility.js';

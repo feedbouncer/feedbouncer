@@ -354,6 +354,9 @@ importers:
       '@feedbouncer/connector-instagram':
         specifier: workspace:*
         version: link:../connector-instagram
+      '@feedbouncer/connector-meta-ads':
+        specifier: workspace:*
+        version: link:../connector-meta-ads
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6

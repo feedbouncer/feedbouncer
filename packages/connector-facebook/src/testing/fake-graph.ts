@@ -74,6 +74,8 @@ interface Injected {
   code: number;
   subcode?: number;
   minutes?: number;
+  /** Calls to let through before this failure fires. */
+  after?: number;
 }
 
 export interface FakeGraphOptions {
@@ -198,6 +200,10 @@ export class FakeGraph {
   addAd(adAccountId: string, o: AddAdOptions = {}): { adId: string; creativeId: string } {
     const ids = { adId: this.nextId(6_000_000_000), creativeId: this.nextId(7_000_000_000) };
     return addAd(this.ads, this.clock(), ids, adAccountId, o);
+  }
+
+  removeAds(adAccountId: string): void {
+    for (const [id, ad] of this.ads.ads) if (ad.accountId === adAccountId) this.ads.ads.delete(id);
   }
 
   setAdStatus(adId: string, status: string): void {
@@ -336,8 +342,13 @@ export class FakeGraph {
     this.injected.push({ code, minutes });
   }
 
-  failNext(code: number, subcode?: number): void {
-    this.injected.push({ code, ...(subcode !== undefined ? { subcode } : {}) });
+  /** Fails the next call, or the one after `afterCalls` more calls. */
+  failNext(code: number, subcode?: number, afterCalls = 0): void {
+    this.injected.push({
+      code,
+      ...(subcode !== undefined ? { subcode } : {}),
+      ...(afterCalls > 0 ? { after: afterCalls } : {}),
+    });
   }
 
   // observation
@@ -478,7 +489,9 @@ export class FakeGraph {
     const bearer = /^Bearer (\S+)$/.exec(headers.get('authorization') ?? '')?.[1] ?? null;
     const info = bearer ? this.tokens.get(bearer) : undefined;
 
-    const inj = this.injected.shift();
+    const due = this.injected.findIndex((i) => (i.after ?? 0) === 0);
+    const inj = due >= 0 ? this.injected.splice(due, 1)[0] : undefined;
+    for (const i of this.injected) if (i.after) i.after -= 1;
     if (inj) {
       if (inj.minutes !== undefined) {
         const key = info?.id ?? 'app';
