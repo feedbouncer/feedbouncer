@@ -53,7 +53,7 @@ describe('duplicate ingestion', () => {
     await expectPgError(
       insertComment(ctx.c, a, { externalId: 'dup-1' }),
       '23505',
-      'comment_source_id_external_id_key',
+      'comment_connection_id_external_id_key',
     );
   });
 

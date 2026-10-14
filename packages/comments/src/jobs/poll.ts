@@ -64,11 +64,17 @@ export async function pollSource(
       ? null
       : new Date(s.highWaterAt.getTime() - d.settings.overlapMs));
   let cursor = s.resumeCursor;
-  let newest: Date | null = null;
+  let newest = s.resumeNewestAt;
   let created = 0;
   let updated = 0;
   const saveResume = (c: string) =>
-    d.tracking.savePollProgress(scope, s.sourceId, { kind: 'resume', cursor: c, boundary, at });
+    d.tracking.savePollProgress(scope, s.sourceId, {
+      kind: 'resume',
+      cursor: c,
+      boundary,
+      newestAt: newest,
+      at,
+    });
   for (;;) {
     let page: Page<NormalizedComment>;
     try {
@@ -130,6 +136,9 @@ export async function pollSource(
   }
 }
 
+/** What an unreadable source's code is when the media itself, or the whole account, is refused. */
+const SOURCE_INACCESSIBLE = 'source_inaccessible';
+
 /** The source itself is unreadable (deleted post, no access to the media): retry it much later. */
 const sourceFailure = (err: ConnectorError) =>
   err.kind === 'permanent' ||
@@ -145,6 +154,7 @@ export function adPollJob(
       const rec = await d.directory.load(ctx.scope);
       if (!rec) throw new JobError('non_retryable', 'connection_not_found');
       const counts = { sources: 0, done: 0, resumed: 0, unavailable: 0, created: 0, updated: 0 };
+      let inaccessible = 0;
       if (rec.status !== 'active') return counts;
       const platform = rec.platform;
       if (platform !== 'facebook' && platform !== 'instagram')
@@ -183,6 +193,7 @@ export function adPollJob(
               retryAt: later(d.settings.unavailableRetrySec * 1000),
             });
             counts.unavailable++;
+            if (ce.code === SOURCE_INACCESSIBLE) inaccessible++;
             continue;
           }
           // The runtime has flagged the connection; the scheduler skips it from now on.
@@ -208,6 +219,12 @@ export function adPollJob(
           }
           throw err;
         }
+      }
+      // Every media refusing us at once means the account-level permission is gone,
+      // not that each post is private: ask the owner to reconnect.
+      if (inaccessible >= 2 && inaccessible === counts.sources) {
+        await d.directory.markReauthRequired(ctx.scope, 'oauth_access_rejected');
+        throw new JobError('non_retryable', 'permission_revoked');
       }
       return counts;
     },

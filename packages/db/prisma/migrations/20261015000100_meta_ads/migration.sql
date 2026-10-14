@@ -19,7 +19,18 @@ ALTER TABLE job_ledger DROP CONSTRAINT job_ledger_platform_check,
     platform IN ('facebook','instagram','tiktok','youtube','threads','linkedin','x','bluesky','meta_ads'));
 
 -- 2. One comment per platform comment id per connection, whichever source it came through.
+-- Stops with a readable error, rather than a unique violation, if existing rows
+-- already file one comment under several sources of a connection.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM comment GROUP BY connection_id, external_id HAVING count(*) > 1) THEN
+    RAISE EXCEPTION 'meta_ads migration: comment has duplicate (connection_id, external_id) rows; merge them before migrating';
+  END IF;
+END $$;
+-- The index build holds a write lock on comment; the table is small until ad polling is enabled.
 CREATE UNIQUE INDEX comment_connection_id_external_id_key ON comment (connection_id, external_id);
+-- Superseded: the connection-wide key is strictly stronger.
+ALTER TABLE comment DROP CONSTRAINT comment_source_id_external_id_key;
 
 -- 2a. A reply's parent may be filed under another source of the same connection
 -- (Instagram reports an ad's comments under the ad media or the original media).
@@ -103,6 +114,7 @@ CREATE TABLE source_poll (
   high_water_at timestamptz(3),
   resume_cursor text,
   resume_boundary timestamptz(3),
+  resume_newest_at timestamptz(3),
   last_polled_at timestamptz(3),
   last_full_scan_at timestamptz(3),
   last_comment_at timestamptz(3),

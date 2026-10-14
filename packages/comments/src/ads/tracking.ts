@@ -55,11 +55,13 @@ export interface DueSource {
   highWaterAt: Date | null;
   resumeCursor: string | null;
   resumeBoundary: Date | null;
+  /** Newest top-level comment seen by the passes so far, carried across resumed jobs. */
+  resumeNewestAt: Date | null;
   lastFullScanAt: Date | null;
 }
 
 export type PollProgress =
-  | { kind: 'resume'; cursor: string; boundary: Date | null; at: Date }
+  | { kind: 'resume'; cursor: string; boundary: Date | null; newestAt: Date | null; at: Date }
   | {
       kind: 'done';
       highWaterAt: Date | null;
@@ -232,10 +234,11 @@ export class PgAdTracking {
       high_water_at: Date | null;
       resume_cursor: string | null;
       resume_boundary: Date | null;
+      resume_newest_at: Date | null;
       last_full_scan_at: Date | null;
     }>(
       `SELECT sp.source_id, s.external_id, sp.high_water_at, sp.resume_cursor, sp.resume_boundary,
-              sp.last_full_scan_at
+              sp.resume_newest_at, sp.last_full_scan_at
        ${POLL_FROM_SQL}
        WHERE sp.organization_id = $1 AND sp.brand_id = $2 AND sp.connection_id = $3
          AND ${DUE_SQL('$4::timestamptz', '$5::int')}
@@ -249,6 +252,7 @@ export class PgAdTracking {
       highWaterAt: x.high_water_at,
       resumeCursor: x.resume_cursor,
       resumeBoundary: x.resume_boundary,
+      resumeNewestAt: x.resume_newest_at,
       lastFullScanAt: x.last_full_scan_at,
     }));
   }
@@ -288,14 +292,14 @@ export class PgAdTracking {
     switch (p.kind) {
       case 'resume':
         await this.pool.query(
-          `UPDATE source_poll SET resume_cursor = $5, resume_boundary = $6, last_polled_at = $7,
-                  next_poll_at = $7 ${where}`,
-          [...base, p.cursor, p.boundary, p.at],
+          `UPDATE source_poll SET resume_cursor = $5, resume_boundary = $6, resume_newest_at = $8,
+                  last_polled_at = $7, next_poll_at = $7 ${where}`,
+          [...base, p.cursor, p.boundary, p.at, p.newestAt],
         );
         return;
       case 'done':
         await this.pool.query(
-          `UPDATE source_poll SET resume_cursor = NULL, resume_boundary = NULL,
+          `UPDATE source_poll SET resume_cursor = NULL, resume_boundary = NULL, resume_newest_at = NULL,
                   high_water_at = GREATEST(high_water_at, $5),
                   last_comment_at = GREATEST(last_comment_at, $6),
                   last_full_scan_at = CASE WHEN $7 THEN $8 ELSE last_full_scan_at END,
@@ -308,7 +312,7 @@ export class PgAdTracking {
         await this.pool.query(
           `UPDATE source_poll SET unavailable_since = COALESCE(unavailable_since, $6),
                   last_error_code = $5, next_poll_at = $7, resume_cursor = NULL,
-                  resume_boundary = NULL, last_polled_at = $6 ${where}`,
+                  resume_boundary = NULL, resume_newest_at = NULL, last_polled_at = $6 ${where}`,
           [...base, p.code, p.at, p.retryAt],
         );
         return;

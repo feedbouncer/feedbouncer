@@ -148,6 +148,15 @@ const pollRowOf = async (sourceExt: string) =>
       [...tenant(fbScope), sourceExt],
     )
   ).rows[0];
+const highWaterOf = async (sourceExt: string) =>
+  (
+    await pool.query<{ high_water_at: Date | null }>(
+      `SELECT sp.high_water_at FROM source_poll sp
+         JOIN source s ON s.id = sp.source_id AND s.organization_id = sp.organization_id
+        WHERE sp.organization_id = $1 AND sp.brand_id = $2 AND s.external_id = $3`,
+      [...tenant(fbScope), sourceExt],
+    )
+  ).rows[0]?.high_water_at;
 const resumeCursorOf = async (sourceExt: string) => (await pollRowOf(sourceExt))?.resume_cursor;
 const unavailableOf = async (sourceExt: string) => (await pollRowOf(sourceExt))?.last_error_code;
 const statusOf = async (s: ConnectionScope) =>
@@ -284,7 +293,7 @@ beforeEach(async () => {
 });
 
 describe('ad poll job', () => {
-  it('ingests comments on a facebook dark post with an ad label (AC: within one interval)', async () => {
+  it('ingests comments on a facebook dark post with an ad label', async () => {
     const { postId } = graph.addDarkPost(pageId);
     graph.addAd(adAccountId, { storyId: postId });
     await discover();
@@ -306,7 +315,7 @@ describe('ad poll job', () => {
     ]);
   });
 
-  it('webhook then poll is one row (Review Focus 1)', async () => {
+  it('webhook then poll is one row', async () => {
     const { postId } = graph.addDarkPost(pageId);
     graph.addAd(adAccountId, { storyId: postId });
     const { commentId } = graph.addComment(pageId, { postId, message: 'hi' });
@@ -346,7 +355,7 @@ describe('ad poll job', () => {
     expect(rows.find((r) => r.externalId === reply.commentId)!.parentCommentId).not.toBeNull();
   });
 
-  it('pages 1,000 comments across several jobs and loses nothing added mid-pass (Review Focus 5)', async () => {
+  it('pages 1,000 comments across several jobs and loses nothing added mid-pass', async () => {
     const { postId } = graph.addDarkPost(pageId);
     graph.addAd(adAccountId, { storyId: postId });
     await discover();
@@ -368,6 +377,23 @@ describe('ad poll job', () => {
     expect(await countFor(fbScope)).toBe(1001);
   });
 
+  it('a pass resumed across jobs records the newest comment it saw, not the last page', async () => {
+    const { postId } = graph.addDarkPost(pageId);
+    graph.addAd(adAccountId, { storyId: postId });
+    await discover();
+    const base = nowMs - 2_000_000;
+    for (let i = 0; i < 300; i++)
+      graph.addComment(pageId, { postId, message: `c${i}`, createdAtMs: base + i * 1000 });
+    settings.softDeadlineMs = 0;
+    let r: PollResult;
+    let i = 0;
+    do {
+      r = await poll(fbScope, 100 + i++);
+    } while (r.resumed > 0 && i < 50);
+    expect(i).toBeGreaterThan(1);
+    expect((await highWaterOf(postId))?.getTime()).toBe(base + 299 * 1000);
+  });
+
   it('a second poll reads only back to the high-water mark', async () => {
     const { postId } = graph.addDarkPost(pageId);
     graph.addAd(adAccountId, { storyId: postId });
@@ -386,7 +412,7 @@ describe('ad poll job', () => {
     expect(graph.calls().length - before).toBe(1);
   });
 
-  it('a deleted post marks only that source unavailable; others still poll (Review Focus 2)', async () => {
+  it('a deleted post marks only that source unavailable; others still poll', async () => {
     const pa = graph.addDarkPost(pageId).postId;
     const pb = graph.addDarkPost(pageId).postId;
     graph.addAd(adAccountId, { storyId: pa });
@@ -411,6 +437,16 @@ describe('ad poll job', () => {
     const r = await poll(igScope);
     expect(r.unavailable).toBe(1);
     expect(await statusOf(igScope)).toBe('active');
+  });
+
+  it('flags the instagram connection when every media refuses at once', async () => {
+    graph.addAd(adAccountId, { igMediaId: '17900000000000777' });
+    graph.addAd(adAccountId, { igMediaId: '17900000000000778' });
+    await discover();
+    graph.failNext(10);
+    graph.failNext(10);
+    await expect(poll(igScope)).rejects.toBeDefined();
+    expect(await statusOf(igScope)).toBe('reconnect_required');
   });
 
   it('a throttle mid-pass saves the cursor and defers; the next run resumes', async () => {
@@ -459,7 +495,7 @@ describe('ad poll job', () => {
     }
   });
 
-  it('ad comments can be hidden, deleted and replied to with existing actions (AC)', async () => {
+  it('ad comments can be hidden, deleted and replied to with existing actions', async () => {
     const actions = new ModerationActions({
       pool,
       store,
@@ -558,7 +594,7 @@ describe('ad poll job', () => {
     });
   });
 
-  it('retired ads stop being polled after the grace period (Review Focus 4)', async () => {
+  it('retired ads stop being polled after the grace period', async () => {
     const { adId } = graph.addAd(adAccountId, { storyId: graph.addDarkPost(pageId).postId });
     await discover();
     graph.setAdStatus(adId, 'PAUSED');
@@ -569,7 +605,7 @@ describe('ad poll job', () => {
     expect((await poll(fbScope, 11)).sources).toBe(0);
   });
 
-  it('ad polling cannot exhaust the read budget used by webhook ingest (AC: never blocks organic)', async () => {
+  it('ad polling cannot exhaust the read budget used by webhook ingest', async () => {
     // Facebook: 200 points per 60 s, 50 reserved for urgent work, so background is capped at 75.
     for (let i = 0; i < 120; i++) {
       const { postId } = graph.addDarkPost(pageId);
@@ -584,7 +620,7 @@ describe('ad poll job', () => {
     expect(await ingest(fbScope, organic)).toMatchObject({ outcome: 'created' });
   });
 
-  it('two overlapping poll jobs for one connection create no duplicates (Review Focus 1)', async () => {
+  it('two overlapping poll jobs for one connection create no duplicates', async () => {
     const { postId } = graph.addDarkPost(pageId);
     graph.addAd(adAccountId, { storyId: postId });
     for (let i = 0; i < 50; i++) graph.addComment(pageId, { postId, message: `c${i}` });

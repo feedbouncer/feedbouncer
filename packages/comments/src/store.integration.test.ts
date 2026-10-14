@@ -365,7 +365,7 @@ describe('PgCommentStore', () => {
   });
 });
 
-describe('per-connection comment identity (Review Focus 1)', () => {
+describe('per-connection comment identity', () => {
   it('the same comment through two sources is one row', async () => {
     const c = normalized({ sourceExternalId: '900_1', externalId: '900_1_77' });
     const a = await store.upsertFromPlatform(scope(), c, opts());

@@ -192,7 +192,7 @@ describe('PgAdTracking', () => {
     expect(await pollRows()).toHaveLength(1);
     expect(await linksOf('900_1')).toEqual(['5001', '5002']);
   });
-  it('shared ad account: tenant B gets page_not_connected and no source under A (Review Focus 3)', async () => {
+  it('shared ad account: tenant B gets page_not_connected and no source under A', async () => {
     const connsB = await tracking.brandMetaConnections(adsB);
     expect(connsB.facebook.size).toBe(0);
     await tracking.recordAd(adsB, adRow('5001', { fb: '900_1' }, connsB), at);
@@ -214,7 +214,7 @@ describe('PgAdTracking', () => {
     await expect(tracking.recordAd(fbA, row, at)).rejects.toThrow();
     expect(await sourcesOf(igA)).toHaveLength(0);
   });
-  it('retirement: polled during grace, not after; re-activation resumes (Review Focus 4)', async () => {
+  it('retirement: polled during grace, not after; re-activation resumes', async () => {
     const conns = await tracking.brandMetaConnections(adsA);
     await tracking.recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);
     expect(await tracking.retireMissing(adsA, new Set(), at)).toBe(1);
@@ -335,6 +335,7 @@ describe('PgAdTracking', () => {
       kind: 'resume',
       cursor: 'abc',
       boundary: days(at, -2),
+      newestAt: null,
       at,
     });
     expect(await tracking.dueSources(fbA, at, { graceDays: 7, limit: 10 })).toEqual([
@@ -368,6 +369,7 @@ describe('PgAdTracking', () => {
         highWaterAt: hw,
         resumeCursor: null,
         resumeBoundary: null,
+        resumeNewestAt: null,
         lastFullScanAt: at,
       },
     ]);
@@ -379,6 +381,7 @@ describe('PgAdTracking', () => {
         kind: 'resume',
         cursor: 'evil',
         boundary: null,
+        newestAt: null,
         at,
       },
     );
@@ -417,6 +420,7 @@ describe('PgAdTracking', () => {
       kind: 'resume',
       cursor: 'abc',
       boundary: days(at, -2),
+      newestAt: null,
       at,
     });
     await tracking.savePollProgress(fbA, s!.sourceId, {
