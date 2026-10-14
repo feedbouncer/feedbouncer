@@ -331,6 +331,7 @@ describe('listComments with inline replies through the runtime', () => {
   it('pages 100 top-level comments with many replies without loss, paying budget per request', async () => {
     const { igUserId, client } = await connectedClient();
     const first = graph.addIgComment(igUserId, { text: 't0' });
+    // 6,100 comments paged one Graph call at a time comfortably exceeds vitest's 5s default.
     const tops = [first.commentId];
     for (let t = 1; t < 100; t++) {
       tops.push(graph.addIgComment(igUserId, { mediaId: first.mediaId, text: `t${t}` }).commentId);
@@ -360,5 +361,5 @@ describe('listComments with inline replies through the runtime', () => {
     const graphRequests = requests.length - requestsBefore;
     expect(graphRequests).toBe(calls);
     expect(acquire).toHaveBeenCalledTimes(calls);
-  });
+  }, 30000);
 });
