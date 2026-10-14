@@ -31,21 +31,44 @@ const fakeDeps = {
 
 describe('buildConnectorRegistry', () => {
   it('registers facebook only when configured', () => {
-    expect(buildConnectorRegistry({ facebook: null, instagram: null }).platforms()).toEqual([]);
-    expect(buildConnectorRegistry({ facebook: cfg, instagram: null }).platforms()).toEqual([
-      'facebook',
-    ]);
+    expect(
+      buildConnectorRegistry({ facebook: null, instagram: null, metaAds: null }).platforms(),
+    ).toEqual([]);
+    expect(
+      buildConnectorRegistry({ facebook: cfg, instagram: null, metaAds: null }).platforms(),
+    ).toEqual(['facebook']);
   });
   it('registers instagram only when enabled', () => {
-    expect(buildConnectorRegistry({ facebook: cfg, instagram: null }).platforms()).toEqual([
-      'facebook',
-    ]);
     expect(
-      buildConnectorRegistry({ facebook: cfg, instagram: { meta: cfg } })
+      buildConnectorRegistry({ facebook: cfg, instagram: null, metaAds: null }).platforms(),
+    ).toEqual(['facebook']);
+    expect(
+      buildConnectorRegistry({ facebook: cfg, instagram: { meta: cfg }, metaAds: null })
         .platforms()
         .slice()
         .sort(),
     ).toEqual(['facebook', 'instagram']);
+  });
+});
+
+describe('meta ads', () => {
+  it('registers the meta_ads connector only when enabled', () => {
+    const metaAds = { meta: cfg, activeStatuses: ['ACTIVE'] };
+    expect(
+      buildConnectorRegistry({ facebook: cfg, instagram: null, metaAds }).platforms().sort(),
+    ).toEqual(['facebook', 'meta_ads']);
+  });
+  it('registers ad_discovery and ad_poll only when ad polling is enabled', () => {
+    const off = buildJobRegistry(fakeDeps);
+    expect(off.supports('ad_discovery', 'meta_ads')).toBe(false);
+    expect(off.supports('ad_poll', 'facebook')).toBe(false);
+    const on = buildJobRegistry({
+      ...fakeDeps,
+      ads: { poll: { intervalSec: 300 } as comments.PollSettings },
+    });
+    expect(on.supports('ad_discovery', 'meta_ads')).toBe(true);
+    expect(on.supports('ad_poll', 'facebook')).toBe(true);
+    expect(on.supports('ad_poll', 'instagram')).toBe(true);
   });
 });
 

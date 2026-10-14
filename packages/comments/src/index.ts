@@ -12,3 +12,4 @@ export * from './jobs/execute.js';
 export * from './jobs/lifecycle.js';
 export * from './webhook-router.js';
 export * from './reconnect-notifier.js';
+export * from './scheduler.js';

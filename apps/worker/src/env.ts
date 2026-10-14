@@ -22,6 +22,8 @@ import {
   type FacebookConfig,
 } from '@feedbouncer/connector-facebook';
 import { parseInstagramEnv, type InstagramConfig } from '@feedbouncer/connector-instagram';
+import { parseMetaAdsEnv, type MetaAdsConfig } from '@feedbouncer/connector-meta-ads';
+import type { PollSettings, SchedulerSettings } from '@feedbouncer/comments';
 import { loadJobsConfig, type JobsConfig } from '@feedbouncer/jobs';
 import {
   loadHealthPolicy,
@@ -58,8 +60,17 @@ export interface WorkerEnv {
   readonly facebook: FacebookConfig | null;
   /** Null unless INSTAGRAM_CONNECTOR_ENABLED=true; runs on the Facebook Meta app, so it requires it. */
   readonly instagram: InstagramConfig | null;
+  /** Null unless META_ADS_CONNECTOR_ENABLED=true; runs on the Facebook Meta app, so it requires it. */
+  readonly metaAds: MetaAdsConfig | null;
+  /** Cadence of ad discovery and ad comment polling; used only when `metaAds` is set. */
+  readonly adPolling: AdPollingConfig;
   /** Null unless Facebook is configured: only the Facebook connector sends mail or needs the web origin. */
   readonly mail: WorkerMailConfig | null;
+}
+
+export interface AdPollingConfig {
+  readonly poll: PollSettings;
+  readonly scheduler: SchedulerSettings;
 }
 
 export interface WorkerMailConfig {
@@ -83,6 +94,59 @@ function readMailConfig(env: Env): WorkerMailConfig {
   return { smtpUrl, mailFrom, publicWebUrl };
 }
 
+function readAdPollingConfig(env: Env): AdPollingConfig {
+  const commentPollSec = readInt(env, 'COMMENT_POLL_INTERVAL_SEC', {
+    min: 60,
+    max: 3600,
+    fallback: 300,
+  });
+  const pollIntervalSec = readInt(env, 'AD_POLL_INTERVAL_SEC', {
+    min: 60,
+    max: 3600,
+    fallback: commentPollSec,
+  });
+  const graceDays = readInt(env, 'AD_RETIREMENT_GRACE_DAYS', { min: 0, max: 30, fallback: 7 });
+  return {
+    poll: {
+      intervalSec: pollIntervalSec,
+      graceDays,
+      maxSourcesPerJob: readInt(env, 'AD_POLL_MAX_SOURCES_PER_JOB', {
+        min: 1,
+        max: 1000,
+        fallback: 100,
+      }),
+      unavailableRetrySec: readInt(env, 'AD_SOURCE_UNAVAILABLE_RETRY_SEC', {
+        min: 600,
+        max: 604_800,
+        fallback: 21_600,
+      }),
+      igDeepScanSec: readInt(env, 'AD_IG_DEEP_SCAN_INTERVAL_SEC', {
+        min: 3600,
+        max: 604_800,
+        fallback: 86_400,
+      }),
+      overlapMs: 60_000,
+      softDeadlineMs: 90_000,
+      pageSize: 100,
+    },
+    scheduler: {
+      tickSec: readInt(env, 'AD_SCHEDULER_TICK_SEC', { min: 10, max: 300, fallback: 30 }),
+      discoveryIntervalSec: readInt(env, 'AD_DISCOVERY_INTERVAL_SEC', {
+        min: 300,
+        max: 86_400,
+        fallback: 900,
+      }),
+      pollIntervalSec,
+      graceDays,
+      maxConnectionsPerTick: readInt(env, 'AD_SCHEDULER_MAX_CONNECTIONS_PER_TICK', {
+        min: 1,
+        max: 10_000,
+        fallback: 500,
+      }),
+    },
+  };
+}
+
 /** The worker's single typed configuration layer. Call once, from main.ts. */
 export function loadWorkerEnv(
   rawEnv: Env,
@@ -94,6 +158,8 @@ export function loadWorkerEnv(
   const redisUrl = readUrl(env, 'REDIS_URL', REDIS_PROTOCOLS);
   const facebook = parseFacebookEnv(env, opts.warn);
   const instagram = parseInstagramEnv(env, facebook);
+  const metaAds = parseMetaAdsEnv(env, facebook);
+  const adPolling = readAdPollingConfig(env);
   const mail = facebook ? readMailConfig(env) : null;
   checkNotPlaceholder(appEnv, 'DATABASE_URL', databaseUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);
@@ -110,6 +176,8 @@ export function loadWorkerEnv(
     health: loadHealthPolicy(env),
     facebook,
     instagram,
+    metaAds,
+    adPolling,
     mail,
   };
   // A whole-config dump (JSON, util.inspect) must never carry URL passwords or keys.
@@ -121,6 +189,7 @@ export function loadWorkerEnv(
     publicWebUrl: mail?.publicWebUrl.origin ?? null,
     facebookEnabled: config.facebook !== null,
     instagramEnabled: config.instagram !== null,
+    metaAdsEnabled: config.metaAds !== null,
     activeKeyId: config.encryption.activeKeyId,
     jobQueuePrefix: config.jobs.prefix,
     jobDlqRetentionDays: config.jobs.dlqRetentionMs / 86_400_000,
