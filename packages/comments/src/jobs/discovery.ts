@@ -19,14 +19,15 @@ import type {
 } from '../ads/tracking.js';
 import { DISCOVERY_JOB, type DiscoveryPayload } from './specs.js';
 
+/** A saved listing cursor older than this is dropped and the listing starts over. */
+const STALE_LISTING_MS = 24 * 3_600_000;
+
 const FB_REASONS: readonly string[] = [
   'no_post',
   'dynamic_creative_unsupported',
   'post_deleted',
   'invalid_platform_id',
 ];
-/** A saved listing cursor older than this is dropped and the listing starts over. */
-const STALE_LISTING_MS = 24 * 3_600_000;
 
 const IG_REASONS: readonly string[] = [
   'not_instagram',

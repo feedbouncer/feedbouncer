@@ -102,7 +102,7 @@ Ad moderation adds these events:
 
 | `msg`                      | Level | Meaning                                                                                                                   |
 | -------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------- |
-| `ads.discovery_truncated`  | warn  | An ad account listed more ads than the per-account cap (adds `listed`); ads beyond the cap are not tracked this cycle.    |
+| `ads.discovery_partial`    | info  | An ad listing stopped at the call budget (adds `listed`); the next discovery job resumes from the saved cursor.           |
 | `ads.unresolved`           | info  | Ads whose Page or Instagram post could not be resolved, per `reason` and `count`.                                         |
 | `ads.poll_defer_failed`    | warn  | A throttled or failing poll could not push back its untried sources (adds `sources`).                                     |
 | `scheduler.enqueue_failed` | warn  | The scheduler could not enqueue a job (adds `jobType`, `platform`; never ids or payload). It is retried on the next tick. |

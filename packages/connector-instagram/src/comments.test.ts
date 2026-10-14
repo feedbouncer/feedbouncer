@@ -387,6 +387,19 @@ describe('listComments / listReplies', () => {
     ).rejects.toMatchObject({ kind: 'permanent', code: 'source_inaccessible' });
   });
 
+  it('a permission error while listing replies still marks the connection as revoked', async () => {
+    const { graph, igUserId, ctx } = world();
+    const { mediaId, commentId } = graph.addIgComment(igUserId);
+    graph.failNext(10);
+    await expect(
+      listReplies(cfg, now, ctx, {
+        parent: { sourceExternalId: mediaId, externalId: commentId },
+        cursor: null,
+        limit: 25,
+      }),
+    ).rejects.toMatchObject({ kind: 'auth_expired', code: 'permission_revoked' });
+  });
+
   it('a missing media while listing is not_found source_missing', async () => {
     const { ctx } = world();
     await expect(
@@ -474,7 +487,9 @@ describe('listComments / listReplies', () => {
       const first = graph.addIgComment(igUserId, { text: 't0' });
       const tops = [first.commentId];
       for (let t = 1; t < 25; t++) {
-        tops.push(graph.addIgComment(igUserId, { mediaId: first.mediaId, text: `t${t}` }).commentId);
+        tops.push(
+          graph.addIgComment(igUserId, { mediaId: first.mediaId, text: `t${t}` }).commentId,
+        );
       }
       for (const p of tops) {
         for (let i = 0; i < 40; i++) {

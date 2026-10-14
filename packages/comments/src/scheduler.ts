@@ -60,9 +60,13 @@ export class PollScheduler {
         const r = await this.d.producer.enqueue({ scope, platform, type, payload: { bucket } });
         if (r.status === 'deduplicated') result.deduplicated++;
         else result[type === 'ad_discovery' ? 'discovery' : 'poll']++;
-      } catch {
+      } catch (err) {
         result.failed++;
-        this.d.log.warn('scheduler.enqueue_failed', { jobType: type, platform });
+        this.d.log.warn('scheduler.enqueue_failed', {
+          jobType: type,
+          platform,
+          errorName: err instanceof Error ? err.name : 'unknown',
+        });
       }
     };
     try {
@@ -95,9 +99,11 @@ export class PollScheduler {
       });
       for (const c of due)
         await enqueue(c.scope, c.platform, 'ad_poll', slot(settings.pollIntervalSec));
-    } catch {
+    } catch (err) {
       result.failed++;
-      this.d.log.warn('scheduler.query_failed');
+      this.d.log.warn('scheduler.query_failed', {
+        errorName: err instanceof Error ? err.name : 'unknown',
+      });
     }
     return result;
   }

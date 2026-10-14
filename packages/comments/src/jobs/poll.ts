@@ -214,8 +214,11 @@ export function adPollJob(
                 kind: 'defer',
                 retryAt,
               });
-          } catch {
-            ctx.log.warn('ads.poll_defer_failed', { sources: due.length - i });
+          } catch (deferErr) {
+            ctx.log.warn('ads.poll_defer_failed', {
+              sources: due.length - i,
+              errorName: deferErr instanceof Error ? deferErr.name : 'unknown',
+            });
           }
           throw err;
         }

@@ -130,6 +130,7 @@ CREATE TABLE source_poll (
   CONSTRAINT source_poll_last_error_code_check CHECK (last_error_code ~ '^[a-z][a-z0-9_]{0,62}$')
 );
 CREATE INDEX source_poll_connection_id_next_poll_at_idx ON source_poll (connection_id, next_poll_at);
+CREATE INDEX source_poll_next_poll_at_idx ON source_poll (next_poll_at);
 CREATE TRIGGER source_poll_set_updated_at_trg BEFORE UPDATE ON source_poll
   FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
 

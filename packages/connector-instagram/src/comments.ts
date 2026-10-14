@@ -185,6 +185,7 @@ async function list(
   segment: 'comments' | 'replies',
   sourceFallback: string | null,
   req: { cursor: string | null; limit: number; includeReplies?: boolean },
+  op: IgOp,
 ): Promise<Page<NormalizedComment>> {
   const id = graphId(parentId);
   const inline = req.includeReplies === true && segment === 'comments';
@@ -198,10 +199,19 @@ async function list(
   // One Graph request per call, so one budget acquire per request: a comment's
   // further reply pages are carried in the cursor, never fetched in a loop.
   if (resume.t !== null && resume.r !== null) {
-    const more = await list(cfg, nowMs, ctx, resume.t, 'replies', sourceFallback, {
-      cursor: resume.r,
-      limit: INLINE_REPLIES,
-    });
+    const more = await list(
+      cfg,
+      nowMs,
+      ctx,
+      resume.t,
+      'replies',
+      sourceFallback,
+      {
+        cursor: resume.r,
+        limit: INLINE_REPLIES,
+      },
+      op,
+    );
     const items = more.items.map((c) => withParent(c, resume.t!));
     const next = more.nextCursor
       ? { a: resume.a, i: resume.i, t: resume.t, r: more.nextCursor }
@@ -220,7 +230,7 @@ async function list(
       limit: String(limit),
       ...(resume.a ? { after: resume.a } : {}),
     },
-    'list_source',
+    op,
   );
   if (!isObj(body) || !Array.isArray(body.data) || body.data.length > MAX_ITEMS) {
     throw new ConnectorError('permanent', 'invalid_graph_response');
@@ -262,7 +272,7 @@ export const listComments = (
     includeReplies?: boolean;
   },
 ): Promise<Page<NormalizedComment>> =>
-  list(cfg, nowMs, ctx, req.sourceExternalId, 'comments', req.sourceExternalId, req);
+  list(cfg, nowMs, ctx, req.sourceExternalId, 'comments', req.sourceExternalId, req, 'list_source');
 
 export const listReplies = (
   cfg: InstagramConfig,
@@ -270,4 +280,4 @@ export const listReplies = (
   ctx: CallContext,
   req: { parent: CommentRef; cursor: string | null; limit: number },
 ): Promise<Page<NormalizedComment>> =>
-  list(cfg, nowMs, ctx, req.parent.externalId, 'replies', req.parent.sourceExternalId, req);
+  list(cfg, nowMs, ctx, req.parent.externalId, 'replies', req.parent.sourceExternalId, req, 'read');

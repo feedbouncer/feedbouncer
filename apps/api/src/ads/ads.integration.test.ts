@@ -146,7 +146,7 @@ describe('ads endpoint', () => {
     await addAd(B, adsConnectionB, { id: '7001', discoveredAt: '2026-10-14T10:00:00Z' });
     const own = await api.req('GET', adsUrl(B), { cookie: B.owner.cookie });
     expect(own.body.ads.map((x: { adId: string }) => x.adId)).toEqual(['7001']);
-    const cross = await api.req('GET', adsUrl({ ...A, orgId: A.orgId, brandId: A.brandId }), {
+    const cross = await api.req('GET', adsUrl(A), {
       cookie: B.owner.cookie,
     });
     expect(cross.status).toBe(404);
