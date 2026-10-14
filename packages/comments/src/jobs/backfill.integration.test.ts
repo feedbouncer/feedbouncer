@@ -30,7 +30,7 @@ import { BACKFILL_DEFAULTS } from '../backfill/settings.js';
 import { PgBackfillStore } from '../backfill/store.js';
 import { ingestCommentJob } from './ingest.js';
 import { connectionBackfillJob } from './backfill.js';
-import { BACKFILL_JOB, type BackfillPayload } from './specs.js';
+import { BACKFILL_JOB, BACKFILL_MAX_ATTEMPTS, type BackfillPayload } from './specs.js';
 
 const APP_SECRET = 'fb-app-secret-SENTINEL-0123456789';
 const log = createLogger('comments-backfill-test', 'error', () => {});
@@ -295,6 +295,18 @@ describe('connection_backfill job', () => {
     const out = await job().handle(ctxFor(scope), p);
     expect(out).toMatchObject({ result: 'completed', imported: 30 });
     expect(commentCalls() - before).toBe(2);
+  });
+
+  it('a segment that exhausts its retries is failed as platform_error and can be restarted', async () => {
+    const post = graph.addPost(pageId, { createdAtMs: t - DAY }).postId;
+    for (let j = 0; j < 30; j++)
+      graph.addComment(pageId, { postId: post, createdAtMs: t - DAY + j });
+    const p = await start();
+    graph.throttleNext(80001, 1, { afterCalls: 2 });
+    const last = { ...ctxFor(scope), attempt: BACKFILL_MAX_ATTEMPTS };
+    await expect(job().handle(last, p)).rejects.toMatchObject({ kind: 'rate_limited' });
+    expect(await view()).toMatchObject({ status: 'failed', failureReason: 'platform_error' });
+    expect((await backfill.request(scope, new Date(t))).kind).toBe('started');
   });
 
   it('resumes after a worker restart from the checkpoint', async () => {

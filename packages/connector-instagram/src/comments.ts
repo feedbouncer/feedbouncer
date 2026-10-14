@@ -8,7 +8,13 @@ import {
   type NormalizedComment,
   type Page,
 } from '@feedbouncer/connectors';
-import { callFor, GRAPH_ID, graphId, graphRequest } from '@feedbouncer/connector-facebook';
+import {
+  callFor,
+  GRAPH_ID,
+  graphId,
+  graphRequest,
+  parseGraphTime,
+} from '@feedbouncer/connector-facebook';
 import type { InstagramConfig } from './config.js';
 import { mapInstagramError, type IgOp } from './errors.js';
 
@@ -36,12 +42,6 @@ function permalinkOf(v: unknown): string | null {
   }
 }
 
-/** Graph writes "+0000"; normalize the offset so parsing is unambiguous. */
-export function parseIgTime(s: string): Date | null {
-  const d = new Date(s.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
-  return Number.isFinite(d.getTime()) ? d : null;
-}
-
 export function toNormalizedIgComment(
   raw: unknown,
   sourceFallback: string | null,
@@ -53,7 +53,7 @@ export function toNormalizedIgComment(
   const sourceExternalId = (media && gid(media.id)) ?? sourceFallback;
   if (!sourceExternalId) return null;
   if (typeof raw.timestamp !== 'string' || raw.timestamp.length > 40) return null;
-  const postedAt = parseIgTime(raw.timestamp);
+  const postedAt = parseGraphTime(raw.timestamp);
   if (postedAt === null) return null;
 
   const from = isObj(raw.from) ? raw.from : null;

@@ -60,7 +60,7 @@ export class PgBackfillStore {
     return withTransaction(this.pool, async (c) => {
       const prev = (
         await c.query(
-          `SELECT run_id, status, segment, synced_through, updated_at FROM connection_backfill WHERE ${T} FOR UPDATE`,
+          `SELECT run_id, status, segment, synced_through, heartbeat_at FROM connection_backfill WHERE ${T} FOR UPDATE`,
           key(scope),
         )
       ).rows[0] as
@@ -69,11 +69,11 @@ export class PgBackfillStore {
             status: string;
             segment: number;
             synced_through: Date | null;
-            updated_at: Date;
+            heartbeat_at: Date;
           }
         | undefined;
       const fresh =
-        prev !== undefined && now.getTime() - prev.updated_at.getTime() < this.s.staleAfterMs;
+        prev !== undefined && now.getTime() - prev.heartbeat_at.getTime() < this.s.staleAfterMs;
       if (prev && fresh && (prev.status === 'pending' || prev.status === 'running'))
         return { kind: 'existing', runId: prev.run_id, segment: prev.segment };
       const floor = new Date(now.getTime() - this.s.windowDays * DAY);
@@ -92,7 +92,7 @@ export class PgBackfillStore {
       }
       const r = await c.query<{ run_id: string }>(
         `INSERT INTO connection_backfill (connection_id, organization_id, brand_id, run_id, status,
-                                          window_start, window_end, max_comments, requested_at, updated_at)
+                                          window_start, window_end, max_comments, requested_at, heartbeat_at)
          VALUES ($3, $1, $2, gen_random_uuid(), 'pending', $4, $5, $6, $5, $5)
          ON CONFLICT (connection_id) DO UPDATE SET
            run_id = EXCLUDED.run_id, status = 'pending', failure_reason = NULL,
@@ -101,7 +101,7 @@ export class PgBackfillStore {
            comment_cursor = NULL, imported_count = 0, sources_done = 0, skipped_count = 0,
            skipped_sources = '[]'::jsonb, max_comments = EXCLUDED.max_comments, limited = false,
            requested_at = EXCLUDED.requested_at, started_at = NULL, completed_at = NULL,
-           updated_at = EXCLUDED.updated_at
+           heartbeat_at = EXCLUDED.heartbeat_at
          WHERE connection_backfill.organization_id = $1 AND connection_backfill.brand_id = $2
          RETURNING run_id`,
         [...key(scope), windowStart, now, this.s.maxComments],
@@ -118,7 +118,7 @@ export class PgBackfillStore {
   ): Promise<BackfillRun | null> {
     const r = await this.pool.query(
       `UPDATE connection_backfill SET status = 'running', segment = $5,
-              started_at = COALESCE(started_at, $6), updated_at = $6
+              started_at = COALESCE(started_at, $6), heartbeat_at = $6
         WHERE ${T} AND run_id = $4 AND status IN ('pending', 'running') AND $5 IN (segment, segment + 1)
         RETURNING run_id, status, segment, window_start, window_end, max_comments, sources_exhausted,
                   source_cursor, source_queue, comment_cursor, imported_count, sources_done, skipped_count`,
@@ -158,7 +158,7 @@ export class PgBackfillStore {
          skipped_sources = CASE
            WHEN $11::jsonb IS NULL OR jsonb_array_length(skipped_sources) >= $12 THEN skipped_sources
            ELSE skipped_sources || jsonb_build_array($11::jsonb) END,
-         updated_at = $13
+         heartbeat_at = $13
        WHERE ${T} AND run_id = $4 AND status = 'running'`,
       [
         ...key(scope),
@@ -184,7 +184,7 @@ export class PgBackfillStore {
     now: Date,
   ): Promise<void> {
     await this.pool.query(
-      `UPDATE connection_backfill SET status = 'completed', limited = $5, completed_at = $6, updated_at = $6,
+      `UPDATE connection_backfill SET status = 'completed', limited = $5, completed_at = $6, heartbeat_at = $6,
               synced_through = window_end, source_cursor = NULL, source_queue = '{}', comment_cursor = NULL
         WHERE ${T} AND run_id = $4 AND status = 'running'`,
       [...key(scope), runId, o.limited, now],
@@ -193,7 +193,7 @@ export class PgBackfillStore {
 
   async fail(scope: ConnectionScope, runId: string, reason: string, now: Date): Promise<void> {
     await this.pool.query(
-      `UPDATE connection_backfill SET status = 'failed', failure_reason = $5, updated_at = $6
+      `UPDATE connection_backfill SET status = 'failed', failure_reason = $5, heartbeat_at = $6
         WHERE ${T} AND run_id = $4 AND status IN ('pending', 'running')`,
       [...key(scope), runId, reason, now],
     );
@@ -201,7 +201,7 @@ export class PgBackfillStore {
 
   async cancel(scope: ConnectionScope, now: Date): Promise<void> {
     await this.pool.query(
-      `UPDATE connection_backfill SET status = 'failed', failure_reason = 'cancelled', updated_at = $4
+      `UPDATE connection_backfill SET status = 'failed', failure_reason = 'cancelled', heartbeat_at = $4
         WHERE ${T} AND status IN ('pending', 'running')`,
       [...key(scope), now],
     );
@@ -213,7 +213,7 @@ export class PgBackfillStore {
   ): Promise<Map<string, BackfillView>> {
     const r = await this.pool.query(
       `SELECT connection_id, status, failure_reason, imported_count, completed_at, limited, max_comments,
-              skipped_count, updated_at
+              skipped_count, heartbeat_at
          FROM connection_backfill WHERE organization_id = $1 AND brand_id = $2`,
       [scope.organizationId, scope.brandId],
     );
@@ -221,7 +221,7 @@ export class PgBackfillStore {
     for (const x of r.rows) {
       const stale =
         (x.status === 'pending' || x.status === 'running') &&
-        now.getTime() - x.updated_at.getTime() >= this.s.staleAfterMs;
+        now.getTime() - x.heartbeat_at.getTime() >= this.s.staleAfterMs;
       m.set(x.connection_id, {
         status: stale ? 'failed' : x.status,
         failureReason: stale ? 'stalled' : x.failure_reason,

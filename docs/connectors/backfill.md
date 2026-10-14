@@ -41,7 +41,7 @@ normal ingest path. Connecting returns at once; the import runs afterwards.
 | `reconnect_required`       | Authorization was revoked or expired mid-run. Reconnecting starts a new run. |
 | `disconnected`             | The connection was removed.                                                  |
 | `cancelled`                | The run was cancelled by a disconnect.                                       |
-| `stalled`                  | A pending or running run was not updated for over 26 hours.                  |
+| `stalled`                  | A pending or running run had no progress checkpoint for over 26 hours.                  |
 | `source_listing_forbidden` | The platform refused to list posts/media (permission).                       |
 | `platform_error`           | The platform failed in a way retries did not resolve.                        |
 

@@ -6,9 +6,9 @@ import {
   type Page,
   type RecentSource,
 } from '@feedbouncer/connectors';
-import { GRAPH_ID, graphId, recentCursor } from '@feedbouncer/connector-facebook';
+import { GRAPH_ID, graphId, parseGraphTime, recentCursor } from '@feedbouncer/connector-facebook';
 import type { InstagramConfig } from './config.js';
-import { nextCursorOf, parseIgTime, read } from './comments.js';
+import { nextCursorOf, read } from './comments.js';
 
 const MAX_ITEMS = 500;
 const PERMALINK_PREFIX = 'https://www.instagram.com/';
@@ -50,7 +50,7 @@ export async function listRecentMedia(
     const r = raw as { id?: unknown; timestamp?: unknown; permalink?: unknown };
     if (typeof r.id !== 'string' || !GRAPH_ID.test(r.id) || typeof r.timestamp !== 'string')
       continue;
-    const t = parseIgTime(r.timestamp);
+    const t = parseGraphTime(r.timestamp);
     if (t === null) continue;
     lastTime = t.getTime();
     if (t < req.since) continue;

@@ -116,11 +116,13 @@ export const backfillPayload = z.strictObject({
 });
 export type BackfillPayload = z.infer<typeof backfillPayload>;
 
+export const BACKFILL_MAX_ATTEMPTS = 8;
+
 export const BACKFILL_JOB = {
   type: 'connection_backfill' as const,
   payload: backfillPayload,
   externalRef: (p: BackfillPayload): string => `backfill:${p.runId}:${p.segment}`,
   timeoutMs: BACKFILL_DEFAULTS.jobTimeoutMs,
-  policy: { maxAttempts: 8 } satisfies Partial<RetryPolicy>,
+  policy: { maxAttempts: BACKFILL_MAX_ATTEMPTS } satisfies Partial<RetryPolicy>,
   platforms: ['facebook', 'instagram'] as readonly Platform[] | 'all',
 };

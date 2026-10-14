@@ -33,6 +33,7 @@ CREATE TABLE connection_backfill (
   requested_at timestamptz(3) NOT NULL DEFAULT now(),
   started_at timestamptz(3),
   completed_at timestamptz(3),
+  heartbeat_at timestamptz(3) NOT NULL DEFAULT now(),
   created_at timestamptz(3) NOT NULL DEFAULT now(),
   updated_at timestamptz(3) NOT NULL DEFAULT now(),
   CONSTRAINT connection_backfill_pkey PRIMARY KEY (connection_id),
