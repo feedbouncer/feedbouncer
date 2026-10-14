@@ -19,7 +19,7 @@ describe('createFacebookConnector', () => {
       responses: ['public_reply', 'private_reply'],
       ingestion: 'webhook',
       listSources: false,
-      recentSources: false,
+      recentSources: true,
       accountSelection: 'multiple',
       tokens: { refreshable: false, rotatesRefreshToken: false },
       apiHosts: ['graph.facebook.com'],
