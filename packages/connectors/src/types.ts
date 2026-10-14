@@ -90,6 +90,11 @@ export interface NormalizedSource {
   /** Set by ad connectors: the ad this source stands for. */
   readonly ad?: AdSourceInfo | undefined;
 }
+export interface RecentSource {
+  readonly externalId: string;
+  readonly createdAt: Date;
+  readonly permalink: string | null;
+}
 export interface Page<T> {
   readonly items: readonly T[];
   readonly nextCursor: string | null;
@@ -175,6 +180,8 @@ export interface ActionConstraints {
 export interface ConnectorCapabilities {
   readonly actions: readonly ModerationAction[];
   readonly listSources: boolean;
+  /** Implements listRecentSources (own posts/media, newest first). Used by backfill. */
+  readonly recentSources: boolean;
   readonly ingestion: 'webhook' | 'polling' | 'webhook_and_polling';
   readonly tokens: { readonly refreshable: boolean; readonly rotatesRefreshToken: boolean };
   readonly rateLimit: RateLimitPolicy;

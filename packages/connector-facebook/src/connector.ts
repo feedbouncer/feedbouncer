@@ -16,6 +16,7 @@ export function createFacebookConnector(
       actions: ['hide', 'unhide', 'delete', 'ban_author', 'unban_author'],
       responses: ['public_reply', 'private_reply'],
       listSources: false,
+      recentSources: false,
       ingestion: 'webhook',
       accountSelection: 'multiple',
       tokens: { refreshable: false, rotatesRefreshToken: false },

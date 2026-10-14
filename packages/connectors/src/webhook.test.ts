@@ -21,6 +21,7 @@ function connector(secretSource: 'app' | 'connection', timestamped = true): Conn
     capabilities: {
       actions: ['hide'],
       listSources: false,
+      recentSources: false,
       ingestion: 'webhook',
       tokens: { refreshable: true, rotatesRefreshToken: false },
       rateLimit: { points: 10, durationSec: 60, urgentReservePoints: 1, defaultRetryAfterMs: 1000 },

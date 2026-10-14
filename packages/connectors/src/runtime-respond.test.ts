@@ -11,6 +11,7 @@ function connector(over: Partial<Connector> = {}): Connector {
     capabilities: {
       actions: ['hide'],
       listSources: false,
+      recentSources: false,
       ingestion: 'polling',
       tokens: { refreshable: false, rotatesRefreshToken: false },
       rateLimit: {

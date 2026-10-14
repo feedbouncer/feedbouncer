@@ -17,6 +17,7 @@ export function createInstagramConnector(
       actions: ['hide', 'unhide', 'delete'],
       responses: ['public_reply', 'private_reply'],
       listSources: false,
+      recentSources: false,
       ingestion: 'webhook',
       accountSelection: 'multiple',
       tokens: { refreshable: false, rotatesRefreshToken: false },

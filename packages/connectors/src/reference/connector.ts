@@ -68,6 +68,7 @@ export function createReferenceConnector(
     capabilities: {
       actions,
       listSources: false,
+      recentSources: false,
       ingestion: push ? 'webhook' : 'polling',
       tokens: { refreshable: true, rotatesRefreshToken: push },
       rateLimit: {

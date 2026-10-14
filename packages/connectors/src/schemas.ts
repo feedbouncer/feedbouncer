@@ -75,6 +75,12 @@ export const sourceSchema = z.strictObject({
   ad: adInfoSchema.optional(),
 });
 
+export const recentSourceSchema = z.strictObject({
+  externalId: externalIdSchema,
+  createdAt: z.date().refine((d) => !Number.isNaN(d.getTime())),
+  permalink: httpsUrl.nullable(),
+});
+
 export const commentRefSchema = z.strictObject({
   sourceExternalId: externalIdSchema,
   externalId: externalIdSchema,

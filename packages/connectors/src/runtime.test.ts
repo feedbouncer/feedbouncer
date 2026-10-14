@@ -52,6 +52,7 @@ beforeEach(async () => {
     capabilities: {
       actions: ['hide', 'unhide', 'delete'],
       listSources: false,
+      recentSources: false,
       ingestion: 'polling',
       tokens: { refreshable: true, rotatesRefreshToken: false },
       rateLimit: { points: 4, durationSec: 60, urgentReservePoints: 2, defaultRetryAfterMs: 7_000 },

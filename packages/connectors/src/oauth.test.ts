@@ -22,6 +22,7 @@ function stubConnector(): Connector {
     capabilities: {
       actions: ['hide'],
       listSources: false,
+      recentSources: false,
       ingestion: 'polling',
       tokens: { refreshable: true, rotatesRefreshToken: false },
       rateLimit: { points: 10, durationSec: 60, urgentReservePoints: 1, defaultRetryAfterMs: 1000 },

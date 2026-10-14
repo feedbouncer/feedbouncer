@@ -19,6 +19,7 @@ export function createMetaAdsConnector(
     capabilities: {
       actions: [],
       listSources: true,
+      recentSources: false,
       ingestion: 'polling',
       accountSelection: 'multiple',
       tokens: { refreshable: false, rotatesRefreshToken: false },
