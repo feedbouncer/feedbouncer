@@ -24,6 +24,7 @@ const ListQuery = z.strictObject({
   before: z.iso.datetime({ offset: true }).optional(),
   beforeId: zUuid.optional(),
   connectionId: zUuid.optional(),
+  origin: z.enum(['ad', 'organic']).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
@@ -49,6 +50,7 @@ export class CommentsController {
       ...(q.before !== undefined && { before: new Date(q.before) }),
       ...(q.beforeId !== undefined && { beforeId: q.beforeId }),
       ...(q.connectionId !== undefined && { connectionId: q.connectionId }),
+      ...(q.origin !== undefined && { origin: q.origin }),
     });
     return { comments };
   }

@@ -3,7 +3,7 @@
 // enqueue-only job producer, and the comment store and moderation actions. The
 // worker runs the jobs. Everything here is null (not built) when Facebook is
 // not configured, so no queue connection is opened. Instagram runs on the same
-// Meta app, so it is only ever registered alongside Facebook.
+// Meta app, so it is only ever registered alongside Facebook; so does Meta Ads.
 import { hostname } from 'node:os';
 import type pg from 'pg';
 import {
@@ -16,6 +16,7 @@ import {
 } from '@feedbouncer/comments';
 import { createFacebookConnector } from '@feedbouncer/connector-facebook';
 import { createInstagramConnector } from '@feedbouncer/connector-instagram';
+import { createMetaAdsConnector } from '@feedbouncer/connector-meta-ads';
 import {
   ConnectorRegistry,
   buildPgConnectorStack,
@@ -62,6 +63,7 @@ export function buildMetaDeps(d: {
   const registry = new ConnectorRegistry();
   registry.register(createFacebookConnector(fb));
   if (env.instagram) registry.register(createInstagramConnector(env.instagram));
+  if (env.metaAds) registry.register(createMetaAdsConnector(env.metaAds));
 
   const redis = createProducerConnection(env.redisUrl.href);
   redis.on('error', (err) => log.warn('redis producer connection error', errorFields(err)));
@@ -82,6 +84,7 @@ export function buildMetaDeps(d: {
     appSecrets: new Map([
       ['facebook', fb.appSecret],
       ...(env.instagram ? ([['instagram', fb.appSecret]] as const) : []),
+      ...(env.metaAds ? ([['meta_ads', fb.appSecret]] as const) : []),
     ]),
     redirectUri: (p) => new URL(`/api/v1/oauth/${p}/callback`, env.publicWebUrl).href,
     log,

@@ -7,6 +7,7 @@ import { errorFields, type Logger } from '@feedbouncer/service-runtime';
 
 export type ErrorCode =
   | 'invalid_request'
+  | 'invalid_cursor'
   | 'invalid_origin'
   | 'not_found'
   | 'internal_error'
@@ -41,6 +42,7 @@ export type ErrorCode =
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
+  invalid_cursor: 'The page cursor is not valid.',
   invalid_origin: 'Request origin is not allowed.',
   not_found: 'Not found.',
   internal_error: 'Something went wrong.',

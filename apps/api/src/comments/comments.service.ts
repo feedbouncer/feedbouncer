@@ -36,6 +36,10 @@ export interface CommentView {
   mediaExternalId: string;
   /** What a person may do with this comment now, computed here with the same rules POST actions applies. */
   availability: Record<ActionKind, ActionAvailability>;
+  /** Where the comment was found: on an ad post or an organic post. */
+  origin: 'ad' | 'organic';
+  /** Up to five ads whose post this comment is on. */
+  ads: { adId: string; adAccountId: string }[];
   /** Longest reply text per kind, in code points. */
   replyLimits: { public_reply: number; private_reply: number };
 }
@@ -45,16 +49,14 @@ export interface ListCommentsQuery {
   /** Tie-breaker for comments posted at the same instant as `before`. */
   beforeId?: string;
   connectionId?: string;
+  origin?: 'ad' | 'organic';
   limit: number;
 }
 
 // Sorts before every comment id, so `before` alone means "posted strictly earlier".
 const MIN_UUID = '00000000-0000-0000-0000-000000000000';
 
-const REFUSALS: Record<
-  Exclude<RefusalCode, 'not_found'>,
-  [number, ErrorCode]
-> = {
+const REFUSALS: Record<Exclude<RefusalCode, 'not_found'>, [number, ErrorCode]> = {
   unsupported: [422, 'unsupported_action'],
   request_key_conflict: [409, 'request_key_conflict'],
   connection_needs_reconnect: [409, 'connection_needs_reconnect'],
@@ -98,6 +100,8 @@ const toView = (
   permalink: c.permalink,
   isOwnAccount: c.isOwnAccount,
   mediaExternalId: c.sourceExternalId,
+  origin: c.origin,
+  ads: c.ads.map((a) => ({ adId: a.adId, adAccountId: a.adAccountId })),
   availability: availability(c, caps, now),
   replyLimits: caps ? { ...resolveConstraints(caps).maxReplyChars } : { ...DEFAULT_REPLY_LIMITS },
 });
@@ -124,6 +128,7 @@ export class CommentsService {
       // filtered in SQL so a page is never short while older comments remain.
       excludeDeleted: true,
       ...(q.connectionId !== undefined && { connectionId: q.connectionId }),
+      ...(q.origin !== undefined && { origin: q.origin }),
     });
     const registry = this.deps.connectors?.registry;
     const now = new Date(systemClock.now());
