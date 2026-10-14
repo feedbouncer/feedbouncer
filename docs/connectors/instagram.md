@@ -130,9 +130,10 @@ request can be dropped.
 
 **Pages whose role was granted through Business Manager.** Meta also requires
 `ads_read` for people who have access to the Page that way. This connector does
-not request `ads_read` yet, so such Pages may fail with a permission error
-(shown as "Needs reconnect" with `permission_revoked`). This is not confirmed
-against a live app.
+not request `ads_read` on the Instagram connection, so such Pages may fail with
+a permission error (shown as "Needs reconnect" with `permission_revoked`). This
+is not confirmed against a live app, and the Meta Ads connector does not change
+it: `ads_read` is requested only on the separate ad account connection.
 
 ## App Review, Business Verification, and development mode
 
@@ -288,10 +289,12 @@ Known platform limits the code applies:
   comment is hidden or deleted there, so FeedBouncer catches up the next time
   someone acts on that comment (see Resync).
 - **Live comments** are ignored.
-- **Ad comments** are stored like organic ones for now. They are not treated
-  differently, and Instagram may impose different rules on them.
-- **No backfill** and no catch-up poll. A comment posted while the connection
-  was down is not imported.
+- **Ad comments** are polled through the Meta Ads connector and shown with an
+  Ad label (see [meta-ads.md](meta-ads.md)). Late replies on older ad comments
+  can take up to `AD_IG_DEEP_SCAN_INTERVAL_SEC` (24 hours by default) to appear.
+- **No backfill.** Ad posts are polled (see meta-ads.md); organic posts are
+  webhook-only, so an organic comment posted while the connection was down is
+  not imported.
 - Meta's deauthorize and data-deletion callbacks are not implemented.
 
 ## Data retention

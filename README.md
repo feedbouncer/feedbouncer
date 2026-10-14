@@ -38,6 +38,7 @@ pnpm test
 | `packages/comments`            | Comments: storage, moderation, lifecycle, webhooks, reconnect emails        |
 | `packages/connector-facebook`  | Facebook Pages connector: OAuth, comments, moderation actions               |
 | `packages/connector-instagram` | Instagram connector (Facebook Login): comments, moderation actions, replies |
+| `packages/connector-meta-ads` | Meta Ads connector: ad accounts and active ads; comments are read through the Page and Instagram connections |
 | `packages/connectors`          | Contract and shared services for platform connectors                        |
 | `packages/db`                  | Postgres schema, migrations and the migration CLI                           |
 | `packages/jobs`                | Job queue: per-platform queues, retries, dead-letter queue, idempotency     |
