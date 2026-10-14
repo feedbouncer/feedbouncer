@@ -130,4 +130,19 @@ describe('meta ads schema', () => {
       0,
     );
   });
+
+  it('source_poll rejects a connection that is not the source connection', async () => {
+    const c1 = await conn(a, 'instagram');
+    const c2 = await conn(a, 'instagram');
+    const s = await src(a, c1, '17900000000000010');
+    try {
+      await pool.query(
+        `INSERT INTO source_poll (source_id, organization_id, brand_id, connection_id) VALUES ($1,$2,$3,$4)`,
+        [s, a.organizationId, a.brandId, c2],
+      );
+      expect.unreachable();
+    } catch (e) {
+      expect((e as { code?: string }).code).toBe('23503');
+    }
+  });
 });

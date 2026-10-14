@@ -64,7 +64,6 @@ CREATE TABLE meta_ad (
   CONSTRAINT meta_ad_instagram_resolution_check CHECK (instagram_resolution IN
     ('linked','not_instagram','post_deleted','instagram_media_pending','invalid_platform_id','instagram_account_not_connected'))
 );
-CREATE INDEX meta_ad_ads_connection_id_idx ON meta_ad (ads_connection_id);
 CREATE TRIGGER meta_ad_set_updated_at_trg BEFORE UPDATE ON meta_ad
   FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
 
@@ -106,10 +105,8 @@ CREATE TABLE source_poll (
   created_at timestamptz(3) NOT NULL DEFAULT now(),
   updated_at timestamptz(3) NOT NULL DEFAULT now(),
   CONSTRAINT source_poll_pkey PRIMARY KEY (source_id),
-  CONSTRAINT source_poll_source_id_fkey FOREIGN KEY (organization_id, brand_id, source_id)
-    REFERENCES source (organization_id, brand_id, id) ON DELETE CASCADE,
-  CONSTRAINT source_poll_connection_id_fkey FOREIGN KEY (organization_id, brand_id, connection_id)
-    REFERENCES connection (organization_id, brand_id, id) ON DELETE CASCADE,
+  CONSTRAINT source_poll_source_id_fkey FOREIGN KEY (organization_id, brand_id, connection_id, source_id)
+    REFERENCES source (organization_id, brand_id, connection_id, id) ON DELETE CASCADE,
   CONSTRAINT source_poll_resume_cursor_check CHECK (char_length(resume_cursor) <= 2048),
   CONSTRAINT source_poll_last_error_code_check CHECK (last_error_code ~ '^[a-z][a-z0-9_]{0,62}$')
 );
