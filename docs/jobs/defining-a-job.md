@@ -60,6 +60,16 @@ export const hideComment = (runtime: ConnectorRuntime): JobDefinition<z.infer<ty
 - **Return a small result** (flat, at most 8 KiB). Include the undo action so the
   outcome is explainable and reversible. `requireActionSuccess` does this.
 
+## Built-in jobs
+
+| Type                  | Platforms           | Payload              | `externalRef`                | Timeout |
+| --------------------- | ------------------- | -------------------- | ---------------------------- | ------- |
+| `connection_backfill` | facebook, instagram | `{ runId, segment }` | `backfill:<runId>:<segment>` | 300 s   |
+
+`connection_backfill` imports a connection's recent comments after connect; it
+continues itself in a new segment before its timeout. See
+[backfill.md](../connectors/backfill.md).
+
 ## Registering and enqueuing
 
 Register definitions in `apps/worker/src/registries.ts` (`buildJobRegistry`). A platform

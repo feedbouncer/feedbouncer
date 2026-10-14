@@ -42,12 +42,12 @@ function connector(over: Partial<Connector> = {}): Connector {
 }
 
 function withRecent(items: RecentSource[]) {
-  const listRecentSources = vi.fn(
-    async (_ctx: unknown, _req: { since: Date; cursor: string | null; limit: number }) => ({
-      items,
-      nextCursor: null,
-    }),
-  );
+  const listRecentSources = vi.fn<
+    (
+      ctx: unknown,
+      req: { since: Date; cursor: string | null; limit: number },
+    ) => Promise<{ items: RecentSource[]; nextCursor: null }>
+  >(async () => ({ items, nextCursor: null }));
   const base = connector();
   const c: Connector = {
     ...base,

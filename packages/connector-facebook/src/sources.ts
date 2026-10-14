@@ -1,7 +1,12 @@
 // Lists a Page's own recent posts for backfill. Only the cursor is used for
 // paging; paging.next is never requested, just mined for an `until` value.
 import * as z from 'zod';
-import { ConnectorError, type CallContext, type Page, type RecentSource } from '@feedbouncer/connectors';
+import {
+  ConnectorError,
+  type CallContext,
+  type Page,
+  type RecentSource,
+} from '@feedbouncer/connectors';
 import { GRAPH_HOST, GRAPH_ID, graphId, graphRequest } from './graph.js';
 import { callFor, parseGraphTime, reporting } from './graph-call.js';
 import type { FacebookConfig } from './config.js';

@@ -10,7 +10,7 @@ const q = async <T>(sql: string) => (await ctx.c.query(sql)).rows as T[];
 
 const SYSTEM_TABLES = ['processed_job'];
 // One row per connection, keyed by the connection's own id instead of a surrogate id.
-const CONNECTION_KEYED_TABLES = ['connection_sync'];
+const CONNECTION_KEYED_TABLES = ['connection_sync', 'connection_backfill'];
 // Tables keyed by their natural key: source_poll is one row per source, meta_ad_source a link row.
 const NATURAL_KEY_TABLES: Record<string, string> = {
   source_poll: 'PRIMARY KEY (source_id)',

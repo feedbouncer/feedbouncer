@@ -19,7 +19,11 @@ describe('listRecentPosts', () => {
     const { now, g, pageId, ctx, cfg } = setup();
     const inWin = [5, 3, 1].map((d) => g.addPost(pageId, { createdAtMs: now - d * DAY }).postId);
     g.addPost(pageId, { createdAtMs: now - 45 * DAY });
-    const page = await listRecentPosts(cfg, () => now, ctx, { since: win(now), cursor: null, limit: 100 });
+    const page = await listRecentPosts(cfg, () => now, ctx, {
+      since: win(now),
+      cursor: null,
+      limit: 100,
+    });
     expect(page.items.map((s) => s.externalId)).toEqual([...inWin].reverse());
     expect(page.nextCursor).toBeNull();
   });
@@ -44,18 +48,24 @@ describe('listRecentPosts', () => {
     const ok = g.addPost(pageId, { createdAtMs: now - DAY }).postId;
     g.injectFeedItem(pageId, { id: '../../me', created_time: '2026-10-13T00:00:00+0000' });
     g.injectFeedItem(pageId, { id: '1_2', created_time: 'not-a-time' });
-    const page = await listRecentPosts(cfg, () => now, ctx, { since: win(now), cursor: null, limit: 100 });
+    const page = await listRecentPosts(cfg, () => now, ctx, {
+      since: win(now),
+      cursor: null,
+      limit: 100,
+    });
     expect(page.items.map((s) => s.externalId)).toEqual([ok]);
   });
 
   it('maps throttling and auth errors through graph.ts', async () => {
     const { now, g, pageId, ctx, cfg } = setup();
     g.throttleNext(80001, 2);
-    await expect(listRecentPosts(cfg, () => now, ctx, { since: win(now, 1), cursor: null, limit: 10 }))
-      .rejects.toMatchObject({ kind: 'rate_limited' });
+    await expect(
+      listRecentPosts(cfg, () => now, ctx, { since: win(now, 1), cursor: null, limit: 10 }),
+    ).rejects.toMatchObject({ kind: 'rate_limited' });
     g.revokePageToken(pageId);
-    await expect(listRecentPosts(cfg, () => now, ctx, { since: win(now, 1), cursor: null, limit: 10 }))
-      .rejects.toMatchObject({ kind: 'auth_expired' });
+    await expect(
+      listRecentPosts(cfg, () => now, ctx, { since: win(now, 1), cursor: null, limit: 10 }),
+    ).rejects.toMatchObject({ kind: 'auth_expired' });
   });
 
   it('never sends the token in the URL and never follows paging.next', async () => {
@@ -63,7 +73,9 @@ describe('listRecentPosts', () => {
     for (let i = 0; i < 3; i++) g.addPost(pageId, { createdAtMs: now - (i + 1) * 3_600_000 });
     let cursor: string | null = null;
     do {
-      cursor = (await listRecentPosts(cfg, () => now, ctx, { since: win(now, 1), cursor, limit: 1 })).nextCursor;
+      cursor = (
+        await listRecentPosts(cfg, () => now, ctx, { since: win(now, 1), cursor, limit: 1 })
+      ).nextCursor;
     } while (cursor);
     const calls = g.calls();
     expect(calls.length).toBeGreaterThan(1);
@@ -74,8 +86,14 @@ describe('listRecentPosts', () => {
   });
 
   it('cursor codec round-trips and rejects garbage', () => {
-    expect(recentCursor.decode(recentCursor.encode({ after: 'QVFI-_x' }))).toEqual({ after: 'QVFI-_x', until: null });
-    expect(recentCursor.decode(recentCursor.encode({ until: '1760400000' }))).toEqual({ after: null, until: '1760400000' });
+    expect(recentCursor.decode(recentCursor.encode({ after: 'QVFI-_x' }))).toEqual({
+      after: 'QVFI-_x',
+      until: null,
+    });
+    expect(recentCursor.decode(recentCursor.encode({ until: '1760400000' }))).toEqual({
+      after: null,
+      until: '1760400000',
+    });
     expect(() => recentCursor.decode('u:12; DROP')).toThrow(/invalid_cursor/);
     expect(() => recentCursor.decode('z:abc')).toThrow(/invalid_cursor/);
   });

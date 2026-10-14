@@ -99,7 +99,10 @@ const meta = {
 
 beforeAll(async () => {
   ctx = await migratedDb();
-  pool = createPool(ctx.db.url, { applicationName: 'comments-backfill-test', onIdleError: () => {} });
+  pool = createPool(ctx.db.url, {
+    applicationName: 'comments-backfill-test',
+    onIdleError: () => {},
+  });
   a = await seedTenant(ctx.c, 'backfill-a');
   await ctx.c.query('DELETE FROM connection WHERE id = $1', [a.connectionId]);
   store = new PgCommentStore(pool);
@@ -273,7 +276,9 @@ describe('connection_backfill job', () => {
       [scope.connectionId],
     );
     expect(n.rows[0].n).toBe(0);
-    expect(graph.calls().filter((c) => c.method !== 'GET' && !c.path.includes('oauth'))).toHaveLength(0);
+    expect(
+      graph.calls().filter((c) => c.method !== 'GET' && !c.path.includes('oauth')),
+    ).toHaveLength(0);
   });
 
   it('throttling defers without failing and resumes without re-reading done pages', async () => {
@@ -309,7 +314,10 @@ describe('connection_backfill job', () => {
       clock,
       settings,
     });
-    expect(await fresh.handle(ctxFor(scope), p)).toMatchObject({ result: 'completed', imported: 30 });
+    expect(await fresh.handle(ctxFor(scope), p)).toMatchObject({
+      result: 'completed',
+      imported: 30,
+    });
     expect(commentCalls() - before).toBe(2);
   });
 
@@ -339,7 +347,10 @@ describe('connection_backfill job', () => {
       result: 'completed',
       imported: 30,
     });
-    expect(await job().handle(ctxFor(scope), p)).toEqual({ result: 'stopped', reason: 'not_current' });
+    expect(await job().handle(ctxFor(scope), p)).toEqual({
+      result: 'stopped',
+      reason: 'not_current',
+    });
   });
 
   it('revoked authorization mid-run stops, fails reconnect_required, and makes no more calls', async () => {

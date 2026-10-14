@@ -53,4 +53,7 @@ CREATE TABLE connection_backfill (
     jsonb_typeof(skipped_sources) = 'array' AND jsonb_array_length(skipped_sources) <= 50)
 );
 
+CREATE TRIGGER connection_backfill_set_updated_at_trg BEFORE UPDATE ON connection_backfill
+  FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
+
 COMMIT;

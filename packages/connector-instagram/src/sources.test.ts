@@ -43,7 +43,11 @@ describe('listRecentMedia', () => {
     const a = g.addIgMedia(igUserId, { createdAtMs: now - 2 * DAY }).mediaId;
     const b = g.addIgMedia(igUserId, { createdAtMs: now - DAY }).mediaId;
     g.addIgMedia(igUserId, { createdAtMs: now - 60 * DAY });
-    const page = await listRecentMedia(cfg, () => now, ctx, { since: new Date(now - 30 * DAY), cursor: null, limit: 100 });
+    const page = await listRecentMedia(cfg, () => now, ctx, {
+      since: new Date(now - 30 * DAY),
+      cursor: null,
+      limit: 100,
+    });
     expect(page.items.map((m) => m.externalId)).toEqual([b, a]);
     expect(page.nextCursor).toBeNull();
     const media = urls.filter((u) => u.pathname.endsWith('/media'));
@@ -54,11 +58,17 @@ describe('listRecentMedia', () => {
 
   it('pages with after cursors', async () => {
     const { now, g, igUserId, ctx } = setup();
-    const ids = [1, 2, 3].map((d) => g.addIgMedia(igUserId, { createdAtMs: now - d * DAY }).mediaId);
+    const ids = [1, 2, 3].map(
+      (d) => g.addIgMedia(igUserId, { createdAtMs: now - d * DAY }).mediaId,
+    );
     const seen: string[] = [];
     let cursor: string | null = null;
     do {
-      const p = await listRecentMedia(cfg, () => now, ctx, { since: new Date(now - 30 * DAY), cursor, limit: 2 });
+      const p = await listRecentMedia(cfg, () => now, ctx, {
+        since: new Date(now - 30 * DAY),
+        cursor,
+        limit: 2,
+      });
       seen.push(...p.items.map((m) => m.externalId));
       cursor = p.nextCursor;
     } while (cursor);
@@ -67,14 +77,20 @@ describe('listRecentMedia', () => {
 
   it('rejects a Facebook time cursor', async () => {
     const { now, ctx } = setup();
-    await expect(listRecentMedia(cfg, () => now, ctx, { since: new Date(now - DAY), cursor: 'u:1760400000', limit: 10 }))
-      .rejects.toMatchObject({ code: 'invalid_cursor' });
+    await expect(
+      listRecentMedia(cfg, () => now, ctx, {
+        since: new Date(now - DAY),
+        cursor: 'u:1760400000',
+        limit: 10,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_cursor' });
   });
 
   it('a refused media list means the account permission is gone', async () => {
     const { now, g, ctx } = setup();
     g.failNextFor('/media', 200);
-    await expect(listRecentMedia(cfg, () => now, ctx, { since: new Date(now - DAY), cursor: null, limit: 10 }))
-      .rejects.toMatchObject({ kind: 'auth_expired', code: 'permission_revoked' });
+    await expect(
+      listRecentMedia(cfg, () => now, ctx, { since: new Date(now - DAY), cursor: null, limit: 10 }),
+    ).rejects.toMatchObject({ kind: 'auth_expired', code: 'permission_revoked' });
   });
 });

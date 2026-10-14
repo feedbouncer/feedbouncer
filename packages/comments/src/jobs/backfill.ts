@@ -131,7 +131,12 @@ export function connectionBackfillJob(d: {
         let next: string | null;
         try {
           const page = await client.listComments(
-            { sourceExternalId: src, cursor: commentCursor, limit: s.pageSize, includeReplies: true },
+            {
+              sourceExternalId: src,
+              cursor: commentCursor,
+              limit: s.pageSize,
+              includeReplies: true,
+            },
             { priority: 'background' },
           );
           let capHit = false;

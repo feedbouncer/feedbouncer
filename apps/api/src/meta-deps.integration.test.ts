@@ -30,11 +30,17 @@ describe('buildMetaDeps job registry', () => {
     const producer = api.deps.producer!;
     const payload = { runId: randomUUID(), segment: 0 };
     for (const platform of ['facebook', 'instagram'] as const) {
-      const { scope } = await api.seedConnection(org, { platform, externalAccountId: `ext-${platform}` });
+      const { scope } = await api.seedConnection(org, {
+        platform,
+        externalAccountId: `ext-${platform}`,
+      });
       const r = await producer.enqueue({ scope, platform, type: 'connection_backfill', payload });
       expect(r.status).toBe('enqueued');
     }
-    const { scope } = await api.seedConnection(org, { platform: 'meta_ads', externalAccountId: 'act_1' });
+    const { scope } = await api.seedConnection(org, {
+      platform: 'meta_ads',
+      externalAccountId: 'act_1',
+    });
     await expect(
       producer.enqueue({ scope, platform: 'meta_ads', type: 'connection_backfill', payload }),
     ).rejects.toMatchObject({ code: 'unknown_job_type' });
