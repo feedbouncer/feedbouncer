@@ -1,7 +1,7 @@
 import * as z from 'zod';
 import type { Platform } from '@feedbouncer/connectors';
-import { BACKFILL_DEFAULTS } from '../backfill/settings.js';
 import { JobError, type JobDefinition, type RetryPolicy } from '@feedbouncer/jobs';
+import { BACKFILL_DEFAULTS, BACKFILL_PLATFORMS } from '../backfill/settings.js';
 
 // Generic external-id shape (Graph ids are digits and underscores). Only safe
 // characters, so ids can join the idempotency ref. The comment id is capped at
@@ -124,5 +124,5 @@ export const BACKFILL_JOB = {
   externalRef: (p: BackfillPayload): string => `backfill:${p.runId}:${p.segment}`,
   timeoutMs: BACKFILL_DEFAULTS.jobTimeoutMs,
   policy: { maxAttempts: BACKFILL_MAX_ATTEMPTS } satisfies Partial<RetryPolicy>,
-  platforms: ['facebook', 'instagram'] as readonly Platform[] | 'all',
+  platforms: BACKFILL_PLATFORMS as readonly Platform[],
 };

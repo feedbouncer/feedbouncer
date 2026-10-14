@@ -901,7 +901,7 @@ describe('backfill on connect', () => {
     const { pageId } = graph.addPage(fbUserId, { name: 'Bf8' });
     const { connectionId } = await connectPage(org, pageId);
     await api.pool.query(
-      `UPDATE connection_backfill SET updated_at = now() - interval '27 hours' WHERE connection_id = $1`,
+      `UPDATE connection_backfill SET heartbeat_at = now() - interval '27 hours' WHERE connection_id = $1`,
       [connectionId],
     );
     expect(await backfillOf(org, connectionId!)).toMatchObject({

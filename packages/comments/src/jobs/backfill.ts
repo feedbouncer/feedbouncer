@@ -100,9 +100,10 @@ export function connectionBackfillJob(d: {
       return { result: 'stopped', reason };
     };
 
+    let limited = false;
     for (;;) {
       if (ctx.signal.aborted) throw ctx.signal.reason;
-      if (imported >= run.maxComments) {
+      if (limited) {
         await d.backfill.complete(scope, p.runId, { limited: true }, at());
         return { result: 'completed', imported, limited: true };
       }
@@ -150,11 +151,10 @@ export function connectionBackfillJob(d: {
           },
           { priority: 'background' },
         );
-        let capHit = false;
         for (const c of page.items) {
           if (c.postedAt < run.windowStart) continue;
           if (imported + applied >= run.maxComments) {
-            capHit = true;
+            limited = true;
             break;
           }
           const r = await applyPlatformComment(d.store, scope, c, {
@@ -177,7 +177,7 @@ export function connectionBackfillJob(d: {
         const passed = page.items.some(
           (c) => c.parentExternalId === null && c.postedAt < run.windowStart,
         );
-        sourceDone = capHit || passed || page.nextCursor === null;
+        sourceDone = limited || passed || page.nextCursor === null;
         if (!sourceDone && page.nextCursor === commentCursor)
           throw new ConnectorError('permanent', 'cursor_stalled');
         next = sourceDone ? null : page.nextCursor;

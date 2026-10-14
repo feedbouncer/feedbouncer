@@ -41,7 +41,7 @@ normal ingest path. Connecting returns at once; the import runs afterwards.
 | `reconnect_required`       | Authorization was revoked or expired mid-run. Reconnecting starts a new run. |
 | `disconnected`             | The connection was removed.                                                  |
 | `cancelled`                | The run was cancelled by a disconnect.                                       |
-| `stalled`                  | A pending or running run had no progress checkpoint for over 26 hours.                  |
+| `stalled`                  | A pending or running run had no progress checkpoint for over 26 hours.       |
 | `source_listing_forbidden` | The platform refused to list posts/media (permission).                       |
 | `platform_error`           | The platform failed in a way retries did not resolve.                        |
 
@@ -116,12 +116,12 @@ GET /{ig-user-id}/media?fields=id,timestamp,permalink&limit=5
 Record under "Verified behaviour (Graph v26.0, checked YYYY-MM-DD)", without
 tokens, cursors, ids or comment text:
 
-| #   | Question                                                                       | Implemented assumption | Fallback if it fails                                                                                                  | Result  |
-| --- | ------------------------------------------------------------------------------ | ---------------------- | --------------------------------------------------------------------------------------------------------------------- | ------- |
-| B1  | Feed returns posts newest first by `created_time` (pinned post may come first) | yes                    | Client-side filter; stop when the last post of a page is older than `since`                                           | pending |
-| B2  | Feed paging with `since` uses `paging.cursors.after`                           | yes                    | If only `paging.next` with `until=<digits>` is returned, the cursor carries `u:<digits>` and re-requests with `until` | pending |
-| B3  | IG `/media` returns newest first                                               | yes                    | Same client-side stop as B1                                                                                           | pending |
-| B4  | A Page token can read `/{page-id}/feed` with the scopes already requested      | yes                    | No scope is added; on error 283/200 the run fails with `source_listing_forbidden`                                     | pending |
+| #   | Question                                                                       | Implemented assumption | Fallback if it fails                                                                                                                | Result  |
+| --- | ------------------------------------------------------------------------------ | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| B1  | Feed returns posts newest first by `created_time` (pinned post may come first) | yes                    | Client-side filter; stop when the last post of a page is older than `since`                                                         | pending |
+| B2  | Feed paging with `since` uses `paging.cursors.after`                           | yes                    | If only `paging.next` with `until=<digits>` is returned, the cursor carries `u:<digits>` and re-requests with `until`               | pending |
+| B3  | IG `/media` returns newest first                                               | yes                    | Same client-side stop as B1                                                                                                         | pending |
+| B4  | A Page token can read `/{page-id}/feed` with the scopes already requested      | yes                    | No scope is added; on Facebook error 283/200 the run fails with `source_listing_forbidden`; on Instagram it is `reconnect_required` | pending |
 
 Also record: whether a pinned post comes first, and the error code if the token
 is refused.

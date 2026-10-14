@@ -301,8 +301,8 @@ one with `listComments`.
   older than `since`.
 - Follow the same cursor, validation and `ctx.http` rules as `listComments`.
   Do not follow `paging.next` URLs; build requests yourself.
-- Backfill calls use `background` priority, the lowest, so they never delay actions or
-  webhook fetches. See [backfill.md](backfill.md).
+- Backfill calls use `background` priority, the lowest, so they never delay actions or webhook fetches.
+  See [backfill.md](backfill.md).
 
 ## Acting
 

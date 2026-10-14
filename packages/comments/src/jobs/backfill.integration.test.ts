@@ -215,6 +215,15 @@ describe('connection_backfill job', () => {
     expect(await backfill.request(scope, new Date(t + 60_000))).toEqual({ kind: 'up_to_date' });
   });
 
+  it('does not mark limited when the account has exactly the cap', async () => {
+    const post = graph.addPost(pageId, { createdAtMs: t - 3_600_000 }).postId;
+    for (let j = 0; j < 50; j++)
+      graph.addComment(pageId, { postId: post, createdAtMs: t - 3_600_000 + j });
+    const out = await job().handle(ctxFor(scope), await start());
+    expect(out).toMatchObject({ result: 'completed', imported: 50, limited: false });
+    expect(await view()).toMatchObject({ limitedTo: null });
+  });
+
   it('re-running and receiving the same comment live creates no duplicates', async () => {
     const post = graph.addPost(pageId, { createdAtMs: t - DAY }).postId;
     const { commentId } = graph.addComment(pageId, { postId: post, createdAtMs: t - DAY });
