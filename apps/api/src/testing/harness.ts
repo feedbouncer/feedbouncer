@@ -83,8 +83,8 @@ export interface TestApi {
 
 /**
  * `deps` replaces individual AppDeps built by the harness (e.g. a failing
- * producer). Meta-backed deps (Facebook, plus Instagram when `overrides.instagram`
- * is set) exist only when `overrides.facebook` is set;
+ * producer). Meta-backed deps (Facebook, plus Instagram and Meta Ads when `overrides.instagram`
+ * or `overrides.metaAds` is set) exist only when `overrides.facebook` is set;
  * `fetch` (e.g. FakeGraph's) then replaces the network behind their SafeHttp.
  */
 export async function startTestApi(
@@ -117,6 +117,7 @@ export async function startTestApi(
     health: loadHealthPolicy({}),
     facebook: null,
     instagram: null,
+    metaAds: null,
     // A random queue prefix per app keeps tests from sharing BullMQ keys.
     jobs: loadJobsConfig({ JOB_QUEUE_PREFIX: `t${randomUUID().replaceAll('-', '').slice(0, 20)}` }),
     ...overrides,

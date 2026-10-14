@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ConnectorError, createSafeHttp, type CallContext } from '@feedbouncer/connectors';
+import {
+  ConnectorError,
+  createSafeHttp,
+  type CallContext,
+  type NormalizedComment,
+  type Page,
+} from '@feedbouncer/connectors';
 import { Secret } from '@feedbouncer/service-runtime';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import type { InstagramConfig } from './config.js';
@@ -372,12 +378,231 @@ describe('listComments / listReplies', () => {
     expect(out.items.map((c) => c.externalId)).toEqual([a.commentId]);
   });
 
-  it('maps a permission error on listing to auth_expired permission_revoked', async () => {
+  it('a permission error while listing one media is source-level, not connection-level', async () => {
     const { graph, igUserId, ctx } = world();
     const { mediaId } = graph.addIgComment(igUserId);
     graph.failNext(10);
     await expect(
-      listComments(cfg, now, ctx, { sourceExternalId: mediaId, cursor: null, limit: 10 }),
+      listComments(cfg, now, ctx, { sourceExternalId: mediaId, cursor: null, limit: 25 }),
+    ).rejects.toMatchObject({ kind: 'permanent', code: 'source_inaccessible' });
+  });
+
+  it('a permission error while listing replies still marks the connection as revoked', async () => {
+    const { graph, igUserId, ctx } = world();
+    const { mediaId, commentId } = graph.addIgComment(igUserId);
+    graph.failNext(10);
+    await expect(
+      listReplies(cfg, now, ctx, {
+        parent: { sourceExternalId: mediaId, externalId: commentId },
+        cursor: null,
+        limit: 25,
+      }),
     ).rejects.toMatchObject({ kind: 'auth_expired', code: 'permission_revoked' });
+  });
+
+  it('a missing media while listing is not_found source_missing', async () => {
+    const { ctx } = world();
+    await expect(
+      listComments(cfg, now, ctx, {
+        sourceExternalId: '17999999999999999',
+        cursor: null,
+        limit: 25,
+      }),
+    ).rejects.toMatchObject({ kind: 'not_found', code: 'source_missing' });
+  });
+
+  it('includeReplies returns replies inline after their parent, without per-comment calls', async () => {
+    const { graph, igUserId, ctx } = world();
+    const top = graph.addIgComment(igUserId, { text: 'top', createdAtMs: Date.UTC(2026, 9, 1) });
+    graph.addIgComment(igUserId, { mediaId: top.mediaId, parentId: top.commentId, text: 'r1' });
+    const before = graph.calls().length;
+    const page = await listComments(cfg, now, ctx, {
+      sourceExternalId: top.mediaId,
+      cursor: null,
+      limit: 25,
+      includeReplies: true,
+    });
+    expect(page.items.map((c) => [c.body, c.parentExternalId])).toEqual([
+      ['top', null],
+      ['r1', top.commentId],
+    ]);
+    expect(graph.calls().length - before).toBe(1);
+  });
+
+  describe('inline replies', () => {
+    const run = (graph: ReturnType<typeof world>['graph'], mediaId: string, ctx: CallContext) =>
+      listComments(cfg, now, ctx, {
+        sourceExternalId: mediaId,
+        cursor: null,
+        limit: 25,
+        includeReplies: true,
+      });
+
+    const drain = async (
+      graph: ReturnType<typeof world>['graph'],
+      mediaId: string,
+      ctx: CallContext,
+    ) => {
+      const items: NormalizedComment[] = [];
+      let cursor: string | null = null;
+      let calls = 0;
+      do {
+        const before = graph.calls().length;
+        const page: Page<NormalizedComment> = await listComments(cfg, now, ctx, {
+          sourceExternalId: mediaId,
+          cursor,
+          limit: 25,
+          includeReplies: true,
+        });
+        expect(graph.calls().length - before).toBe(1);
+        items.push(...page.items);
+        cursor = page.nextCursor;
+        calls++;
+      } while (cursor && calls < 50);
+      return { items, calls };
+    };
+
+    it('carries a parent with 120 replies across calls, one Graph request each, losing none', async () => {
+      const { graph, igUserId, ctx } = world();
+      const top = graph.addIgComment(igUserId, { text: 'top' });
+      for (let i = 0; i < 120; i++) {
+        graph.addIgComment(igUserId, {
+          mediaId: top.mediaId,
+          parentId: top.commentId,
+          text: `r${i}`,
+        });
+      }
+      const first = await run(graph, top.mediaId, ctx);
+      expect(first.items).toHaveLength(51);
+      expect(first.nextCursor).not.toBeNull();
+      const { items, calls } = await drain(graph, top.mediaId, ctx);
+      expect(items).toHaveLength(121);
+      expect(new Set(items.map((c) => c.externalId)).size).toBe(121);
+      expect(items.slice(1).every((c) => c.parentExternalId === top.commentId)).toBe(true);
+      expect(calls).toBe(4);
+    });
+
+    it('stops a page before exceeding the item cap and resumes at the same comment', async () => {
+      const { graph, igUserId, ctx } = world();
+      const first = graph.addIgComment(igUserId, { text: 't0' });
+      const tops = [first.commentId];
+      for (let t = 1; t < 25; t++) {
+        tops.push(
+          graph.addIgComment(igUserId, { mediaId: first.mediaId, text: `t${t}` }).commentId,
+        );
+      }
+      for (const p of tops) {
+        for (let i = 0; i < 40; i++) {
+          graph.addIgComment(igUserId, { mediaId: first.mediaId, parentId: p, text: `r${i}` });
+        }
+      }
+      const page = await run(graph, first.mediaId, ctx);
+      expect(page.items.length).toBeLessThanOrEqual(500);
+      expect(page.nextCursor).not.toBeNull();
+      const { items } = await drain(graph, first.mediaId, ctx);
+      expect(items).toHaveLength(25 * 41);
+      expect(new Set(items.map((c) => c.externalId)).size).toBe(25 * 41);
+    });
+
+    it('skips no comment when an already returned one is deleted between calls', async () => {
+      const { graph, igUserId, ctx } = world();
+      const first = graph.addIgComment(igUserId, { text: 't0' });
+      const tops = [first.commentId];
+      for (let t = 1; t < 25; t++) {
+        tops.push(
+          graph.addIgComment(igUserId, { mediaId: first.mediaId, text: `t${t}` }).commentId,
+        );
+      }
+      for (const p of tops) {
+        for (let i = 0; i < 40; i++) {
+          graph.addIgComment(igUserId, { mediaId: first.mediaId, parentId: p, text: `r${i}` });
+        }
+      }
+      let deleted = false;
+      const http = createSafeHttp({
+        allowedHosts: ['graph.facebook.com'],
+        fetch: async (input, init) => {
+          const res = await graph.fetch(input, init);
+          if (!deleted) return res;
+          const j = (await res.json()) as { data: { id: string }[] };
+          j.data = j.data.filter((c) => c.id !== tops[0]);
+          return new Response(JSON.stringify(j), { status: 200 });
+        },
+      });
+      const page = await listComments(
+        cfg,
+        now,
+        { ...ctx, http },
+        {
+          sourceExternalId: first.mediaId,
+          cursor: null,
+          limit: 25,
+          includeReplies: true,
+        },
+      );
+      expect(page.nextCursor).not.toBeNull();
+      deleted = true;
+      const ids = new Set(page.items.map((c) => c.externalId));
+      let cursor = page.nextCursor;
+      for (let calls = 0; cursor && calls < 100; calls++) {
+        const next: Page<NormalizedComment> = await listComments(
+          cfg,
+          now,
+          { ...ctx, http },
+          {
+            sourceExternalId: first.mediaId,
+            cursor,
+            limit: 25,
+            includeReplies: true,
+          },
+        );
+        for (const c of next.items) ids.add(c.externalId);
+        cursor = next.nextCursor;
+      }
+      for (const t of tops) expect(ids.has(t)).toBe(true);
+      expect(ids.size).toBe(25 * 41);
+    });
+
+    it("drops malformed replies, keeps a reply's own parent_id, ignores non-array replies", async () => {
+      const { graph, igUserId, ctx } = world();
+      const a = graph.addIgComment(igUserId, { text: 'a' });
+      const b = graph.addIgComment(igUserId, { mediaId: a.mediaId, text: 'b' });
+      const rewriting = createSafeHttp({
+        allowedHosts: ['graph.facebook.com'],
+        fetch: async (input, init) => {
+          const res = await graph.fetch(input, init);
+          const j = (await res.json()) as { data: Record<string, unknown>[] };
+          const [x, y] = j.data;
+          x!.replies = {
+            data: [
+              { id: '../x', text: 'bad', timestamp: '2026-10-13T09:00:00+0000' },
+              {
+                id: '17900000000000001',
+                text: 'own',
+                parent_id: '17900000000000002',
+                timestamp: '2026-10-13T09:00:00+0000',
+              },
+            ],
+          };
+          y!.replies = { data: 'nope' };
+          return new Response(JSON.stringify(j), { status: 200 });
+        },
+      });
+      const page = await listComments(
+        cfg,
+        now,
+        { ...ctx, http: rewriting },
+        {
+          sourceExternalId: a.mediaId,
+          cursor: null,
+          limit: 25,
+          includeReplies: true,
+        },
+      );
+      const byId = new Map(page.items.map((c) => [c.externalId, c]));
+      expect(page.items).toHaveLength(3);
+      expect(byId.get('17900000000000001')?.parentExternalId).toBe('17900000000000002');
+      expect(byId.has(a.commentId) && byId.has(b.commentId)).toBe(true);
+    });
   });
 });

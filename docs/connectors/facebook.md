@@ -228,8 +228,10 @@ is the log; update it when you test.
 Other limits:
 
 - No backfill. Comments posted while a Page was disconnected, or before it was
-  connected, are not imported. A catch-up poll is not implemented.
-- Ads (dark post) comments are not covered.
+  connected, are not imported. Ad posts are polled (see
+  [meta-ads.md](meta-ads.md)); organic posts are webhook-only.
+- Comments on ads (dark posts) arrive through the Meta Ads connector, which
+  reads them with this Page's connection.
 - Shared Pages: see below.
 - Meta's deauthorize and data-deletion callbacks are not implemented.
 - Pages that are reachable only through a Business Manager may need the

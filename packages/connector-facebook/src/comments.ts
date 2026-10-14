@@ -111,7 +111,8 @@ export async function listComments(
   cfg: FacebookConfig,
   nowMs: () => number,
   ctx: CallContext,
-  req: { sourceExternalId: string; cursor: string | null; limit: number },
+  // `includeReplies` is accepted and ignored: filter=stream already returns replies.
+  req: { sourceExternalId: string; cursor: string | null; limit: number; includeReplies?: boolean },
 ): Promise<Page<NormalizedComment>> {
   const r = await reporting(
     ctx,

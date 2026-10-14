@@ -23,6 +23,7 @@ import {
   parseFacebookEnv,
   type FacebookConfig,
 } from '@feedbouncer/connector-facebook';
+import { parseMetaAdsEnv, type MetaAdsConfig } from '@feedbouncer/connector-meta-ads';
 import { parseInstagramEnv, type InstagramConfig } from '@feedbouncer/connector-instagram';
 import { loadJobsConfig, type JobsConfig } from '@feedbouncer/jobs';
 import {
@@ -68,6 +69,8 @@ export interface ApiEnv {
    * so enabling it without the Facebook config fails startup.
    */
   readonly instagram: InstagramConfig | null;
+  /** Null unless META_ADS_CONNECTOR_ENABLED=true; also requires the Facebook config. */
+  readonly metaAds: MetaAdsConfig | null;
   /** Queue prefix and dedup window, shared with the worker so both sides use the same queues. */
   readonly jobs: JobsConfig;
   readonly telemetry: TelemetryConfig;
@@ -114,6 +117,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     encryption: loadEncryptionKeyring(env, appEnv, opts.warn),
     facebook,
     instagram: parseInstagramEnv(env, facebook),
+    metaAds: parseMetaAdsEnv(env, facebook),
     jobs: loadJobsConfig(env),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),
@@ -127,6 +131,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     trustProxyHops: config.trustProxyHops,
     facebookEnabled: config.facebook !== null,
     instagramEnabled: config.instagram !== null,
+    metaAdsEnabled: config.metaAds !== null,
     jobQueuePrefix: config.jobs.prefix,
     activeKeyId: config.encryption.activeKeyId,
     metricsPort: config.telemetry.metrics.port,

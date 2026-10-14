@@ -12,7 +12,7 @@ const KEYS = [
 ] as const;
 
 describe('isConnectable', () => {
-  it.each(['facebook', 'instagram'])('accepts %s', (p) => {
+  it.each(['facebook', 'instagram', 'meta_ads'])('accepts %s', (p) => {
     expect(isConnectable(p)).toBe(true);
   });
   it.each(['../x', 'tiktok', '', 'Instagram', 'constructor', '__proto__'])('rejects %s', (p) => {

@@ -7,6 +7,8 @@ import { createAuthEmails, type AuthEmails } from './auth/emails.js';
 import { createAuthRateLimits } from './auth/rate-limit.js';
 import { SessionGuard } from './auth/session.guard.js';
 import { SignUpController } from './auth/sign-up.controller.js';
+import { AdsController } from './ads/ads.controller.js';
+import { AdsService } from './ads/ads.service.js';
 import { BrandsController } from './brands/brands.controller.js';
 import { BrandsService } from './brands/brands.service.js';
 import { CommentsController } from './comments/comments.controller.js';
@@ -65,6 +67,7 @@ export class AppModule {
         OAuthConnectController,
         OAuthCallbackController,
         CommentsController,
+        AdsController,
         MembersController,
         OrgInvitationsController,
         InvitationsController,
@@ -80,6 +83,7 @@ export class AppModule {
         OAuthConnectService,
         ConnectablePlatformPipe,
         CommentsService,
+        AdsService,
         MembersService,
         InvitationsService,
         { provide: DEPS, useValue: deps },

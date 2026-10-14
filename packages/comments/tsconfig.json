@@ -10,6 +10,7 @@
     { "path": "../jobs/tsconfig.build.json" },
     { "path": "../mailer/tsconfig.build.json" },
     { "path": "../connector-facebook/tsconfig.build.json" },
-    { "path": "../connector-instagram/tsconfig.build.json" }
+    { "path": "../connector-instagram/tsconfig.build.json" },
+    { "path": "../connector-meta-ads/tsconfig.build.json" }
   ]
 }

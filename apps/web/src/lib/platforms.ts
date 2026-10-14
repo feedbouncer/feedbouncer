@@ -1,7 +1,7 @@
 // Platforms whose accounts are connected through the OAuth connect flow and
 // the account picker. The API decides whether each one is configured; the web
 // app only knows their names and copy.
-export const CONNECTABLE = ['facebook', 'instagram'] as const;
+export const CONNECTABLE = ['facebook', 'instagram', 'meta_ads'] as const;
 export type ConnectablePlatform = (typeof CONNECTABLE)[number];
 
 export function isConnectable(p: string): p is ConnectablePlatform {
@@ -41,5 +41,16 @@ export const PLATFORM_COPY: Record<ConnectablePlatform, PlatformCopy> = {
     pickerIntro: 'Choose the Facebook Page your Instagram professional account is linked to.',
     noEligible:
       'None of your Facebook Pages has a linked Instagram professional account. Link your Instagram Business or Creator account to a Facebook Page in Meta Business Suite, then connect again.',
+  },
+  meta_ads: {
+    label: 'Meta ad account',
+    accountNoun: 'ad account',
+    connectLabel: 'Connect ad account',
+    pickerTitle: 'Choose ad accounts',
+    viewOn: 'View in Ads Manager',
+    deleteConfirm: "Delete this comment? This can't be undone.",
+    pickerIntro: 'Choose the ad accounts whose ads you want to moderate.',
+    noEligible:
+      'None of your ad accounts can be used right now. Check that you have access to an active ad account in Meta Business Suite, then connect again.',
   },
 };

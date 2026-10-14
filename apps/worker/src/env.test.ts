@@ -193,3 +193,49 @@ describe('loadWorkerEnv', () => {
     });
   });
 });
+
+describe('ad polling settings', () => {
+  const adsOn = { ...base, ...facebook, META_ADS_CONNECTOR_ENABLED: 'true' };
+
+  it('applies the documented defaults', () => {
+    const env = load(adsOn);
+    expect(env.metaAds?.activeStatuses).toEqual(['ACTIVE']);
+    expect(env.adPolling?.poll).toMatchObject({
+      intervalSec: 300,
+      graceDays: 7,
+      maxSourcesPerJob: 100,
+      unavailableRetrySec: 21_600,
+      igDeepScanSec: 86_400,
+    });
+    expect(env.adPolling?.scheduler).toEqual({
+      tickSec: 30,
+      discoveryIntervalSec: 900,
+      pollIntervalSec: 300,
+      graceDays: 7,
+      maxConnectionsPerTick: 500,
+    });
+  });
+  it('is disabled unless META_ADS_CONNECTOR_ENABLED=true', () => {
+    expect(load({ ...base, ...facebook }).metaAds).toBeNull();
+  });
+  it('leaves ad polling unconfigured, and its variables unread, when the connector is off', () => {
+    const env = load({ ...base, ...facebook, AD_POLL_INTERVAL_SEC: '1' });
+    expect(env.adPolling).toBeNull();
+  });
+  it.each([
+    ['AD_POLL_INTERVAL_SEC', '3601'],
+    ['AD_DISCOVERY_INTERVAL_SEC', '299'],
+    ['AD_RETIREMENT_GRACE_DAYS', '31'],
+    ['AD_POLL_MAX_SOURCES_PER_JOB', '0'],
+    ['AD_SOURCE_UNAVAILABLE_RETRY_SEC', '599'],
+    ['AD_IG_DEEP_SCAN_INTERVAL_SEC', '3599'],
+    ['AD_SCHEDULER_TICK_SEC', '9'],
+    ['AD_SCHEDULER_MAX_CONNECTIONS_PER_TICK', '10001'],
+    ['META_ADS_ACTIVE_STATUSES', 'active;drop'],
+  ])('rejects %s=%s', (name, value) => {
+    expect(() => load({ ...adsOn, [name]: value })).toThrow(EnvError);
+  });
+  it('requires the Facebook Meta app config', () => {
+    expect(() => load({ ...base, META_ADS_CONNECTOR_ENABLED: 'true' })).toThrow(EnvError);
+  });
+});

@@ -123,6 +123,11 @@ export const CASES: IsolationCase[] = [
     url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections/${f.bConnectionId}`,
   },
   {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/ads',
+    name: 'list B ads',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/brands/${f.B.brandId}/ads`,
+  },
+  {
     route: 'GET /api/v1/orgs/:orgId/brands/:brandId/comments',
     name: 'list B comments',
     url: (f) => `/api/v1/orgs/${f.B.orgId}/brands/${f.B.brandId}/comments`,

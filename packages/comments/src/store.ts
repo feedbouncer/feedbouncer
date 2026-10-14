@@ -41,7 +41,13 @@ export interface CommentRow {
   readonly connectionStatus: ConnectionStatus;
   /** A private reply to this comment is pending or applied (the platform allows one). */
   readonly privateReplied: boolean;
+  /** 'ad' when its source is linked to an ad, or it was also seen through an ad's source. */
+  readonly origin: CommentOrigin;
+  /** Up to 5 linked ads, by ad id. */
+  readonly ads: readonly { adId: string; adAccountId: string }[];
 }
+
+export type CommentOrigin = 'ad' | 'organic';
 
 /** Position in the newest-first listing: the last row of the previous page. */
 export interface CommentCursor {
@@ -53,6 +59,12 @@ export interface CommentCursor {
 const noNul = (s: string): string => s.replaceAll('\u0000', '�');
 const outOfScope = () => new Error('comment store: connection is not in the given scope');
 
+/** Over `comment c`: true when the comment came through an ad. */
+const IS_AD_SQL = `(c.ad_source_id IS NOT NULL OR EXISTS (
+    SELECT 1 FROM meta_ad_source mas
+     WHERE mas.organization_id = c.organization_id AND mas.brand_id = c.brand_id
+       AND mas.source_id = c.source_id))`;
+
 const ROW_SQL = `
   SELECT c.id, c.connection_id, cn.platform, s.external_id AS source_external_id, c.external_id,
          c.parent_external_id, c.parent_comment_id, a.external_id AS author_external_id,
@@ -63,12 +75,24 @@ const ROW_SQL = `
                   WHERE ma.comment_id = c.id AND ma.organization_id = c.organization_id
                     AND ma.brand_id = c.brand_id
                     AND ma.kind = 'private_reply' AND ma.status IN ('pending', 'applied'))
-           AS private_replied
+           AS private_replied,
+         CASE WHEN ${IS_AD_SQL} THEN 'ad' ELSE 'organic' END AS origin,
+         COALESCE(ads.ads, '[]'::jsonb) AS ads
     FROM comment c
     JOIN source s ON s.id = c.source_id AND s.organization_id = c.organization_id AND s.brand_id = c.brand_id
     JOIN connection cn ON cn.id = c.connection_id AND cn.organization_id = c.organization_id AND cn.brand_id = c.brand_id
     LEFT JOIN author a ON a.id = c.author_id AND a.connection_id = c.connection_id
-    LEFT JOIN comment p ON p.id = c.parent_comment_id AND p.organization_id = c.organization_id AND p.brand_id = c.brand_id`;
+    LEFT JOIN comment p ON p.id = c.parent_comment_id AND p.organization_id = c.organization_id AND p.brand_id = c.brand_id
+    LEFT JOIN LATERAL (
+      SELECT jsonb_agg(jsonb_build_object('adId', x.external_id, 'adAccountId', x.ad_account_external_id)
+                       ORDER BY x.external_id) AS ads
+        FROM (SELECT DISTINCT ma.external_id, ma.ad_account_external_id
+                FROM meta_ad_source mas
+                JOIN meta_ad ma ON ma.id = mas.ad_id AND ma.organization_id = mas.organization_id
+                               AND ma.brand_id = mas.brand_id
+               WHERE mas.organization_id = c.organization_id AND mas.brand_id = c.brand_id
+                 AND mas.source_id IN (c.source_id, c.ad_source_id)
+               ORDER BY ma.external_id LIMIT 5) x) ads ON true`;
 
 const toRow = (r: Record<string, unknown>): CommentRow => ({
   id: r.id as string,
@@ -88,6 +112,8 @@ const toRow = (r: Record<string, unknown>): CommentRow => ({
   isOwnAccount: r.is_own_account as boolean,
   connectionStatus: r.connection_status as ConnectionStatus,
   privateReplied: r.private_replied as boolean,
+  origin: r.origin as CommentOrigin,
+  ads: r.ads as { adId: string; adAccountId: string }[],
 });
 
 const ids = (s: ConnectionScope) => [s.organizationId, s.brandId, s.connectionId];
@@ -110,6 +136,7 @@ export async function setCommentPlatformState(
   );
 }
 
+/** An existing source keeps its kind: an ad post is never demoted. */
 async function upsertSource(
   tx: pg.ClientBase,
   scope: ConnectionScope,
@@ -127,19 +154,36 @@ async function upsertSource(
   return r.rows[0].id;
 }
 
-/** Re-links replies stored before their parent. */
+/** Upserts an ad's post as kind 'ad_post', promoting an organic one. */
+async function upsertAdSource(
+  tx: pg.Pool | pg.ClientBase,
+  scope: ConnectionScope,
+  externalId: string,
+): Promise<string> {
+  const r = await tx.query<{ id: string }>(
+    `INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id)
+     VALUES ($1, $2, $3, 'ad_post', $4)
+     ON CONFLICT (connection_id, external_id) DO UPDATE SET kind = 'ad_post', updated_at = now()
+       WHERE source.organization_id = $1 AND source.brand_id = $2
+     RETURNING id`,
+    [...ids(scope), externalId],
+  );
+  if (!r.rows[0]) throw outOfScope();
+  return r.rows[0].id;
+}
+
+/** Re-links replies stored before their parent (in any source of the connection). */
 async function linkChildren(
   tx: pg.ClientBase,
   scope: ConnectionScope,
-  sourceId: string,
   commentId: string,
   externalId: string,
 ): Promise<void> {
   await tx.query(
-    `UPDATE comment SET parent_comment_id = $3
-      WHERE organization_id = $1 AND brand_id = $2 AND source_id = $4
+    `UPDATE comment SET parent_comment_id = $4
+      WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3
         AND parent_external_id = $5 AND parent_comment_id IS NULL`,
-    [scope.organizationId, scope.brandId, commentId, sourceId, externalId],
+    [...ids(scope), commentId, externalId],
   );
 }
 
@@ -179,10 +223,10 @@ export class PgCommentStore {
                               permalink, is_own_account, platform_synced_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7::text,
                  (SELECT p.id FROM comment p
-                   WHERE p.organization_id = $1 AND p.brand_id = $2 AND p.source_id = $4
+                   WHERE p.organization_id = $1 AND p.brand_id = $2 AND p.connection_id = $3
                      AND p.external_id = $7::text),
                  $8, $9, $10, $11, $12, $13)
-         ON CONFLICT (source_id, external_id) DO UPDATE SET
+         ON CONFLICT (connection_id, external_id) DO UPDATE SET
            body = EXCLUDED.body,
            author_id = COALESCE(EXCLUDED.author_id, comment.author_id),
            parent_external_id = COALESCE(comment.parent_external_id, EXCLUDED.parent_external_id),
@@ -220,15 +264,44 @@ export class PgCommentStore {
         applied = false;
         const existing = await tx.query<{ id: string }>(
           `SELECT id FROM comment
-            WHERE organization_id = $1 AND brand_id = $2 AND source_id = $3 AND external_id = $4`,
-          [scope.organizationId, scope.brandId, sourceId, c.externalId],
+            WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND external_id = $4`,
+          [...ids(scope), c.externalId],
         );
         if (!existing.rows[0]) throw outOfScope();
         commentId = existing.rows[0].id;
       }
-      await linkChildren(tx, scope, sourceId, commentId, c.externalId);
+      await linkChildren(tx, scope, commentId, c.externalId);
       return { commentId, created, applied };
     });
+  }
+
+  /** Upserts an ad's post as a source of kind 'ad_post' (promoting an organic one); `tx` joins a caller's transaction. */
+  ensureAdSource(
+    scope: ConnectionScope,
+    sourceExternalId: string,
+    tx?: pg.ClientBase,
+  ): Promise<string> {
+    return upsertAdSource(tx ?? this.pool, scope, sourceExternalId);
+  }
+
+  /**
+   * Records that a comment stored under another source was also read through
+   * an ad's source. Not a snapshot, so the platform_synced_at rule does not apply.
+   */
+  async markSeenViaAdSource(
+    scope: ConnectionScope,
+    commentId: string,
+    adSourceId: string,
+  ): Promise<void> {
+    if (!UUID.test(commentId) || !UUID.test(adSourceId)) return;
+    await this.pool.query(
+      `UPDATE comment SET ad_source_id = $4, updated_at = now()
+        WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND id = $5
+          AND ad_source_id IS NULL AND source_id <> $4
+          AND EXISTS (SELECT 1 FROM source s WHERE s.id = $4 AND s.organization_id = $1
+                         AND s.brand_id = $2 AND s.connection_id = $3)`,
+      [...ids(scope), adSourceId, commentId],
+    );
   }
 
   /** Marks a stored comment deleted (terminal). Unknown comments are not stored: returns null. */
@@ -239,13 +312,11 @@ export class PgCommentStore {
   ): Promise<string | null> {
     const r = await this.pool.query<{ id: string }>(
       `UPDATE comment c SET platform_state = 'deleted',
-              platform_synced_at = GREATEST(c.platform_synced_at, $6)
-         FROM source s
-        WHERE s.id = c.source_id AND s.organization_id = $1 AND s.brand_id = $2
-          AND s.connection_id = $3 AND s.external_id = $4 AND c.external_id = $5
-          AND c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3
+              platform_synced_at = GREATEST(c.platform_synced_at, $5)
+        WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3
+          AND c.external_id = $4
        RETURNING c.id`,
-      [...ids(scope), ref.sourceExternalId, ref.externalId, syncedAt],
+      [...ids(scope), ref.externalId, syncedAt],
     );
     return r.rows[0]?.id ?? null;
   }
@@ -267,7 +338,7 @@ export class PgCommentStore {
         `INSERT INTO comment (organization_id, brand_id, connection_id, source_id, external_id, body,
                               platform_state, posted_at, platform_synced_at)
          VALUES ($1, $2, $3, $4, $5, '', 'deleted', $6, $7)
-         ON CONFLICT (source_id, external_id) DO UPDATE SET
+         ON CONFLICT (connection_id, external_id) DO UPDATE SET
            platform_state = 'deleted',
            platform_synced_at = GREATEST(comment.platform_synced_at, EXCLUDED.platform_synced_at)
          WHERE comment.organization_id = $1 AND comment.brand_id = $2
@@ -275,7 +346,7 @@ export class PgCommentStore {
         [...ids(scope), sourceId, ref.externalId, o.occurredAt, o.syncedAt],
       );
       if (!r.rows[0]) throw outOfScope();
-      await linkChildren(tx, scope, sourceId, r.rows[0].id, ref.externalId);
+      await linkChildren(tx, scope, r.rows[0].id, ref.externalId);
       return r.rows[0].id;
     });
   }
@@ -297,6 +368,7 @@ export class PgCommentStore {
       connectionId?: string;
       /** Leaves out deleted comments (and tombstones of never-seen ones) before the limit applies. */
       excludeDeleted?: boolean;
+      origin?: CommentOrigin;
     },
   ): Promise<CommentRow[]> {
     if (q.connectionId !== undefined && !UUID.test(q.connectionId)) return [];
@@ -307,6 +379,7 @@ export class PgCommentStore {
                    AND ($3::timestamptz IS NULL OR (c.posted_at, c.id) < ($3::timestamptz, $4::uuid))
                    AND ($5::uuid IS NULL OR c.connection_id = $5)
                    AND (NOT $7::boolean OR c.platform_state <> 'deleted')
+                   AND ($8::text IS NULL OR (${IS_AD_SQL}) = ($8::text = 'ad'))
                  ORDER BY c.posted_at DESC, c.id DESC LIMIT $6`,
       [
         scope.organizationId,
@@ -316,6 +389,7 @@ export class PgCommentStore {
         q.connectionId ?? null,
         limit,
         q.excludeDeleted === true,
+        q.origin ?? null,
       ],
     );
     return r.rows.map(toRow);

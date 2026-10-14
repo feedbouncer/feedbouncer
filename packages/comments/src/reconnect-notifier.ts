@@ -25,6 +25,7 @@ const PLATFORM_LABELS: Record<Platform, string> = {
   linkedin: 'LinkedIn page',
   x: 'X account',
   bluesky: 'Bluesky account',
+  meta_ads: 'Meta ad account',
 };
 
 export class EmailReconnectNotifier implements ReconnectNotifier {

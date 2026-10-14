@@ -63,6 +63,32 @@ export const LIFECYCLE_JOB = {
   platforms: 'all' as readonly Platform[] | 'all',
 };
 
+export const discoveryPayload = z.strictObject({ bucket: z.number().int().nonnegative() });
+export type DiscoveryPayload = z.infer<typeof discoveryPayload>;
+
+// One run lists every active ad of an ad account; `bucket` is a time slot
+// (scheduler-chosen) that makes each cycle a distinct ledger entry.
+export const DISCOVERY_JOB = {
+  type: 'ad_discovery' as const,
+  payload: discoveryPayload,
+  externalRef: (p: DiscoveryPayload): string => `discover:${p.bucket}`,
+  timeoutMs: 300_000,
+  platforms: ['meta_ads'] as readonly Platform[] | 'all',
+};
+
+export const pollPayload = z.strictObject({ bucket: z.number().int().nonnegative() });
+export type PollPayload = z.infer<typeof pollPayload>;
+
+// One run polls a Page / IG connection's due ad sources; `bucket` is the
+// scheduler's poll-interval slot.
+export const POLL_JOB = {
+  type: 'ad_poll' as const,
+  payload: pollPayload,
+  externalRef: (p: PollPayload): string => `ad_poll:${p.bucket}`,
+  timeoutMs: 120_000,
+  platforms: ['facebook', 'instagram'] as readonly Platform[] | 'all',
+};
+
 /** For processes that enqueue but never run jobs (the API): same type, payload and key; no handler. */
 export function enqueueOnly<P>(spec: {
   type: string;

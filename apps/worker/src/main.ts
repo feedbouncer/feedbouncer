@@ -4,7 +4,9 @@ import { Worker } from 'bullmq';
 import {
   EmailReconnectNotifier,
   NotifyingConnectionDirectory,
+  PgAdTracking,
   PgCommentStore,
+  PollScheduler,
 } from '@feedbouncer/comments';
 import {
   PgSyncRecorder,
@@ -96,6 +98,7 @@ try {
   // Mail is only configured (and only needed) alongside the Facebook connector.
   const mailer = mail ? createSmtpMailer(mail.smtpUrl, mail.mailFrom) : null;
   let jobs = new JobRegistry();
+  let scheduler: PollScheduler | null = null;
   if (facebook && mail && mailer) {
     const stack = buildPgConnectorStack({
       pool,
@@ -108,6 +111,7 @@ try {
       appSecrets: new Map([
         ['facebook', facebook.appSecret],
         ...(env.instagram ? ([['instagram', facebook.appSecret]] as const) : []),
+        ...(env.metaAds ? ([['meta_ads', facebook.appSecret]] as const) : []),
       ]),
       redirectUri: (p) => new URL(`/api/v1/oauth/${p}/callback`, mail.publicWebUrl).href,
       log,
@@ -122,17 +126,29 @@ try {
           log,
         ),
     });
+    const store = new PgCommentStore(pool);
     jobs = buildJobRegistry({
       runtime: stack.runtime,
       directory: stack.directory,
-      store: new PgCommentStore(pool),
+      store,
       pool,
       clock: systemClock,
       log,
       ingestObserver: promIngestObserver(telemetry.metrics),
       // The producer needs the job registry built here, so it is reached lazily.
       producer: { enqueue: (input) => producer.enqueue(input) },
+      ...(env.adPolling ? { ads: { poll: env.adPolling.poll } } : {}),
     });
+    if (env.adPolling) {
+      scheduler = new PollScheduler({
+        pool,
+        producer: { enqueue: (input) => producer.enqueue(input) },
+        tracking: new PgAdTracking(pool, store),
+        clock: systemClock,
+        log,
+        settings: env.adPolling.scheduler,
+      });
+    }
   }
 
   const worker = new Worker(
@@ -196,6 +212,7 @@ try {
   });
 
   onShutdown(async () => {
+    await scheduler?.stop();
     await Promise.all([worker.close(), jobWorkers.close()]);
     await queues.close();
     await health.close();
@@ -217,6 +234,7 @@ try {
 
   await jobWorkers.start();
   log.info('job consumers ready', { platforms: jobWorkers.platforms().join(',') || 'none' });
+  scheduler?.start();
 
   worker.run().catch((err: unknown) => {
     log.error('worker stopped', errorFields(err));

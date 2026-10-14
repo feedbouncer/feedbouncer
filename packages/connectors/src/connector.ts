@@ -120,7 +120,13 @@ export interface Connector {
   /** A comment deleted between pages must not fail the listing; return what still exists. */
   listComments(
     ctx: CallContext,
-    req: { sourceExternalId: string; cursor: string | null; limit: number },
+    req: {
+      sourceExternalId: string;
+      cursor: string | null;
+      limit: number;
+      /** Also return replies where the platform lists top-level comments only. Absent means false. */
+      includeReplies?: boolean;
+    },
   ): Promise<Page<NormalizedComment>>;
 
   /**

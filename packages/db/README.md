@@ -116,7 +116,7 @@ and worker wait for the one-shot `migrate` service to finish.
 
 ## Data model
 
-Every table except `processed_job` and `connection_sync` (keyed by `connection_id`) has
+Every table except `processed_job`, `connection_sync` (keyed by `connection_id`), `meta_ad_source`, `meta_ad_listing` and `source_poll` has
 `id uuid` (`gen_random_uuid()`), `created_at`
 and `updated_at`. Tenant tables carry `organization_id`, brand-scoped tables also
 carry `brand_id`, and each child foreign key includes its parent's scope columns,
@@ -139,7 +139,11 @@ so the database refuses cross-tenant links.
 | `moderation_action` | A platform moderation action on a comment. Status: `pending`, then `applied`, `noop`, `not_eligible` or `failed`. One private reply per comment.                       | org, brand, connection                 | `(organization_id, request_key)`            |
 | `source`            | A post, ad, video or thread on a connection.                                                                                                                           | org, brand, connection                 | `(connection_id, external_id)`              |
 | `author`            | A commenter's platform identity, scoped to a connection (platform user IDs are not global).                                                                            | org, brand, connection                 | `(connection_id, external_id)`              |
-| `comment`           | A comment on a source. `body` is unbounded text. Optional parent in the same source.                                                                                   | org, brand, connection, source         | `(source_id, external_id)`                  |
+| `comment`           | A comment on a source. `body` is unbounded text. Optional parent under any source of the same connection.                                                              | org, brand, connection, source         | `(connection_id, external_id)`              |
+| `meta_ad`           | An ad discovered through a `meta_ads` connection (one ad account), with its resolved Facebook/Instagram post ids and active state.                                     | org, brand, ads connection             | `(ads_connection_id, external_id)`          |
+| `meta_ad_source`    | Links an ad to the source(s) it shows. Keyed by `(ad_id, source_id)`, no `id`.                                                                                         | org, brand, ad, source                 | `(ad_id, source_id)`                        |
+| `meta_ad_listing`   | An ad listing in progress for a meta_ads connection: resume cursor and start time. Keyed by `ads_connection_id`, no `id`.                                              | org, brand, connection                 | `ads_connection_id`                         |
+| `source_poll`       | Comment polling state per source (cursor, high-water mark, schedule). Keyed by `source_id`, no `id`.                                                                   | org, brand, connection, source         | `source_id`                                 |
 | `rule`              | A brand's moderation rule: conditions, action, mode, priority, `enabled`.                                                                                              | `organization_id`, `brand_id`          | none                                        |
 | `decision`          | One append-only moderation outcome for a comment, with actor, reason and optional classifier fields.                                                                   | `organization_id`, `brand_id`          | none (`id`)                                 |
 | `audit_event`       | Append-only record of significant changes.                                                                                                                             | `organization_id`, optional brand      | none (`id`)                                 |

@@ -4,7 +4,13 @@
 import { ConnectorError } from '@feedbouncer/connectors';
 import { graphErrorCodes } from '@feedbouncer/connector-facebook';
 
-export type IgOp = 'read' | 'moderate' | 'public_reply' | 'private_reply' | 'lifecycle';
+export type IgOp =
+  | 'read'
+  | 'moderate'
+  | 'public_reply'
+  | 'private_reply'
+  | 'lifecycle'
+  | 'list_source';
 
 export const IG_PRIVATE_REPLY_INELIGIBLE: ReadonlyArray<{
   code: number;
@@ -43,6 +49,13 @@ export function mapInstagramError(
   if (op === 'public_reply') {
     const o = match(PUBLIC_REPLY_INELIGIBLE, codes);
     if (o) return { notEligible: o };
+  }
+  // Listing one media: its permission/existence problems are that source's, not the connection's.
+  if (op === 'list_source') {
+    if (e.code === 'permission_denied') {
+      return { throw: new ConnectorError('permanent', 'source_inaccessible') };
+    }
+    if (e.kind === 'not_found') return { throw: new ConnectorError('not_found', 'source_missing') };
   }
   if (e.code === 'permission_denied') {
     return { throw: new ConnectorError('auth_expired', 'permission_revoked') };

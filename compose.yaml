@@ -33,6 +33,10 @@ x-facebook-env: &facebook-env
   # Instagram connector (docs/connectors/instagram.md). No default: unset means off.
   # It runs on the Facebook Meta app above, so it needs the FACEBOOK_* variables.
   INSTAGRAM_CONNECTOR_ENABLED: ${INSTAGRAM_CONNECTOR_ENABLED:-}
+  # Meta Ads connector (docs/connectors/meta-ads.md). No default: unset means off.
+  # It also runs on the Facebook Meta app, so it needs the FACEBOOK_* variables.
+  META_ADS_CONNECTOR_ENABLED: ${META_ADS_CONNECTOR_ENABLED:-}
+  META_ADS_ACTIVE_STATUSES: ${META_ADS_ACTIVE_STATUSES:-}
 
 x-node-service: &node-service
   init: true
@@ -166,6 +170,7 @@ services:
       - ./packages/comments/src:/repo/packages/comments/src:ro
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro
+      - ./packages/connector-meta-ads/src:/repo/packages/connector-meta-ads/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
       - ./packages/observability/src:/repo/packages/observability/src:ro
@@ -219,6 +224,15 @@ services:
       JOB_BACKOFF_MAX_MS: ${JOB_BACKOFF_MAX_MS:-}
       JOB_DLQ_RETENTION_DAYS: ${JOB_DLQ_RETENTION_DAYS:-}
       JOB_DEDUP_WINDOW_DAYS: ${JOB_DEDUP_WINDOW_DAYS:-}
+      # Ad discovery and ad comment polling; empty means the default (docs/connectors/meta-ads.md).
+      AD_POLL_INTERVAL_SEC: ${AD_POLL_INTERVAL_SEC:-}
+      AD_DISCOVERY_INTERVAL_SEC: ${AD_DISCOVERY_INTERVAL_SEC:-}
+      AD_RETIREMENT_GRACE_DAYS: ${AD_RETIREMENT_GRACE_DAYS:-}
+      AD_POLL_MAX_SOURCES_PER_JOB: ${AD_POLL_MAX_SOURCES_PER_JOB:-}
+      AD_SOURCE_UNAVAILABLE_RETRY_SEC: ${AD_SOURCE_UNAVAILABLE_RETRY_SEC:-}
+      AD_IG_DEEP_SCAN_INTERVAL_SEC: ${AD_IG_DEEP_SCAN_INTERVAL_SEC:-}
+      AD_SCHEDULER_TICK_SEC: ${AD_SCHEDULER_TICK_SEC:-}
+      AD_SCHEDULER_MAX_CONNECTIONS_PER_TICK: ${AD_SCHEDULER_MAX_CONNECTIONS_PER_TICK:-}
     # In-flight jobs finish on shutdown, bounded by the handler timeout (60 s default).
     # Keep this above that timeout plus margin so a restart does not kill a job mid-effect.
     stop_grace_period: 100s
@@ -229,6 +243,7 @@ services:
       - ./packages/comments/src:/repo/packages/comments/src:ro
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro
+      - ./packages/connector-meta-ads/src:/repo/packages/connector-meta-ads/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
       - ./packages/mailer/src:/repo/packages/mailer/src:ro

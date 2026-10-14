@@ -38,7 +38,14 @@ const states: { state: string; carrier: TestResponse }[] = [];
 
 beforeAll(async () => {
   graph = new FakeGraph({ appSecret: SECRET, appId: APP_ID });
-  api = await startTestApi({ facebook: FACEBOOK, instagram: INSTAGRAM }, { fetch: graph.fetch });
+  api = await startTestApi(
+    {
+      facebook: FACEBOOK,
+      instagram: INSTAGRAM,
+      metaAds: { meta: FACEBOOK, activeStatuses: ['ACTIVE'] },
+    },
+    { fetch: graph.fetch },
+  );
   org = await orgWithRoles(api, 'fbc');
   // Same people, another organization (each test file has a small email budget).
   other = await orgWithRoles(api, 'fbo', {
@@ -720,6 +727,49 @@ describe('instagram connect flow', () => {
     expect((await call('GET', `${base(org)}/instagram/grants/${grantId}`, org.owner)).status).toBe(
       200,
     );
+  });
+});
+
+describe('meta ads connect flow', () => {
+  it('meta_ads connect lists ad accounts and creates one connection per selected account', async () => {
+    const first = graph.addAdAccount(fbUserId, { name: 'Shop ads' }).adAccountId;
+    const second = graph.addAdAccount(fbUserId, { name: 'Brand ads' }).adAccountId;
+    const url = await authorize(org, org.owner, {}, 'meta_ads');
+    expect(url.searchParams.get('scope')!.split(',')).toEqual(['ads_read']);
+    const cb = await callback(org.owner, graph.consent(url, fbUserId), 'meta_ads');
+    expect(cb.status).toBe(302);
+    const grantId = new RegExp(
+      `^${WEB}/orgs/${org.orgId}/brands/${org.brandId}/connections/meta_ads/select\\?grant=(${UUID_RE})$`,
+    ).exec(String(cb.headers.location))![1]!;
+    const g = await call('GET', `${base(org)}/meta_ads/grants/${grantId}`, org.owner);
+    expect(g.status).toBe(200);
+    const ids = (g.body.accounts as { externalAccountId: string }[]).map(
+      (a) => a.externalAccountId,
+    );
+    expect(ids).toEqual(expect.arrayContaining([first, second]));
+
+    const results = await connect(org, grantId, [first, second], 'meta_ads');
+    expect(results.map((r) => r.status)).toEqual(['connected', 'connected']);
+    const rows = await api.pool.query(
+      `SELECT platform FROM connection WHERE brand_id = $1 AND external_account_id = ANY($2::text[])`,
+      [org.brandId, [first, second]],
+    );
+    expect(rows.rows).toEqual([{ platform: 'meta_ads' }, { platform: 'meta_ads' }]);
+  });
+
+  it('declining ads_read creates nothing and reports the missing scope', async () => {
+    const before = await api.pool.query('SELECT id FROM connection');
+    const url = await authorize(org, org.owner, {}, 'meta_ads');
+    const r = await callback(
+      org.owner,
+      graph.consent(url, fbUserId, { decline: ['ads_read'] }),
+      'meta_ads',
+    );
+    expect(r.status).toBe(302);
+    expect(r.headers.location).toBe(
+      `${WEB}/orgs/${org.orgId}/brands/${org.brandId}/connections?error=missing_permissions&missing=ads_read`,
+    );
+    expect((await api.pool.query('SELECT id FROM connection')).rows).toEqual(before.rows);
   });
 });
 

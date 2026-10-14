@@ -53,14 +53,14 @@ describe('duplicate ingestion', () => {
     await expectPgError(
       insertComment(ctx.c, a, { externalId: 'dup-1' }),
       '23505',
-      'comment_source_id_external_id_key',
+      'comment_connection_id_external_id_key',
     );
   });
 
   it('ON CONFLICT DO NOTHING ignores the duplicate deterministically and keeps the original', async () => {
     const first = await insertComment(ctx.c, a, { externalId: 'dup-2', body: 'original' });
     const r = await ctx.c.query(
-      `${INSERT} ON CONFLICT (source_id, external_id) DO NOTHING RETURNING id`,
+      `${INSERT} ON CONFLICT (connection_id, external_id) DO NOTHING RETURNING id`,
       values(a, { externalId: 'dup-2', body: 'replayed' }),
     );
     expect(r.rowCount).toBe(0);
@@ -79,7 +79,7 @@ describe('duplicate ingestion', () => {
       const results = await Promise.all(
         clients.map((c) =>
           c.query(
-            `${INSERT} ON CONFLICT (source_id, external_id) DO NOTHING RETURNING id`,
+            `${INSERT} ON CONFLICT DO NOTHING RETURNING id`,
             values(a, { externalId: 'race-1' }),
           ),
         ),
@@ -94,9 +94,13 @@ describe('duplicate ingestion', () => {
     }
   });
 
-  it('the same external id is allowed in another source and in another organization', async () => {
+  it('the same external id is allowed in another organization but not in another source of the same connection', async () => {
     await insertComment(ctx.c, a, { externalId: 'shared-1' });
-    await insertComment(ctx.c, a, { externalId: 'shared-1', sourceId: a.otherSourceId });
+    await expectPgError(
+      insertComment(ctx.c, a, { externalId: 'shared-1', sourceId: a.otherSourceId }),
+      '23505',
+      'comment_connection_id_external_id_key',
+    );
     await insertComment(ctx.c, b, { externalId: 'shared-1' });
   });
 
@@ -142,12 +146,13 @@ describe('cross-tenant isolation', () => {
       'comment_connection_id_author_id_fkey',
     );
   });
-  it('a reply cannot have a parent from another source', async () => {
+  it('a reply can have a parent from another source of its connection, never another connection', async () => {
     const parent = await insertComment(ctx.c, a, { sourceId: a.otherSourceId });
+    await insertComment(ctx.c, a, { parentCommentId: parent });
     await expectPgError(
-      insertComment(ctx.c, a, { parentCommentId: parent }),
+      insertComment(ctx.c, a, { parentCommentId: await insertComment(ctx.c, b) }),
       '23503',
-      'comment_source_id_parent_comment_id_fkey',
+      'comment_connection_id_parent_comment_id_fkey',
     );
   });
   it("a source cannot point at another brand's connection", async () => {

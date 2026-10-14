@@ -1,3 +1,4 @@
+import { RateLimiterMemory } from 'rate-limiter-flexible';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RateBudget, memoryBudget, type BudgetLimiter } from './budget.js';
 import { ConnectorError } from './errors.js';
@@ -142,5 +143,54 @@ describe('RateBudget', () => {
     if (!d.granted) expect(d.retryAfterMs).toBeLessThanOrEqual(86_400_000);
     vi.advanceTimersByTime(86_400_000 + 1);
     expect((await b.acquire('facebook', 'c1', policy, 'urgent')).granted).toBe(true);
+  });
+});
+
+describe('background priority', () => {
+  const bgPolicy = {
+    points: 10,
+    durationSec: 60,
+    urgentReservePoints: 2,
+    defaultRetryAfterMs: 60_000,
+  };
+  it('can use at most half of the bulk allowance and never touches the urgent reserve', async () => {
+    const b = memoryBudget();
+    let granted = 0;
+    for (let i = 0; i < 10; i++)
+      if ((await b.acquire('facebook', 'k', bgPolicy, 'background')).granted) granted++;
+    expect(granted).toBe(4); // floor((10-2)/2)
+    for (let i = 0; i < 4; i++)
+      expect((await b.acquire('facebook', 'k', bgPolicy, 'bulk')).granted).toBe(true);
+    expect((await b.acquire('facebook', 'k', bgPolicy, 'bulk')).granted).toBe(false); // bulk = 8 total
+    expect((await b.acquire('facebook', 'k', bgPolicy, 'urgent')).granted).toBe(true); // reserve intact
+  });
+
+  it('honours an explicit backgroundPoints', async () => {
+    const b = memoryBudget();
+    const p = { ...bgPolicy, backgroundPoints: 1 };
+    expect((await b.acquire('facebook', 'k2', p, 'background')).granted).toBe(true);
+    expect((await b.acquire('facebook', 'k2', p, 'background')).granted).toBe(false);
+  });
+
+  it('a background call denied by shared refunds background and bulk', async () => {
+    const limiters = new Map<string, RateLimiterMemory>();
+    const b = new RateBudget((o) => {
+      const l = new RateLimiterMemory(o);
+      limiters.set(o.keyPrefix, l);
+      return l;
+    }, 'p');
+    const p = {
+      points: 4,
+      durationSec: 60,
+      urgentReservePoints: 0,
+      defaultRetryAfterMs: 60_000,
+      backgroundPoints: 4,
+    };
+    for (let i = 0; i < 4; i++) await b.acquire('facebook', 'k3', p, 'urgent'); // shared exhausted
+    expect((await b.acquire('facebook', 'k3', p, 'background')).granted).toBe(false);
+    for (const name of ['bulk', 'background']) {
+      const res = await limiters.get(`p:facebook:${name}`)?.get('k3');
+      expect(res?.remainingPoints ?? 4).toBe(4);
+    }
   });
 });

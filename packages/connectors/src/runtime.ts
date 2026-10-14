@@ -97,6 +97,11 @@ export interface RuntimeDeps {
   sync?: SyncRecorder;
 }
 
+/** Per-call options for reads; `background` is for ad discovery and polling. */
+export interface ListOptions {
+  readonly priority?: 'bulk' | 'background';
+}
+
 export class ConnectorRuntime {
   constructor(private readonly d: RuntimeDeps) {}
 
@@ -224,21 +229,25 @@ export class ConnectionClient {
     );
   }
 
-  async listSources(cursor: string | null): Promise<Page<NormalizedSource>> {
+  async listSources(cursor: string | null, opts?: ListOptions): Promise<Page<NormalizedSource>> {
     const op = this.connector.listSources?.bind(this.connector);
     if (!op) throw new ConnectorError('unsupported', 'list_sources');
     if (!cursorSchema.safeParse(cursor).success) throw invalidRequest();
     return parsePage(
       sourceSchema,
-      await this.#call('bulk', 'list_sources', (ctx) => op(ctx, { cursor })),
+      await this.#call(opts?.priority ?? 'bulk', 'list_sources', (ctx) => op(ctx, { cursor })),
     );
   }
 
-  async listComments(req: {
-    sourceExternalId: string;
-    cursor: string | null;
-    limit?: number;
-  }): Promise<Page<NormalizedComment>> {
+  async listComments(
+    req: {
+      sourceExternalId: string;
+      cursor: string | null;
+      limit?: number;
+      includeReplies?: boolean;
+    },
+    opts?: ListOptions,
+  ): Promise<Page<NormalizedComment>> {
     if (
       !externalIdSchema.safeParse(req.sourceExternalId).success ||
       !cursorSchema.safeParse(req.cursor).success
@@ -246,22 +255,26 @@ export class ConnectionClient {
       throw invalidRequest();
     const max = this.capabilities.maxPageSize;
     const limit = Math.min(Math.max(Math.trunc(req.limit ?? max), 1), max);
-    const raw = await this.#call('bulk', 'list_comments', (ctx) =>
+    const raw = await this.#call(opts?.priority ?? 'bulk', 'list_comments', (ctx) =>
       this.connector.listComments(ctx, {
         sourceExternalId: req.sourceExternalId,
         cursor: req.cursor,
         limit,
+        ...(req.includeReplies === true ? { includeReplies: true } : {}),
       }),
     );
     return parsePage(commentSchema, raw);
   }
 
   /** Replies under one comment; `null` without any I/O when the connector has no `listReplies`. */
-  async listReplies(req: {
-    parent: CommentRef;
-    cursor: string | null;
-    limit?: number;
-  }): Promise<Page<NormalizedComment> | null> {
+  async listReplies(
+    req: {
+      parent: CommentRef;
+      cursor: string | null;
+      limit?: number;
+    },
+    opts?: ListOptions,
+  ): Promise<Page<NormalizedComment> | null> {
     const op = this.connector.listReplies?.bind(this.connector);
     if (!op) return null;
     if (
@@ -271,7 +284,7 @@ export class ConnectionClient {
       throw invalidRequest();
     const max = this.capabilities.maxPageSize;
     const limit = Math.min(Math.max(Math.trunc(req.limit ?? max), 1), max);
-    const raw = await this.#call('bulk', 'list_replies', (ctx) =>
+    const raw = await this.#call(opts?.priority ?? 'bulk', 'list_replies', (ctx) =>
       op(ctx, { parent: req.parent, cursor: req.cursor, limit }),
     );
     return parsePage(commentSchema, raw);

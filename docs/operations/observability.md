@@ -98,6 +98,22 @@ docker compose logs worker --no-log-prefix | jq -c 'select(.connector_id == "<co
 | `access token refreshed`, `token refresh failed`         | info/warn  | A token refresh finished.                                                                                                                                                                                                 |
 | `telemetry.*`                                            | varies     | The telemetry layer itself, for example `telemetry.metrics_ready`, `telemetry.tracing_ready`, `telemetry.collect_failed`, `telemetry.exporter_problem`, `telemetry.shutdown_timeout`.                                     |
 
+Ad moderation adds these events:
+
+| `msg`                      | Level | Meaning                                                                                                                   |
+| -------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------- |
+| `ads.discovery_partial`    | info  | An ad listing stopped at the call budget (adds `listed`); the next discovery job resumes from the saved cursor.           |
+| `ads.unresolved`           | info  | Ads whose Page or Instagram post could not be resolved, per `reason` and `count`.                                         |
+| `ads.poll_defer_failed`    | warn  | A throttled or failing poll could not push back its untried sources (adds `sources`).                                     |
+| `scheduler.enqueue_failed` | warn  | The scheduler could not enqueue a job (adds `jobType`, `platform`; never ids or payload). It is retried on the next tick. |
+| `scheduler.query_failed`   | warn  | The scheduler could not read connections or due sources; the tick is skipped.                                             |
+
+Ad comments that polling creates feed the same ingest-lag metric as webhook
+comments (`platform="facebook"` or `"instagram"`). Their lag is measured from
+the comment's own time, so it is bounded below by the poll interval. Expect
+roughly one `ad_poll` ledger row per connection with due ad sources per poll
+interval, and one `ad_discovery` row per ad account per discovery interval.
+
 The Instagram connector reports through the same metrics as the others: its
 series carry `platform="instagram"` (and `connector_type` `instagram` in logs
 and health), so filter by that label to separate it from `facebook`.

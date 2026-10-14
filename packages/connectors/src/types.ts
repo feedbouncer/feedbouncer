@@ -1,6 +1,7 @@
 import type { ConnectorErrorInfo } from './errors.js';
 
-// Mirrors connection_platform_check (migration 20261011000100_tenancy).
+// Mirrors connection_platform_check (migration 20261011000100_tenancy; meta_ads added by
+// 20261015000100_meta_ads).
 export const PLATFORMS = [
   'facebook',
   'instagram',
@@ -10,6 +11,7 @@ export const PLATFORMS = [
   'linkedin',
   'x',
   'bluesky',
+  'meta_ads',
 ] as const;
 export type Platform = (typeof PLATFORMS)[number];
 export const isPlatform = (v: unknown): v is Platform =>
@@ -55,11 +57,38 @@ export interface NormalizedComment {
   readonly platformState: PlatformState;
   readonly permalink: string | null;
 }
+export type AdPlacementPlatform = 'facebook' | 'instagram';
+export type AdUnresolvedReason =
+  | 'no_post'
+  | 'dynamic_creative_unsupported'
+  | 'post_deleted'
+  | 'invalid_platform_id'
+  | 'instagram_media_pending'
+  | 'not_instagram';
+/** Where one ad's post lives on one platform; exactly one of `sourceExternalId` and `unresolvedReason` is set. */
+export interface AdPlacement {
+  readonly platform: AdPlacementPlatform;
+  /** FB: Page id (prefix of the story id). IG: instagram_user_id. Null when unknown. */
+  readonly accountExternalId: string | null;
+  /** FB: 'PAGEID_POSTID'. IG: media id. Null when unresolved. */
+  readonly sourceExternalId: string | null;
+  readonly unresolvedReason: AdUnresolvedReason | null;
+}
+export interface AdSourceInfo {
+  /** Digits only, without the `act_` prefix. */
+  readonly adAccountExternalId: string;
+  /** Matches `^[A-Z_]{1,40}$`. */
+  readonly effectiveStatus: string;
+  /** Exactly one 'facebook' and one 'instagram' entry. */
+  readonly placements: readonly AdPlacement[];
+}
 export interface NormalizedSource {
   readonly externalId: string;
   readonly kind: SourceKind;
   readonly permalink: string | null;
   readonly active: boolean;
+  /** Set by ad connectors: the ad this source stands for. */
+  readonly ad?: AdSourceInfo | undefined;
 }
 export interface Page<T> {
   readonly items: readonly T[];
@@ -111,7 +140,8 @@ export type RespondResult =
       readonly error: ConnectorErrorInfo;
     };
 
-export type Priority = 'urgent' | 'bulk';
+/** `background` (ad polling and discovery) is capped below `bulk`; see RateBudget. */
+export type Priority = 'urgent' | 'bulk' | 'background';
 
 export interface RateLimitPolicy {
   /** Requests allowed per window, per connected account. */
@@ -121,6 +151,8 @@ export interface RateLimitPolicy {
   readonly urgentReservePoints: number;
   /** Used when the platform throttles without a retry hint. */
   readonly defaultRetryAfterMs: number;
+  /** Points `background` work may use per window. Default floor((points - urgentReservePoints) / 2), min 1. */
+  readonly backgroundPoints?: number;
 }
 
 /** How long after a comment is posted a platform still accepts a private reply to it (Facebook: 7 days). */

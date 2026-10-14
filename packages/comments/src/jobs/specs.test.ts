@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { EXTERNAL_REF, JobError, JobRegistry, type JobContext } from '@feedbouncer/jobs';
 import {
+  DISCOVERY_JOB,
   EXECUTE_JOB,
   INGEST_JOB,
   LIFECYCLE_JOB,
+  POLL_JOB,
   enqueueOnly,
   type IngestPayload,
 } from './specs.js';
@@ -157,5 +159,25 @@ describe('job definitions', () => {
     w.register(ingestCommentJob({} as Parameters<typeof ingestCommentJob>[0]));
     expect(w.supports(INGEST_JOB.type, 'facebook')).toBe(true);
     expect(w.supports(INGEST_JOB.type, 'youtube')).toBe(false);
+  });
+});
+
+describe('DISCOVERY_JOB', () => {
+  it('keys a run by its bucket', () => {
+    expect(DISCOVERY_JOB.externalRef({ bucket: 42 })).toBe('discover:42');
+  });
+
+  it('rejects extra keys and negative buckets', () => {
+    expect(DISCOVERY_JOB.payload.safeParse({ bucket: 1 }).success).toBe(true);
+    expect(DISCOVERY_JOB.payload.safeParse({ bucket: 1, extra: 1 }).success).toBe(false);
+    expect(DISCOVERY_JOB.payload.safeParse({ bucket: -1 }).success).toBe(false);
+  });
+});
+
+describe('POLL_JOB', () => {
+  it('keys a run by its bucket on the facebook and instagram platforms', () => {
+    expect(POLL_JOB.externalRef({ bucket: 7 })).toBe('ad_poll:7');
+    expect(POLL_JOB.platforms).toEqual(['facebook', 'instagram']);
+    expect(POLL_JOB.payload.safeParse({ bucket: 1, extra: 1 }).success).toBe(false);
   });
 });

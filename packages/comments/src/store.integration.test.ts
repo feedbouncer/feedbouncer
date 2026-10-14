@@ -5,15 +5,18 @@ import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import type { NormalizedComment } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { PgCommentStore, setCommentPlatformState } from './store.js';
+import { applyPlatformComment } from './apply.js';
 
 let ctx: Awaited<ReturnType<typeof migratedDb>>;
 let pool: pg.Pool;
 let t: Tenant;
 let store: PgCommentStore;
+let foreign: Tenant;
 beforeAll(async () => {
   ctx = await migratedDb();
   pool = createPool(ctx.db.url, { applicationName: 'comments-store-test', onIdleError: () => {} });
   t = await seedTenant(ctx.c, 'cs');
+  foreign = await seedTenant(ctx.c, 'cs-foreign');
   store = new PgCommentStore(pool);
 });
 afterAll(async () => {
@@ -40,6 +43,39 @@ const comment = (over: Partial<NormalizedComment> = {}): NormalizedComment => ({
 });
 const at = (s: number) => new Date(Date.UTC(2026, 9, 13, 10, 0, s));
 const own = (s: number) => ({ ownAccountExternalId: 'page', syncedAt: at(s) });
+let tick = Date.UTC(2026, 9, 14);
+const normalized = (o: Partial<NormalizedComment>): NormalizedComment =>
+  comment({ author: { externalId: 'u9', displayName: 'Ben', profileUrl: null }, ...o });
+const opts = () => ({ ownAccountExternalId: '900', syncedAt: new Date(++tick) });
+const countComments = async (s: ConnectionScope, ext: string) =>
+  (
+    await pool.query(
+      `SELECT count(*)::int AS n FROM comment
+        WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND external_id = $4`,
+      [s.organizationId, s.brandId, s.connectionId, ext],
+    )
+  ).rows[0].n as number;
+const sourceKind = async (s: ConnectionScope, ext: string) =>
+  (
+    await pool.query(
+      `SELECT kind FROM source
+        WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND external_id = $4`,
+      [s.organizationId, s.brandId, s.connectionId, ext],
+    )
+  ).rows[0]?.kind as string | undefined;
+const rowOf = async (id: string) =>
+  (
+    await pool.query(
+      'SELECT * FROM comment WHERE organization_id = $1 AND brand_id = $2 AND id = $3',
+      [t.organizationId, t.brandId, id],
+    )
+  ).rows[0] as Record<string, unknown>;
+/** Tenant B's organization and brand with tenant A's connection id. */
+const foreignScope = (): ConnectionScope => ({
+  organizationId: foreign.organizationId,
+  brandId: foreign.brandId,
+  connectionId: t.connectionId,
+});
 
 describe('PgCommentStore', () => {
   it('creates once and is idempotent for the same snapshot', async () => {
@@ -78,6 +114,8 @@ describe('PgCommentStore', () => {
       isOwnAccount: false,
       connectionStatus: 'active',
       privateReplied: false,
+      origin: 'organic',
+      ads: [],
     });
   });
 
@@ -324,5 +362,87 @@ describe('PgCommentStore', () => {
     const theirs = await store.upsertFromPlatform(scopeOf(other), c, own(1));
     expect(theirs.created).toBe(true);
     expect(theirs.commentId).not.toBe(commentId);
+  });
+});
+
+describe('per-connection comment identity', () => {
+  it('the same comment through two sources is one row', async () => {
+    const c = normalized({ sourceExternalId: '900_1', externalId: '900_1_77' });
+    const a = await store.upsertFromPlatform(scope(), c, opts());
+    const b = await store.upsertFromPlatform(scope(), { ...c, sourceExternalId: '900_2' }, opts());
+    expect(b.commentId).toBe(a.commentId);
+    expect(b.created).toBe(false);
+    expect(await countComments(scope(), '900_1_77')).toBe(1);
+  });
+  it('a reply stored under another source still links to its parent', async () => {
+    const parent = await store.upsertFromPlatform(
+      scope(),
+      normalized({ sourceExternalId: 'm1', externalId: 'x-p1' }),
+      opts(),
+    );
+    const child = await store.upsertFromPlatform(
+      scope(),
+      normalized({ sourceExternalId: 'm2', externalId: 'x-c1', parentExternalId: 'x-p1' }),
+      opts(),
+    );
+    expect((await store.load(t, child.commentId))!.parentCommentId).toBe(parent.commentId);
+  });
+  it('ensureAdSource promotes an organic source and a later webhook never demotes it', async () => {
+    await store.upsertFromPlatform(
+      scope(),
+      normalized({ sourceExternalId: '900_5', externalId: '900_5_1' }),
+      opts(),
+    );
+    expect(await sourceKind(scope(), '900_5')).toBe('organic_post');
+    await store.ensureAdSource(scope(), '900_5');
+    await store.upsertFromPlatform(
+      scope(),
+      normalized({ sourceExternalId: '900_5', externalId: '900_5_2' }),
+      opts(),
+    );
+    expect(await sourceKind(scope(), '900_5')).toBe('ad_post');
+  });
+  it("ensureAdSource cannot touch another tenant's source", async () => {
+    await expect(store.ensureAdSource(foreignScope(), '900_5')).rejects.toThrow();
+    expect(
+      await sourceKind({ ...foreignScope(), connectionId: foreign.connectionId }, '900_5'),
+    ).toBe(undefined);
+  });
+  it('applyPlatformComment with adSourceId labels a comment filed under another source', async () => {
+    const r = await applyPlatformComment(
+      store,
+      scope(),
+      normalized({ sourceExternalId: 'orig', externalId: 'k1' }),
+      opts(),
+    );
+    expect(r.outcome).toBe('created');
+    const adSrc = await store.ensureAdSource(scope(), 'admedia');
+    const again = await applyPlatformComment(
+      store,
+      scope(),
+      normalized({ sourceExternalId: 'admedia', externalId: 'k1' }),
+      { ...opts(), adSourceId: adSrc },
+    );
+    expect(again).toEqual({ commentId: r.commentId, outcome: 'updated' });
+    expect((await rowOf(r.commentId)).ad_source_id).toBe(adSrc);
+  });
+  it('a stale read through an ad source still records the ad path', async () => {
+    const first = opts();
+    const later = opts();
+    const r = await applyPlatformComment(
+      store,
+      scope(),
+      normalized({ sourceExternalId: 'orig2', externalId: 'k2' }),
+      later,
+    );
+    const adSrc = await store.ensureAdSource(scope(), 'admedia2');
+    const stale = await applyPlatformComment(
+      store,
+      scope(),
+      normalized({ sourceExternalId: 'admedia2', externalId: 'k2' }),
+      { ...first, adSourceId: adSrc },
+    );
+    expect(stale.outcome).toBe('stale');
+    expect((await rowOf(r.commentId)).ad_source_id).toBe(adSrc);
   });
 });

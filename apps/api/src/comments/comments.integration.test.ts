@@ -681,3 +681,45 @@ describe('comments: instagram platform, media and availability', () => {
     }
   });
 });
+
+describe('ad origin', () => {
+  it('origin filter and ad fields', async () => {
+    const organic = await comment(page, { message: 'organic one' });
+    const onAd = await comment(page, { message: 'on an ad' });
+    const ads = await api.pool.query<{ id: string }>(
+      `INSERT INTO connection (organization_id, brand_id, platform, external_account_id)
+       VALUES ($1, $2, 'meta_ads', $3) RETURNING id`,
+      [org.orgId, org.brandId, `act-${randomUUID().slice(0, 8)}`],
+    );
+    const ad = await api.pool.query<{ id: string }>(
+      `INSERT INTO meta_ad (organization_id, brand_id, ads_connection_id, external_id,
+                            ad_account_external_id, effective_status, active,
+                            facebook_source_external_id, facebook_resolution,
+                            instagram_resolution, last_discovered_at)
+       VALUES ($1, $2, $3, '555001', '1001', 'ACTIVE', true, $4, 'linked', 'not_instagram', now())
+       RETURNING id`,
+      [org.orgId, org.brandId, ads.rows[0]!.id, onAd.postId],
+    );
+    await api.pool.query(
+      `INSERT INTO meta_ad_source (organization_id, brand_id, ad_id, source_id, platform)
+       SELECT c.organization_id, c.brand_id, $2, c.source_id, 'facebook' FROM comment c WHERE c.id = $1`,
+      [onAd.id, ad.rows[0]!.id],
+    );
+    const get = (q: string) =>
+      api.req('GET', `${base()}/comments?limit=100${q}`, { cookie: org.owner.cookie });
+    const adOnly = await get('&origin=ad');
+    expect(adOnly.status).toBe(200);
+    const adIds = adOnly.body.comments.map((c: { id: string }) => c.id);
+    expect(adIds).toContain(onAd.id);
+    expect(adIds).not.toContain(organic.id);
+    expect(adOnly.body.comments.find((c: { id: string }) => c.id === onAd.id)).toMatchObject({
+      origin: 'ad',
+      ads: [{ adId: '555001', adAccountId: '1001' }],
+    });
+    const organicOnly = await get('&origin=organic');
+    const organicIds = organicOnly.body.comments.map((c: { id: string }) => c.id);
+    expect(organicIds).toContain(organic.id);
+    expect(organicIds).not.toContain(onAd.id);
+    expect((await get('&origin=x')).status).toBe(400);
+  });
+});

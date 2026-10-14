@@ -1,6 +1,10 @@
 export * from './store.js';
+export * from './apply.js';
+export * from './ads/tracking.js';
 export * from './jobs/specs.js';
 export * from './jobs/ingest.js';
+export * from './jobs/discovery.js';
+export * from './jobs/poll.js';
 export * from './action-kinds.js';
 export * from './actions.js';
 export * from './eligibility.js';
@@ -8,3 +12,4 @@ export * from './jobs/execute.js';
 export * from './jobs/lifecycle.js';
 export * from './webhook-router.js';
 export * from './reconnect-notifier.js';
+export * from './scheduler.js';
