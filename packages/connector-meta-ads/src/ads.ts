@@ -19,6 +19,7 @@ export const AD_FIELDS =
 const NUMERIC_ID = /^\d{1,32}$/;
 const STORY_ID = /^\d{1,32}_\d{1,32}$/;
 const STATUS = /^[A-Z_]{1,40}$/;
+const CURSOR = /^[A-Za-z0-9=_-]{1,512}$/;
 const PAGE_SIZE = 100;
 const QUOTA_PCT = 90;
 
@@ -118,7 +119,7 @@ export async function listActiveAds(
   ctx: CallContext,
   req: { cursor: string | null },
 ): Promise<Page<NormalizedSource>> {
-  if (req.cursor !== null && req.cursor.length > 2048) {
+  if (req.cursor !== null && !CURSOR.test(req.cursor)) {
     throw new ConnectorError('permanent', 'invalid_cursor');
   }
   const node = adAccountNode(ctx.externalAccountId);

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { parseAd } from './ads.js';
+import type { CallContext } from '@feedbouncer/connectors';
+import { listActiveAds, parseAd } from './ads.js';
+import type { MetaAdsConfig } from './config.js';
 
 const base = {
   id: '120000000000001',
@@ -84,4 +86,15 @@ describe('parseAd', () => {
     const r = parseAd({ ...base, effective_status: 'PAUSED', creative: { id: '7' } });
     expect('skipped' in r ? null : r.active).toBe(false);
   });
+});
+
+describe('listActiveAds cursor', () => {
+  it.each([['../x'], ['a b'], ['a?b=c'], ['a'.repeat(513)], ['']])(
+    'rejects %j before any network I/O',
+    async (cursor) => {
+      await expect(
+        listActiveAds({} as MetaAdsConfig, Date.now, {} as CallContext, { cursor }),
+      ).rejects.toMatchObject({ kind: 'permanent', code: 'invalid_cursor' });
+    },
+  );
 });

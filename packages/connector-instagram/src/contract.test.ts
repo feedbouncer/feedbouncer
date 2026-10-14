@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryStack } from '@feedbouncer/connectors/testing';
 import type { Connector } from '@feedbouncer/connectors';
 import { Secret } from '@feedbouncer/service-runtime';
@@ -325,4 +325,40 @@ it('every request stays on graph.facebook.com with Bearer auth and appsecret_pro
     expect(headers.get('authorization')).toMatch(/^Bearer \S+$/);
     expect(url.searchParams.get('appsecret_proof')).toMatch(/^[0-9a-f]{64}$/);
   }
+});
+
+describe('listComments with inline replies through the runtime', () => {
+  it('pages 100 top-level comments with many replies without loss, paying budget per request', async () => {
+    const { igUserId, client } = await connectedClient();
+    const first = graph.addIgComment(igUserId, { text: 't0' });
+    const tops = [first.commentId];
+    for (let t = 1; t < 100; t++) {
+      tops.push(graph.addIgComment(igUserId, { mediaId: first.mediaId, text: `t${t}` }).commentId);
+    }
+    for (const p of tops) {
+      for (let i = 0; i < 60; i++) {
+        graph.addIgComment(igUserId, { mediaId: first.mediaId, parentId: p, text: `r${i}` });
+      }
+    }
+    const acquire = vi.spyOn(stack.budget, 'acquire').mockResolvedValue({ granted: true });
+    const requestsBefore = requests.length;
+    const ids = new Set<string>();
+    let cursor: string | null = null;
+    let calls = 0;
+    do {
+      const page = await client.listComments({
+        sourceExternalId: first.mediaId,
+        cursor,
+        includeReplies: true,
+      });
+      expect(page.items.length).toBeLessThanOrEqual(500);
+      for (const c of page.items) ids.add(c.externalId);
+      cursor = page.nextCursor;
+      calls++;
+    } while (cursor && calls < 500);
+    expect(ids.size).toBe(100 * 61);
+    const graphRequests = requests.length - requestsBefore;
+    expect(graphRequests).toBe(calls);
+    expect(acquire).toHaveBeenCalledTimes(calls);
+  });
 });

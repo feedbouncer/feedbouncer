@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ConnectorError, createSafeHttp, type CallContext } from '@feedbouncer/connectors';
+import {
+  ConnectorError,
+  createSafeHttp,
+  type CallContext,
+  type NormalizedComment,
+  type Page,
+} from '@feedbouncer/connectors';
 import { Secret } from '@feedbouncer/service-runtime';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import type { InstagramConfig } from './config.js';
@@ -419,7 +425,31 @@ describe('listComments / listReplies', () => {
         includeReplies: true,
       });
 
-    it('follows the replies cursor so a parent with 120 replies returns all of them', async () => {
+    const drain = async (
+      graph: ReturnType<typeof world>['graph'],
+      mediaId: string,
+      ctx: CallContext,
+    ) => {
+      const items: NormalizedComment[] = [];
+      let cursor: string | null = null;
+      let calls = 0;
+      do {
+        const before = graph.calls().length;
+        const page: Page<NormalizedComment> = await listComments(cfg, now, ctx, {
+          sourceExternalId: mediaId,
+          cursor,
+          limit: 25,
+          includeReplies: true,
+        });
+        expect(graph.calls().length - before).toBe(1);
+        items.push(...page.items);
+        cursor = page.nextCursor;
+        calls++;
+      } while (cursor && calls < 50);
+      return { items, calls };
+    };
+
+    it('carries a parent with 120 replies across calls, one Graph request each, losing none', async () => {
       const { graph, igUserId, ctx } = world();
       const top = graph.addIgComment(igUserId, { text: 'top' });
       for (let i = 0; i < 120; i++) {
@@ -429,26 +459,34 @@ describe('listComments / listReplies', () => {
           text: `r${i}`,
         });
       }
-      const page = await run(graph, top.mediaId, ctx);
-      expect(page.items).toHaveLength(121);
-      expect(new Set(page.items.map((c) => c.externalId)).size).toBe(121);
-      expect(page.items.slice(1).every((c) => c.parentExternalId === top.commentId)).toBe(true);
+      const first = await run(graph, top.mediaId, ctx);
+      expect(first.items).toHaveLength(51);
+      expect(first.nextCursor).not.toBeNull();
+      const { items, calls } = await drain(graph, top.mediaId, ctx);
+      expect(items).toHaveLength(121);
+      expect(new Set(items.map((c) => c.externalId)).size).toBe(121);
+      expect(items.slice(1).every((c) => c.parentExternalId === top.commentId)).toBe(true);
+      expect(calls).toBe(4);
     });
 
-    it('bounds follow-up pages per comment', async () => {
+    it('stops a page before exceeding the item cap and resumes at the same comment', async () => {
       const { graph, igUserId, ctx } = world();
-      const top = graph.addIgComment(igUserId, { text: 'top' });
-      for (let i = 0; i < 400; i++) {
-        graph.addIgComment(igUserId, {
-          mediaId: top.mediaId,
-          parentId: top.commentId,
-          text: `r${i}`,
-        });
+      const first = graph.addIgComment(igUserId, { text: 't0' });
+      const tops = [first.commentId];
+      for (let t = 1; t < 25; t++) {
+        tops.push(graph.addIgComment(igUserId, { mediaId: first.mediaId, text: `t${t}` }).commentId);
       }
-      const before = graph.calls().length;
-      const page = await run(graph, top.mediaId, ctx);
-      expect(graph.calls().length - before).toBe(1 + 5);
-      expect(page.items).toHaveLength(1 + 50 + 5 * 50);
+      for (const p of tops) {
+        for (let i = 0; i < 40; i++) {
+          graph.addIgComment(igUserId, { mediaId: first.mediaId, parentId: p, text: `r${i}` });
+        }
+      }
+      const page = await run(graph, first.mediaId, ctx);
+      expect(page.items.length).toBeLessThanOrEqual(500);
+      expect(page.nextCursor).not.toBeNull();
+      const { items } = await drain(graph, first.mediaId, ctx);
+      expect(items).toHaveLength(25 * 41);
+      expect(new Set(items.map((c) => c.externalId)).size).toBe(25 * 41);
     });
 
     it("drops malformed replies, keeps a reply's own parent_id, ignores non-array replies", async () => {

@@ -15,9 +15,7 @@ import { mapInstagramError, type IgOp } from './errors.js';
 export const IG_COMMENT_FIELDS =
   'id,text,timestamp,from,user,username,hidden,parent_id,media{id,permalink}';
 
-const IG_REPLY_FIELDS = IG_COMMENT_FIELDS;
 const INLINE_REPLIES = 50;
-const MAX_REPLY_PAGES = 5;
 
 const USERNAME = /^[A-Za-z0-9._]{1,30}$/;
 const CURSOR = /^[A-Za-z0-9=_-]{1,512}$/;
@@ -137,6 +135,48 @@ function nextCursorOf(edge: Record<string, unknown>): string | null {
   return paging?.next ? after : null;
 }
 
+/**
+ * Position inside a comments page when a call stops early: re-read the page at
+ * `after`, resume at top-level index `i`; with `t`/`r` the replies of comment `t`
+ * continue from reply cursor `r`. Opaque to callers, validated on the way in.
+ */
+interface Resume {
+  a: string | null;
+  i: number;
+  t: string | null;
+  r: string | null;
+}
+const RESUME_PREFIX = 'ir_';
+const encodeResume = (s: Resume): string =>
+  RESUME_PREFIX + Buffer.from(JSON.stringify(s)).toString('base64url');
+
+function decodeResume(cursor: string | null): Resume {
+  if (cursor?.startsWith(RESUME_PREFIX) && cursor.length <= 2048) {
+    try {
+      const s: unknown = JSON.parse(
+        Buffer.from(cursor.slice(RESUME_PREFIX.length), 'base64url').toString(),
+      );
+      if (isObj(s) && Number.isInteger(s.i) && (s.i as number) >= 0 && (s.i as number) < 1000) {
+        const ok = (v: unknown) => v === null || (typeof v === 'string' && CURSOR.test(v));
+        if (ok(s.a) && ok(s.r) && (s.t === null || gid(s.t)) && (s.r === null) === (s.t === null)) {
+          return s as unknown as Resume;
+        }
+      }
+    } catch {
+      /* not ours: treated as a plain Graph cursor below */
+    }
+  }
+  if (cursor !== null && !CURSOR.test(cursor)) {
+    throw new ConnectorError('permanent', 'invalid_cursor');
+  }
+  return { a: cursor, i: 0, t: null, r: null };
+}
+
+const withParent = (c: NormalizedComment, parent: string): NormalizedComment => ({
+  ...c,
+  parentExternalId: c.parentExternalId ?? parent,
+});
+
 async function list(
   cfg: InstagramConfig,
   nowMs: () => number,
@@ -147,11 +187,27 @@ async function list(
   req: { cursor: string | null; limit: number; includeReplies?: boolean },
 ): Promise<Page<NormalizedComment>> {
   const id = graphId(parentId);
-  if (req.cursor !== null && !CURSOR.test(req.cursor)) {
+  const inline = req.includeReplies === true && segment === 'comments';
+  const resume = inline
+    ? decodeResume(req.cursor)
+    : { a: req.cursor, i: 0, t: null as string | null, r: null as string | null };
+  if (!inline && req.cursor !== null && !CURSOR.test(req.cursor)) {
     throw new ConnectorError('permanent', 'invalid_cursor');
   }
   const limit = Math.min(100, Math.max(1, Number.isFinite(req.limit) ? Math.trunc(req.limit) : 25));
-  const inline = req.includeReplies === true && segment === 'comments';
+  // One Graph request per call, so one budget acquire per request: a comment's
+  // further reply pages are carried in the cursor, never fetched in a loop.
+  if (resume.t !== null && resume.r !== null) {
+    const more = await list(cfg, nowMs, ctx, resume.t, 'replies', sourceFallback, {
+      cursor: resume.r,
+      limit: INLINE_REPLIES,
+    });
+    const items = more.items.map((c) => withParent(c, resume.t!));
+    const next = more.nextCursor
+      ? { a: resume.a, i: resume.i, t: resume.t, r: more.nextCursor }
+      : { a: resume.a, i: resume.i + 1, t: null, r: null };
+    return { items, nextCursor: encodeResume(next) };
+  }
   const body = await read(
     cfg,
     nowMs,
@@ -159,38 +215,37 @@ async function list(
     [id, segment],
     {
       fields: inline
-        ? `${IG_COMMENT_FIELDS},replies.limit(${INLINE_REPLIES}){${IG_REPLY_FIELDS}}`
+        ? `${IG_COMMENT_FIELDS},replies.limit(${INLINE_REPLIES}){${IG_COMMENT_FIELDS}}`
         : IG_COMMENT_FIELDS,
       limit: String(limit),
-      ...(req.cursor ? { after: req.cursor } : {}),
+      ...(resume.a ? { after: resume.a } : {}),
     },
     'list_source',
   );
   if (!isObj(body) || !Array.isArray(body.data) || body.data.length > MAX_ITEMS) {
     throw new ConnectorError('permanent', 'invalid_graph_response');
   }
+  const data = body.data as unknown[];
   const items: NormalizedComment[] = [];
-  for (const raw of body.data as unknown[]) {
+  for (let i = resume.i; i < data.length; i++) {
+    const raw = data[i];
+    // A comment brings at most 1 + INLINE_REPLIES items; keep the page under the runtime cap.
+    if (items.length > 0 && items.length + 1 + INLINE_REPLIES > MAX_ITEMS) {
+      return { items, nextCursor: encodeResume({ a: resume.a, i, t: null, r: null }) };
+    }
     const top = toNormalizedIgComment(raw, sourceFallback);
     if (!top) continue;
     items.push(top);
-    const replies = inline && isObj(raw) && isObj(raw.replies) ? raw.replies.data : null;
-    if (!Array.isArray(replies)) continue;
-    for (const r of replies.slice(0, INLINE_REPLIES)) {
+    const edge = inline && isObj(raw) && isObj(raw.replies) ? raw.replies : null;
+    if (!edge || !Array.isArray(edge.data)) continue;
+    for (const r of edge.data.slice(0, INLINE_REPLIES)) {
       const c = toNormalizedIgComment(r, top.sourceExternalId);
-      if (c) items.push({ ...c, parentExternalId: c.parentExternalId ?? top.externalId });
+      if (c) items.push(withParent(c, top.externalId));
     }
-    // Inline replies are capped at 50: fetch the rest by cursor (never paging.next), bounded.
-    let cursor = nextCursorOf((raw as { replies: Record<string, unknown> }).replies);
-    for (let n = 0; cursor && n < MAX_REPLY_PAGES; n++) {
-      const more = await list(cfg, nowMs, ctx, top.externalId, 'replies', top.sourceExternalId, {
-        cursor,
-        limit: INLINE_REPLIES,
-      });
-      for (const c of more.items) {
-        items.push({ ...c, parentExternalId: c.parentExternalId ?? top.externalId });
-      }
-      cursor = more.nextCursor;
+    const more = nextCursorOf(edge);
+    if (more) {
+      const state = { a: resume.a, i, t: top.externalId, r: more };
+      return { items, nextCursor: encodeResume(state) };
     }
   }
   return { items, nextCursor: nextCursorOf(body) };

@@ -261,9 +261,11 @@ export class PgAdTracking {
       connection_id: string;
       platform: 'facebook' | 'instagram';
     }>(
-      `SELECT DISTINCT sp.organization_id, sp.brand_id, sp.connection_id, c.platform
+      `SELECT sp.organization_id, sp.brand_id, sp.connection_id, c.platform
        ${POLL_FROM_SQL}
        WHERE c.platform IN ('facebook', 'instagram') AND ${DUE_SQL('$1::timestamptz', '$2::int')}
+       GROUP BY sp.organization_id, sp.brand_id, sp.connection_id, c.platform
+       ORDER BY MIN(sp.next_poll_at), sp.connection_id
        LIMIT $3`,
       [at, o.graceDays, o.limit],
     );

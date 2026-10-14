@@ -255,6 +255,34 @@ describe('PgAdTracking', () => {
       0,
     );
   });
+  it('connectionsWithDueSources returns the longest-waiting connections first, deterministically', async () => {
+    const base = await tracking.brandMetaConnections(adsA);
+    const extra: ConnectionScope[] = [];
+    const waited = [2, 3, 1]; // days overdue, in creation order
+    for (const [k, d] of waited.entries()) {
+      const scope = await connect(a, 'facebook', `91${k}`);
+      extra.push(scope);
+      const conns = { ...base, facebook: new Map([['900', scope]]) };
+      await tracking.recordAd(adsA, adRow(`60${k}`, { fb: `91${k}_1` }, conns), at);
+      await pool.query(
+        'UPDATE source_poll SET next_poll_at = $2 WHERE organization_id = $1 AND connection_id = $3',
+        [a.organizationId, days(at, -d), scope.connectionId],
+      );
+    }
+    const [c2, c3, c1] = extra as [ConnectionScope, ConnectionScope, ConnectionScope];
+    const ids = async (limit: number) =>
+      (await tracking.connectionsWithDueSources(at, { graceDays: 7, limit })).map(
+        (x) => x.scope.connectionId,
+      );
+    expect(await ids(2)).toEqual([c3.connectionId, c2.connectionId]);
+    expect(await ids(2)).toEqual([c3.connectionId, c2.connectionId]);
+    // Their polls advance; the next call reaches the remaining connection.
+    await pool.query(
+      'UPDATE source_poll SET next_poll_at = $2 WHERE organization_id = $1 AND connection_id = ANY($3::uuid[])',
+      [a.organizationId, days(at, 1), [c3.connectionId, c2.connectionId]],
+    );
+    expect(await ids(2)).toEqual([c1.connectionId]);
+  });
   it('dueSources is scoped to its tenant', async () => {
     await tracking.recordAd(
       adsA,
