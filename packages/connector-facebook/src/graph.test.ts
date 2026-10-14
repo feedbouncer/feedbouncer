@@ -219,8 +219,12 @@ describe('marketing api primitives', () => {
 
   it('accepts the adaccounts and ads segments and act_ nodes; still rejects hostile segments', async () => {
     const fetch = ok();
-    await graphRequest(call(fetch as never), { method: 'GET', path: ['me', 'adaccounts'] });
-    await graphRequest(call(fetch as never), { method: 'GET', path: ['act_1', 'ads'] });
+    await expect(
+      graphRequest(call(fetch as never), { method: 'GET', path: ['me', 'adaccounts'] }),
+    ).resolves.toBeDefined();
+    await expect(
+      graphRequest(call(fetch as never), { method: 'GET', path: ['act_1', 'ads'] }),
+    ).resolves.toBeDefined();
     expect(fetch).toHaveBeenCalledTimes(2);
     await expect(
       graphRequest(call(fetch as never), { method: 'GET', path: ['act_..', 'ads'] }),

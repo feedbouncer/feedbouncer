@@ -255,10 +255,19 @@ export function routeInstagram(
     ...(c.parentId ? { parent_id: c.parentId } : {}),
     media: { id: c.mediaId, permalink: `https://www.instagram.com/p/${c.mediaId}/` },
   });
-  const list = (items: IgComment[]) => {
+  const list = (items: IgComment[], inlineReplies = false) => {
     const p = page(items, query);
+    const withReplies = (c: IgComment) => ({
+      ...view(c),
+      replies: {
+        data: [...s.comments.values()]
+          .filter((r) => r.parentId === c.id && !r.deleted)
+          .slice(0, 50)
+          .map(view),
+      },
+    });
     return host.reply(200, {
-      data: p.slice.map(view),
+      data: p.slice.map(inlineReplies ? withReplies : view),
       paging: {
         cursors: { after: p.after },
         ...(p.more ? { next: `https://graph.facebook.com/${first}/next?after=${p.after}` } : {}),
@@ -299,6 +308,7 @@ export function routeInstagram(
     if (path.length !== 2 || second !== 'comments' || method !== 'GET') return missing();
     return list(
       [...s.comments.values()].filter((c) => c.mediaId === media.id && !c.parentId && !c.deleted),
+      (query.get('fields') ?? '').includes('replies'),
     );
   }
 

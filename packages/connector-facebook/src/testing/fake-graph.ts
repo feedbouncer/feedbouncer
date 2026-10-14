@@ -4,6 +4,16 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { PRIVATE_REPLY_WINDOW_MS } from '@feedbouncer/connectors';
 import {
+  addAd,
+  addAdAccount,
+  createAdsState,
+  routeAds,
+  setAdCreative,
+  setAdStatus,
+  type AddAdOptions,
+  type AdsHost,
+} from './fake-ads.js';
+import {
   FAKE_IG_SCOPES,
   addIgComment,
   addInstagramAccount,
@@ -96,6 +106,8 @@ export class FakeGraph {
   private readonly injected: Injected[] = [];
   private readonly ig = createIgState();
   private readonly igHost: IgHost;
+  private readonly ads = createAdsState();
+  private readonly adsHost: AdsHost;
 
   constructor(opts: FakeGraphOptions) {
     this.appSecret = opts.appSecret;
@@ -103,6 +115,11 @@ export class FakeGraph {
     this.version = opts.version ?? 'v26.0';
     this.clock = opts.clock ?? Date.now;
     this.fetch = (input, init) => this.handle(input, init);
+    this.adsHost = {
+      graphTime,
+      reply: (status, body, headers) => this.reply(status, body, headers),
+      error: (code, subcode) => this.error(code, subcode),
+    };
     this.igHost = {
       clock: () => this.clock(),
       graphTime,
@@ -166,6 +183,59 @@ export class FakeGraph {
     return this.sign(
       instagramDeliveryBody(this.ig, this.clock(), igUserId, comments, o.timeUnit ?? 's'),
     );
+  }
+
+  // ads controls (implemented in fake-ads.ts)
+
+  addAdAccount(
+    userId: string,
+    o: { name?: string; accountStatus?: number } = {},
+  ): { adAccountId: string } {
+    if (!this.users.has(userId)) throw new Error('unknown user');
+    return addAdAccount(this.ads, this.nextId(5_000_000_000), userId, o);
+  }
+
+  addAd(adAccountId: string, o: AddAdOptions = {}): { adId: string; creativeId: string } {
+    const ids = { adId: this.nextId(6_000_000_000), creativeId: this.nextId(7_000_000_000) };
+    return addAd(this.ads, this.clock(), ids, adAccountId, o);
+  }
+
+  setAdStatus(adId: string, status: string): void {
+    setAdStatus(this.ads, this.clock(), adId, status);
+  }
+
+  setAdCreative(
+    adId: string,
+    patch: { storyId?: string | null; igMediaId?: string | null; igUserId?: string | null },
+  ): void {
+    setAdCreative(this.ads, this.clock(), adId, patch);
+  }
+
+  /** Ad listings for this user/account answer Graph error `code` from now on. */
+  revokeAdAccountAccess(userId: string, adAccountId: string, code = 200): void {
+    this.ads.revoked.set(`${userId}:${adAccountId}`, code);
+  }
+
+  /** A Page post that never appears in the Page feed (an ad "dark post"). */
+  addDarkPost(pageId: string): { postId: string } {
+    if (!this.pages.has(pageId)) throw new Error('unknown page');
+    const postId = `${pageId}_${++this.seq}`;
+    this.posts.set(postId, pageId);
+    this.ads.dark.add(postId);
+    return { postId };
+  }
+
+  /** GET <post>/comments answers 100/33 afterwards. */
+  removePost(postId: string): void {
+    this.posts.delete(postId);
+    this.ads.dark.delete(postId);
+  }
+
+  /** Emitted as X-Ad-Account-Usage on that account's ad listings. */
+  setAdAccountUsage(adAccountId: string, utilPct: number, resetSec: number): void {
+    const account = this.ads.accounts.get(adAccountId);
+    if (!account) throw new Error('unknown ad account');
+    account.usage = { utilPct, resetSec };
   }
 
   // controls
@@ -540,6 +610,8 @@ export class FakeGraph {
         });
       return this.reply(200, { data });
     }
+    const adsResponse = routeAds(this.ads, this.adsHost, method, path, query, who);
+    if (adsResponse) return adsResponse;
     if (first === 'me' || !first || path.length > 2) return missing();
 
     const igResponse = routeInstagram(this.ig, this.igHost, method, path, query, form, json, who);
@@ -584,18 +656,39 @@ export class FakeGraph {
           const isPost = this.posts.get(first) === owner;
           const parent = this.comments.get(first);
           if (!isPost && (!parent || parent.deleted)) return missing();
-          const data = [...this.comments.values()]
+          const paged = query.has('limit') || query.has('after');
+          const topOnly = paged && isPost && query.get('filter') !== 'stream';
+          const matching = [...this.comments.values()]
             .filter((c) => !c.deleted && (isPost ? c.postId === first : c.parentId === first))
-            .map((c) => ({
-              id: c.id,
-              message: c.message,
-              created_time: graphTime(c.createdAtMs),
-              from: { id: c.authorId },
-              ...(c.parentId ? { parent: { id: c.parentId } } : {}),
-              is_hidden: c.hidden,
-            }));
+            .filter((c) => !topOnly || c.parentId === null);
+          if (paged) {
+            matching.sort((a, b) => b.createdAtMs - a.createdAtMs || b.id.localeCompare(a.id));
+          }
+          const data = matching.map((c) => ({
+            id: c.id,
+            message: c.message,
+            created_time: graphTime(c.createdAtMs),
+            from: { id: c.authorId },
+            ...(c.parentId ? { parent: { id: c.parentId } } : {}),
+            is_hidden: c.hidden,
+          }));
           const limit = Number(query.get('limit') ?? '25');
-          return this.reply(200, { data: data.slice(0, Number.isFinite(limit) ? limit : 25) });
+          if (!paged) {
+            return this.reply(200, { data: data.slice(0, Number.isFinite(limit) ? limit : 25) });
+          }
+          const size = Number.isInteger(limit) && limit > 0 ? limit : 25;
+          const after = query.get('after') ?? '';
+          const start = /^p\d{1,9}$/.test(after) ? Number(after.slice(1)) : 0;
+          const end = start + size;
+          return this.reply(200, {
+            data: data.slice(start, end),
+            paging: {
+              cursors: { after: `p${end}` },
+              ...(end < data.length
+                ? { next: `https://graph.facebook.com/${first}/comments?after=p${end}` }
+                : {}),
+            },
+          });
         }
         if (method === 'POST') {
           const parent = this.comments.get(first);
