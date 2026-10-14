@@ -409,4 +409,88 @@ describe('listComments / listReplies', () => {
     ]);
     expect(graph.calls().length - before).toBe(1);
   });
+
+  describe('inline replies', () => {
+    const run = (graph: ReturnType<typeof world>['graph'], mediaId: string, ctx: CallContext) =>
+      listComments(cfg, now, ctx, {
+        sourceExternalId: mediaId,
+        cursor: null,
+        limit: 25,
+        includeReplies: true,
+      });
+
+    it('follows the replies cursor so a parent with 120 replies returns all of them', async () => {
+      const { graph, igUserId, ctx } = world();
+      const top = graph.addIgComment(igUserId, { text: 'top' });
+      for (let i = 0; i < 120; i++) {
+        graph.addIgComment(igUserId, {
+          mediaId: top.mediaId,
+          parentId: top.commentId,
+          text: `r${i}`,
+        });
+      }
+      const page = await run(graph, top.mediaId, ctx);
+      expect(page.items).toHaveLength(121);
+      expect(new Set(page.items.map((c) => c.externalId)).size).toBe(121);
+      expect(page.items.slice(1).every((c) => c.parentExternalId === top.commentId)).toBe(true);
+    });
+
+    it('bounds follow-up pages per comment', async () => {
+      const { graph, igUserId, ctx } = world();
+      const top = graph.addIgComment(igUserId, { text: 'top' });
+      for (let i = 0; i < 400; i++) {
+        graph.addIgComment(igUserId, {
+          mediaId: top.mediaId,
+          parentId: top.commentId,
+          text: `r${i}`,
+        });
+      }
+      const before = graph.calls().length;
+      const page = await run(graph, top.mediaId, ctx);
+      expect(graph.calls().length - before).toBe(1 + 5);
+      expect(page.items).toHaveLength(1 + 50 + 5 * 50);
+    });
+
+    it("drops malformed replies, keeps a reply's own parent_id, ignores non-array replies", async () => {
+      const { graph, igUserId, ctx } = world();
+      const a = graph.addIgComment(igUserId, { text: 'a' });
+      const b = graph.addIgComment(igUserId, { mediaId: a.mediaId, text: 'b' });
+      const rewriting = createSafeHttp({
+        allowedHosts: ['graph.facebook.com'],
+        fetch: async (input, init) => {
+          const res = await graph.fetch(input, init);
+          const j = (await res.json()) as { data: Record<string, unknown>[] };
+          const [x, y] = j.data;
+          x!.replies = {
+            data: [
+              { id: '../x', text: 'bad', timestamp: '2026-10-13T09:00:00+0000' },
+              {
+                id: '17900000000000001',
+                text: 'own',
+                parent_id: '17900000000000002',
+                timestamp: '2026-10-13T09:00:00+0000',
+              },
+            ],
+          };
+          y!.replies = { data: 'nope' };
+          return new Response(JSON.stringify(j), { status: 200 });
+        },
+      });
+      const page = await listComments(
+        cfg,
+        now,
+        { ...ctx, http: rewriting },
+        {
+          sourceExternalId: a.mediaId,
+          cursor: null,
+          limit: 25,
+          includeReplies: true,
+        },
+      );
+      const byId = new Map(page.items.map((c) => [c.externalId, c]));
+      expect(page.items).toHaveLength(3);
+      expect(byId.get('17900000000000001')?.parentExternalId).toBe('17900000000000002');
+      expect(byId.has(a.commentId) && byId.has(b.commentId)).toBe(true);
+    });
+  });
 });

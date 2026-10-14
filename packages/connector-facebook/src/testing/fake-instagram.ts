@@ -259,12 +259,20 @@ export function routeInstagram(
     const p = page(items, query);
     const withReplies = (c: IgComment) => ({
       ...view(c),
-      replies: {
-        data: [...s.comments.values()]
-          .filter((r) => r.parentId === c.id && !r.deleted)
-          .slice(0, 50)
-          .map(view),
-      },
+      replies: (() => {
+        const all = [...s.comments.values()].filter((r) => r.parentId === c.id && !r.deleted);
+        return {
+          data: all.slice(0, 50).map(view),
+          ...(all.length > 50
+            ? {
+                paging: {
+                  cursors: { after: 'c50' },
+                  next: `https://graph.facebook.com/${c.id}/replies?after=c50`,
+                },
+              }
+            : {}),
+        };
+      })(),
     });
     return host.reply(200, {
       data: p.slice.map(inlineReplies ? withReplies : view),

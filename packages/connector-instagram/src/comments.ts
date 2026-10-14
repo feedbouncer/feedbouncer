@@ -17,6 +17,7 @@ export const IG_COMMENT_FIELDS =
 
 const IG_REPLY_FIELDS = IG_COMMENT_FIELDS;
 const INLINE_REPLIES = 50;
+const MAX_REPLY_PAGES = 5;
 
 const USERNAME = /^[A-Za-z0-9._]{1,30}$/;
 const CURSOR = /^[A-Za-z0-9=_-]{1,512}$/;
@@ -127,6 +128,15 @@ export async function getComment(
   return c;
 }
 
+/** The `after` cursor of a Graph edge when it has a further page; `paging.next` is never followed. */
+function nextCursorOf(edge: Record<string, unknown>): string | null {
+  const paging = isObj(edge.paging) ? edge.paging : null;
+  const cursors = paging && isObj(paging.cursors) ? paging.cursors : null;
+  const after =
+    typeof cursors?.after === 'string' && CURSOR.test(cursors.after) ? cursors.after : null;
+  return paging?.next ? after : null;
+}
+
 async function list(
   cfg: InstagramConfig,
   nowMs: () => number,
@@ -170,12 +180,20 @@ async function list(
       const c = toNormalizedIgComment(r, top.sourceExternalId);
       if (c) items.push({ ...c, parentExternalId: c.parentExternalId ?? top.externalId });
     }
+    // Inline replies are capped at 50: fetch the rest by cursor (never paging.next), bounded.
+    let cursor = nextCursorOf((raw as { replies: Record<string, unknown> }).replies);
+    for (let n = 0; cursor && n < MAX_REPLY_PAGES; n++) {
+      const more = await list(cfg, nowMs, ctx, top.externalId, 'replies', top.sourceExternalId, {
+        cursor,
+        limit: INLINE_REPLIES,
+      });
+      for (const c of more.items) {
+        items.push({ ...c, parentExternalId: c.parentExternalId ?? top.externalId });
+      }
+      cursor = more.nextCursor;
+    }
   }
-  const paging = isObj(body.paging) ? body.paging : null;
-  const cursors = paging && isObj(paging.cursors) ? paging.cursors : null;
-  const after =
-    typeof cursors?.after === 'string' && CURSOR.test(cursors.after) ? cursors.after : null;
-  return { items, nextCursor: paging?.next ? after : null };
+  return { items, nextCursor: nextCursorOf(body) };
 }
 
 export const listComments = (
