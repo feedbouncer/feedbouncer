@@ -5,6 +5,7 @@ import {
   EXECUTE_JOB,
   INGEST_JOB,
   LIFECYCLE_JOB,
+  POLL_JOB,
   enqueueOnly,
   type IngestPayload,
 } from './specs.js';
@@ -170,5 +171,13 @@ describe('DISCOVERY_JOB', () => {
     expect(DISCOVERY_JOB.payload.safeParse({ bucket: 1 }).success).toBe(true);
     expect(DISCOVERY_JOB.payload.safeParse({ bucket: 1, extra: 1 }).success).toBe(false);
     expect(DISCOVERY_JOB.payload.safeParse({ bucket: -1 }).success).toBe(false);
+  });
+});
+
+describe('POLL_JOB', () => {
+  it('keys a run by its bucket on the facebook and instagram platforms', () => {
+    expect(POLL_JOB.externalRef({ bucket: 7 })).toBe('ad_poll:7');
+    expect(POLL_JOB.platforms).toEqual(['facebook', 'instagram']);
+    expect(POLL_JOB.payload.safeParse({ bucket: 1, extra: 1 }).success).toBe(false);
   });
 });

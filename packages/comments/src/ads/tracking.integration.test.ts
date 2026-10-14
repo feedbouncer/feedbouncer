@@ -406,6 +406,28 @@ describe('PgAdTracking', () => {
       1,
     );
   });
+  it('defer keeps the resume cursor and waits for retryAt', async () => {
+    await tracking.recordAd(
+      adsA,
+      adRow('5001', { fb: '900_1' }, await tracking.brandMetaConnections(adsA)),
+      at,
+    );
+    const [s] = await tracking.dueSources(fbA, at, { graceDays: 7, limit: 10 });
+    await tracking.savePollProgress(fbA, s!.sourceId, {
+      kind: 'resume',
+      cursor: 'abc',
+      boundary: days(at, -2),
+      at,
+    });
+    await tracking.savePollProgress(fbA, s!.sourceId, {
+      kind: 'defer',
+      retryAt: days(at, 0.25),
+    });
+    expect(await tracking.dueSources(fbA, days(at, 0.2), { graceDays: 7, limit: 10 })).toEqual([]);
+    expect(await tracking.dueSources(fbA, days(at, 0.3), { graceDays: 7, limit: 10 })).toEqual([
+      expect.objectContaining({ resumeCursor: 'abc', resumeBoundary: days(at, -2) }),
+    ]);
+  });
   it('a changed creative moves the link to the new post', async () => {
     const conns = await tracking.brandMetaConnections(adsA);
     await tracking.recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);

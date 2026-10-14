@@ -338,8 +338,10 @@ export class FakeGraph {
     info.revoked = subcode;
   }
 
-  throttleNext(code = 80001, minutes = 1): void {
-    this.injected.push({ code, minutes });
+  /** Throttles the next call, or the one after `afterCalls` more calls. */
+  throttleNext(code = 80001, minutes = 1, o: { afterCalls?: number } = {}): void {
+    const after = o.afterCalls ?? 0;
+    this.injected.push({ code, minutes, ...(after > 0 ? { after } : {}) });
   }
 
   /** Fails the next call, or the one after `afterCalls` more calls. */

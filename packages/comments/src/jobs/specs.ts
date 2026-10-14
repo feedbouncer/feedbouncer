@@ -76,6 +76,19 @@ export const DISCOVERY_JOB = {
   platforms: ['meta_ads'] as readonly Platform[] | 'all',
 };
 
+export const pollPayload = z.strictObject({ bucket: z.number().int().nonnegative() });
+export type PollPayload = z.infer<typeof pollPayload>;
+
+// One run polls a Page / IG connection's due ad sources; `bucket` is the
+// scheduler's poll-interval slot.
+export const POLL_JOB = {
+  type: 'ad_poll' as const,
+  payload: pollPayload,
+  externalRef: (p: PollPayload): string => `ad_poll:${p.bucket}`,
+  timeoutMs: 120_000,
+  platforms: ['facebook', 'instagram'] as readonly Platform[] | 'all',
+};
+
 /** For processes that enqueue but never run jobs (the API): same type, payload and key; no handler. */
 export function enqueueOnly<P>(spec: {
   type: string;

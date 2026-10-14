@@ -68,7 +68,9 @@ export type PollProgress =
       at: Date;
       nextPollAt: Date;
     }
-  | { kind: 'unavailable'; code: string; at: Date; retryAt: Date };
+  | { kind: 'unavailable'; code: string; at: Date; retryAt: Date }
+  /** Not polled now (throttle, transient failure): keeps any resume cursor, due again at `retryAt`. */
+  | { kind: 'defer'; retryAt: Date };
 
 const outOfScope = () => new Error('ad tracking: connection is not in the given scope');
 const ids = (s: ConnectionScope) => [s.organizationId, s.brandId, s.connectionId];
@@ -309,6 +311,12 @@ export class PgAdTracking {
                   resume_boundary = NULL, last_polled_at = $6 ${where}`,
           [...base, p.code, p.at, p.retryAt],
         );
+        return;
+      case 'defer':
+        await this.pool.query(`UPDATE source_poll SET next_poll_at = $5 ${where}`, [
+          ...base,
+          p.retryAt,
+        ]);
         return;
     }
   }
