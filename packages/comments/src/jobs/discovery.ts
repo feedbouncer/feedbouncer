@@ -1,8 +1,8 @@
 // Lists a meta_ads connection's active ads and records which Facebook post and
 // Instagram media each one shows, under the brand's own Page / IG connections.
 // Resolution is per brand: another tenant's connections are never consulted.
-// Ads missing from a COMPLETE listing are retired; a truncated or failed
-// listing retires nothing.
+// A listing may span several jobs (its cursor is saved after every page). Ads
+// the listing did not touch are retired only once it completes.
 import { JobError, type JobDefinition } from '@feedbouncer/jobs';
 import type {
   Clock,
@@ -25,6 +25,9 @@ const FB_REASONS: readonly string[] = [
   'post_deleted',
   'invalid_platform_id',
 ];
+/** A saved listing cursor older than this is dropped and the listing starts over. */
+const STALE_LISTING_MS = 24 * 3_600_000;
+
 const IG_REASONS: readonly string[] = [
   'not_instagram',
   'post_deleted',
@@ -58,10 +61,9 @@ export function resolveAd(src: NormalizedSource, conns: BrandMetaConnections): D
   let instagram: DiscoveredAdRow['instagram'];
   const accountExternalId = ig?.accountExternalId ?? null;
   if (ig?.sourceExternalId) {
-    // Unknown account: a brand with exactly one IG connection is the likely owner. A wrong
-    // guess surfaces as source_inaccessible when comments are listed, within the brand.
-    const only = conns.instagram.size === 1 ? [...conns.instagram.values()][0] : undefined;
-    const conn = accountExternalId === null ? only : conns.instagram.get(accountExternalId);
+    // Only an account Meta names is linked: guessing would poll the media with a connection
+    // that may not own it, and its refusals would be charged to that connection.
+    const conn = accountExternalId === null ? undefined : conns.instagram.get(accountExternalId);
     instagram = {
       sourceExternalId: ig.sourceExternalId,
       accountExternalId,
@@ -105,19 +107,20 @@ export function adDiscoveryJob(d: {
       const at = new Date(d.clock.now());
       const client = await d.runtime.connect(ctx.scope);
 
-      const seen = new Set<string>();
+      const saved = await d.tracking.listingProgress(ctx.scope);
+      const resume =
+        saved && at.getTime() - saved.startedAt.getTime() < STALE_LISTING_MS ? saved : null;
+      const startedAt = resume?.startedAt ?? at;
       const unresolved = new Map<string, number>();
       const bump = (reason: string) => unresolved.set(reason, (unresolved.get(reason) ?? 0) + 1);
       let listed = 0;
       let linked = 0;
-      let cursor: string | null = null;
+      let cursor = resume?.cursor ?? null;
       do {
         const page = await client.listSources(cursor, { priority: 'background' });
-        for (const src of page.items) {
-          if (!src.ad) continue;
-          const row = resolveAd(src, conns);
-          await d.tracking.recordAd(ctx.scope, row, at);
-          seen.add(row.externalId);
+        const rows = page.items.filter((src) => src.ad).map((src) => resolveAd(src, conns));
+        await d.tracking.recordAds(ctx.scope, rows, at);
+        for (const row of rows) {
           listed += 1;
           let any = false;
           for (const r of [row.facebook.resolution, row.instagram.resolution]) {
@@ -127,12 +130,15 @@ export function adDiscoveryJob(d: {
           if (any) linked += 1;
         }
         cursor = page.nextCursor;
+        if (cursor !== null) await d.tracking.saveListingProgress(ctx.scope, { cursor, startedAt });
       } while (cursor !== null && listed < max);
 
       const complete = cursor === null;
       let retired = 0;
-      if (complete) retired = await d.tracking.retireMissing(ctx.scope, seen, at);
-      else ctx.log.warn('ads.discovery_truncated', { listed });
+      if (complete) {
+        retired = await d.tracking.retireUnlisted(ctx.scope, startedAt, at);
+        await d.tracking.clearListingProgress(ctx.scope);
+      } else ctx.log.info('ads.discovery_partial', { listed });
       for (const [reason, count] of unresolved) ctx.log.info('ads.unresolved', { reason, count });
       return {
         listed,

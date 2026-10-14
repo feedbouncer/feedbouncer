@@ -217,7 +217,7 @@ describe('PgAdTracking', () => {
   it('retirement: polled during grace, not after; re-activation resumes', async () => {
     const conns = await tracking.brandMetaConnections(adsA);
     await tracking.recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);
-    expect(await tracking.retireMissing(adsA, new Set(), at)).toBe(1);
+    expect(await tracking.retireUnlisted(adsA, days(at, 1), at)).toBe(1);
     expect(await tracking.dueSources(fbA, days(at, 6.9), { graceDays: 7, limit: 10 })).toHaveLength(
       1,
     );
@@ -229,14 +229,31 @@ describe('PgAdTracking', () => {
       1,
     );
   });
-  it('retireMissing keeps seen ads and only touches its own connection', async () => {
+  it('retireUnlisted keeps ads the listing touched and only touches its own connection', async () => {
     const conns = await tracking.brandMetaConnections(adsA);
-    await tracking.recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);
+    const listingStart = days(at, 1);
+    await tracking.recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), listingStart);
     await tracking.recordAd(adsA, adRow('5002', { fb: '900_2' }, conns), at);
     await tracking.recordAd(adsB, adRow('5003', {}, await tracking.brandMetaConnections(adsB)), at);
-    expect(await tracking.retireMissing(adsA, new Set(['5001']), at)).toBe(1);
-    expect(await tracking.retireMissing(adsA, new Set(['5001']), at)).toBe(0);
-    expect(await tracking.retireMissing(adsB, new Set(), at)).toBe(1);
+    expect(await tracking.retireUnlisted(adsA, listingStart, listingStart)).toBe(1);
+    expect(await tracking.retireUnlisted(adsA, listingStart, listingStart)).toBe(0);
+    expect(await tracking.retireUnlisted(adsB, listingStart, listingStart)).toBe(1);
+  });
+  it('recordAds stores a page of ads atomically', async () => {
+    const conns = await tracking.brandMetaConnections(adsA);
+    const good = adRow('5001', { fb: '900_1' }, conns);
+    const bad = { ...adRow('5002', { fb: '900_2' }, conns), adAccountExternalId: 'not-a-number' };
+    await expect(tracking.recordAds(adsA, [good, bad], at)).rejects.toThrow();
+    expect(await tracking.retireUnlisted(adsA, days(at, 1), at)).toBe(0);
+  });
+  it('keeps one listing cursor per ads connection, scoped to its brand', async () => {
+    expect(await tracking.listingProgress(adsA)).toBeNull();
+    await tracking.saveListingProgress(adsA, { cursor: 'c1', startedAt: at });
+    await tracking.saveListingProgress(adsA, { cursor: 'c2', startedAt: at });
+    expect(await tracking.listingProgress(adsA)).toEqual({ cursor: 'c2', startedAt: at });
+    expect(await tracking.listingProgress(adsB)).toBeNull();
+    await tracking.clearListingProgress(adsA);
+    expect(await tracking.listingProgress(adsA)).toBeNull();
   });
   it('revoking the ads connection or the page connection stops polling', async () => {
     await tracking.recordAd(

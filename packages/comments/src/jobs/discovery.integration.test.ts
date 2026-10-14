@@ -49,7 +49,7 @@ let adsScopeB: ConnectionScope;
 let job: ReturnType<typeof adDiscoveryJob>;
 let deps: Parameters<typeof adDiscoveryJob>[0];
 let makeDeps: () => Parameters<typeof adDiscoveryJob>[0];
-const nowMs = Date.UTC(2026, 9, 14, 12, 0, 0);
+let nowMs = Date.UTC(2026, 9, 14, 12, 0, 0);
 const clock: Clock = { now: () => nowMs };
 
 const jobCtx = (scope: ConnectionScope): JobContext => ({
@@ -236,6 +236,10 @@ beforeEach(async () => {
       t.organizationId,
       t.brandId,
     ]);
+    await ctx.c.query('DELETE FROM meta_ad_listing WHERE organization_id = $1 AND brand_id = $2', [
+      t.organizationId,
+      t.brandId,
+    ]);
     await ctx.c.query(
       `UPDATE connection SET status = 'active' WHERE organization_id = $1 AND brand_id = $2`,
       [t.organizationId, t.brandId],
@@ -285,9 +289,11 @@ describe('ad discovery job', () => {
     const { adId } = graph.addAd(adAccountId, { storyId: graph.addDarkPost(pageId).postId });
     await run(1);
     graph.setAdStatus(adId, 'PAUSED');
+    nowMs += 60_000;
     graph.failNext(2, undefined, 1); // second page fails: truncated listing
     await expect(run(2)).rejects.toBeDefined();
     expect(await activeOf(adId)).toBe(true);
+    nowMs += 60_000;
     await run(3);
     expect(await activeOf(adId)).toBe(false);
   });
@@ -324,16 +330,36 @@ describe('ad discovery job', () => {
     expect(await count('source_poll')).toBe(1);
   });
 
+  it('does not guess the instagram account when Meta omits it', async () => {
+    graph.addAd(adAccountId, { igMediaId: '17900000000000777' });
+    const r = await run();
+    expect(r).toMatchObject({
+      listed: 1,
+      linked: 0,
+      unresolved_instagram_account_not_connected: 1,
+    });
+    expect(await resolutions()).toEqual([
+      expect.objectContaining({ instagram: 'instagram_account_not_connected' }),
+    ]);
+    expect(await count('source_poll', igScope)).toBe(0);
+  });
+
   it('stops at the cap, reports incomplete and retires nothing', async () => {
     const { adId } = graph.addAd(adAccountId, { storyId: graph.addDarkPost(pageId).postId });
     await run(1);
     graph.setAdStatus(adId, 'PAUSED');
     for (let i = 0; i < 150; i++)
       graph.addAd(adAccountId, { storyId: graph.addDarkPost(pageId).postId });
+    nowMs += 60_000;
     const capped = adDiscoveryJob({ ...deps, maxAdsPerAccount: 100 });
     const r = await capped.handle(jobCtx(adsScope), { bucket: 2 });
     expect(r).toMatchObject({ listed: 100, complete: false, retired: 0 });
     expect(await activeOf(adId)).toBe(true);
+    // The next job resumes after the first page and completes the listing.
+    nowMs += 60_000;
+    const rest = await job.handle(jobCtx(adsScope), { bucket: 3 });
+    expect(rest).toMatchObject({ listed: 50, complete: true, retired: 1 });
+    expect(await activeOf(adId)).toBe(false);
   });
 
   // Last: the revoked grant stays revoked in the shared FakeGraph.

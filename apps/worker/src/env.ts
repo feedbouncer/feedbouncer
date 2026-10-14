@@ -62,8 +62,8 @@ export interface WorkerEnv {
   readonly instagram: InstagramConfig | null;
   /** Null unless META_ADS_CONNECTOR_ENABLED=true; runs on the Facebook Meta app, so it requires it. */
   readonly metaAds: MetaAdsConfig | null;
-  /** Cadence of ad discovery and ad comment polling; used only when `metaAds` is set. */
-  readonly adPolling: AdPollingConfig;
+  /** Cadence of ad discovery and ad comment polling; null exactly when `metaAds` is. */
+  readonly adPolling: AdPollingConfig | null;
   /** Null unless Facebook is configured: only the Facebook connector sends mail or needs the web origin. */
   readonly mail: WorkerMailConfig | null;
 }
@@ -95,15 +95,10 @@ function readMailConfig(env: Env): WorkerMailConfig {
 }
 
 function readAdPollingConfig(env: Env): AdPollingConfig {
-  const commentPollSec = readInt(env, 'COMMENT_POLL_INTERVAL_SEC', {
-    min: 60,
-    max: 3600,
-    fallback: 300,
-  });
   const pollIntervalSec = readInt(env, 'AD_POLL_INTERVAL_SEC', {
     min: 60,
     max: 3600,
-    fallback: commentPollSec,
+    fallback: 300,
   });
   const graceDays = readInt(env, 'AD_RETIREMENT_GRACE_DAYS', { min: 0, max: 30, fallback: 7 });
   return {
@@ -159,7 +154,7 @@ export function loadWorkerEnv(
   const facebook = parseFacebookEnv(env, opts.warn);
   const instagram = parseInstagramEnv(env, facebook);
   const metaAds = parseMetaAdsEnv(env, facebook);
-  const adPolling = readAdPollingConfig(env);
+  const adPolling = metaAds ? readAdPollingConfig(env) : null;
   const mail = facebook ? readMailConfig(env) : null;
   checkNotPlaceholder(appEnv, 'DATABASE_URL', databaseUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);

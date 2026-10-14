@@ -50,6 +50,7 @@ interface AdRow {
   facebook_resolution: string;
   instagram_resolution: string;
   last_discovered_at: Date;
+  first_discovered_at: Date;
   last_polled_at: Date | null;
   post_unavailable: boolean;
 }
@@ -70,7 +71,7 @@ export class AdsService {
     const rows = await pool.query<AdRow>(
       `SELECT ma.id, ma.external_id, ma.ad_account_external_id, ma.effective_status, ma.active,
               ma.inactive_since, ma.facebook_source_external_id, ma.instagram_source_external_id,
-              ma.facebook_resolution, ma.instagram_resolution, ma.last_discovered_at,
+              ma.facebook_resolution, ma.instagram_resolution, ma.last_discovered_at, ma.first_discovered_at,
               poll.last_polled_at, COALESCE(poll.unavailable, false) AS post_unavailable
          FROM meta_ad ma
          LEFT JOIN LATERAL (
@@ -84,8 +85,8 @@ export class AdsService {
               AND mas.brand_id = ma.brand_id) poll ON true
         WHERE ma.organization_id = $1 AND ma.brand_id = $2
           AND ($3::uuid IS NULL OR ma.ads_connection_id = $3)
-          AND ($4::timestamptz IS NULL OR (ma.last_discovered_at, ma.id) < ($4::timestamptz, $5::uuid))
-        ORDER BY ma.last_discovered_at DESC, ma.id DESC
+          AND ($4::timestamptz IS NULL OR (ma.first_discovered_at, ma.id) < ($4::timestamptz, $5::uuid))
+        ORDER BY ma.first_discovered_at DESC, ma.id DESC
         LIMIT $6`,
       [...params, cursor?.t ?? null, cursor?.id ?? null, q.limit + 1],
     );
@@ -103,7 +104,7 @@ export class AdsService {
     return {
       ads: page.map(toView),
       nextCursor:
-        rows.rows.length > q.limit && last ? encodeCursor(last.last_discovered_at, last.id) : null,
+        rows.rows.length > q.limit && last ? encodeCursor(last.first_discovered_at, last.id) : null,
       hints: {
         pagesNotConnected: Number(hints.rows[0]?.pages ?? 0),
         instagramNotConnected: Number(hints.rows[0]?.instagram ?? 0),

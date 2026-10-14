@@ -430,8 +430,7 @@ describe('ad poll job', () => {
   });
 
   it('an unreadable IG media does not flag the instagram connection', async () => {
-    // No igUserId: the brand has one IG connection; the media is unknown to it.
-    graph.addAd(adAccountId, { igMediaId: '17900000000000777' });
+    graph.addAd(adAccountId, { igMediaId: '17900000000000777', igUserId });
     await discover();
     graph.failNext(10); // permission error on that media listing
     const r = await poll(igScope);
@@ -440,13 +439,21 @@ describe('ad poll job', () => {
   });
 
   it('flags the instagram connection when every media refuses at once', async () => {
-    graph.addAd(adAccountId, { igMediaId: '17900000000000777' });
-    graph.addAd(adAccountId, { igMediaId: '17900000000000778' });
+    graph.addAd(adAccountId, { igMediaId: '17900000000000777', igUserId });
+    graph.addAd(adAccountId, { igMediaId: '17900000000000778', igUserId });
     await discover();
     graph.failNext(10);
     graph.failNext(10);
     await expect(poll(igScope)).rejects.toBeDefined();
     expect(await statusOf(igScope)).toBe('reconnect_required');
+  });
+
+  it('ads on an unknown instagram account are not linked, so their refusals flag nothing', async () => {
+    graph.addAd(adAccountId, { igMediaId: '17900000000000777' });
+    graph.addAd(adAccountId, { igMediaId: '17900000000000778' });
+    await discover();
+    expect((await poll(igScope)).sources).toBe(0);
+    expect(await statusOf(igScope)).toBe('active');
   });
 
   it('a throttle mid-pass saves the cursor and defers; the next run resumes', async () => {
@@ -598,6 +605,7 @@ describe('ad poll job', () => {
     const { adId } = graph.addAd(adAccountId, { storyId: graph.addDarkPost(pageId).postId });
     await discover();
     graph.setAdStatus(adId, 'PAUSED');
+    advance(60_000);
     await discover();
     advance(6 * 86_400_000);
     expect((await poll(fbScope, 10)).sources).toBe(1);

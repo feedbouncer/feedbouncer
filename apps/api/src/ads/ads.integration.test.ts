@@ -37,8 +37,8 @@ async function addAd(
     `INSERT INTO meta_ad (organization_id, brand_id, ads_connection_id, external_id,
                           ad_account_external_id, effective_status, active,
                           facebook_source_external_id, facebook_resolution, instagram_resolution,
-                          last_discovered_at)
-     VALUES ($1, $2, $3, $4, $5, 'ACTIVE', true, $6, $7, $8, $9) RETURNING id`,
+                          first_discovered_at, last_discovered_at)
+     VALUES ($1, $2, $3, $4, $5, 'ACTIVE', true, $6, $7, $8, $9, $9) RETURNING id`,
     [
       f.orgId,
       f.brandId,

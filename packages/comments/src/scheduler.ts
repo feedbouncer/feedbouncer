@@ -39,6 +39,8 @@ interface SchedulerDeps {
 export class PollScheduler {
   #timer: NodeJS.Timeout | null = null;
   #running: Promise<unknown> | null = null;
+  /** Last ads connection enqueued: the next tick continues after it, wrapping at the end. */
+  #adsCursor: string | null = null;
 
   constructor(private readonly d: SchedulerDeps) {}
 
@@ -70,9 +72,15 @@ export class PollScheduler {
         id: string;
       }>(
         `SELECT organization_id, brand_id, id FROM connection
-          WHERE platform = 'meta_ads' AND status = 'active' ORDER BY id LIMIT $1`,
-        [settings.maxConnectionsPerTick],
+          WHERE platform = 'meta_ads' AND status = 'active' AND ($2::uuid IS NULL OR id > $2)
+          ORDER BY id LIMIT $1`,
+        [settings.maxConnectionsPerTick, this.#adsCursor],
       );
+      // A short page is the end of the list: the next tick starts over.
+      this.#adsCursor =
+        adsConnections.rows.length < settings.maxConnectionsPerTick
+          ? null
+          : adsConnections.rows[adsConnections.rows.length - 1]!.id;
       for (const c of adsConnections.rows) {
         const scope = {
           organizationId: c.organization_id,

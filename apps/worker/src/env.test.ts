@@ -200,14 +200,14 @@ describe('ad polling settings', () => {
   it('applies the documented defaults', () => {
     const env = load(adsOn);
     expect(env.metaAds?.activeStatuses).toEqual(['ACTIVE']);
-    expect(env.adPolling.poll).toMatchObject({
+    expect(env.adPolling?.poll).toMatchObject({
       intervalSec: 300,
       graceDays: 7,
       maxSourcesPerJob: 100,
       unavailableRetrySec: 21_600,
       igDeepScanSec: 86_400,
     });
-    expect(env.adPolling.scheduler).toEqual({
+    expect(env.adPolling?.scheduler).toEqual({
       tickSec: 30,
       discoveryIntervalSec: 900,
       pollIntervalSec: 300,
@@ -218,17 +218,11 @@ describe('ad polling settings', () => {
   it('is disabled unless META_ADS_CONNECTOR_ENABLED=true', () => {
     expect(load({ ...base, ...facebook }).metaAds).toBeNull();
   });
-  it('AD_POLL_INTERVAL_SEC inherits COMMENT_POLL_INTERVAL_SEC', () => {
-    expect(load({ ...adsOn, COMMENT_POLL_INTERVAL_SEC: '120' }).adPolling.poll.intervalSec).toBe(
-      120,
-    );
-    expect(
-      load({ ...adsOn, COMMENT_POLL_INTERVAL_SEC: '120', AD_POLL_INTERVAL_SEC: '600' }).adPolling
-        .scheduler.pollIntervalSec,
-    ).toBe(600);
+  it('leaves ad polling unconfigured, and its variables unread, when the connector is off', () => {
+    const env = load({ ...base, ...facebook, AD_POLL_INTERVAL_SEC: '1' });
+    expect(env.adPolling).toBeNull();
   });
   it.each([
-    ['COMMENT_POLL_INTERVAL_SEC', '59'],
     ['AD_POLL_INTERVAL_SEC', '3601'],
     ['AD_DISCOVERY_INTERVAL_SEC', '299'],
     ['AD_RETIREMENT_GRACE_DAYS', '31'],

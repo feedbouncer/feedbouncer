@@ -94,10 +94,7 @@ export default async function ConnectionsPage({
               </thead>
               <tbody>
                 {connections.map((c) => {
-                  const reason = statusReasonText(
-                    c.statusReason ?? (c.status === 'needs_reconnect' ? 'needs_reconnect' : null),
-                    c.platform,
-                  );
+                  const reason = statusReasonText(c.statusReason);
                   return (
                     <tr key={c.id}>
                       <td>{platformLabel(c.platform)}</td>

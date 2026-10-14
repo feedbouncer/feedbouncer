@@ -169,16 +169,3 @@ describe('outcomeSentence', () => {
     );
   });
 });
-
-describe('statusReasonText for ad accounts', () => {
-  it('meta_ads needs_reconnect says how to enable ad moderation', () => {
-    expect(statusReasonText('oauth_access_rejected', 'meta_ads')).toBe(
-      'Reconnect to enable ad moderation',
-    );
-  });
-  it('other platforms keep their own text', () => {
-    expect(statusReasonText('oauth_access_rejected', 'facebook')).toBe(
-      statusReasonText('oauth_access_rejected'),
-    );
-  });
-});

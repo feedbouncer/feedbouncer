@@ -48,14 +48,14 @@ const producer = {
       : { status: 'enqueued', ledgerId: key, jobId: key };
   },
 };
-const scheduler = () =>
+const scheduler = (override: Partial<SchedulerSettings> = {}) =>
   new PollScheduler({
     pool,
     producer,
     tracking,
     clock: { now: () => nowMs },
     log: { warn: (m) => void warnings.push(m) },
-    settings,
+    settings: { ...settings, ...override },
   });
 const ofType = (type: string) => enqueued.filter((e) => e.type === type);
 
@@ -143,6 +143,17 @@ describe('PollScheduler', () => {
     await s1.tick();
     expect(ofType('ad_discovery')).toHaveLength(4);
     expect(ofType('ad_discovery').every((e) => e.platform === 'meta_ads')).toBe(true);
+  });
+
+  it("rotates through ads connections beyond one tick's limit", async () => {
+    const s = scheduler({ maxConnectionsPerTick: 1 });
+    await s.tick();
+    await s.tick();
+    const ids = ofType('ad_discovery').map((e) => e.scope.connectionId);
+    expect(new Set(ids).size).toBe(2);
+    await s.tick(); // end of the list: starts over
+    await s.tick();
+    expect(await s.tick()).toMatchObject({ deduplicated: 1 });
   });
 
   it('enqueues ad_poll only for connections with due sources, on the connection platform', async () => {

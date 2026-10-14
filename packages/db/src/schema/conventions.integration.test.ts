@@ -15,6 +15,7 @@ const CONNECTION_KEYED_TABLES = ['connection_sync'];
 const NATURAL_KEY_TABLES: Record<string, string> = {
   source_poll: 'PRIMARY KEY (source_id)',
   meta_ad_source: 'PRIMARY KEY (ad_id, source_id)',
+  meta_ad_listing: 'PRIMARY KEY (ads_connection_id)',
 };
 const GLOBAL_TABLES = [
   'organization',

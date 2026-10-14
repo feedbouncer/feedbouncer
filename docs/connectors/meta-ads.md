@@ -44,23 +44,26 @@ An ad whose Page or Instagram account is not connected there is listed with a
 reason and checked again every discovery cycle. Connect the account and the
 ad's comments start arriving within one discovery interval.
 
+Meta does not always say which Instagram account runs an ad. Such an ad is never
+linked to a guessed account: it is listed as `instagram_account_not_connected`
+until Meta reports the account.
+
 ## Cadence and settings
 
 Set these on the worker. A value that is empty or unset uses the default.
 
-| Variable                                | Range                              | Default                     |
-| --------------------------------------- | ---------------------------------- | --------------------------- |
-| `META_ADS_CONNECTOR_ENABLED`            | true/false                         | `false`                     |
-| `META_ADS_ACTIVE_STATUSES`              | up to 10 `effective_status` values | `ACTIVE`                    |
-| `COMMENT_POLL_INTERVAL_SEC`             | 60..3600                           | 300                         |
-| `AD_POLL_INTERVAL_SEC`                  | 60..3600                           | `COMMENT_POLL_INTERVAL_SEC` |
-| `AD_DISCOVERY_INTERVAL_SEC`             | 300..86400                         | 900                         |
-| `AD_RETIREMENT_GRACE_DAYS`              | 0..30                              | 7                           |
-| `AD_POLL_MAX_SOURCES_PER_JOB`           | 1..1000                            | 100                         |
-| `AD_SOURCE_UNAVAILABLE_RETRY_SEC`       | 600..604800                        | 21600                       |
-| `AD_IG_DEEP_SCAN_INTERVAL_SEC`          | 3600..604800                       | 86400                       |
-| `AD_SCHEDULER_TICK_SEC`                 | 10..300                            | 30                          |
-| `AD_SCHEDULER_MAX_CONNECTIONS_PER_TICK` | 1..10000                           | 500                         |
+| Variable                                | Range                              | Default  |
+| --------------------------------------- | ---------------------------------- | -------- |
+| `META_ADS_CONNECTOR_ENABLED`            | true/false                         | `false`  |
+| `META_ADS_ACTIVE_STATUSES`              | up to 10 `effective_status` values | `ACTIVE` |
+| `AD_POLL_INTERVAL_SEC`                  | 60..3600                           | 300      |
+| `AD_DISCOVERY_INTERVAL_SEC`             | 300..86400                         | 900      |
+| `AD_RETIREMENT_GRACE_DAYS`              | 0..30                              | 7        |
+| `AD_POLL_MAX_SOURCES_PER_JOB`           | 1..1000                            | 100      |
+| `AD_SOURCE_UNAVAILABLE_RETRY_SEC`       | 600..604800                        | 21600    |
+| `AD_IG_DEEP_SCAN_INTERVAL_SEC`          | 3600..604800                       | 86400    |
+| `AD_SCHEDULER_TICK_SEC`                 | 10..300                            | 30       |
+| `AD_SCHEDULER_MAX_CONNECTIONS_PER_TICK` | 1..10000                           | 500      |
 
 The API needs `META_ADS_CONNECTOR_ENABLED` and `META_ADS_ACTIVE_STATUSES` too,
 so the connect flow is available. It requires the `FACEBOOK_*` variables.
@@ -73,6 +76,12 @@ so the connect flow is available. It requires the `FACEBOOK_*` variables.
 - Instagram's list endpoint returns top-level comments only on each poll, so a
   full scan runs every `AD_IG_DEEP_SCAN_INTERVAL_SEC` to catch late replies on
   older comments. Those replies can take up to that long to appear.
+
+## Large ad accounts
+
+Listing an ad account can take several jobs when it has many ads, because
+discovery shares the background rate-limit budget. The listing resumes where it
+stopped, and ads are retired only once a listing has completed.
 
 ## Retirement
 

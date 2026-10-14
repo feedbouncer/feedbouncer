@@ -129,13 +129,33 @@ export class PgAdTracking {
   }
 
   async recordAd(adsScope: ConnectionScope, ad: DiscoveredAdRow, at: Date): Promise<void> {
+    await this.recordAds(adsScope, [ad], at);
+  }
+
+  /** All ads of one listing page in a single transaction. */
+  async recordAds(
+    adsScope: ConnectionScope,
+    ads: readonly DiscoveredAdRow[],
+    at: Date,
+  ): Promise<void> {
+    if (ads.length === 0) return;
+    await withTransaction(this.pool, async (tx) => {
+      for (const ad of ads) await this.#recordAd(tx, adsScope, ad, at);
+    });
+  }
+
+  async #recordAd(
+    tx: pg.PoolClient,
+    adsScope: ConnectionScope,
+    ad: DiscoveredAdRow,
+    at: Date,
+  ): Promise<void> {
     const placements = [
       { platform: 'facebook', ...ad.facebook },
       { platform: 'instagram', ...ad.instagram },
     ] as const;
-    await withTransaction(this.pool, async (tx) => {
-      const up = await tx.query<{ id: string }>(
-        `INSERT INTO meta_ad (organization_id, brand_id, ads_connection_id, external_id,
+    const up = await tx.query<{ id: string }>(
+      `INSERT INTO meta_ad (organization_id, brand_id, ads_connection_id, external_id,
                               ad_account_external_id, effective_status, active, inactive_since,
                               facebook_source_external_id, instagram_source_external_id,
                               instagram_account_external_id, facebook_resolution,
@@ -158,67 +178,98 @@ export class PgAdTracking {
            last_discovered_at = EXCLUDED.last_discovered_at
          WHERE meta_ad.organization_id = $1 AND meta_ad.brand_id = $2
          RETURNING id`,
-        [
-          ...ids(adsScope),
-          ad.externalId,
-          ad.adAccountExternalId,
-          ad.effectiveStatus,
-          ad.active,
-          at,
-          ad.facebook.sourceExternalId,
-          ad.instagram.sourceExternalId,
-          ad.instagram.accountExternalId,
-          ad.facebook.resolution,
-          ad.instagram.resolution,
-        ],
+      [
+        ...ids(adsScope),
+        ad.externalId,
+        ad.adAccountExternalId,
+        ad.effectiveStatus,
+        ad.active,
+        at,
+        ad.facebook.sourceExternalId,
+        ad.instagram.sourceExternalId,
+        ad.instagram.accountExternalId,
+        ad.facebook.resolution,
+        ad.instagram.resolution,
+      ],
+    );
+    const adId = up.rows[0]?.id;
+    if (!adId) throw outOfScope();
+    const sourceIds: string[] = [];
+    for (const p of placements) {
+      if (p.connection === null || p.sourceExternalId === null) continue;
+      const conn = p.connection;
+      if (conn.organizationId !== adsScope.organizationId || conn.brandId !== adsScope.brandId)
+        throw outOfScope();
+      // The link's platform must be the source connection's platform.
+      const ok = await tx.query(
+        'SELECT 1 FROM connection WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND platform = $4',
+        [...ids(conn), p.platform],
       );
-      const adId = up.rows[0]?.id;
-      if (!adId) throw outOfScope();
-      const sourceIds: string[] = [];
-      for (const p of placements) {
-        if (p.connection === null || p.sourceExternalId === null) continue;
-        const conn = p.connection;
-        if (conn.organizationId !== adsScope.organizationId || conn.brandId !== adsScope.brandId)
-          throw outOfScope();
-        // The link's platform must be the source connection's platform.
-        const ok = await tx.query(
-          'SELECT 1 FROM connection WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND platform = $4',
-          [...ids(conn), p.platform],
-        );
-        if (ok.rowCount !== 1) throw outOfScope();
-        const sourceId = await this.store.ensureAdSource(conn, p.sourceExternalId, tx);
-        sourceIds.push(sourceId);
-        await tx.query(
-          `INSERT INTO source_poll (source_id, organization_id, brand_id, connection_id, next_poll_at)
-           VALUES ($4, $1, $2, $3, $5) ON CONFLICT (source_id) DO NOTHING`,
-          [...ids(conn), sourceId, at],
-        );
-        await tx.query(
-          `INSERT INTO meta_ad_source (organization_id, brand_id, ad_id, source_id, platform)
-           VALUES ($1, $2, $3, $4, $5) ON CONFLICT (ad_id, source_id) DO NOTHING`,
-          [adsScope.organizationId, adsScope.brandId, adId, sourceId, p.platform],
-        );
-      }
-      // The creative changed: drop links to posts the ad no longer shows.
+      if (ok.rowCount !== 1) throw outOfScope();
+      const sourceId = await this.store.ensureAdSource(conn, p.sourceExternalId, tx);
+      sourceIds.push(sourceId);
       await tx.query(
-        `DELETE FROM meta_ad_source
+        `INSERT INTO source_poll (source_id, organization_id, brand_id, connection_id, next_poll_at)
+           VALUES ($4, $1, $2, $3, $5) ON CONFLICT (source_id) DO NOTHING`,
+        [...ids(conn), sourceId, at],
+      );
+      await tx.query(
+        `INSERT INTO meta_ad_source (organization_id, brand_id, ad_id, source_id, platform)
+           VALUES ($1, $2, $3, $4, $5) ON CONFLICT (ad_id, source_id) DO NOTHING`,
+        [adsScope.organizationId, adsScope.brandId, adId, sourceId, p.platform],
+      );
+    }
+    // The creative changed: drop links to posts the ad no longer shows.
+    await tx.query(
+      `DELETE FROM meta_ad_source
           WHERE organization_id = $1 AND brand_id = $2 AND ad_id = $3
             AND NOT (source_id = ANY($4::uuid[]))`,
-        [adsScope.organizationId, adsScope.brandId, adId, sourceIds],
-      );
-    });
+      [adsScope.organizationId, adsScope.brandId, adId, sourceIds],
+    );
   }
 
-  async retireMissing(
+  /** The unfinished listing of an ads connection, if one is in progress. */
+  async listingProgress(
     adsScope: ConnectionScope,
-    seen: ReadonlySet<string>,
-    at: Date,
-  ): Promise<number> {
+  ): Promise<{ cursor: string; startedAt: Date } | null> {
+    const r = await this.pool.query<{ cursor: string; started_at: Date }>(
+      `SELECT cursor, started_at FROM meta_ad_listing
+        WHERE organization_id = $1 AND brand_id = $2 AND ads_connection_id = $3`,
+      ids(adsScope),
+    );
+    const row = r.rows[0];
+    return row ? { cursor: row.cursor, startedAt: row.started_at } : null;
+  }
+
+  async saveListingProgress(
+    adsScope: ConnectionScope,
+    p: { cursor: string; startedAt: Date },
+  ): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO meta_ad_listing (organization_id, brand_id, ads_connection_id, cursor, started_at)
+       SELECT $1, $2, $3, $4, $5 FROM connection
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND platform = 'meta_ads'
+       ON CONFLICT (ads_connection_id) DO UPDATE SET cursor = EXCLUDED.cursor,
+         started_at = EXCLUDED.started_at`,
+      [...ids(adsScope), p.cursor, p.startedAt],
+    );
+  }
+
+  async clearListingProgress(adsScope: ConnectionScope): Promise<void> {
+    await this.pool.query(
+      `DELETE FROM meta_ad_listing
+        WHERE organization_id = $1 AND brand_id = $2 AND ads_connection_id = $3`,
+      ids(adsScope),
+    );
+  }
+
+  /** Retires active ads a complete listing that began at `listedSince` did not touch. */
+  async retireUnlisted(adsScope: ConnectionScope, listedSince: Date, at: Date): Promise<number> {
     const r = await this.pool.query(
       `UPDATE meta_ad SET active = false, inactive_since = COALESCE(inactive_since, $4), updated_at = now()
         WHERE organization_id = $1 AND brand_id = $2 AND ads_connection_id = $3 AND active
-          AND NOT (external_id = ANY($5::text[]))`,
-      [...ids(adsScope), at, [...seen]],
+          AND last_discovered_at < $5`,
+      [...ids(adsScope), at, listedSince],
     );
     return r.rowCount ?? 0;
   }
