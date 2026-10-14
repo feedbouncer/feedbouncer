@@ -19,6 +19,7 @@
     "@feedbouncer/authz": "workspace:*",
     "@feedbouncer/comments": "workspace:*",
     "@feedbouncer/connector-facebook": "workspace:*",
+    "@feedbouncer/connector-instagram": "workspace:*",
     "@feedbouncer/connectors": "workspace:*",
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/jobs": "workspace:*",

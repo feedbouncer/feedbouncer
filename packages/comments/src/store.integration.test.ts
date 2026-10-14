@@ -72,10 +72,12 @@ describe('PgCommentStore', () => {
       authorName: 'Ann',
       body: 'hello',
       platformState: 'hidden',
+      parentPlatformState: null,
       postedAt: c.postedAt,
       permalink: 'https://www.facebook.com/x',
       isOwnAccount: false,
       connectionStatus: 'active',
+      privateReplied: false,
     });
   });
 

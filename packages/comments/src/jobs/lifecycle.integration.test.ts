@@ -17,6 +17,7 @@ import {
   type Connector,
 } from '@feedbouncer/connectors';
 import { createFacebookConnector } from '@feedbouncer/connector-facebook';
+import { createInstagramConnector, INSTAGRAM_PAGE_FIELDS } from '@feedbouncer/connector-instagram';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import type { JobContext } from '@feedbouncer/jobs';
 import { CredentialStore, type ConnectionScope } from '@feedbouncer/secrets';
@@ -98,14 +99,15 @@ beforeAll(async () => {
   });
   graph = new FakeGraph({ appSecret: APP_SECRET, appId: '111' });
   creds = new CredentialStore(pool, testKeyring(['k1']));
-  const connector = createFacebookConnector({
+  const meta = {
     appId: '111',
     appSecret: new Secret(APP_SECRET),
     graphVersion: 'v26.0',
     webhookVerifyToken: new Secret('v'.repeat(24)),
-  });
+  };
   const registry = new ConnectorRegistry();
-  registry.register(connector);
+  registry.register(createFacebookConnector(meta));
+  registry.register(createInstagramConnector({ meta }));
   const http = (c: Connector) =>
     createSafeHttp({ allowedHosts: c.capabilities.apiHosts, fetch: graph.fetch.bind(graph) });
   directory = new PgConnectionDirectory(pool);
@@ -216,5 +218,36 @@ describe('connection lifecycle job', () => {
     await run(scope, 'teardown', LIFECYCLE_JOB.policy.maxAttempts).catch(() => undefined);
     const joined = lines.join('\n');
     for (const s of graph.issuedSecrets()) expect(joined).not.toContain(s);
+  });
+  it('instagram setup subscribes comments on the linked page; facebook teardown on the same page keeps it', async () => {
+    // One Page, connected both as Facebook and (through its linked account) as Instagram.
+    const fb = await connectedPage();
+    await run(fb.scope, 'setup');
+    const fbFields = [...graph.subscribedFields(fb.pageId)];
+    expect(fbFields.length).toBeGreaterThan(0);
+
+    const igUserId = graph.addInstagramAccount(fb.pageId).igUserId;
+    const ig = await ctx.c.query<{ id: string }>(
+      `INSERT INTO connection (organization_id, brand_id, platform, external_account_id)
+       VALUES ($1, $2, 'instagram', $3) RETURNING id`,
+      [fb.scope.organizationId, fb.scope.brandId, igUserId],
+    );
+    const igScope = { ...fb.scope, connectionId: ig.rows[0]!.id };
+    const pageToken = (await creds.get(fb.scope, 'access_token'))!.value.reveal();
+    await creds.put(igScope, 'access_token', new Secret(pageToken), null);
+
+    await run(igScope, 'setup');
+    const merged = graph.subscribedFields(fb.pageId);
+    expect([...merged].sort()).toEqual(
+      [...new Set([...fbFields, ...INSTAGRAM_PAGE_FIELDS])].sort(),
+    );
+
+    // Disconnecting Facebook removes only its own fields.
+    expect(await directory.disconnect(fb.scope, fb.userId)).toBe(true);
+    await run(fb.scope, 'teardown');
+    expect(await secretCount(fb.scope)).toBe(0);
+    for (const f of INSTAGRAM_PAGE_FIELDS) expect(graph.subscribedFields(fb.pageId)).toContain(f);
+    expect(graph.subscribed(fb.pageId)).toBe(true);
+    expect(await secretCount(igScope)).toBe(1);
   });
 });

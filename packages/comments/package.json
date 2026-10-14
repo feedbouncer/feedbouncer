@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@feedbouncer/connector-facebook": "workspace:*",
+    "@feedbouncer/connector-instagram": "workspace:*",
     "@types/node": "24.13.6",
     "@types/pg": "8.23.1"
   }

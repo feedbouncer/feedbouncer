@@ -6,6 +6,7 @@
     { "path": "packages/service-runtime" },
     { "path": "packages/connectors" },
     { "path": "packages/connector-facebook" },
+    { "path": "packages/connector-instagram" },
     { "path": "packages/jobs" },
     { "path": "packages/comments" },
     { "path": "packages/observability" },

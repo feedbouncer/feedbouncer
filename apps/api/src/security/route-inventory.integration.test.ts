@@ -20,18 +20,63 @@ const FACEBOOK = {
   graphVersion: 'v26.0',
   webhookVerifyToken: new Secret('verify-token-0123456789'),
 };
-const COVERED_ROUTES = CASES.map((c) => c.route);
+// A route may have several cases (e.g. one per platform); each is listed once.
+const COVERED_ROUTES = [...new Set(CASES.map((c) => c.route))];
 
 let api: TestApi;
 beforeAll(async () => {
-  api = await startTestApi({ facebook: FACEBOOK });
+  api = await startTestApi({ facebook: FACEBOOK, instagram: { meta: FACEBOOK } });
 });
 afterAll(() => api.close());
 
+const join = (...parts: string[]) =>
+  '/' +
+  parts
+    .map((p) => p.replace(/^\/+|\/+$/g, ''))
+    .filter(Boolean)
+    .join('/');
+
+interface NestHandler {
+  /** "METHOD /path" as declared on the controller. */
+  route: string;
+  label: string;
+  handler: () => unknown;
+}
+
+/** Every Nest controller handler with its declared method and full path. */
+function nestHandlers(): NestHandler[] {
+  const reflector = new Reflector();
+  const discovery = new DiscoveryService(api.app.get(ModulesContainer, { strict: false }));
+  const scanner = new MetadataScanner();
+  const out: NestHandler[] = [];
+  for (const wrapper of discovery.getControllers()) {
+    const instance = wrapper.instance as object | undefined;
+    if (!instance) continue;
+    const proto = Object.getPrototypeOf(instance) as object;
+    const base = reflector.get<string | undefined>(PATH_METADATA, wrapper.metatype as never) ?? '';
+    for (const name of scanner.getAllMethodNames(proto)) {
+      const handler = (proto as Record<string, unknown>)[name] as () => unknown;
+      const sub = reflector.get<string | undefined>(PATH_METADATA, handler);
+      const method = reflector.get<number | undefined>(METHOD_METADATA, handler);
+      if (sub === undefined || method === undefined) continue;
+      const full = join(String(base), sub);
+      out.push({
+        route: `${RequestMethod[method]} ${full}`,
+        label: `${RequestMethod[method]} ${full} (${wrapper.name}.${name})`,
+        handler,
+      });
+    }
+  }
+  return out;
+}
+
 // "METHOD /path" for every registered route, from Fastify's printed radix tree
-// (4 columns per level); HEAD companions of GET are dropped.
+// (4 columns per level); HEAD companions of GET are dropped. Routes that share a
+// parameter position under different names print as ":a|:b"; each such route is
+// resolved to the one name its Nest handler declares, so a typo still fails.
 function registered(): string[] {
   const printed = api.app.getHttpAdapter().getInstance().printRoutes({ commonPrefix: false });
+  const declared = new Set(nestHandlers().map((h) => h.route));
   const stack: string[] = [];
   const routes: string[] = [];
   for (const line of printed.split('\n')) {
@@ -40,9 +85,23 @@ function registered(): string[] {
     stack.length = m[1]!.length / 4;
     stack.push(m[2]!);
     const path = stack.join('');
-    for (const method of m[3]!.split(', ')) if (method !== 'HEAD') routes.push(`${method} ${path}`);
+    for (const method of m[3]!.split(', ')) {
+      if (method === 'HEAD') continue;
+      const route = `${method} ${path}`;
+      const candidates = expand(route).filter((r) => declared.has(r));
+      routes.push(route.includes('|') && candidates.length === 1 ? candidates[0]! : route);
+    }
   }
   return routes;
+}
+
+/** All readings of a printed route whose segments may hold ":a|:b" alternatives. */
+function expand(route: string): string[] {
+  const m = /:[A-Za-z]+(?:\|:[A-Za-z]+)+/.exec(route);
+  if (!m) return [route];
+  return m[0]
+    .split('|')
+    .flatMap((alt) => expand(route.slice(0, m.index) + alt + route.slice(m.index + m[0].length)));
 }
 
 describe('route inventory', () => {
@@ -74,34 +133,14 @@ describe('route inventory', () => {
   });
 
   it('every tenant handler (path contains :orgId) declares @RequireCapability', () => {
-    const reflector = new Reflector();
-    const discovery = new DiscoveryService(api.app.get(ModulesContainer, { strict: false }));
-    const scanner = new MetadataScanner();
-    const join = (...parts: string[]) =>
-      '/' +
-      parts
-        .map((p) => p.replace(/^\/+|\/+$/g, ''))
-        .filter(Boolean)
-        .join('/');
     const tenant: string[] = [];
     const offenders: string[] = [];
-    for (const wrapper of discovery.getControllers()) {
-      const instance = wrapper.instance as object | undefined;
-      if (!instance) continue;
-      const proto = Object.getPrototypeOf(instance) as object;
-      const base =
-        reflector.get<string | undefined>(PATH_METADATA, wrapper.metatype as never) ?? '';
-      for (const name of scanner.getAllMethodNames(proto)) {
-        const handler = (proto as Record<string, unknown>)[name] as () => unknown;
-        const sub = reflector.get<string | undefined>(PATH_METADATA, handler);
-        const method = reflector.get<number | undefined>(METHOD_METADATA, handler);
-        if (sub === undefined || method === undefined) continue;
-        const full = join(String(base), sub);
-        if (!full.startsWith('/api/v1/') || !full.includes(':orgId')) continue;
-        const label = `${RequestMethod[method]} ${full} (${wrapper.name}.${name})`;
-        tenant.push(label);
-        if (reflector.get<unknown>(CAPABILITY, handler) === undefined) offenders.push(label);
-      }
+    for (const h of nestHandlers()) {
+      const [, full] = h.route.split(' ') as [string, string];
+      if (!full.startsWith('/api/v1/') || !full.includes(':orgId')) continue;
+      tenant.push(h.label);
+      if (new Reflector().get<unknown>(CAPABILITY, h.handler) === undefined)
+        offenders.push(h.label);
     }
     expect(tenant.length, 'no tenant handlers discovered').toBe(COVERED_ROUTES.length);
     expect(offenders, 'handlers without @RequireCapability').toEqual([]);

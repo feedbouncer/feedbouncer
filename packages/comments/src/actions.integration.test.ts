@@ -12,26 +12,33 @@ import {
   type NormalizedComment,
 } from '@feedbouncer/connectors';
 import { createFacebookConnector } from '@feedbouncer/connector-facebook';
+import { createInstagramConnector } from '@feedbouncer/connector-instagram';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { PgCommentStore } from './store.js';
-import { ModerationActions, type ActionActor, type ActionKind } from './actions.js';
+import type { ActionActor, ActionKind } from './action-kinds.js';
+import { ModerationActions } from './actions.js';
 import { EXECUTE_JOB } from './jobs/specs.js';
 
 const PAGE = '1000000001';
+const IG_ACCOUNT = '17841400000000001';
 const log = createLogger('comments-actions-test', 'error', () => {});
-const capabilities = createFacebookConnector({
+const META = {
   appId: '111',
   appSecret: new Secret('fb-app-secret-0123456789'),
   graphVersion: 'v26.0',
   webhookVerifyToken: new Secret('v'.repeat(24)),
-}).capabilities;
+};
+const capabilities = createFacebookConnector(META).capabilities;
+const igCapabilities = createInstagramConnector({ meta: META }).capabilities;
 
 let ctx: Awaited<ReturnType<typeof migratedDb>>;
 let pool: pg.Pool;
 let t: Tenant;
 let other: Tenant;
 let scope: ConnectionScope;
+/** An Instagram connection in tenant t's brand. */
+let igScope: ConnectionScope;
 let store: PgCommentStore;
 let nowMs = Date.UTC(2026, 9, 13, 12, 0, 0);
 const clock: Clock = { now: () => nowMs };
@@ -75,6 +82,37 @@ async function seedComment(
   return r.commentId;
 }
 
+/** An Instagram comment on media 17900000000000001 of the tenant's Instagram connection. */
+async function seedIgComment(
+  o: {
+    parentExternalId?: string | null;
+    state?: NormalizedComment['platformState'];
+    authorId?: string | null;
+    postedAt?: Date;
+  } = {},
+): Promise<string> {
+  const n = ++seq;
+  const authorId = o.authorId === undefined ? `178414990${String(n).padStart(8, '0')}` : o.authorId;
+  const r = await store.upsertFromPlatform(
+    igScope,
+    {
+      externalId: `178000000${String(n).padStart(8, '0')}`,
+      sourceExternalId: '17900000000000001',
+      parentExternalId: o.parentExternalId ?? null,
+      author:
+        authorId === null
+          ? null
+          : { externalId: authorId, displayName: 'someone', profileUrl: null },
+      body: 'hello from instagram',
+      postedAt: o.postedAt ?? new Date(nowMs - 60_000),
+      platformState: o.state ?? 'visible',
+      permalink: null,
+    },
+    { ownAccountExternalId: IG_ACCOUNT, syncedAt: new Date(nowMs) },
+  );
+  return r.commentId;
+}
+
 const rowsFor = async (commentId: string) =>
   (
     await pool.query(
@@ -112,6 +150,12 @@ beforeAll(async () => {
     PAGE,
     t.connectionId,
   ]);
+  const ig = await ctx.c.query<{ id: string }>(
+    `INSERT INTO connection (organization_id, brand_id, platform, external_account_id)
+     VALUES ($1, $2, 'instagram', $3) RETURNING id`,
+    [t.organizationId, t.brandId, IG_ACCOUNT],
+  );
+  igScope = { organizationId: t.organizationId, brandId: t.brandId, connectionId: ig.rows[0]!.id };
   store = new PgCommentStore(pool);
 });
 afterAll(async () => {
@@ -125,7 +169,8 @@ beforeEach(() => {
     pool,
     store,
     producer: { enqueue } as never,
-    capabilities: (p) => (p === 'facebook' ? (capabilities as ConnectorCapabilities) : undefined),
+    capabilities: (p) =>
+      p === 'facebook' ? capabilities : p === 'instagram' ? igCapabilities : undefined,
     clock,
     log,
   });
@@ -467,5 +512,190 @@ describe('ModerationActions.request', () => {
     expect(JSON.stringify(audit.rows)).not.toContain('secret reply');
     await request(commentId, 'hide');
     expect((await actions.list(t, commentId)).map((a) => a.kind)).toEqual(['public_reply', 'hide']);
+  });
+  it('instagram: private reply on a nested reply is recorded not_eligible private_reply_nested_comment and not enqueued', async () => {
+    const top = await seedIgComment();
+    const topExternal = (await store.load(t, top))!.externalId;
+    const nested = await seedIgComment({ parentExternalId: topExternal });
+    expect(await request(nested, 'private_reply', { text: 'hi there' })).toMatchObject({
+      status: 'recorded',
+      action: {
+        kind: 'private_reply',
+        status: 'not_eligible',
+        outcomeCode: 'private_reply_nested_comment',
+        completedAt: expect.any(Date),
+      },
+    });
+    expect(await rowsFor(nested)).toMatchObject([
+      {
+        kind: 'private_reply',
+        status: 'not_eligible',
+        outcome_code: 'private_reply_nested_comment',
+      },
+    ]);
+    expect(enqueue).not.toHaveBeenCalled();
+    // The top-level comment itself may be replied to privately.
+    expect(await request(top, 'private_reply', { text: 'hi there' })).toMatchObject({
+      status: 'accepted',
+      action: { status: 'pending' },
+    });
+    expect(enqueue).toHaveBeenCalledWith({
+      scope: igScope,
+      platform: 'instagram',
+      type: EXECUTE_JOB.type,
+      payload: { actionId: expect.any(String) },
+    });
+  });
+
+  it('instagram: public reply on a hidden comment -> not_eligible reply_to_hidden_comment', async () => {
+    const hidden = await seedIgComment({ state: 'hidden' });
+    expect(await request(hidden, 'public_reply', { text: 'thanks' })).toMatchObject({
+      status: 'recorded',
+      action: { status: 'not_eligible', outcomeCode: 'reply_to_hidden_comment' },
+    });
+    expect(await rowsFor(hidden)).toMatchObject([
+      { kind: 'public_reply', status: 'not_eligible', outcome_code: 'reply_to_hidden_comment' },
+    ]);
+    // Unhiding stays possible.
+    expect(await request(hidden, 'unhide')).toMatchObject({ status: 'accepted' });
+    expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('instagram: hide on the account own comment -> not_eligible own_comment_always_visible', async () => {
+    const own = await seedIgComment({ authorId: IG_ACCOUNT });
+    expect((await store.load(t, own))?.isOwnAccount).toBe(true);
+    expect(await request(own, 'hide')).toMatchObject({
+      status: 'recorded',
+      action: { status: 'not_eligible', outcomeCode: 'own_comment_always_visible' },
+    });
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('instagram: ban_author -> refused unsupported', async () => {
+    const commentId = await seedIgComment();
+    for (const kind of ['ban_author', 'unban_author'] as const)
+      expect(await request(commentId, kind)).toEqual({ status: 'refused', code: 'unsupported' });
+    expect(await rowsFor(commentId)).toHaveLength(0);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('instagram: 2201-code-point public reply -> refused text_too_long, no row inserted', async () => {
+    const commentId = await seedIgComment();
+    // Astral characters: 2201 code points are 4402 UTF-16 units, inside the generic 8000 limit.
+    expect(await request(commentId, 'public_reply', { text: '😀'.repeat(2201) })).toEqual({
+      status: 'refused',
+      code: 'text_too_long',
+      max: 2200,
+    });
+    expect(await request(commentId, 'private_reply', { text: 'x'.repeat(1001) })).toEqual({
+      status: 'refused',
+      code: 'text_too_long',
+      max: 1000,
+    });
+    // Refused before anything is recorded, even when the outcome would have been a noop.
+    const deleted = await seedIgComment({ state: 'deleted' });
+    expect(await request(deleted, 'public_reply', { text: 'y'.repeat(2201) })).toEqual({
+      status: 'refused',
+      code: 'text_too_long',
+      max: 2200,
+    });
+    expect(await rowsFor(commentId)).toHaveLength(0);
+    expect(await rowsFor(deleted)).toHaveLength(0);
+    expect(enqueue).not.toHaveBeenCalled();
+
+    // Exactly at the limits is accepted.
+    expect(await request(commentId, 'public_reply', { text: '😀'.repeat(2200) })).toMatchObject({
+      status: 'accepted',
+    });
+    expect(await request(commentId, 'private_reply', { text: 'x'.repeat(1000) })).toMatchObject({
+      status: 'accepted',
+    });
+    expect(enqueue).toHaveBeenCalledTimes(2);
+  });
+
+  it('instagram: two concurrent private replies -> exactly one pending, one private_reply_already_sent', async () => {
+    const commentId = await seedIgComment();
+    expect((await store.load(t, commentId))?.privateReplied).toBe(false);
+    const results = await Promise.all([
+      request(commentId, 'private_reply', { text: 'a' }),
+      request(commentId, 'private_reply', { text: 'b' }),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual(['accepted', 'recorded']);
+    const rows = await rowsFor(commentId);
+    expect(rows.map((r) => r.status).sort()).toEqual(['not_eligible', 'pending']);
+    expect(rows.find((r) => r.status === 'not_eligible')).toMatchObject({
+      outcome_code: 'private_reply_already_sent',
+    });
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect((await store.load(t, commentId))?.privateReplied).toBe(true);
+    const listed = await store.list(t, {
+      before: null,
+      limit: 100,
+      connectionId: igScope.connectionId,
+    });
+    expect(listed.find((r) => r.id === commentId)?.privateReplied).toBe(true);
+    // A third request sees the stored reply without racing.
+    expect(await request(commentId, 'private_reply', { text: 'c' })).toMatchObject({
+      status: 'recorded',
+      action: { status: 'not_eligible', outcomeCode: 'private_reply_already_sent' },
+    });
+  });
+
+  it('instagram: comment in brand A requested from brand B scope -> refused not_found', async () => {
+    const commentId = await seedIgComment();
+    const brandB = await ctx.c.query<{ id: string }>(
+      'INSERT INTO brand (organization_id, name) VALUES ($1, $2) RETURNING id',
+      [t.organizationId, `Brand B ${randomUUID()}`],
+    );
+    for (const s of [
+      { organizationId: t.organizationId, brandId: brandB.rows[0]!.id },
+      { organizationId: other.organizationId, brandId: other.brandId },
+    ])
+      expect(
+        await actions.request({
+          scope: s,
+          commentId,
+          kind: 'hide',
+          actor: user(),
+          requestKey: key(),
+        }),
+      ).toEqual({ status: 'refused', code: 'not_found' });
+    expect(await rowsFor(commentId)).toHaveLength(0);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('facebook: behaviour unchanged (hidden comment public reply still accepted)', async () => {
+    const hidden = await seedComment({ state: 'hidden' });
+    expect(await request(hidden, 'public_reply', { text: 'thanks' })).toMatchObject({
+      status: 'accepted',
+      action: { kind: 'public_reply', status: 'pending' },
+    });
+    // 8000 characters is still within Facebook's limit.
+    expect(await request(hidden, 'public_reply', { text: 'z'.repeat(8000) })).toMatchObject({
+      status: 'accepted',
+    });
+    // A person may hide the Page's own comment.
+    const own = await seedComment({ authorId: PAGE });
+    expect(await request(own, 'hide')).toMatchObject({ status: 'accepted' });
+    // Facebook private replies are not limited to top-level comments.
+    const top = await seedComment();
+    const nested = await store.upsertFromPlatform(
+      scope,
+      {
+        externalId: `${PAGE}_1_nested_${++seq}`,
+        sourceExternalId: `${PAGE}_1`,
+        parentExternalId: (await store.load(t, top))!.externalId,
+        author: { externalId: '3999999999', displayName: 'A', profileUrl: null },
+        body: 'a reply',
+        postedAt: new Date(nowMs - 60_000),
+        platformState: 'visible',
+        permalink: null,
+      },
+      { ownAccountExternalId: PAGE, syncedAt: new Date(nowMs) },
+    );
+    expect(await request(nested.commentId, 'private_reply', { text: 'dm' })).toMatchObject({
+      status: 'accepted',
+    });
+    expect(enqueue).toHaveBeenCalledTimes(4);
   });
 });

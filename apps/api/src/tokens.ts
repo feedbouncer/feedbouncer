@@ -6,7 +6,7 @@ export const AUTH_EMAILS = Symbol('AUTH_EMAILS');
 export const RATE_LIMITS = Symbol('RATE_LIMITS');
 /** The AuthHooks Better Auth calls before deleting a user. */
 export const ACCOUNT_DELETION = Symbol('ACCOUNT_DELETION');
-/** The Facebook connector stack (AppDeps.connectors), or null when not configured. */
+/** The connector stack (AppDeps.connectors), or null when not configured. */
 export const CONNECTOR_STACK = Symbol('CONNECTOR_STACK');
 /** The enqueue-only job producer, or null when not configured. */
 export const JOB_PRODUCER = Symbol('JOB_PRODUCER');

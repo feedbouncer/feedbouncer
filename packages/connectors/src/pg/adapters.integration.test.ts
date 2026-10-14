@@ -714,6 +714,14 @@ describe('PgConnectionDirectory (facebook pages additions)', () => {
       ConnectionTakenError,
     );
   });
+
+  it('maps the instagram live-account index to ConnectionTakenError', async () => {
+    const other = await seedTenant(h.c, `igtaken${Date.now()}`);
+    const account = `1784${Date.now()}`;
+    const ig = (t: Tenant) => ({ ...fb(t, account, null), platform: 'instagram' as const });
+    await dir.upsertPending(ig(a));
+    await expect(dir.upsertPending(ig(other))).rejects.toBeInstanceOf(ConnectionTakenError);
+  });
 });
 
 describe('PgOAuthStateStore.peekBinding', () => {

@@ -1,6 +1,12 @@
 import type { Connector } from './connector.js';
 import { ConnectorError } from './errors.js';
-import { isPlatform, MODERATION_ACTIONS, RESPONSE_KINDS, type Platform } from './types.js';
+import {
+  isPlatform,
+  MODERATION_ACTIONS,
+  RESPONSE_KINDS,
+  type Platform,
+  type ResponseKind,
+} from './types.js';
 
 const HOST =
   /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
@@ -49,6 +55,17 @@ export function validateConnector(c: Connector): void {
   )
     fail('capabilities.responses');
   if (responses.length > 0 !== (typeof c.respond === 'function')) fail('capabilities.responses');
+  if (c.listReplies !== undefined && typeof c.listReplies !== 'function') fail('listReplies');
+  const constraints = k.constraints;
+  if (constraints !== undefined) {
+    const posInt = (n: unknown) => Number.isSafeInteger(n) && (n as number) > 0;
+    if (constraints.privateReplyWindowMs !== undefined && !posInt(constraints.privateReplyWindowMs))
+      fail('capabilities.constraints');
+    for (const [kind, n] of Object.entries(constraints.maxReplyChars ?? {})) {
+      if (!responses.includes(kind as ResponseKind) || !posInt(n) || (n as number) > 8000)
+        fail('capabilities.constraints');
+    }
+  }
   if (
     c.lifecycle !== undefined &&
     (typeof c.lifecycle.onConnected !== 'function' ||

@@ -207,3 +207,128 @@ describe('routeWebhookDelivery', () => {
     ).rejects.toThrow('queue down');
   });
 });
+
+describe('routeWebhookDelivery for instagram', () => {
+  const IG_A = '17841400000000900';
+  const IG_B = '17841400000000901';
+  let igA: { organizationId: string; brandId: string; connectionId: string };
+  let igB: { organizationId: string; brandId: string; connectionId: string };
+
+  beforeAll(async () => {
+    const insert = async (
+      t: { organizationId: string; brandId: string },
+      platform: string,
+      account: string,
+      revoked = false,
+    ) =>
+      (
+        await ctx.c.query<{ id: string }>(
+          `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, status, status_reason)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+          [
+            t.organizationId,
+            t.brandId,
+            platform,
+            account,
+            revoked ? 'revoked' : 'active',
+            revoked ? 'user_disconnected' : null,
+          ],
+        )
+      ).rows[0]!.id;
+    // Brand B once connected IG_A and disconnected it; its live Instagram account is IG_B.
+    await insert(B, 'instagram', IG_A, true);
+    igA = {
+      organizationId: A.organizationId,
+      brandId: A.brandId,
+      connectionId: await insert(A, 'instagram', IG_A),
+    };
+    igB = {
+      organizationId: B.organizationId,
+      brandId: B.brandId,
+      connectionId: await insert(B, 'instagram', IG_B),
+    };
+    // A Facebook connection whose Page id happens to equal an Instagram id never receives Instagram events.
+    await insert(B, 'facebook', IG_A);
+  });
+
+  it('instagram events route only to the live connection for that IG account; unknown accounts are logged unrouted', async () => {
+    lines.length = 0;
+    const enqueue = producerOk();
+    const route = routeWebhookDelivery({
+      directory: new PgConnectionDirectory(pool),
+      producer: { enqueue },
+      log,
+    });
+    await route({
+      platform: 'instagram',
+      connectionId: null,
+      deliveryKey: 'ig-k1',
+      events: [
+        ev(IG_A, '17900000000000001', '17800000000000001', 'comment.created'),
+        ev(IG_B, '17900000000000002', '17800000000000002', 'comment.created', 1_760_000_400),
+        ev('17841400000000999', '17900000000000003', '17800000000000003', 'comment.created'),
+        ev('17841400000000998', '17900000000000004', '17800000000000004', 'comment.created'),
+      ],
+    });
+    expect(enqueue.mock.calls.map(([r]) => [r.scope, r.platform, r.type, r.payload])).toEqual([
+      [
+        igA,
+        'instagram',
+        'comment_ingest',
+        {
+          sourceExternalId: '17900000000000001',
+          commentExternalId: '17800000000000001',
+          event: 'created',
+          platformEventSec: expect.any(Number),
+          changeId: expect.stringMatching(/^[0-9a-f]{16}$/),
+        },
+      ],
+      [
+        igB,
+        'instagram',
+        'comment_ingest',
+        {
+          sourceExternalId: '17900000000000002',
+          commentExternalId: '17800000000000002',
+          event: 'created',
+          platformEventSec: 1_760_000_400,
+          changeId: expect.stringMatching(/^[0-9a-f]{16}$/),
+        },
+      ],
+    ]);
+    const unrouted = lines
+      .map((l) => JSON.parse(l) as Record<string, unknown>)
+      .filter((l) => l.msg === 'webhook.unrouted_events');
+    expect(unrouted).toEqual([expect.objectContaining({ platform: 'instagram', count: 2 })]);
+  });
+
+  it('1000 instagram events in one delivery are all enqueued', async () => {
+    const enqueue = producerOk();
+    const directory = new PgConnectionDirectory(pool);
+    const lookup = vi.spyOn(directory, 'findLiveByAccount');
+    const route = routeWebhookDelivery({ directory, producer: { enqueue }, log });
+    const events = Array.from({ length: 1000 }, (_, i) =>
+      ev(
+        i % 2 === 0 ? IG_A : IG_B,
+        '17900000000000009',
+        `1780000001${String(i).padStart(7, '0')}`,
+        'comment.created',
+        1_760_000_500,
+      ),
+    );
+    await route({ platform: 'instagram', connectionId: null, deliveryKey: 'ig-burst', events });
+    expect(enqueue).toHaveBeenCalledTimes(1000);
+    expect(lookup).toHaveBeenCalledTimes(2);
+    const payloads = enqueue.mock.calls.map(
+      ([r]) => r.payload as { commentExternalId: string; changeId: string },
+    );
+    expect(new Set(payloads.map((p) => p.commentExternalId)).size).toBe(1000);
+    expect(new Set(payloads.map((p) => p.changeId)).size).toBe(1000);
+    expect(
+      enqueue.mock.calls.filter(([r]) => r.scope.connectionId === igA.connectionId),
+    ).toHaveLength(500);
+    expect(
+      enqueue.mock.calls.filter(([r]) => r.scope.connectionId === igB.connectionId),
+    ).toHaveLength(500);
+  });
+});

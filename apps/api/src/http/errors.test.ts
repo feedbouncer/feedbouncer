@@ -7,7 +7,7 @@ import {
   type ArgumentsHost,
 } from '@nestjs/common';
 import { createLogger } from '@feedbouncer/service-runtime';
-import { ApiError, ApiErrorFilter, notFound } from './errors.js';
+import { ApiError, ApiErrorFilter, errorBody, notFound } from './errors.js';
 
 function fakeReply() {
   const sent: { status?: number; headers: Record<string, string>; body?: unknown } = {
@@ -50,6 +50,15 @@ describe('ApiError', () => {
   });
   it('accepts a custom message', () => {
     expect(new ApiError(400, 'invalid_request', 'Bad name.').message).toBe('Bad name.');
+  });
+});
+
+describe('ApiError details', () => {
+  it('are merged into the envelope next to code and message', () => {
+    const e = new ApiError(422, 'text_too_long', undefined, { max: 2200 });
+    expect(errorBody(e)).toEqual({
+      error: { code: 'text_too_long', message: e.message, max: 2200 },
+    });
   });
 });
 

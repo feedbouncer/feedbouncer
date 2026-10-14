@@ -19,7 +19,7 @@ export interface AppDeps {
   readonly health: HealthReader;
   /** Prepended to every Redis key the API writes, so tests can isolate and clean up. */
   readonly redisKeyPrefix: string;
-  /** Null when Facebook is not configured. */
+  /** The Meta connectors (Facebook, plus Instagram when enabled). Null when Facebook is not configured. */
   readonly connectors: { registry: ConnectorRegistry; stack: PgConnectorStack } | null;
   /** Enqueue-only job producer (the worker runs the jobs). Null when Facebook is not configured. */
   readonly producer: JobProducer | null;

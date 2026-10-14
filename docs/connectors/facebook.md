@@ -20,7 +20,8 @@ go out. Nothing else.
 
 Out of scope:
 
-- Ads ("dark post") comments, and comments on Instagram or other platforms.
+- Ads ("dark post") comments, and comments on other platforms. Instagram is
+  a separate connector: see [instagram.md](instagram.md).
 - Posting, scheduling or editing posts, reading insights, and inbox
   conversations other than the one private reply per comment.
 - Importing comments posted before a Page was connected, or while it was
@@ -229,6 +230,7 @@ Other limits:
 - No backfill. Comments posted while a Page was disconnected, or before it was
   connected, are not imported. A catch-up poll is not implemented.
 - Ads (dark post) comments are not covered.
+- Shared Pages: see below.
 - Meta's deauthorize and data-deletion callbacks are not implemented.
 - Pages that are reachable only through a Business Manager may need the
   `business_management` permission, which FeedBouncer does not request. If a
@@ -239,6 +241,16 @@ Other limits:
 - Only one comment nesting level is modeled; see Acting.
 - Roles: a `member` can moderate comments. Only an `owner` or `admin` can
   connect, reconnect or disconnect a Page.
+
+## Shared Pages
+
+A Page can be connected here and, through its linked Instagram account, to the
+[Instagram connector](instagram.md). Both use the same Meta app, and a Meta app
+has one webhook subscription per Page whose `subscribed_fields` list is
+replaced as a whole on every write. FeedBouncer therefore reads the current
+list and merges by field: this connector adds and removes `feed`, the Instagram
+connector adds and removes `comments`, and the subscription is deleted only
+when no field is left. Disconnecting one platform does not stop the other.
 
 ## Troubleshooting
 

@@ -23,6 +23,8 @@ const ref = { sourceExternalId: 's1', externalId: 'c1' };
 
 let act: Mock<Connector['act']>;
 let listComments: Mock<Connector['listComments']>;
+let listReplies: Mock<NonNullable<Connector['listReplies']>>;
+const bareScope = { organizationId: 'o1', brandId: 'b1', connectionId: 'c2' };
 let refreshTokens: Mock<Connector['refreshTokens']>;
 let directory: MemoryConnectionDirectory;
 let runtime: ConnectorRuntime;
@@ -33,6 +35,10 @@ let vault: MemoryCredentialVault;
 beforeEach(async () => {
   act = vi.fn(async () => ({ status: 'applied', platformActionId: 'pa1' }));
   listComments = vi.fn(async () => ({ items: [comment], nextCursor: null }));
+  listReplies = vi.fn(async () => ({
+    items: [{ ...comment, externalId: 'r1', parentExternalId: 'c1' }],
+    nextCursor: null,
+  }));
   refreshTokens = vi.fn(async () => ({
     accessToken: new Secret('access-2'),
     accessTokenExpiresAt: null,
@@ -59,16 +65,28 @@ beforeEach(async () => {
     },
     refreshTokens,
     listComments,
+    listReplies,
     getComment: async () => null,
     act,
   };
   const registry = new ConnectorRegistry();
   registry.register(connector);
+  const withoutReplies: Connector = { ...connector };
+  delete withoutReplies.listReplies;
+  registry.register({ ...withoutReplies, platform: 'tiktok' });
   directory = new MemoryConnectionDirectory();
   directory.seed({ scope, platform: 'youtube', externalAccountId: 'chan', status: 'active' });
+  directory.seed({
+    scope: bareScope,
+    platform: 'tiktok',
+    externalAccountId: 'tt',
+    status: 'active',
+  });
   vault = new MemoryCredentialVault();
-  await vault.writeAccessToken(scope, { value: new Secret('access-1'), expiresAt: null });
-  await vault.writeRefreshToken(scope, { value: new Secret('refresh-1'), expiresAt: null });
+  for (const sc of [scope, bareScope]) {
+    await vault.writeAccessToken(sc, { value: new Secret('access-1'), expiresAt: null });
+    await vault.writeRefreshToken(sc, { value: new Secret('refresh-1'), expiresAt: null });
+  }
   lines = [];
   budget = memoryBudget();
   const log = createLogger('t', 'debug', (l) => lines.push(l));
@@ -213,6 +231,29 @@ describe('ConnectionClient reads', () => {
     await expect(c.listComments({ sourceExternalId: 's1', cursor: null })).rejects.toMatchObject({
       code: 'invalid_connector_output',
     });
+  });
+
+  it('listReplies caps the limit, validates output and runs on the bulk budget', async () => {
+    const acquire = vi.spyOn(budget, 'acquire');
+    const c = await runtime.connect(scope);
+    const page = await c.listReplies({ parent: ref, cursor: null, limit: 10_000 });
+    expect(page?.items).toHaveLength(1);
+    expect(listReplies.mock.calls[0]![1]).toMatchObject({ parent: ref, cursor: null, limit: 25 });
+    expect(acquire).toHaveBeenCalledWith('youtube', 'o1/b1/c1', expect.anything(), 'bulk');
+    listReplies.mockResolvedValueOnce({
+      items: [{ ...comment, permalink: 'javascript:alert(1)' }],
+      nextCursor: null,
+    });
+    await expect(c.listReplies({ parent: ref, cursor: null })).rejects.toMatchObject({
+      code: 'invalid_connector_output',
+    });
+  });
+
+  it('listReplies returns null without I/O when the connector has none', async () => {
+    const acquire = vi.spyOn(budget, 'acquire');
+    const c = await runtime.connect(bareScope);
+    expect(await c.listReplies({ parent: ref, cursor: null })).toBeNull();
+    expect(acquire).not.toHaveBeenCalled();
   });
 
   it('defers bulk reads when the budget is exhausted, keeping the urgent reserve', async () => {

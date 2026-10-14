@@ -123,6 +123,15 @@ export interface Connector {
     req: { sourceExternalId: string; cursor: string | null; limit: number },
   ): Promise<Page<NormalizedComment>>;
 
+  /**
+   * Replies under one comment. Implement when replies are not reachable through
+   * `listComments({ sourceExternalId: commentId })`.
+   */
+  listReplies?(
+    ctx: CallContext,
+    req: { parent: CommentRef; cursor: string | null; limit: number },
+  ): Promise<Page<NormalizedComment>>;
+
   getComment(ctx: CallContext, ref: CommentRef): Promise<NormalizedComment | null>;
 
   /**

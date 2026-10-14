@@ -23,6 +23,7 @@ import {
   parseFacebookEnv,
   type FacebookConfig,
 } from '@feedbouncer/connector-facebook';
+import { parseInstagramEnv, type InstagramConfig } from '@feedbouncer/connector-instagram';
 import { loadJobsConfig, type JobsConfig } from '@feedbouncer/jobs';
 import {
   loadHealthPolicy,
@@ -62,6 +63,11 @@ export interface ApiEnv {
   readonly encryption: Keyring;
   /** Null when FACEBOOK_APP_ID is unset: the connector, its webhook route and its job producer are off. */
   readonly facebook: FacebookConfig | null;
+  /**
+   * Null unless INSTAGRAM_CONNECTOR_ENABLED=true. Runs on the Facebook Meta app,
+   * so enabling it without the Facebook config fails startup.
+   */
+  readonly instagram: InstagramConfig | null;
   /** Queue prefix and dedup window, shared with the worker so both sides use the same queues. */
   readonly jobs: JobsConfig;
   readonly telemetry: TelemetryConfig;
@@ -89,6 +95,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
   checkNotPlaceholder(appEnv, 'DATABASE_URL', databaseUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'AUTH_SECRET', authSecret, opts.warn);
+  const facebook = parseFacebookEnv(env, opts.warn);
   const config: ApiEnv = {
     appEnv,
     databaseUrl,
@@ -105,7 +112,8 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     }),
     trustProxyHops: readInt(env, 'TRUST_PROXY_HOPS', { min: 0, max: 5, fallback: 0 }),
     encryption: loadEncryptionKeyring(env, appEnv, opts.warn),
-    facebook: parseFacebookEnv(env, opts.warn),
+    facebook,
+    instagram: parseInstagramEnv(env, facebook),
     jobs: loadJobsConfig(env),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),
@@ -118,6 +126,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     publicWebUrl: publicWebUrl.origin,
     trustProxyHops: config.trustProxyHops,
     facebookEnabled: config.facebook !== null,
+    instagramEnabled: config.instagram !== null,
     jobQueuePrefix: config.jobs.prefix,
     activeKeyId: config.encryption.activeKeyId,
     metricsPort: config.telemetry.metrics.port,

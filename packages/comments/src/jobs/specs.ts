@@ -31,7 +31,7 @@ export const INGEST_JOB = {
       ? `${p.commentExternalId}:updated:${p.platformEventSec}:${p.changeId}`
       : `${p.commentExternalId}:${p.event}`,
   policy: { maxAttempts: 8 } satisfies Partial<RetryPolicy>,
-  platforms: ['facebook'] as readonly Platform[] | 'all',
+  platforms: ['facebook', 'instagram'] as readonly Platform[] | 'all',
 };
 
 export const executePayload = z.strictObject({ actionId: z.uuid() });
@@ -42,7 +42,7 @@ export const EXECUTE_JOB = {
   payload: executePayload,
   externalRef: (p: ExecutePayload): string => `action:${p.actionId}`,
   policy: { maxAttempts: 8 } satisfies Partial<RetryPolicy>,
-  platforms: ['facebook'] as readonly Platform[] | 'all',
+  platforms: ['facebook', 'instagram'] as readonly Platform[] | 'all',
 };
 
 // `${connectionId}:${audit sequence}` of the connection.authorized (setup) or

@@ -1,10 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type {
-  ActionKind,
-  CommentRow,
-  ModerationActionView,
-  RequestActionResult,
+import {
+  ACTION_KINDS,
+  availabilityFor,
+  connectionRefusal,
+  eligibilityComment,
+  resolveConstraints,
+  type ActionAvailability,
+  type ActionKind,
+  type CommentRow,
+  type ModerationActionView,
+  type RefusalCode,
 } from '@feedbouncer/comments';
+import { systemClock, type ConnectorCapabilities } from '@feedbouncer/connectors';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
@@ -25,6 +32,12 @@ export interface CommentView {
   postedAt: string;
   permalink: string | null;
   isOwnAccount: boolean;
+  /** The media or post the comment is on (the platform's id). */
+  mediaExternalId: string;
+  /** What a person may do with this comment now, computed here with the same rules POST actions applies. */
+  availability: Record<ActionKind, ActionAvailability>;
+  /** Longest reply text per kind, in code points. */
+  replyLimits: { public_reply: number; private_reply: number };
 }
 
 export interface ListCommentsQuery {
@@ -39,7 +52,7 @@ export interface ListCommentsQuery {
 const MIN_UUID = '00000000-0000-0000-0000-000000000000';
 
 const REFUSALS: Record<
-  Exclude<Extract<RequestActionResult, { status: 'refused' }>['code'], 'not_found'>,
+  Exclude<RefusalCode, 'not_found'>,
   [number, ErrorCode]
 > = {
   unsupported: [422, 'unsupported_action'],
@@ -48,7 +61,31 @@ const REFUSALS: Record<
   connection_inactive: [409, 'connection_inactive'],
 };
 
-const toView = (c: CommentRow): CommentView => ({
+/** Used when the platform's connector is not registered (e.g. Instagram disabled after connecting). */
+const DEFAULT_REPLY_LIMITS = { public_reply: 8000, private_reply: 8000 } as const;
+
+const unavailable = (reason: string) =>
+  Object.fromEntries(
+    ACTION_KINDS.map((k): [ActionKind, ActionAvailability] => [k, { available: false, reason }]),
+  ) as Record<ActionKind, ActionAvailability>;
+
+/** Same order as POST actions: the connection's state first, then the platform, then the comment. */
+function availability(
+  c: CommentRow,
+  caps: ConnectorCapabilities | undefined,
+  now: Date,
+): Record<ActionKind, ActionAvailability> {
+  const blocked = connectionRefusal(c.connectionStatus);
+  if (blocked) return unavailable(blocked);
+  if (!caps) return unavailable('unsupported');
+  return availabilityFor({ comment: eligibilityComment(c), caps, now });
+}
+
+const toView = (
+  c: CommentRow,
+  caps: ConnectorCapabilities | undefined,
+  now: Date,
+): CommentView => ({
   id: c.id,
   connectionId: c.connectionId,
   platform: c.platform,
@@ -60,6 +97,9 @@ const toView = (c: CommentRow): CommentView => ({
   postedAt: c.postedAt.toISOString(),
   permalink: c.permalink,
   isOwnAccount: c.isOwnAccount,
+  mediaExternalId: c.sourceExternalId,
+  availability: availability(c, caps, now),
+  replyLimits: caps ? { ...resolveConstraints(caps).maxReplyChars } : { ...DEFAULT_REPLY_LIMITS },
 });
 
 @Injectable()
@@ -85,7 +125,9 @@ export class CommentsService {
       excludeDeleted: true,
       ...(q.connectionId !== undefined && { connectionId: q.connectionId }),
     });
-    return rows.map(toView);
+    const registry = this.deps.connectors?.registry;
+    const now = new Date(systemClock.now());
+    return rows.map((c) => toView(c, registry?.get(c.platform)?.capabilities, now));
   }
 
   async actions(
@@ -118,6 +160,8 @@ export class CommentsService {
     });
     if (r.status === 'refused') {
       if (r.code === 'not_found') throw notFound();
+      if (r.code === 'text_too_long')
+        throw new ApiError(422, 'text_too_long', undefined, { max: r.max });
       const [status, code] = REFUSALS[r.code];
       throw new ApiError(status, code);
     }

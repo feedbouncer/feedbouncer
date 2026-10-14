@@ -30,6 +30,9 @@ x-facebook-env: &facebook-env
   FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET:-}
   FACEBOOK_WEBHOOK_VERIFY_TOKEN: ${FACEBOOK_WEBHOOK_VERIFY_TOKEN:-}
   FACEBOOK_GRAPH_API_VERSION: ${FACEBOOK_GRAPH_API_VERSION:-}
+  # Instagram connector (docs/connectors/instagram.md). No default: unset means off.
+  # It runs on the Facebook Meta app above, so it needs the FACEBOOK_* variables.
+  INSTAGRAM_CONNECTOR_ENABLED: ${INSTAGRAM_CONNECTOR_ENABLED:-}
 
 x-node-service: &node-service
   init: true
@@ -162,6 +165,7 @@ services:
       - ./packages/secrets/src:/repo/packages/secrets/src:ro
       - ./packages/comments/src:/repo/packages/comments/src:ro
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
+      - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
       - ./packages/observability/src:/repo/packages/observability/src:ro
@@ -224,6 +228,7 @@ services:
       - ./packages/authz/src:/repo/packages/authz/src:ro
       - ./packages/comments/src:/repo/packages/comments/src:ro
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
+      - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
       - ./packages/mailer/src:/repo/packages/mailer/src:ro

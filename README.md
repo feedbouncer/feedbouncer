@@ -28,25 +28,26 @@ pnpm test
 
 ## Repository layout
 
-| Path                          | What it is                                                              |
-| ----------------------------- | ----------------------------------------------------------------------- |
-| `apps/api`                    | HTTP API (NestJS on Fastify): accounts, organizations, brands, health   |
-| `apps/web`                    | Web app (Next.js)                                                       |
-| `apps/worker`                 | Background worker that runs queued jobs                                 |
-| `apps/placeholder-app`        | Minimal app used as the template for new apps and Docker images         |
-| `packages/authz`              | Roles and authorization checks                                          |
-| `packages/comments`           | Comments: storage, moderation, lifecycle, webhooks, reconnect emails    |
-| `packages/connector-facebook` | Facebook Pages connector: OAuth, comments, moderation actions           |
-| `packages/connectors`         | Contract and shared services for platform connectors                    |
-| `packages/db`                 | Postgres schema, migrations and the migration CLI                       |
-| `packages/jobs`               | Job queue: per-platform queues, retries, dead-letter queue, idempotency |
-| `packages/mailer`             | Transactional email                                                     |
-| `packages/observability`      | Structured logs, traces, metrics and connector health                   |
-| `packages/placeholder`        | Minimal package used as the template for new packages                   |
-| `packages/secrets`            | Envelope encryption for stored credentials and key management           |
-| `packages/service-runtime`    | Shared service startup, configuration, health and error handling        |
-| `docs/`                       | Operations and developer guides                                         |
-| `scripts/`                    | CI guard tests and dev-stack smoke scripts                              |
+| Path                           | What it is                                                                  |
+| ------------------------------ | --------------------------------------------------------------------------- |
+| `apps/api`                     | HTTP API (NestJS on Fastify): accounts, organizations, brands, health       |
+| `apps/web`                     | Web app (Next.js)                                                           |
+| `apps/worker`                  | Background worker that runs queued jobs                                     |
+| `apps/placeholder-app`         | Minimal app used as the template for new apps and Docker images             |
+| `packages/authz`               | Roles and authorization checks                                              |
+| `packages/comments`            | Comments: storage, moderation, lifecycle, webhooks, reconnect emails        |
+| `packages/connector-facebook`  | Facebook Pages connector: OAuth, comments, moderation actions               |
+| `packages/connector-instagram` | Instagram connector (Facebook Login): comments, moderation actions, replies |
+| `packages/connectors`          | Contract and shared services for platform connectors                        |
+| `packages/db`                  | Postgres schema, migrations and the migration CLI                           |
+| `packages/jobs`                | Job queue: per-platform queues, retries, dead-letter queue, idempotency     |
+| `packages/mailer`              | Transactional email                                                         |
+| `packages/observability`       | Structured logs, traces, metrics and connector health                       |
+| `packages/placeholder`         | Minimal package used as the template for new packages                       |
+| `packages/secrets`             | Envelope encryption for stored credentials and key management               |
+| `packages/service-runtime`     | Shared service startup, configuration, health and error handling            |
+| `docs/`                        | Operations and developer guides                                             |
+| `scripts/`                     | CI guard tests and dev-stack smoke scripts                                  |
 
 ## Local stack with Docker Compose
 

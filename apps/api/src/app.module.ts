@@ -15,11 +15,12 @@ import { ConnectionHealthController } from './connections/connection-health.cont
 import { ConnectionHealthService } from './connections/connection-health.service.js';
 import { ConnectionsController } from './connections/connections.controller.js';
 import { ConnectionsService } from './connections/connections.service.js';
+import { ConnectablePlatformPipe } from './connections/connectable-platform.pipe.js';
 import {
-  FacebookCallbackController,
-  FacebookConnectController,
-} from './connections/facebook-connect.controller.js';
-import { FacebookConnectService } from './connections/facebook-connect.service.js';
+  OAuthCallbackController,
+  OAuthConnectController,
+} from './connections/oauth-connect.controller.js';
+import { OAuthConnectService } from './connections/oauth-connect.service.js';
 import { HealthController } from './http/health.controller.js';
 import {
   InvitationsController,
@@ -61,8 +62,8 @@ export class AppModule {
         BrandsController,
         ConnectionHealthController,
         ConnectionsController,
-        FacebookConnectController,
-        FacebookCallbackController,
+        OAuthConnectController,
+        OAuthCallbackController,
         CommentsController,
         MembersController,
         OrgInvitationsController,
@@ -76,7 +77,8 @@ export class AppModule {
         BrandsService,
         ConnectionHealthService,
         ConnectionsService,
-        FacebookConnectService,
+        OAuthConnectService,
+        ConnectablePlatformPipe,
         CommentsService,
         MembersService,
         InvitationsService,

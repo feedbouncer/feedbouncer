@@ -84,10 +84,11 @@ export class MemoryConnectionDirectory implements ConnectionDirectory {
         return { scope: rec.scope, created: false };
       }
     }
-    if (i.platform === 'facebook')
+    // Pages and Instagram accounts each belong to exactly one live connection (as in Pg).
+    if (i.platform === 'facebook' || i.platform === 'instagram')
       for (const { rec } of this.#rows.values())
         if (
-          rec.platform === 'facebook' &&
+          rec.platform === i.platform &&
           rec.externalAccountId === i.externalAccountId &&
           rec.status !== 'revoked'
         )

@@ -20,6 +20,7 @@ import {
   type Connector,
 } from '@feedbouncer/connectors';
 import { createFacebookConnector } from '@feedbouncer/connector-facebook';
+import { createInstagramConnector } from '@feedbouncer/connector-instagram';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import { JobError, classifyFailure, type JobContext } from '@feedbouncer/jobs';
 import { CredentialStore, type ConnectionScope } from '@feedbouncer/secrets';
@@ -39,6 +40,8 @@ let scope: ConnectionScope;
 let store: PgCommentStore;
 let graph: FakeGraph;
 let pageId: string;
+let pageToken: string;
+let creds: CredentialStore;
 let nowMs = Date.UTC(2026, 9, 13, 12, 0, 0);
 const clock: Clock = { now: () => nowMs };
 const tick = (ms = 1_000) => {
@@ -97,24 +100,23 @@ beforeAll(async () => {
   const { userId } = graph.addUser('Dana');
   const page = graph.addPage(userId, { name: 'Shop' });
   pageId = page.pageId;
+  pageToken = page.pageToken;
   await ctx.c.query('UPDATE connection SET external_account_id = $1 WHERE id = $2', [
     pageId,
     t.connectionId,
   ]);
-  const creds = new CredentialStore(pool, testKeyring(['k1']));
+  creds = new CredentialStore(pool, testKeyring(['k1']));
   await creds.put(scope, 'access_token', new Secret(page.pageToken), null);
 
-  const connector = createFacebookConnector(
-    {
-      appId: '111',
-      appSecret: new Secret(APP_SECRET),
-      graphVersion: 'v26.0',
-      webhookVerifyToken: new Secret('v'.repeat(24)),
-    },
-    { clock },
-  );
+  const meta = {
+    appId: '111',
+    appSecret: new Secret(APP_SECRET),
+    graphVersion: 'v26.0',
+    webhookVerifyToken: new Secret('v'.repeat(24)),
+  };
   const registry = new ConnectorRegistry();
-  registry.register(connector);
+  registry.register(createFacebookConnector(meta, { clock }));
+  registry.register(createInstagramConnector({ meta }, { clock }));
   const fetchVia: typeof fetch = async (input, init) => {
     const hold = holdNext;
     holdNext = null;
@@ -346,5 +348,157 @@ describe('comment ingest job', () => {
         [t.connectionId],
       );
     }
+  });
+});
+
+describe('comment ingest job on instagram', () => {
+  let igUserId: string;
+  let igScope: ConnectionScope;
+  const igPayload = (
+    c: { mediaId: string; commentId: string },
+    event: IngestPayload['event'],
+  ): IngestPayload => ({
+    sourceExternalId: c.mediaId,
+    commentExternalId: c.commentId,
+    event,
+    platformEventSec: sec(nowMs),
+    changeId: '0123456789abcdef',
+  });
+  const runIg = (p: IngestPayload) => run(p, igScope);
+  /** Graph timestamps have whole seconds. */
+  const graphSecond = (ms: number) => new Date(Math.floor(ms / 1000) * 1000);
+
+  beforeAll(async () => {
+    igUserId = graph.addInstagramAccount(pageId, { username: 'shop.official' }).igUserId;
+    const r = await ctx.c.query<{ id: string }>(
+      `INSERT INTO connection (organization_id, brand_id, platform, external_account_id)
+       VALUES ($1, $2, 'instagram', $3) RETURNING id`,
+      [t.organizationId, t.brandId, igUserId],
+    );
+    igScope = { organizationId: t.organizationId, brandId: t.brandId, connectionId: r.rows[0]!.id };
+    await creds.put(igScope, 'access_token', new Secret(pageToken), null);
+  });
+
+  it('instagram: stores author, text, media id as source, parent, timestamp, hidden state', async () => {
+    const createdAtMs = nowMs - 90_000;
+    const top = graph.addIgComment(igUserId, { text: 'nice post', createdAtMs });
+    const reply = graph.addIgComment(igUserId, {
+      parentId: top.commentId,
+      authorId: '17841400000009999',
+      username: 'fan.account',
+      text: 'agreed',
+      createdAtMs,
+    });
+    graph.ownerHides(reply.commentId);
+    const r = await runIg(igPayload(reply, 'created'));
+    expect(r).toMatchObject({ outcome: 'created' });
+    expect(await store.load(t, r.commentId as string)).toEqual({
+      id: r.commentId,
+      connectionId: igScope.connectionId,
+      platform: 'instagram',
+      sourceExternalId: top.mediaId,
+      externalId: reply.commentId,
+      parentExternalId: top.commentId,
+      parentCommentId: null,
+      authorExternalId: '17841400000009999',
+      authorName: 'fan.account',
+      body: 'agreed',
+      platformState: 'hidden',
+      parentPlatformState: null,
+      postedAt: graphSecond(createdAtMs),
+      permalink: `https://www.instagram.com/p/${top.mediaId}/`,
+      isOwnAccount: false,
+      connectionStatus: 'active',
+      privateReplied: false,
+    });
+    // The parent arriving later links the stored reply to it.
+    const parent = await runIg(igPayload(top, 'created'));
+    expect(await store.load(t, r.commentId as string)).toMatchObject({
+      parentCommentId: parent.commentId,
+      parentPlatformState: 'visible',
+    });
+    expect(events.at(-1)).toMatchObject({ platform: 'instagram', outcome: 'created' });
+  });
+
+  it('instagram: replaying the same created event creates no second comment (idempotent ingest)', async () => {
+    const c = graph.addIgComment(igUserId);
+    const a = await runIg(igPayload(c, 'created'));
+    tick();
+    const b = await runIg(igPayload(c, 'created'));
+    expect(b.commentId).toBe(a.commentId);
+    expect(b.outcome).toBe('updated');
+    expect(await rowsFor(c.commentId)).toHaveLength(1);
+  });
+
+  it('instagram: a stale fetch never overwrites a newer synced state', async () => {
+    const c = graph.addIgComment(igUserId);
+    const { commentId } = await runIg(igPayload(c, 'created'));
+    tick();
+    const held = holdNextResponse();
+    const older = runIg(igPayload(c, 'updated'));
+    await held.reached; // its response (visible) is captured
+    graph.ownerHides(c.commentId);
+    tick();
+    expect(await runIg(igPayload(c, 'updated'))).toMatchObject({ outcome: 'updated' });
+    tick();
+    held.release();
+    expect(await older).toMatchObject({ outcome: 'stale' });
+    expect((await store.load(t, commentId as string))?.platformState).toBe('hidden');
+  });
+
+  it('instagram: a comment by the account itself is flagged is_own_account', async () => {
+    const c = graph.addIgComment(igUserId, { authorId: igUserId, text: 'thank you!' });
+    const r = await runIg(igPayload(c, 'created'));
+    expect(await store.load(t, r.commentId as string)).toMatchObject({
+      isOwnAccount: true,
+      authorExternalId: igUserId,
+      authorName: 'shop.official',
+    });
+  });
+
+  it('instagram: own comment whose from.id is a different (scoped) id is still flagged via user.id', async () => {
+    const c = graph.addIgComment(igUserId, {
+      authorId: igUserId,
+      fromId: '17841400000005555',
+      text: 'thanks again',
+    });
+    const r = await runIg(igPayload(c, 'created'));
+    expect(await store.load(t, r.commentId as string)).toMatchObject({
+      isOwnAccount: true,
+      authorExternalId: igUserId,
+      authorName: 'shop.official',
+    });
+  });
+
+  it('instagram: emoji / RTL / 10k-char / NUL text round-trips intact (NUL -> U+FFFD)', async () => {
+    const cases: [string, string][] = [
+      ['👍🏽 family 👨‍👩‍👧 flag 🇮🇱', '👍🏽 family 👨‍👩‍👧 flag 🇮🇱'],
+      ['שלום עולם — مرحبا بالعالم', 'שלום עולם — مرحبا بالعالم'],
+      ['x'.repeat(10_000), 'x'.repeat(10_000)],
+      ['before\u0000after', 'before�after'],
+      ['  spaced\n\tlines  ', '  spaced\n\tlines  '],
+    ];
+    for (const [text, stored] of cases) {
+      const c = graph.addIgComment(igUserId, { text });
+      const r = await runIg(igPayload(c, 'created'));
+      expect((await store.load(t, r.commentId as string))?.body).toBe(stored);
+    }
+  });
+
+  it('instagram: a resync after the owner hid the comment in the app sets platform_state hidden', async () => {
+    const c = graph.addIgComment(igUserId);
+    const { commentId } = await runIg(igPayload(c, 'created'));
+    expect((await store.load(t, commentId as string))?.platformState).toBe('visible');
+    // Hiding in the Instagram app produces no webhook; only a re-read sees it.
+    graph.ownerHides(c.commentId);
+    tick();
+    const r = await runIg({ ...igPayload(c, 'updated'), changeId: 'fedcba9876543210' });
+    expect(r).toMatchObject({ outcome: 'updated', commentId });
+    expect((await store.load(t, commentId as string))?.platformState).toBe('hidden');
+    // An owner delete is seen the same way and is terminal.
+    graph.ownerDeletes(c.commentId);
+    tick();
+    expect(await runIg(igPayload(c, 'updated'))).toMatchObject({ outcome: 'gone', commentId });
+    expect((await store.load(t, commentId as string))?.platformState).toBe('deleted');
   });
 });

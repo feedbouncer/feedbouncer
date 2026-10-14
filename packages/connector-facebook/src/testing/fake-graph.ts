@@ -3,6 +3,23 @@
 // binding, error injection and a call log that never holds a token.
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { PRIVATE_REPLY_WINDOW_MS } from '@feedbouncer/connectors';
+import {
+  FAKE_IG_SCOPES,
+  addIgComment,
+  addInstagramAccount,
+  createIgState,
+  igPrivateReplies,
+  igReplies,
+  igState,
+  instagramDeliveryBody,
+  linkedAccount,
+  ownerDeletes,
+  ownerHides,
+  routeInstagram,
+  type AddIgCommentOptions,
+  type IgDeliveryComment,
+  type IgHost,
+} from './fake-instagram.js';
 
 const HOST = 'graph.facebook.com';
 
@@ -16,7 +33,7 @@ interface Page {
   userId: string;
   tasks: string[];
   token: string;
-  subscribed: boolean;
+  subscriptions: Map<string, string[]>; // app id -> subscribed fields
   blocked: Set<string>;
 }
 interface Comment {
@@ -77,6 +94,8 @@ export class FakeGraph {
   private readonly issued: string[] = [];
   private readonly log: { method: string; path: string }[] = [];
   private readonly injected: Injected[] = [];
+  private readonly ig = createIgState();
+  private readonly igHost: IgHost;
 
   constructor(opts: FakeGraphOptions) {
     this.appSecret = opts.appSecret;
@@ -84,6 +103,69 @@ export class FakeGraph {
     this.version = opts.version ?? 'v26.0';
     this.clock = opts.clock ?? Date.now;
     this.fetch = (input, init) => this.handle(input, init);
+    this.igHost = {
+      clock: () => this.clock(),
+      graphTime,
+      reply: (status, body) => this.reply(status, body),
+      error: (code, subcode) => this.error(code, subcode),
+      pageOwner: (pageId) => this.pages.get(pageId)?.userId,
+      permissionGranted: (userId, permission) => {
+        const explicit = this.ig.granted.get(userId);
+        if (explicit) return explicit.includes(permission);
+        return !this.grantedScopes.get(userId)?.declined.includes(permission);
+      },
+    };
+  }
+
+  // instagram controls and observation (implemented in fake-instagram.ts)
+
+  addInstagramAccount(pageId: string, o: { username?: string } = {}): { igUserId: string } {
+    if (!this.pages.has(pageId)) throw new Error('unknown page');
+    return addInstagramAccount(this.ig, pageId, o);
+  }
+
+  addIgComment(
+    igUserId: string,
+    o: AddIgCommentOptions = {},
+  ): { mediaId: string; commentId: string } {
+    return addIgComment(this.ig, this.clock(), igUserId, o);
+  }
+
+  igState(commentId: string): 'visible' | 'hidden' | 'deleted' {
+    return igState(this.ig, commentId);
+  }
+
+  igReplies(commentId: string): readonly { id: string; text: string; fromId: string }[] {
+    return igReplies(this.ig, commentId);
+  }
+
+  igPrivateReplies(commentId: string): readonly string[] {
+    return igPrivateReplies(this.ig, commentId);
+  }
+
+  /** The owner acted in the Instagram app: no webhook is produced. */
+  ownerHides(commentId: string): void {
+    ownerHides(this.ig, commentId);
+  }
+
+  ownerDeletes(commentId: string): void {
+    ownerDeletes(this.ig, commentId);
+  }
+
+  /** Drives GET me/permissions and the private-reply permission error. */
+  setGrantedPermissions(userId: string, perms: readonly string[]): void {
+    if (!this.users.has(userId)) throw new Error('unknown user');
+    this.ig.granted.set(userId, [...perms]);
+  }
+
+  signedInstagramDelivery(
+    igUserId: string,
+    comments: readonly IgDeliveryComment[],
+    o: { timeUnit?: 's' | 'ms' } = {},
+  ): { headers: Record<string, string>; rawBody: Buffer } {
+    return this.sign(
+      instagramDeliveryBody(this.ig, this.clock(), igUserId, comments, o.timeUnit ?? 's'),
+    );
   }
 
   // controls
@@ -107,7 +189,7 @@ export class FakeGraph {
       userId,
       tasks: opts.tasks ?? ['MODERATE', 'MESSAGING'],
       token,
-      subscribed: false,
+      subscriptions: new Map(),
       blocked: new Set(),
     });
     return { pageId: id, pageToken: token };
@@ -210,7 +292,28 @@ export class FakeGraph {
   }
 
   subscribed(pageId: string): boolean {
-    return this.pages.get(pageId)?.subscribed ?? false;
+    return this.subscribedFields(pageId).length > 0;
+  }
+
+  /** Fields this app is subscribed to on the Page; [] when not subscribed. */
+  subscribedFields(pageId: string): readonly string[] {
+    return [...(this.pages.get(pageId)?.subscriptions.get(this.appId) ?? [])];
+  }
+
+  setSubscription(pageId: string, appId: string, fields: readonly string[]): void {
+    const page = this.pages.get(pageId);
+    if (!page) throw new Error('unknown page');
+    page.subscriptions.set(appId, [...fields]);
+  }
+
+  /** Same as setSubscription; named for tests about subscriptions owned by another app. */
+  setOtherAppSubscription(pageId: string, appId: string, fields: readonly string[]): void {
+    this.setSubscription(pageId, appId, fields);
+  }
+
+  /** The app secret, for building appsecret_proof in test call helpers. */
+  appSecretValue(): string {
+    return this.appSecret;
   }
 
   /** Every token and code ever issued, plus the app secret. */
@@ -247,6 +350,10 @@ export class FakeGraph {
         },
       ],
     };
+    return this.sign(body);
+  }
+
+  private sign(body: unknown): { headers: Record<string, string>; rawBody: Buffer } {
     const rawBody = Buffer.from(JSON.stringify(body), 'utf8');
     const sig = createHmac('sha256', this.appSecret).update(rawBody).digest('hex');
     return {
@@ -389,6 +496,10 @@ export class FakeGraph {
   ): Response {
     const missing = () => this.error(100, 33);
     const denied = () => this.error(200);
+    // `me` with a Page token addresses that Page's subscriptions.
+    if (path[0] === 'me' && path[1] === 'subscribed_apps' && who.kind === 'page') {
+      path = [who.id, 'subscribed_apps'];
+    }
     const [first, second] = path;
 
     if (first === 'me' && path.length === 1 && method === 'GET') {
@@ -399,6 +510,13 @@ export class FakeGraph {
     if (first === 'me' && second === 'permissions' && path.length === 2 && method === 'GET') {
       if (who.kind !== 'user') return denied();
       const c = this.grantedScopes.get(who.id);
+      const explicit = this.ig.granted.get(who.id);
+      if (explicit || !c) {
+        const list = explicit ?? FAKE_IG_SCOPES;
+        return this.reply(200, {
+          data: list.map((permission) => ({ permission, status: 'granted' })),
+        });
+      }
       return this.reply(200, {
         data: [
           ...(c?.scopes ?? []).map((permission) => ({ permission, status: 'granted' })),
@@ -410,10 +528,22 @@ export class FakeGraph {
       if (who.kind !== 'user') return denied();
       const data = [...this.pages.values()]
         .filter((p) => p.userId === who.id)
-        .map((p) => ({ id: p.id, name: p.name, tasks: p.tasks, access_token: p.token }));
+        .map((p) => {
+          const ig = linkedAccount(this.ig, p.id);
+          return {
+            id: p.id,
+            name: p.name,
+            tasks: p.tasks,
+            access_token: p.token,
+            ...(ig ? { instagram_business_account: ig } : {}),
+          };
+        });
       return this.reply(200, { data });
     }
     if (first === 'me' || !first || path.length > 2) return missing();
+
+    const igResponse = routeInstagram(this.ig, this.igHost, method, path, query, form, json, who);
+    if (igResponse) return igResponse;
 
     // Everything else addresses a Page-owned object: the first id segment is the Page.
     const owner = first.split('_')[0]!;
@@ -496,12 +626,23 @@ export class FakeGraph {
         return this.error(100);
       }
       case 'subscribed_apps': {
+        if (method === 'GET') {
+          const data = [...page.subscriptions].map(([id, subscribed_fields]) => ({
+            id,
+            name: 'x',
+            subscribed_fields,
+          }));
+          return this.reply(200, { data });
+        }
         if (method === 'POST') {
-          page.subscribed = true;
+          // Graph replaces the calling app's field list; merging is the client's job.
+          const fields = (form.get('subscribed_fields') ?? '').split(',').filter(Boolean);
+          if (fields.length === 0) return this.error(100);
+          page.subscriptions.set(this.appId, fields);
           return this.reply(200, { success: true });
         }
         if (method === 'DELETE') {
-          page.subscribed = false;
+          page.subscriptions.delete(this.appId);
           return this.reply(200, { success: true });
         }
         return this.error(100);

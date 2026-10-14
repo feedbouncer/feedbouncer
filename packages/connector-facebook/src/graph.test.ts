@@ -89,6 +89,22 @@ describe('graphRequest', () => {
     },
   );
 
+  it('allows the replies segment and still rejects hostile ids', async () => {
+    const fetch = vi.fn(async (url: URL) => {
+      expect(url.pathname).toBe('/v26.0/17890000000000001/replies');
+      return new Response('{"data":[]}', { status: 200 });
+    });
+    await graphRequest(call(fetch as never), {
+      method: 'GET',
+      path: ['17890000000000001', 'replies'],
+    });
+    expect(fetch).toHaveBeenCalledOnce();
+    await expect(
+      graphRequest(call(fetch as never), { method: 'GET', path: ['..', 'replies'] }),
+    ).rejects.toMatchObject({ kind: 'permanent', code: 'invalid_graph_id' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('maps a Graph error body and never carries its message', async () => {
     const fetch = async () =>
       new Response(

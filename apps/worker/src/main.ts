@@ -104,8 +104,12 @@ try {
       redisPrefix: env.jobs.prefix,
       keys: env.encryption,
       registry: connectors,
-      appSecrets: new Map([['facebook', facebook.appSecret]]),
-      redirectUri: () => new URL('/api/v1/oauth/facebook/callback', mail.publicWebUrl).href,
+      // One Meta app signs both platforms' webhooks and owns both OAuth clients.
+      appSecrets: new Map([
+        ['facebook', facebook.appSecret],
+        ...(env.instagram ? ([['instagram', facebook.appSecret]] as const) : []),
+      ]),
+      redirectUri: (p) => new URL(`/api/v1/oauth/${p}/callback`, mail.publicWebUrl).href,
       log,
       workerId,
       observer: promConnectorObserver(telemetry.metrics),
@@ -126,6 +130,8 @@ try {
       clock: systemClock,
       log,
       ingestObserver: promIngestObserver(telemetry.metrics),
+      // The producer needs the job registry built here, so it is reached lazily.
+      producer: { enqueue: (input) => producer.enqueue(input) },
     });
   }
 

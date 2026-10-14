@@ -11,6 +11,12 @@ import {
 import type { Platform } from '../types.js';
 import { noNul } from './sanitize.js';
 
+/** One live (non-revoked) connection per platform account; a violation means another tenant owns it. */
+const LIVE_ACCOUNT_INDEXES = [
+  'connection_facebook_live_external_account_id_key',
+  'connection_instagram_live_external_account_id_key',
+];
+
 export class PgConnectionDirectory implements ConnectionDirectory {
   constructor(private readonly pool: pg.Pool) {}
 
@@ -75,7 +81,7 @@ export class PgConnectionDirectory implements ConnectionDirectory {
         ],
       );
     } catch (err) {
-      if (isUniqueViolation(err, 'connection_facebook_live_external_account_id_key'))
+      if (LIVE_ACCOUNT_INDEXES.some((index) => isUniqueViolation(err, index)))
         throw new ConnectionTakenError();
       throw err;
     }

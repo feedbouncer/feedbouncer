@@ -31,3 +31,19 @@ describe('missingPermissionText', () => {
     expect(missingPermissionText('constructor,__proto__,toString')).toEqual([]);
   });
 });
+
+describe('instagram scopes', () => {
+  it('describes the Instagram permissions', () => {
+    expect(
+      missingPermissionText('instagram_basic,instagram_manage_comments,instagram_manage_messages'),
+    ).toEqual([
+      "See your Instagram account's basic info (instagram_basic)",
+      'Read, hide, delete and reply to comments (instagram_manage_comments)',
+      'Send one private reply to a commenter (instagram_manage_messages)',
+    ]);
+  });
+  it.each(['https://www.instagram.com/oauth/authorize', 'https://api.instagram.com/oauth'])(
+    'still only allows the facebook dialog host: rejects %s',
+    (u) => expect(safeAuthorizationUrl(u)).toBeNull(),
+  );
+});

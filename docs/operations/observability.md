@@ -41,16 +41,16 @@ still present on the lines that already carried them.
 Correlation keys are snake_case and are attached automatically to every line written while
 the work is in scope. A value that is not a safe identifier is dropped, never logged.
 
-| Key              | Present when                                                                               |
-| ---------------- | ------------------------------------------------------------------------------------------ |
-| `tenant_id`      | An authenticated API request or a job is in scope (the organization id).                   |
-| `brand_id`       | A job is running (the brand the job belongs to).                                           |
-| `connector_id`   | A connection is known: its id, taken from a verified webhook delivery or a job.            |
-| `connector_type` | The platform (`facebook`, `youtube`, ...); `unknown` for a webhook to an unknown platform. |
-| `job_id`         | A job is running or being enqueued: the `job_ledger` row id.                               |
-| `request_id`     | An API request is in scope.                                                                |
-| `trace_id`       | A span is active (32 hex characters).                                                      |
-| `span_id`        | A span is active (16 hex characters).                                                      |
+| Key              | Present when                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------- |
+| `tenant_id`      | An authenticated API request or a job is in scope (the organization id).                                |
+| `brand_id`       | A job is running (the brand the job belongs to).                                                        |
+| `connector_id`   | A connection is known: its id, taken from a verified webhook delivery or a job.                         |
+| `connector_type` | The platform (`facebook`, `instagram`, `youtube`, ...); `unknown` for a webhook to an unknown platform. |
+| `job_id`         | A job is running or being enqueued: the `job_ledger` row id.                                            |
+| `request_id`     | An API request is in scope.                                                                             |
+| `trace_id`       | A span is active (32 hex characters).                                                                   |
+| `span_id`        | A span is active (16 hex characters).                                                                   |
 
 Unauthenticated or rejected webhooks never carry `connector_id`: the id a caller sends is
 not trusted until the signature has been verified.
@@ -90,12 +90,17 @@ docker compose logs worker --no-log-prefix | jq -c 'select(.connector_id == "<co
 | `job.replayed`, `job.requeued`, `job.duplicate_delivery` | info       | Operator replay, sweeper re-add, or a queue redelivery that was skipped.                                                                                                                                                  |
 | `job.trace_started`                                      | debug      | The job row had no valid trace context, so a new trace was started.                                                                                                                                                       |
 | `job.lost_lease`, `job.missing`, `job.invalid_data`      | warn/error | A job could not be run as delivered.                                                                                                                                                                                      |
+| `moderation.resync_not_queued`                           | warn       | A moderation action finished but the follow-up re-read of the comment could not be queued (adds `actionId`). The outcome is recorded; the stored comment catches up on its next event or action.                          |
 | `webhook.unrouted_events`                                | info       | A verified webhook delivery named accounts with no live connection; those events were dropped (adds `platform`, `count`). Expected after a disconnect; a sustained count for a connected account means a routing problem. |
 | `duplicate webhook delivery skipped`                     | info       | A redelivered webhook was recognized and not processed again.                                                                                                                                                             |
 | `webhook rejected`                                       | warn       | A delivery failed verification (adds `check`, never the payload).                                                                                                                                                         |
 | `token refresh joined`, `token refresh reused`           | info       | A concurrent refresh was shared in-process or across processes.                                                                                                                                                           |
 | `access token refreshed`, `token refresh failed`         | info/warn  | A token refresh finished.                                                                                                                                                                                                 |
 | `telemetry.*`                                            | varies     | The telemetry layer itself, for example `telemetry.metrics_ready`, `telemetry.tracing_ready`, `telemetry.collect_failed`, `telemetry.exporter_problem`, `telemetry.shutdown_timeout`.                                     |
+
+The Instagram connector reports through the same metrics as the others: its
+series carry `platform="instagram"` (and `connector_type` `instagram` in logs
+and health), so filter by that label to separate it from `facebook`.
 
 The worker's periodic sweep also logs `job.stats` with the requeued and purged counts and per-platform event counters.
 
@@ -133,7 +138,7 @@ configuration summary.
 | `webhook.receive`       | server   | Webhook gate (intake)       | A new root for every delivery. `feedbouncer.webhook.outcome`: `accepted`, `duplicate`, `rejected`. |
 | `job.enqueue`           | producer | Job producer                | Child of the active span; records `feedbouncer.job.deduplicated`.                                  |
 | `job.run`               | consumer | Job runner, one per attempt | `feedbouncer.job.attempt` is 1 for the first try. Retries are sibling spans in one trace.          |
-| `connector.<operation>` | client   | Platform calls              | `<operation>` is `list_sources`, `list_comments`, `get_comment` or `act`.                          |
+| `connector.<operation>` | client   | Platform calls              | `<operation>` is `list_sources`, `list_comments`, `list_replies`, `get_comment` or `act`.          |
 | `moderation.apply`      | internal | `ConnectionClient.act`      | Carries `feedbouncer.action` and `feedbouncer.action.status`.                                      |
 | `HTTP <method> <route>` | server   | API requests                | A new root per request; `<route>` is the route pattern, never the raw path.                        |
 
@@ -301,13 +306,13 @@ only increments the failure count, so it shows as `degraded` and not `needs_reco
 
 ### States and recovery
 
-| State                | Meaning                                                | What to do                                                                                                                                                                                |
-| -------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `healthy`            | Recent successful sync, no failure streak, no backlog. | Nothing.                                                                                                                                                                                  |
-| `pending_first_sync` | Connected, no successful read or webhook yet.          | Wait. It stays in this state until a sync outcome is recorded; there is no overdue timeout.                                                                                               |
-| `degraded`           | Working but not keeping up. Check `reason`.            | See the reason table below.                                                                                                                                                               |
+| State                | Meaning                                                | What to do                                                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `healthy`            | Recent successful sync, no failure streak, no backlog. | Nothing.                                                                                                                                                                                                      |
+| `pending_first_sync` | Connected, no successful read or webhook yet.          | Wait. It stays in this state until a sync outcome is recorded; there is no overdue timeout.                                                                                                                   |
+| `degraded`           | Working but not keeping up. Check `reason`.            | See the reason table below.                                                                                                                                                                                   |
 | `needs_reconnection` | The platform credentials are no longer usable.         | Reconnect from the brand's connections page. Reasons: `oauth_refresh_rejected`, `oauth_access_rejected`, `oauth_not_refreshable`, `setup_not_queued`, `token_expired`, `oauth_pending`, `reconnect_required`. |
-| `disabled`           | A user paused or revoked the connection.               | Nothing to fix; resume or reconnect it deliberately.                                                                                                                                      |
+| `disabled`           | A user paused or revoked the connection.               | Nothing to fix; resume or reconnect it deliberately.                                                                                                                                                          |
 
 | Degraded reason    | What to check                                                                                                                            |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |

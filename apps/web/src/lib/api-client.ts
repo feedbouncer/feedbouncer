@@ -3,6 +3,8 @@ export class ApiRequestError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    /** The limit a refused value exceeded (e.g. reply length in code points), when the API names one. */
+    readonly max?: number | undefined,
   ) {
     super(message);
   }
@@ -22,13 +24,15 @@ export async function apiFetch<T>(
   });
   if (res.status === 204) return undefined as T;
   const data = (await res.json().catch(() => null)) as {
-    error?: { code: string; message: string };
+    error?: { code: string; message: string; max?: unknown };
   } | null;
   if (!res.ok) {
+    const max = data?.error?.max;
     throw new ApiRequestError(
       res.status,
       data?.error?.code ?? 'internal_error',
       data?.error?.message ?? 'Something went wrong.',
+      typeof max === 'number' && Number.isSafeInteger(max) ? max : undefined,
     );
   }
   return data as T;

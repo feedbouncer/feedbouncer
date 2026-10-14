@@ -5,10 +5,12 @@ import { ConnectButton } from '../../../../../../components/connect-button';
 import { isUuid } from '../../../../../../lib/ids';
 import { messageFor, statusReasonText } from '../../../../../../lib/messages';
 import { missingPermissionText } from '../../../../../../lib/oauth';
+import { CONNECTABLE, PLATFORM_COPY, isConnectable } from '../../../../../../lib/platforms';
 import { dataOrThrow, requireMe, serverGet, type Role } from '../../../../../../lib/server-api';
 
 interface Connection {
   id: string;
+  platform: string;
   displayName: string | null;
   status: 'connected' | 'needs_reconnect' | 'paused' | 'error' | 'disconnected';
   statusReason: string | null;
@@ -31,6 +33,8 @@ const ERROR_CODES: ReadonlySet<string> = new Set([
   'connection_inactive',
   'oauth_rejected',
 ]);
+
+const platformLabel = (p: string): string => (isConnectable(p) ? PLATFORM_COPY[p].label : p);
 
 const one = (v: string | string[] | undefined): string | null => (typeof v === 'string' ? v : null);
 
@@ -74,35 +78,65 @@ export default async function ConnectionsPage({
       ) : null}
       {canManage ? (
         <>
-          <ul>
-            {connections.map((c) => (
-              <li key={c.id}>
-                <strong>{c.displayName ?? 'Unnamed Page'}</strong> - {STATUS_LABEL[c.status]}
-                {statusReasonText(c.statusReason) ? (
-                  <p>{statusReasonText(c.statusReason)}</p>
-                ) : null}
-                {c.status === 'needs_reconnect' ? (
-                  <ConnectButton
-                    orgId={orgId}
-                    brandId={brandId}
-                    label="Reconnect"
-                    reconnectConnectionId={c.id}
-                  />
-                ) : null}
-                <ApiForm
-                  action={`/api/v1/orgs/${orgId}/brands/${brandId}/connections/${c.id}`}
-                  method="DELETE"
-                  fields={[]}
-                  submitLabel="Disconnect"
-                  refresh
-                />
-              </li>
-            ))}
-          </ul>
-          <ConnectButton orgId={orgId} brandId={brandId} label="Connect Facebook Page" />
+          {connections.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Platform</th>
+                  <th scope="col">Account</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {connections.map((c) => {
+                  const reason = statusReasonText(c.statusReason);
+                  return (
+                    <tr key={c.id}>
+                      <td>{platformLabel(c.platform)}</td>
+                      <td>
+                        <strong>{c.displayName ?? 'Unnamed account'}</strong>
+                      </td>
+                      <td>
+                        {STATUS_LABEL[c.status]}
+                        {reason ? <p>{reason}</p> : null}
+                      </td>
+                      <td>
+                        {c.status === 'needs_reconnect' && isConnectable(c.platform) ? (
+                          <ConnectButton
+                            orgId={orgId}
+                            brandId={brandId}
+                            platform={c.platform}
+                            label="Reconnect"
+                            reconnectConnectionId={c.id}
+                          />
+                        ) : null}
+                        <ApiForm
+                          action={`/api/v1/orgs/${orgId}/brands/${brandId}/connections/${c.id}`}
+                          method="DELETE"
+                          fields={[]}
+                          submitLabel="Disconnect"
+                          refresh
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : null}
+          {CONNECTABLE.map((p) => (
+            <ConnectButton
+              key={p}
+              orgId={orgId}
+              brandId={brandId}
+              platform={p}
+              label={PLATFORM_COPY[p].connectLabel}
+            />
+          ))}
           <p>
             While the FeedBouncer Meta app is in review, only people with a role on the app can
-            connect Pages.
+            connect Pages and Instagram accounts.
           </p>
         </>
       ) : (

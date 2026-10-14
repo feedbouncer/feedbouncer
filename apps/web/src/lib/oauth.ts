@@ -5,8 +5,12 @@ const SCOPE_TEXT: Record<string, string> = {
   pages_manage_engagement: 'Hide, delete and reply to comments',
   pages_manage_metadata: 'Receive new comments in real time',
   pages_messaging: 'Send private replies',
+  instagram_basic: "See your Instagram account's basic info",
+  instagram_manage_comments: 'Read, hide, delete and reply to comments',
+  instagram_manage_messages: 'Send one private reply to a commenter',
 };
 
+// Instagram is connected through Facebook Login, so its dialog is on www.facebook.com too.
 export function safeAuthorizationUrl(raw: unknown): URL | null {
   if (typeof raw !== 'string') return null;
   try {

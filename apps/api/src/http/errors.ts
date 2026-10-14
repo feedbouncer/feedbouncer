@@ -36,6 +36,7 @@ export type ErrorCode =
   | 'connection_inactive'
   | 'unsupported_action'
   | 'request_key_conflict'
+  | 'text_too_long'
   | 'service_unavailable';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
@@ -69,6 +70,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   connection_inactive: 'This connection is not active.',
   unsupported_action: 'This action is not supported for this platform.',
   request_key_conflict: 'This request key was already used for a different action.',
+  text_too_long: 'Reply is too long for this platform.',
   service_unavailable: 'Service temporarily unavailable. Try again shortly.',
 };
 
@@ -78,6 +80,8 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: ErrorCode,
     message?: string,
+    /** Machine-readable specifics of this error (never request values), merged into the envelope. */
+    readonly details?: Readonly<Record<string, number>>,
   ) {
     super(message ?? DEFAULT_MESSAGES[code]);
   }
@@ -85,8 +89,10 @@ export class ApiError extends Error {
 
 export const notFound = (): ApiError => new ApiError(404, 'not_found');
 
-export function errorBody(e: ApiError): { error: { code: ErrorCode; message: string } } {
-  return { error: { code: e.code, message: e.message } };
+export function errorBody(e: ApiError): {
+  error: { code: ErrorCode; message: string } & Record<string, unknown>;
+} {
+  return { error: { ...e.details, code: e.code, message: e.message } };
 }
 
 // Maps anything thrown in Nest (or by Fastify before a handler, which Nest

@@ -54,3 +54,21 @@ describe('apiFetch', () => {
     });
   });
 });
+
+describe('apiFetch error details', () => {
+  it('exposes the numeric max of a text_too_long refusal', async () => {
+    stubFetch(json({ error: { code: 'text_too_long', message: 'm', max: 2200 } }, 422));
+    await expect(apiFetch('/api/v1/x', { method: 'POST' })).rejects.toMatchObject({
+      status: 422,
+      code: 'text_too_long',
+      max: 2200,
+    });
+  });
+  it('ignores a non-numeric max', async () => {
+    stubFetch(json({ error: { code: 'text_too_long', message: 'm', max: '9' } }, 422));
+    const err = (await apiFetch('/api/v1/x', { method: 'POST' }).catch((e: unknown) => e)) as {
+      max?: unknown;
+    };
+    expect(err.max).toBeUndefined();
+  });
+});

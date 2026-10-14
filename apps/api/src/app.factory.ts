@@ -8,7 +8,7 @@ import { registerRequestLog } from './http/request-log.js';
 import { TraceInterceptor } from './http/trace.interceptor.js';
 import { trustProxyHops } from './http/trust-proxy.js';
 import type { AppDeps } from './deps.js';
-import { registerFacebookWebhook } from './webhooks/facebook-webhook.plugin.js';
+import { registerMetaWebhooks } from './webhooks/meta-webhooks.plugin.js';
 
 export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
   const adapter = new FastifyAdapter({
@@ -47,7 +47,7 @@ export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
     reply.header('x-content-type-options', 'nosniff');
     reply.header('cache-control', reply.getHeader('cache-control') ?? 'no-store');
   });
-  await registerFacebookWebhook(fastify, deps);
+  await registerMetaWebhooks(fastify, deps);
   registerRequestLog(fastify, deps.log, deps.metrics);
   app.useGlobalInterceptors(new TraceInterceptor());
   app.useGlobalFilters(new ApiErrorFilter(deps.log));
