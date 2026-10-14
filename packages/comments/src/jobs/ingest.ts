@@ -11,14 +11,21 @@ import type {
   ConnectorRuntime,
   Platform,
 } from '@feedbouncer/connectors';
-import type { PgCommentStore } from '../store.js';
+import type { IngestOrigin, PgCommentStore } from '../store.js';
 import { applyPlatformComment } from '../apply.js';
 import { INGEST_JOB, type IngestPayload } from './specs.js';
 
 export type IngestOutcome = 'created' | 'updated' | 'stale' | 'deleted' | 'gone';
 
+export type { IngestOrigin };
+
 export interface IngestObserver {
-  onIngested(e: { platform: Platform; lagMs: number; outcome: IngestOutcome }): void;
+  onIngested(e: {
+    platform: Platform;
+    lagMs: number;
+    outcome: IngestOutcome;
+    origin: IngestOrigin;
+  }): void;
 }
 
 export function ingestCommentJob(d: {
@@ -59,7 +66,7 @@ export function ingestCommentJob(d: {
       }
       const { lagMs } = clampLag(p.platformEventSec * 1000, d.clock.now());
       try {
-        d.observer?.onIngested({ platform: rec.platform, lagMs, outcome });
+        d.observer?.onIngested({ platform: rec.platform, lagMs, outcome, origin: 'live' });
       } catch {
         /* telemetry never fails a job */
       }

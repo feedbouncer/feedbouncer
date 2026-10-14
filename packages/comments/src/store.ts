@@ -16,6 +16,9 @@ import type {
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { UUID } from '@feedbouncer/service-runtime';
 
+/** Where a comment first entered the system; written on insert, never updated. */
+export type IngestOrigin = 'live' | 'backfill';
+
 export interface BrandScope {
   readonly organizationId: string;
   readonly brandId: string;
@@ -193,7 +196,7 @@ export class PgCommentStore {
   async upsertFromPlatform(
     scope: ConnectionScope,
     c: NormalizedComment,
-    o: { ownAccountExternalId: string; syncedAt: Date },
+    o: { ownAccountExternalId: string; syncedAt: Date; origin?: IngestOrigin },
   ): Promise<{ commentId: string; created: boolean; applied: boolean }> {
     return withTransaction(this.pool, async (tx) => {
       const sourceId = await upsertSource(tx, scope, c.sourceExternalId);
@@ -220,12 +223,12 @@ export class PgCommentStore {
       const up = await tx.query<{ id: string; created: boolean }>(
         `INSERT INTO comment (organization_id, brand_id, connection_id, source_id, external_id, author_id,
                               parent_external_id, parent_comment_id, body, platform_state, posted_at,
-                              permalink, is_own_account, platform_synced_at)
+                              permalink, is_own_account, platform_synced_at, ingest_origin)
          VALUES ($1, $2, $3, $4, $5, $6, $7::text,
                  (SELECT p.id FROM comment p
                    WHERE p.organization_id = $1 AND p.brand_id = $2 AND p.connection_id = $3
                      AND p.external_id = $7::text),
-                 $8, $9, $10, $11, $12, $13)
+                 $8, $9, $10, $11, $12, $13, $14)
          ON CONFLICT (connection_id, external_id) DO UPDATE SET
            body = EXCLUDED.body,
            author_id = COALESCE(EXCLUDED.author_id, comment.author_id),
@@ -252,6 +255,7 @@ export class PgCommentStore {
           c.permalink,
           c.author !== null && c.author.externalId === o.ownAccountExternalId,
           o.syncedAt,
+          o.origin ?? 'live',
         ],
       );
       let commentId: string;

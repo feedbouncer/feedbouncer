@@ -183,7 +183,9 @@ describe('comment ingest job', () => {
       isOwnAccount: false,
       connectionStatus: 'active',
     });
-    expect(events).toEqual([{ platform: 'facebook', lagMs: 0, outcome: 'created' }]);
+    expect(events).toEqual([
+      { platform: 'facebook', lagMs: 0, outcome: 'created', origin: 'live' },
+    ]);
   });
 
   it('flags comments written by the Page itself', async () => {
@@ -298,7 +300,9 @@ describe('comment ingest job', () => {
   it('records ingest lag from platformEventSec', async () => {
     const c = graph.addComment(pageId);
     await run(payload(c, 'created', nowMs - 5_000));
-    expect(events).toEqual([{ platform: 'facebook', lagMs: 5_000, outcome: 'created' }]);
+    expect(events).toEqual([
+      { platform: 'facebook', lagMs: 5_000, outcome: 'created', origin: 'live' },
+    ]);
     events.length = 0;
     // A platform clock ahead of ours is clamped to 0.
     await run(payload(graph.addComment(pageId), 'created', nowMs + 60_000));

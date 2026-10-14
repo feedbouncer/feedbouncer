@@ -49,8 +49,8 @@ it('maps job events, waits, connector calls and webhooks onto the registry', asy
 it('records comment ingest lag in seconds by platform and outcome', async () => {
   const m = createMetrics('worker');
   const o = promIngestObserver(m);
-  o.onIngested({ platform: 'facebook', lagMs: 2500, outcome: 'created' });
-  o.onIngested({ platform: 'facebook', lagMs: 0, outcome: 'stale' });
+  o.onIngested({ platform: 'facebook', lagMs: 2500, outcome: 'created', origin: 'live' });
+  o.onIngested({ platform: 'facebook', lagMs: 0, outcome: 'stale', origin: 'live' });
   const t = await m.registry.metrics();
   expect(t).toMatch(
     /feedbouncer_comment_ingest_lag_seconds_count\{[^}]*platform="facebook"[^}]*outcome="created"[^}]*\} 1/,
@@ -59,4 +59,16 @@ it('records comment ingest lag in seconds by platform and outcome', async () => 
     /feedbouncer_comment_ingest_lag_seconds_sum\{[^}]*outcome="created"[^}]*\} 2\.5/,
   );
   expect(t).toMatch(/feedbouncer_comment_ingest_lag_seconds_count\{[^}]*outcome="stale"[^}]*\} 1/);
+});
+
+it('does not record ingest lag for backfilled comments', async () => {
+  const m = createMetrics('worker');
+  promIngestObserver(m).onIngested({
+    platform: 'facebook',
+    lagMs: 9e9,
+    outcome: 'created',
+    origin: 'backfill',
+  });
+  const t = await m.registry.metrics();
+  expect(t).not.toMatch(/feedbouncer_comment_ingest_lag_seconds_count\{[^}]*\} [1-9]/);
 });

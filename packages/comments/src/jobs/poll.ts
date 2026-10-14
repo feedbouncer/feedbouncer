@@ -105,6 +105,7 @@ export async function pollSource(
             platform,
             lagMs: Math.max(0, d.clock.now() - c.postedAt.getTime()),
             outcome: 'created',
+            origin: 'live',
           });
         } catch {
           /* telemetry never fails a job */
