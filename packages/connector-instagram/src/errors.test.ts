@@ -71,6 +71,14 @@ describe('mapInstagramError', () => {
       { throw: { kind: 'auth_expired', code: 'token_expired' } },
     ],
     [{ code: 4 }, 'read', { throw: { kind: 'rate_limited' } }],
+    [{ code: 10 }, 'list_source', { throw: { kind: 'permanent', code: 'source_inaccessible' } }],
+    [{ code: 200 }, 'list_source', { throw: { kind: 'permanent', code: 'source_inaccessible' } }],
+    [
+      { code: 100, error_subcode: 33 },
+      'list_source',
+      { throw: { kind: 'not_found', code: 'source_missing' } },
+    ],
+    [{ code: 190, error_subcode: 463 }, 'list_source', { throw: { kind: 'auth_expired' } }],
     [{ code: 100, error_subcode: 33 }, 'read', { throw: { kind: 'not_found' } }],
   ] as const)('%j during %s', async (g, op, expected) => {
     expect(mapInstagramError(await build(g), op)).toMatchObject(expected);

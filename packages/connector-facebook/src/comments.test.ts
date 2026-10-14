@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ConnectorError, createSafeHttp } from '@feedbouncer/connectors';
 import { Secret } from '@feedbouncer/service-runtime';
 import type { FacebookConfig } from './config.js';
+import { FakeGraph } from './testing/index.js';
 import { COMMENT_FIELDS, getComment, listComments, toNormalizedComment } from './comments.js';
 
 const cfg: FacebookConfig = {
@@ -160,5 +161,43 @@ describe('toNormalizedComment', () => {
   it('returns null for non-objects and bad ids', () => {
     expect(toNormalizedComment(null, '900_1')).toBeNull();
     expect(toNormalizedComment(raw({ id: '1?x=y' }), '900_1')).toBeNull();
+  });
+});
+
+describe('listComments against FakeGraph', () => {
+  it('lists dark-post comments newest first across pages and ignores includeReplies', async () => {
+    const appSecret = 's'.repeat(32);
+    const fake = new FakeGraph({ appSecret, appId: '111' });
+    const { userId } = fake.addUser();
+    const { pageId, pageToken } = fake.addPage(userId, { tasks: ['MODERATE'] });
+    const { postId } = fake.addDarkPost(pageId);
+    for (let i = 0; i < 5; i++) {
+      fake.addComment(pageId, {
+        postId,
+        message: `c${i}`,
+        createdAtMs: Date.UTC(2026, 9, 1, 0, i),
+      });
+    }
+    const fcfg: FacebookConfig = { ...cfg, appSecret: new Secret(appSecret) };
+    const ctx = {
+      accessToken: new Secret(pageToken),
+      externalAccountId: pageId,
+      http: createSafeHttp({ allowedHosts: ['graph.facebook.com'], fetch: fake.fetch }),
+      signal: AbortSignal.timeout(2000),
+      reportQuota: async () => undefined,
+    };
+    const p1 = await listComments(fcfg, now, ctx, {
+      sourceExternalId: postId,
+      cursor: null,
+      limit: 2,
+      includeReplies: true,
+    });
+    expect(p1.items.map((c) => c.body)).toEqual(['c4', 'c3']);
+    const p2 = await listComments(fcfg, now, ctx, {
+      sourceExternalId: postId,
+      cursor: p1.nextCursor,
+      limit: 2,
+    });
+    expect(p2.items.map((c) => c.body)).toEqual(['c2', 'c1']);
   });
 });

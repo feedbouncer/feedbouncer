@@ -200,7 +200,7 @@ describe('toNormalizedIgComment', () => {
     });
   });
 
-  it('prefers user.id over a different from.id: user is only present on the account\'s own comments', () => {
+  it("prefers user.id over a different from.id: user is only present on the account's own comments", () => {
     const c = toNormalizedIgComment(
       rawComment({
         from: { id: '17841400000000777', username: 'shop.official' },
@@ -372,12 +372,41 @@ describe('listComments / listReplies', () => {
     expect(out.items.map((c) => c.externalId)).toEqual([a.commentId]);
   });
 
-  it('maps a permission error on listing to auth_expired permission_revoked', async () => {
+  it('a permission error while listing one media is source-level, not connection-level', async () => {
     const { graph, igUserId, ctx } = world();
     const { mediaId } = graph.addIgComment(igUserId);
     graph.failNext(10);
     await expect(
-      listComments(cfg, now, ctx, { sourceExternalId: mediaId, cursor: null, limit: 10 }),
-    ).rejects.toMatchObject({ kind: 'auth_expired', code: 'permission_revoked' });
+      listComments(cfg, now, ctx, { sourceExternalId: mediaId, cursor: null, limit: 25 }),
+    ).rejects.toMatchObject({ kind: 'permanent', code: 'source_inaccessible' });
+  });
+
+  it('a missing media while listing is not_found source_missing', async () => {
+    const { ctx } = world();
+    await expect(
+      listComments(cfg, now, ctx, {
+        sourceExternalId: '17999999999999999',
+        cursor: null,
+        limit: 25,
+      }),
+    ).rejects.toMatchObject({ kind: 'not_found', code: 'source_missing' });
+  });
+
+  it('includeReplies returns replies inline after their parent, without per-comment calls', async () => {
+    const { graph, igUserId, ctx } = world();
+    const top = graph.addIgComment(igUserId, { text: 'top', createdAtMs: Date.UTC(2026, 9, 1) });
+    graph.addIgComment(igUserId, { mediaId: top.mediaId, parentId: top.commentId, text: 'r1' });
+    const before = graph.calls().length;
+    const page = await listComments(cfg, now, ctx, {
+      sourceExternalId: top.mediaId,
+      cursor: null,
+      limit: 25,
+      includeReplies: true,
+    });
+    expect(page.items.map((c) => [c.body, c.parentExternalId])).toEqual([
+      ['top', null],
+      ['r1', top.commentId],
+    ]);
+    expect(graph.calls().length - before).toBe(1);
   });
 });

@@ -10,10 +10,13 @@ import {
 } from '@feedbouncer/connectors';
 import { callFor, GRAPH_ID, graphId, graphRequest } from '@feedbouncer/connector-facebook';
 import type { InstagramConfig } from './config.js';
-import { mapInstagramError } from './errors.js';
+import { mapInstagramError, type IgOp } from './errors.js';
 
 export const IG_COMMENT_FIELDS =
   'id,text,timestamp,from,user,username,hidden,parent_id,media{id,permalink}';
+
+const IG_REPLY_FIELDS = IG_COMMENT_FIELDS;
+const INLINE_REPLIES = 50;
 
 const USERNAME = /^[A-Za-z0-9._]{1,30}$/;
 const CURSOR = /^[A-Za-z0-9=_-]{1,512}$/;
@@ -89,6 +92,7 @@ async function read(
   ctx: CallContext,
   path: string[],
   query: Record<string, string>,
+  op: IgOp = 'read',
 ): Promise<unknown> {
   try {
     const r = await graphRequest(callFor(cfg.meta, nowMs, ctx), { method: 'GET', path, query });
@@ -98,7 +102,7 @@ async function read(
     return r.body;
   } catch (e) {
     if (e instanceof ConnectorError) {
-      const mapped = mapInstagramError(e, 'read');
+      const mapped = mapInstagramError(e, op);
       if ('throw' in mapped) throw mapped.throw;
     }
     throw e;
@@ -130,24 +134,43 @@ async function list(
   parentId: string,
   segment: 'comments' | 'replies',
   sourceFallback: string | null,
-  req: { cursor: string | null; limit: number },
+  req: { cursor: string | null; limit: number; includeReplies?: boolean },
 ): Promise<Page<NormalizedComment>> {
   const id = graphId(parentId);
   if (req.cursor !== null && !CURSOR.test(req.cursor)) {
     throw new ConnectorError('permanent', 'invalid_cursor');
   }
   const limit = Math.min(100, Math.max(1, Number.isFinite(req.limit) ? Math.trunc(req.limit) : 25));
-  const body = await read(cfg, nowMs, ctx, [id, segment], {
-    fields: IG_COMMENT_FIELDS,
-    limit: String(limit),
-    ...(req.cursor ? { after: req.cursor } : {}),
-  });
+  const inline = req.includeReplies === true && segment === 'comments';
+  const body = await read(
+    cfg,
+    nowMs,
+    ctx,
+    [id, segment],
+    {
+      fields: inline
+        ? `${IG_COMMENT_FIELDS},replies.limit(${INLINE_REPLIES}){${IG_REPLY_FIELDS}}`
+        : IG_COMMENT_FIELDS,
+      limit: String(limit),
+      ...(req.cursor ? { after: req.cursor } : {}),
+    },
+    'list_source',
+  );
   if (!isObj(body) || !Array.isArray(body.data) || body.data.length > MAX_ITEMS) {
     throw new ConnectorError('permanent', 'invalid_graph_response');
   }
-  const items = (body.data as unknown[])
-    .map((x) => toNormalizedIgComment(x, sourceFallback))
-    .filter((x): x is NormalizedComment => x !== null);
+  const items: NormalizedComment[] = [];
+  for (const raw of body.data as unknown[]) {
+    const top = toNormalizedIgComment(raw, sourceFallback);
+    if (!top) continue;
+    items.push(top);
+    const replies = inline && isObj(raw) && isObj(raw.replies) ? raw.replies.data : null;
+    if (!Array.isArray(replies)) continue;
+    for (const r of replies.slice(0, INLINE_REPLIES)) {
+      const c = toNormalizedIgComment(r, top.sourceExternalId);
+      if (c) items.push({ ...c, parentExternalId: c.parentExternalId ?? top.externalId });
+    }
+  }
   const paging = isObj(body.paging) ? body.paging : null;
   const cursors = paging && isObj(paging.cursors) ? paging.cursors : null;
   const after =
@@ -159,7 +182,12 @@ export const listComments = (
   cfg: InstagramConfig,
   nowMs: () => number,
   ctx: CallContext,
-  req: { sourceExternalId: string; cursor: string | null; limit: number },
+  req: {
+    sourceExternalId: string;
+    cursor: string | null;
+    limit: number;
+    includeReplies?: boolean;
+  },
 ): Promise<Page<NormalizedComment>> =>
   list(cfg, nowMs, ctx, req.sourceExternalId, 'comments', req.sourceExternalId, req);
 

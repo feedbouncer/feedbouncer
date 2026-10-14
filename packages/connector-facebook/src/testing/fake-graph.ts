@@ -619,9 +619,9 @@ export class FakeGraph {
 
     // Everything else addresses a Page-owned object: the first id segment is the Page.
     const owner = first.split('_')[0]!;
-    if (who.kind !== 'page' || who.id !== owner) return denied();
     const page = this.pages.get(owner);
     if (!page) return missing();
+    if (who.kind !== 'page' || who.id !== owner) return denied();
 
     if (path.length === 1) {
       const c = this.comments.get(first);
