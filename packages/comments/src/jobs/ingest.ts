@@ -12,6 +12,7 @@ import type {
   Platform,
 } from '@feedbouncer/connectors';
 import type { PgCommentStore } from '../store.js';
+import { applyPlatformComment } from '../apply.js';
 import { INGEST_JOB, type IngestPayload } from './specs.js';
 
 export type IngestOutcome = 'created' | 'updated' | 'stale' | 'deleted' | 'gone';
@@ -50,12 +51,10 @@ export function ingestCommentJob(d: {
           commentId = await d.store.markDeleted(ctx.scope, ref, syncedAt);
           outcome = 'gone';
         } else {
-          const r = await d.store.upsertFromPlatform(ctx.scope, c, {
+          ({ commentId, outcome } = await applyPlatformComment(d.store, ctx.scope, c, {
             ownAccountExternalId: rec.externalAccountId,
             syncedAt,
-          });
-          commentId = r.commentId;
-          outcome = r.created ? 'created' : r.applied ? 'updated' : 'stale';
+          }));
         }
       }
       const { lagMs } = clampLag(p.platformEventSec * 1000, d.clock.now());
