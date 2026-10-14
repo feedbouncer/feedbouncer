@@ -11,6 +11,11 @@ const q = async <T>(sql: string) => (await ctx.c.query(sql)).rows as T[];
 const SYSTEM_TABLES = ['processed_job'];
 // One row per connection, keyed by the connection's own id instead of a surrogate id.
 const CONNECTION_KEYED_TABLES = ['connection_sync'];
+// Tables keyed by their natural key: source_poll is one row per source, meta_ad_source a link row.
+const NATURAL_KEY_TABLES: Record<string, string> = {
+  source_poll: 'PRIMARY KEY (source_id)',
+  meta_ad_source: 'PRIMARY KEY (ad_id, source_id)',
+};
 const GLOBAL_TABLES = [
   'organization',
   'app_user',
@@ -82,6 +87,10 @@ describe('schema conventions', () => {
       if (SYSTEM_TABLES.includes(r.t)) continue;
       if (CONNECTION_KEYED_TABLES.includes(r.t)) {
         expect(r.pk, r.t).toBe('PRIMARY KEY (connection_id)');
+        continue;
+      }
+      if (NATURAL_KEY_TABLES[r.t]) {
+        expect(r.pk, r.t).toBe(NATURAL_KEY_TABLES[r.t]);
         continue;
       }
       expect(r.pk, r.t).toBe('PRIMARY KEY (id)');
