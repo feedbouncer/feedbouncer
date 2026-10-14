@@ -1,8 +1,10 @@
 // Per-connection request budget shared by reads and actions. The key is the
-// full tenant scope (scopeKey), never a bare connection id. Two counters
-// with rate-limiter-flexible: "shared" (all work, `points` per window) and
-// "bulk" (reads, `points - urgentReservePoints`). Bulk takes from both, urgent
-// only from shared, so reads can never consume the urgent reserve. Platform
+// full tenant scope (scopeKey), never a bare connection id. Three counters
+// with rate-limiter-flexible: "shared" (all work, `points` per window),
+// "bulk" (reads, `points - urgentReservePoints`) and "background" (ad polling,
+// half of bulk by default). Background takes from all three, bulk from bulk and
+// shared, urgent only from shared, so reads can never consume the urgent
+// reserve and background can never starve other reads. Platform
 // hints (Retry-After, quota reports) override the local estimate via block()
 // (clamped to 1 s..24 h) and penalty(). Store errors fail closed as transient
 // (defer, never bypass).
@@ -45,17 +47,22 @@ async function take(l: BudgetLimiter, key: string): Promise<BudgetDecision> {
 }
 
 export class RateBudget {
-  readonly #pairs = new Map<string, { shared: BudgetLimiter; bulk: BudgetLimiter }>();
+  readonly #sets = new Map<
+    string,
+    { shared: BudgetLimiter; bulk: BudgetLimiter; background: BudgetLimiter }
+  >();
   constructor(
     private readonly factory: LimiterFactory,
     private readonly prefix = 'fb:budget',
   ) {}
 
-  #pair(platform: Platform, p: RateLimitPolicy) {
-    const id = `${platform}:${p.points}:${p.durationSec}:${p.urgentReservePoints}`;
-    let pair = this.#pairs.get(id);
-    if (!pair) {
-      pair = {
+  #set(platform: Platform, p: RateLimitPolicy) {
+    const backgroundPoints =
+      p.backgroundPoints ?? Math.max(1, Math.floor((p.points - p.urgentReservePoints) / 2));
+    const id = `${platform}:${p.points}:${p.durationSec}:${p.urgentReservePoints}:${backgroundPoints}`;
+    let set = this.#sets.get(id);
+    if (!set) {
+      set = {
         shared: this.factory({
           keyPrefix: `${this.prefix}:${platform}:shared`,
           points: p.points,
@@ -66,10 +73,15 @@ export class RateBudget {
           points: p.points - p.urgentReservePoints,
           duration: p.durationSec,
         }),
+        background: this.factory({
+          keyPrefix: `${this.prefix}:${platform}:background`,
+          points: backgroundPoints,
+          duration: p.durationSec,
+        }),
       };
-      this.#pairs.set(id, pair);
+      this.#sets.set(id, set);
     }
-    return pair;
+    return set;
   }
 
   async acquire(
@@ -78,7 +90,22 @@ export class RateBudget {
     policy: RateLimitPolicy,
     priority: Priority,
   ): Promise<BudgetDecision> {
-    const { shared, bulk } = this.#pair(platform, policy);
+    const { shared, bulk, background } = this.#set(platform, policy);
+    if (priority === 'background') {
+      const g = await take(background, key);
+      if (!g.granted) return g;
+      const b = await take(bulk, key);
+      if (!b.granted) {
+        await background.reward(key, 1).catch(() => undefined);
+        return b;
+      }
+      const s = await take(shared, key);
+      if (!s.granted) {
+        await bulk.reward(key, 1).catch(() => undefined);
+        await background.reward(key, 1).catch(() => undefined);
+      }
+      return s;
+    }
     if (priority === 'bulk') {
       const b = await take(bulk, key);
       if (!b.granted) return b;
@@ -95,7 +122,7 @@ export class RateBudget {
     hint: { retryAfterMs: number },
   ): Promise<void> {
     try {
-      await this.#pair(platform, policy).shared.block(key, blockSeconds(hint.retryAfterMs));
+      await this.#set(platform, policy).shared.block(key, blockSeconds(hint.retryAfterMs));
     } catch {
       throw unavailable();
     }
@@ -113,7 +140,7 @@ export class RateBudget {
       return this.applyPlatformHint(platform, key, policy, {
         retryAfterMs: q.resetAt.getTime() - nowMs,
       });
-    const { shared } = this.#pair(platform, policy);
+    const { shared } = this.#set(platform, policy);
     try {
       const res = await shared.get(key);
       const local = res ? res.remainingPoints : policy.points;

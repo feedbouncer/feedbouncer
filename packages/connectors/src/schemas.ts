@@ -37,11 +37,42 @@ export const commentSchema = z
   })
   .refine((c) => c.parentExternalId !== c.externalId);
 
+const digits = z.string().regex(/^\d{1,32}$/);
+const placementSchema = z
+  .strictObject({
+    platform: z.enum(['facebook', 'instagram']),
+    accountExternalId: digits.nullable(),
+    sourceExternalId: z
+      .string()
+      .regex(/^\d{1,32}(_\d{1,32})?$/)
+      .nullable(),
+    unresolvedReason: z
+      .enum([
+        'no_post',
+        'dynamic_creative_unsupported',
+        'post_deleted',
+        'invalid_platform_id',
+        'instagram_media_pending',
+        'not_instagram',
+      ])
+      .nullable(),
+  })
+  .refine((p) => (p.sourceExternalId === null) !== (p.unresolvedReason === null));
+const adInfoSchema = z.strictObject({
+  adAccountExternalId: digits,
+  effectiveStatus: z.string().regex(/^[A-Z_]{1,40}$/),
+  placements: z
+    .array(placementSchema)
+    .length(2)
+    .refine((ps) => new Set(ps.map((p) => p.platform)).size === 2),
+});
+
 export const sourceSchema = z.strictObject({
   externalId: externalIdSchema,
   kind: z.enum(['organic_post', 'ad_post', 'video', 'thread']),
   permalink: httpsUrl.nullable(),
   active: z.boolean(),
+  ad: adInfoSchema.optional(),
 });
 
 export const commentRefSchema = z.strictObject({

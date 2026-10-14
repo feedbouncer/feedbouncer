@@ -5,6 +5,7 @@ import type { CallContext, Connector } from './connector.js';
 import { ConnectorError } from './errors.js';
 import { MemoryConnectionDirectory, MemoryCredentialVault, MemoryRefreshLock } from './memory.js';
 import { ConnectorRegistry } from './registry.js';
+import { isPlatform } from './types.js';
 import { ConnectorRuntime, isSuccessEquivalent } from './runtime.js';
 import { TokenManager } from './tokens.js';
 
@@ -121,7 +122,7 @@ beforeEach(async () => {
 
 describe('rate budget key', () => {
   it('names the full tenancy scope, never the connection id alone', async () => {
-    const acquire = vi.spyOn(budget, 'acquire');
+    const acquire = vi.spyOn(budget, 'acquire').mockResolvedValue({ granted: true });
     const c = await runtime.connect(scope);
     await c.act({ action: 'hide', target: ref });
     expect(acquire).toHaveBeenCalledWith('youtube', 'o1/b1/c1', expect.anything(), 'urgent');
@@ -234,7 +235,7 @@ describe('ConnectionClient reads', () => {
   });
 
   it('listReplies caps the limit, validates output and runs on the bulk budget', async () => {
-    const acquire = vi.spyOn(budget, 'acquire');
+    const acquire = vi.spyOn(budget, 'acquire').mockResolvedValue({ granted: true });
     const c = await runtime.connect(scope);
     const page = await c.listReplies({ parent: ref, cursor: null, limit: 10_000 });
     expect(page?.items).toHaveLength(1);
@@ -250,7 +251,7 @@ describe('ConnectionClient reads', () => {
   });
 
   it('listReplies returns null without I/O when the connector has none', async () => {
-    const acquire = vi.spyOn(budget, 'acquire');
+    const acquire = vi.spyOn(budget, 'acquire').mockResolvedValue({ granted: true });
     const c = await runtime.connect(bareScope);
     expect(await c.listReplies({ parent: ref, cursor: null })).toBeNull();
     expect(acquire).not.toHaveBeenCalled();
@@ -459,5 +460,27 @@ describe('reportQuota', () => {
     expect(logged).toHaveLength(1);
     expect(logged[0]).toContain('"errorName":"Error"');
     expect(lines.join('\n')).not.toContain('SENTINEL');
+  });
+});
+
+describe('list options', () => {
+  it('listComments forwards includeReplies and runs at the requested priority', async () => {
+    const acquire = vi.spyOn(budget, 'acquire').mockResolvedValue({ granted: true });
+    const c = await runtime.connect(scope);
+    await c.listComments({ sourceExternalId: 's1', cursor: null });
+    expect(acquire.mock.calls.at(-1)?.[3]).toBe('bulk');
+    expect(listComments.mock.calls.at(-1)?.[1]).not.toHaveProperty('includeReplies');
+    await c.listComments(
+      { sourceExternalId: 's1', cursor: null, includeReplies: true },
+      { priority: 'background' },
+    );
+    expect(acquire.mock.calls.at(-1)?.[3]).toBe('background');
+    expect(listComments.mock.calls.at(-1)?.[1]).toMatchObject({ includeReplies: true });
+    await c.listReplies({ parent: ref, cursor: null }, { priority: 'background' });
+    expect(acquire.mock.calls.at(-1)?.[3]).toBe('background');
+  });
+
+  it('meta_ads is a platform', () => {
+    expect(isPlatform('meta_ads')).toBe(true);
   });
 });

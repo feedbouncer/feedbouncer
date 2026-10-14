@@ -37,6 +37,14 @@ describe('validateConnector', () => {
     expect(() => validateConnector(base())).not.toThrow();
   });
 
+  it('a polling-only connector with no actions validates', () => {
+    const c = {
+      ...withCaps({ actions: [], ingestion: 'polling', listSources: true }),
+      listSources: async () => ({ items: [], nextCursor: null }),
+    };
+    expect(() => validateConnector(c)).not.toThrow();
+  });
+
   it.each([
     ['unknown platform', { ...base(), platform: 'myspace' as never }, /platform/],
     ['required scope not requested', withCaps({ requiredScopes: ['other'] }), /requiredScopes/],
@@ -111,6 +119,19 @@ describe('validateConnector', () => {
       'reply limit for an undeclared response',
       withCaps({ constraints: { maxReplyChars: { private_reply: 100 } } }),
       /constraints/,
+    ],
+    [
+      'backgroundPoints above bulk',
+      withCaps({
+        rateLimit: {
+          points: 10,
+          durationSec: 60,
+          urgentReservePoints: 2,
+          defaultRetryAfterMs: 60_000,
+          backgroundPoints: 9,
+        },
+      }),
+      /rateLimit/,
     ],
     ['listReplies is not a function', { ...withCaps({}), listReplies: 1 as never }, /listReplies/],
   ])('rejects %s', (_n, c, msg) => {

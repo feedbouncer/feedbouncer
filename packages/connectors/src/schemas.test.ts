@@ -7,6 +7,7 @@ import {
   parsePage,
   replyTextSchema,
   respondRequestSchema,
+  sourceSchema,
 } from './schemas.js';
 
 const good = {
@@ -132,5 +133,63 @@ describe('action request authorExternalId', () => {
       actionRequestSchema.safeParse({ action: 'ban_author', target, authorExternalId: 'u\n1' })
         .success,
     ).toBe(false);
+  });
+});
+
+describe('ad source', () => {
+  it('accepts an ad source and rejects hostile ad fields', () => {
+    const ok = {
+      externalId: '120000000000001',
+      kind: 'ad_post',
+      permalink: null,
+      active: true,
+      ad: {
+        adAccountExternalId: '1001',
+        effectiveStatus: 'ACTIVE',
+        placements: [
+          {
+            platform: 'facebook',
+            accountExternalId: '900',
+            sourceExternalId: '900_1',
+            unresolvedReason: null,
+          },
+          {
+            platform: 'instagram',
+            accountExternalId: null,
+            sourceExternalId: null,
+            unresolvedReason: 'not_instagram',
+          },
+        ],
+      },
+    };
+    expect(sourceSchema.safeParse(ok).success).toBe(true);
+    for (const patch of [
+      { adAccountExternalId: 'act_1001' },
+      { effectiveStatus: 'active; drop' },
+      { placements: [ok.ad.placements[0], { ...ok.ad.placements[0] }] }, // two facebook entries
+      {
+        placements: [
+          {
+            platform: 'facebook',
+            accountExternalId: '900',
+            sourceExternalId: '../me',
+            unresolvedReason: null,
+          },
+          ok.ad.placements[1],
+        ],
+      },
+      {
+        placements: [
+          {
+            platform: 'facebook',
+            accountExternalId: '900',
+            sourceExternalId: '900_1',
+            unresolvedReason: 'no_post',
+          },
+          ok.ad.placements[1],
+        ],
+      }, // both set
+    ])
+      expect(sourceSchema.safeParse({ ...ok, ad: { ...ok.ad, ...patch } }).success).toBe(false);
   });
 });

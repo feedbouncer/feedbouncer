@@ -31,7 +31,9 @@ export function validateConnector(c: Connector): void {
     !int(rl.points, 1, 1_000_000) ||
     !int(rl.durationSec, 1, 86_400) ||
     !int(rl.urgentReservePoints, 0, rl.points - 1) ||
-    !int(rl.defaultRetryAfterMs, 1_000, 86_400_000)
+    !int(rl.defaultRetryAfterMs, 1_000, 86_400_000) ||
+    (rl.backgroundPoints !== undefined &&
+      !int(rl.backgroundPoints, 1, rl.points - rl.urgentReservePoints))
   )
     fail('capabilities.rateLimit');
   for (const field of ['apiHosts', 'authorizationHosts'] as const)
