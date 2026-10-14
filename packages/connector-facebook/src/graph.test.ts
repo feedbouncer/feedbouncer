@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { ConnectorError, createSafeHttp } from '@feedbouncer/connectors';
 import { Secret } from '@feedbouncer/service-runtime';
 import {
+  adAccountNode,
   appSecretProof,
   graphErrorCodes,
   graphId,
   graphRequest,
   mapGraphError,
+  parseAdAccountUsage,
   parseBucUsage,
 } from './graph.js';
 
@@ -190,5 +192,85 @@ describe('mapGraphError', () => {
       '{"1":[{"estimated_time_to_regain_access":-5}]}',
     ])
       expect(parseBucUsage(h).throttledForMs).toBeNull();
+  });
+});
+
+describe('marketing api primitives', () => {
+  const ok = () => vi.fn(async () => new Response('{"data":[]}', { status: 200 }));
+
+  it('adAccountNode accepts digits or act_digits and rejects everything else before I/O', () => {
+    expect(adAccountNode('123')).toBe('act_123');
+    expect(adAccountNode('act_123')).toBe('act_123');
+    for (const bad of [
+      'act_',
+      'act_12a',
+      '../me',
+      '1?x=1',
+      'act_123/ads',
+      '',
+      7,
+      null,
+      'x'.repeat(40),
+    ])
+      expect(() => adAccountNode(bad)).toThrow(
+        expect.objectContaining({ code: 'invalid_graph_id' }),
+      );
+  });
+
+  it('accepts the adaccounts and ads segments and act_ nodes; still rejects hostile segments', async () => {
+    const fetch = ok();
+    await graphRequest(call(fetch as never), { method: 'GET', path: ['me', 'adaccounts'] });
+    await graphRequest(call(fetch as never), { method: 'GET', path: ['act_1', 'ads'] });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await expect(
+      graphRequest(call(fetch as never), { method: 'GET', path: ['act_..', 'ads'] }),
+    ).rejects.toMatchObject({ kind: 'permanent', code: 'invalid_graph_id' });
+    await expect(
+      graphRequest(call(fetch as never), { method: 'GET', path: ['act_1', 'ads;x'] }),
+    ).rejects.toMatchObject({ kind: 'permanent', code: 'invalid_graph_id' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('maps 80004 to rate_limited with retryAfter from the BUC header', async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response('{"error":{"code":80004,"message":"x"}}', {
+          status: 400,
+          headers: {
+            'x-business-use-case-usage': '{"1":[{"estimated_time_to_regain_access":3}]}',
+          },
+        }),
+    );
+    await expect(
+      graphRequest(call(fetch as never), { method: 'GET', path: ['me'] }),
+    ).rejects.toMatchObject({ kind: 'rate_limited', retryAfterMs: 180_000 });
+  });
+
+  it('surfaces X-Ad-Account-Usage on the response', async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response('{"data":[]}', {
+          status: 200,
+          headers: { 'x-ad-account-usage': '{"acc_id_util_pct":42,"reset_time_duration":60}' },
+        }),
+    );
+    const r = await graphRequest(call(fetch as never), { method: 'GET', path: ['act_1', 'ads'] });
+    expect(r.adAccountUsage).toEqual({ utilPct: 42, resetMs: 60_000 });
+    const none = await graphRequest(call(ok() as never), { method: 'GET', path: ['me'] });
+    expect(none.adAccountUsage).toBeNull();
+  });
+
+  it('parses X-Ad-Account-Usage defensively', () => {
+    expect(parseAdAccountUsage('{"acc_id_util_pct":91.5,"reset_time_duration":120}')).toEqual({
+      utilPct: 91.5,
+      resetMs: 120_000,
+    });
+    expect(parseAdAccountUsage('{"acc_id_util_pct":"x"}')).toBeNull();
+    expect(parseAdAccountUsage('not json')).toBeNull();
+    expect(parseAdAccountUsage(null)).toBeNull();
+    expect(parseAdAccountUsage('{"acc_id_util_pct":10,"reset_time_duration":999999999}')).toEqual({
+      utilPct: 10,
+      resetMs: 86_400_000,
+    });
   });
 });

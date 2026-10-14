@@ -10,7 +10,9 @@ export const GRAPH_HOST = 'graph.facebook.com';
 /** Up to three numeric segments: `<id>`, `<page>_<post>`, `<page>_<post>_<n>` (comment ids). */
 export const GRAPH_ID = /^\d{1,32}(_\d{1,32}){0,2}$/;
 const SEGMENT =
-  /^(?:\d{1,32}(?:_\d{1,32}){0,2}|me|accounts|permissions|comments|replies|blocked|subscribed_apps|messages|oauth|access_token)$/;
+  /^(?:\d{1,32}(?:_\d{1,32}){0,2}|act_\d{1,32}|me|accounts|permissions|comments|replies|blocked|subscribed_apps|messages|oauth|access_token|adaccounts|ads)$/;
+/** Ad account id without the `act_` prefix. */
+export const AD_ACCOUNT_ID = /^\d{1,32}$/;
 
 /** Path-traversal guard for every id that came from Graph or a webhook. */
 export function graphId(v: unknown): string {
@@ -18,6 +20,14 @@ export function graphId(v: unknown): string {
     throw new ConnectorError('permanent', 'invalid_graph_id');
   }
   return v;
+}
+
+/** 'act_123' or '123' → 'act_123'. Anything else throws before any I/O. */
+export function adAccountNode(v: unknown): string {
+  if (typeof v !== 'string') throw new ConnectorError('permanent', 'invalid_graph_id');
+  const digits = v.startsWith('act_') ? v.slice(4) : v;
+  if (!AD_ACCOUNT_ID.test(digits)) throw new ConnectorError('permanent', 'invalid_graph_id');
+  return `act_${digits}`;
 }
 
 export interface BucUsage {
@@ -38,9 +48,14 @@ export interface GraphRequest {
   readonly form?: Readonly<Record<string, string>>;
   readonly json?: unknown;
 }
+export interface AdAccountUsage {
+  readonly utilPct: number;
+  readonly resetMs: number;
+}
 export interface GraphResponse {
   readonly body: unknown;
   readonly usage: BucUsage;
+  readonly adAccountUsage: AdAccountUsage | null;
 }
 
 export const appSecretProof = (token: Secret, appSecret: Secret): string =>
@@ -68,7 +83,26 @@ export function parseBucUsage(header: string | null): BucUsage {
   }
 }
 
-const THROTTLE = new Set([4, 17, 32, 613, 80001]);
+/** Parses `X-Ad-Account-Usage`; null when absent or malformed. */
+export function parseAdAccountUsage(header: string | null): AdAccountUsage | null {
+  if (!header) return null;
+  try {
+    const p = JSON.parse(header) as {
+      acc_id_util_pct?: unknown;
+      reset_time_duration?: unknown;
+    } | null;
+    const pct = p?.acc_id_util_pct;
+    if (typeof pct !== 'number' || !Number.isFinite(pct)) return null;
+    const secs = p?.reset_time_duration;
+    const clamped =
+      typeof secs === 'number' && Number.isFinite(secs) ? Math.min(Math.max(secs, 0), 86_400) : 0;
+    return { utilPct: pct, resetMs: clamped * 1000 };
+  } catch {
+    return null;
+  }
+}
+
+const THROTTLE = new Set([4, 17, 32, 613, 80001, 80004]);
 const AUTH_SUBCODES: Readonly<Record<number, string>> = {
   458: 'app_not_installed',
   459: 'user_checkpointed',
@@ -149,6 +183,7 @@ export async function graphRequest(call: GraphCall, req: GraphRequest): Promise<
     call.signal,
   );
   const usage = parseBucUsage(res.headers.get('x-business-use-case-usage'));
+  const adAccountUsage = parseAdAccountUsage(res.headers.get('x-ad-account-usage'));
   let parsed: unknown = null;
   try {
     parsed = res.body.length > 0 ? JSON.parse(res.body) : null;
@@ -170,5 +205,5 @@ export async function graphRequest(call: GraphCall, req: GraphRequest): Promise<
     throw mapped;
   }
   if (parsed === null) throw new ConnectorError('transient', 'platform_unavailable');
-  return { body: parsed, usage };
+  return { body: parsed, usage, adAccountUsage };
 }
