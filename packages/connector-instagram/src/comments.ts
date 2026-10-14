@@ -36,6 +36,12 @@ function permalinkOf(v: unknown): string | null {
   }
 }
 
+/** Graph writes "+0000"; normalize the offset so parsing is unambiguous. */
+export function parseIgTime(s: string): Date | null {
+  const d = new Date(s.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
 export function toNormalizedIgComment(
   raw: unknown,
   sourceFallback: string | null,
@@ -47,9 +53,8 @@ export function toNormalizedIgComment(
   const sourceExternalId = (media && gid(media.id)) ?? sourceFallback;
   if (!sourceExternalId) return null;
   if (typeof raw.timestamp !== 'string' || raw.timestamp.length > 40) return null;
-  // Graph writes "+0000"; normalize the offset so parsing is unambiguous.
-  const postedAt = new Date(raw.timestamp.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
-  if (!Number.isFinite(postedAt.getTime())) return null;
+  const postedAt = parseIgTime(raw.timestamp);
+  if (postedAt === null) return null;
 
   const from = isObj(raw.from) ? raw.from : null;
   const user = isObj(raw.user) ? raw.user : null;
@@ -85,7 +90,7 @@ export function toNormalizedIgComment(
   };
 }
 
-async function read(
+export async function read(
   cfg: InstagramConfig,
   nowMs: () => number,
   ctx: CallContext,
@@ -127,7 +132,7 @@ export async function getComment(
 }
 
 /** The `after` cursor of a Graph edge when it has a further page; `paging.next` is never followed. */
-function nextCursorOf(edge: Record<string, unknown>): string | null {
+export function nextCursorOf(edge: Record<string, unknown>): string | null {
   const paging = isObj(edge.paging) ? edge.paging : null;
   const cursors = paging && isObj(paging.cursors) ? paging.cursors : null;
   const after =

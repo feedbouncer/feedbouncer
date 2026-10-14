@@ -10,7 +10,8 @@ export type IgOp =
   | 'public_reply'
   | 'private_reply'
   | 'lifecycle'
-  | 'list_source';
+  | 'list_source'
+  | 'list_media';
 
 export const IG_PRIVATE_REPLY_INELIGIBLE: ReadonlyArray<{
   code: number;
