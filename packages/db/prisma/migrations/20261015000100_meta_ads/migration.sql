@@ -21,6 +21,13 @@ ALTER TABLE job_ledger DROP CONSTRAINT job_ledger_platform_check,
 -- 2. One comment per platform comment id per connection, whichever source it came through.
 CREATE UNIQUE INDEX comment_connection_id_external_id_key ON comment (connection_id, external_id);
 
+-- 2a. A reply's parent may be filed under another source of the same connection
+-- (Instagram reports an ad's comments under the ad media or the original media).
+ALTER TABLE comment ADD CONSTRAINT comment_connection_id_id_key UNIQUE (connection_id, id);
+ALTER TABLE comment DROP CONSTRAINT comment_source_id_parent_comment_id_fkey,
+  ADD CONSTRAINT comment_connection_id_parent_comment_id_fkey FOREIGN KEY (connection_id, parent_comment_id)
+    REFERENCES comment (connection_id, id) ON DELETE SET NULL (parent_comment_id);
+
 -- 2b. The ad source a comment was polled through, when the comment is stored under a different source.
 ALTER TABLE comment ADD COLUMN ad_source_id uuid,
   ADD CONSTRAINT comment_ad_source_id_fkey FOREIGN KEY (organization_id, brand_id, ad_source_id)

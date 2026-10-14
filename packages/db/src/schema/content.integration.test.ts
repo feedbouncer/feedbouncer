@@ -146,12 +146,13 @@ describe('cross-tenant isolation', () => {
       'comment_connection_id_author_id_fkey',
     );
   });
-  it('a reply cannot have a parent from another source', async () => {
+  it('a reply can have a parent from another source of its connection, never another connection', async () => {
     const parent = await insertComment(ctx.c, a, { sourceId: a.otherSourceId });
+    await insertComment(ctx.c, a, { parentCommentId: parent });
     await expectPgError(
-      insertComment(ctx.c, a, { parentCommentId: parent }),
+      insertComment(ctx.c, a, { parentCommentId: await insertComment(ctx.c, b) }),
       '23503',
-      'comment_source_id_parent_comment_id_fkey',
+      'comment_connection_id_parent_comment_id_fkey',
     );
   });
   it("a source cannot point at another brand's connection", async () => {
