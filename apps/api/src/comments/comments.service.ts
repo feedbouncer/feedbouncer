@@ -56,7 +56,10 @@ export interface ListCommentsQuery {
 // Sorts before every comment id, so `before` alone means "posted strictly earlier".
 const MIN_UUID = '00000000-0000-0000-0000-000000000000';
 
-const REFUSALS: Record<Exclude<RefusalCode, 'not_found'>, [number, ErrorCode]> = {
+const REFUSALS: Record<
+  Exclude<RefusalCode, 'not_found'>,
+  [number, ErrorCode]
+> = {
   unsupported: [422, 'unsupported_action'],
   request_key_conflict: [409, 'request_key_conflict'],
   connection_needs_reconnect: [409, 'connection_needs_reconnect'],

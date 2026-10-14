@@ -163,14 +163,13 @@ const comment = (sourceExternalId: string, externalId: string): NormalizedCommen
   permalink: null,
 });
 
+const recordAd = (scope: ConnectionScope, ad: DiscoveredAdRow, at: Date) =>
+  tracking.recordAds(scope, [ad], at);
+
 describe('PgAdTracking', () => {
   it('records an ad on both placements: one source per platform, one poll row each', async () => {
     const conns = await tracking.brandMetaConnections(adsA);
-    await tracking.recordAd(
-      adsA,
-      adRow('5001', { fb: '900_1', ig: '17900000000000001' }, conns),
-      at,
-    );
+    await recordAd(adsA, adRow('5001', { fb: '900_1', ig: '17900000000000001' }, conns), at);
     expect(await sourcesOf(fbA)).toEqual([{ externalId: '900_1', kind: 'ad_post' }]);
     expect(await sourcesOf(igA)).toEqual([{ externalId: '17900000000000001', kind: 'ad_post' }]);
     expect(await pollRows()).toHaveLength(2);
@@ -178,16 +177,16 @@ describe('PgAdTracking', () => {
   it('recordAd is idempotent', async () => {
     const conns = await tracking.brandMetaConnections(adsA);
     const row = adRow('5001', { fb: '900_1', ig: '17900000000000001' }, conns);
-    await tracking.recordAd(adsA, row, at);
-    await tracking.recordAd(adsA, row, at);
+    await recordAd(adsA, row, at);
+    await recordAd(adsA, row, at);
     expect(await pollRows()).toHaveLength(2);
     expect(await linksOf('900_1')).toEqual(['5001']);
     expect(await resolutionOf(adsA, '5001')).toEqual({ facebook: 'linked', instagram: 'linked' });
   });
   it('two ads on one post: one source, one poll row, two links', async () => {
     const conns = await tracking.brandMetaConnections(adsA);
-    await tracking.recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);
-    await tracking.recordAd(adsA, adRow('5002', { fb: '900_1' }, conns), at);
+    await recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);
+    await recordAd(adsA, adRow('5002', { fb: '900_1' }, conns), at);
     expect(await sourcesOf(fbA)).toHaveLength(1);
     expect(await pollRows()).toHaveLength(1);
     expect(await linksOf('900_1')).toEqual(['5001', '5002']);
@@ -195,13 +194,13 @@ describe('PgAdTracking', () => {
   it('shared ad account: tenant B gets page_not_connected and no source under A', async () => {
     const connsB = await tracking.brandMetaConnections(adsB);
     expect(connsB.facebook.size).toBe(0);
-    await tracking.recordAd(adsB, adRow('5001', { fb: '900_1' }, connsB), at);
+    await recordAd(adsB, adRow('5001', { fb: '900_1' }, connsB), at);
     expect(await resolutionOf(adsB, '5001')).toMatchObject({ facebook: 'page_not_connected' });
     expect(await sourcesOf(fbA)).toHaveLength(0);
   });
   it('recordAd refuses a placement connection from another brand', async () => {
     const row = adRow('5009', { fb: '900_1' }, await tracking.brandMetaConnections(adsA));
-    await expect(tracking.recordAd(adsB, row, at)).rejects.toThrow();
+    await expect(recordAd(adsB, row, at)).rejects.toThrow();
     expect(await sourcesOf(fbA)).toHaveLength(0);
     expect(await resolutionOf(adsB, '5009')).toBeUndefined();
   });
@@ -209,14 +208,23 @@ describe('PgAdTracking', () => {
     const conns = await tracking.brandMetaConnections(adsA);
     const row = adRow('5010', { fb: '900_1' }, conns);
     await expect(
-      tracking.recordAd(adsA, { ...row, facebook: { ...row.facebook, connection: igA } }, at),
+      recordAd(adsA, { ...row, facebook: { ...row.facebook, connection: igA } }, at),
     ).rejects.toThrow();
-    await expect(tracking.recordAd(fbA, row, at)).rejects.toThrow();
+    await expect(recordAd(fbA, row, at)).rejects.toThrow();
     expect(await sourcesOf(igA)).toHaveLength(0);
+  });
+  it('keeps ad links when a placement connection needs reconnecting', async () => {
+    const conns = await tracking.brandMetaConnections(adsA);
+    await recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);
+    await setStatus(fbA, 'error');
+    const lapsed = await tracking.brandMetaConnections(adsA);
+    expect(lapsed.facebook.size).toBe(1);
+    await recordAd(adsA, adRow('5001', { fb: '900_1' }, lapsed), at);
+    expect(await linksOf('900_1')).toEqual(['5001']);
   });
   it('retirement: polled during grace, not after; re-activation resumes', async () => {
     const conns = await tracking.brandMetaConnections(adsA);
-    await tracking.recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);
+    await recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);
     expect(await tracking.retireUnlisted(adsA, days(at, 1), at)).toBe(1);
     expect(await tracking.dueSources(fbA, days(at, 6.9), { graceDays: 7, limit: 10 })).toHaveLength(
       1,
@@ -224,7 +232,7 @@ describe('PgAdTracking', () => {
     expect(await tracking.dueSources(fbA, days(at, 7.1), { graceDays: 7, limit: 10 })).toHaveLength(
       0,
     );
-    await tracking.recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), days(at, 8));
+    await recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), days(at, 8));
     expect(await tracking.dueSources(fbA, days(at, 8), { graceDays: 7, limit: 10 })).toHaveLength(
       1,
     );
@@ -232,9 +240,9 @@ describe('PgAdTracking', () => {
   it('retireUnlisted keeps ads the listing touched and only touches its own connection', async () => {
     const conns = await tracking.brandMetaConnections(adsA);
     const listingStart = days(at, 1);
-    await tracking.recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), listingStart);
-    await tracking.recordAd(adsA, adRow('5002', { fb: '900_2' }, conns), at);
-    await tracking.recordAd(adsB, adRow('5003', {}, await tracking.brandMetaConnections(adsB)), at);
+    await recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), listingStart);
+    await recordAd(adsA, adRow('5002', { fb: '900_2' }, conns), at);
+    await recordAd(adsB, adRow('5003', {}, await tracking.brandMetaConnections(adsB)), at);
     expect(await tracking.retireUnlisted(adsA, listingStart, listingStart)).toBe(1);
     expect(await tracking.retireUnlisted(adsA, listingStart, listingStart)).toBe(0);
     expect(await tracking.retireUnlisted(adsB, listingStart, listingStart)).toBe(1);
@@ -256,7 +264,7 @@ describe('PgAdTracking', () => {
     expect(await tracking.listingProgress(adsA)).toBeNull();
   });
   it('revoking the ads connection or the page connection stops polling', async () => {
-    await tracking.recordAd(
+    await recordAd(
       adsA,
       adRow('5001', { fb: '900_1' }, await tracking.brandMetaConnections(adsA)),
       at,
@@ -280,7 +288,7 @@ describe('PgAdTracking', () => {
       const scope = await connect(a, 'facebook', `91${k}`);
       extra.push(scope);
       const conns = { ...base, facebook: new Map([['900', scope]]) };
-      await tracking.recordAd(adsA, adRow(`60${k}`, { fb: `91${k}_1` }, conns), at);
+      await recordAd(adsA, adRow(`60${k}`, { fb: `91${k}_1` }, conns), at);
       await pool.query(
         'UPDATE source_poll SET next_poll_at = $2 WHERE organization_id = $1 AND connection_id = $3',
         [a.organizationId, days(at, -d), scope.connectionId],
@@ -301,7 +309,7 @@ describe('PgAdTracking', () => {
     expect(await ids(2)).toEqual([c1.connectionId]);
   });
   it('dueSources is scoped to its tenant', async () => {
-    await tracking.recordAd(
+    await recordAd(
       adsA,
       adRow('5001', { fb: '900_1' }, await tracking.brandMetaConnections(adsA)),
       at,
@@ -316,7 +324,7 @@ describe('PgAdTracking', () => {
       ['5002', '900_2'],
       ['5003', '900_3'],
     ] as const)
-      await tracking.recordAd(adsA, adRow(ad, { fb: post }, conns), at);
+      await recordAd(adsA, adRow(ad, { fb: post }, conns), at);
     const due = await tracking.dueSources(fbA, at, { graceDays: 7, limit: 10 });
     const id = (ext: string) => due.find((s) => s.sourceExternalId === ext)!.sourceId;
     const done = (lastCommentAt: Date) =>
@@ -342,7 +350,7 @@ describe('PgAdTracking', () => {
     ).toEqual(['900_3', '900_2']);
   });
   it('savePollProgress: resume keeps the source due, done clears the cursor', async () => {
-    await tracking.recordAd(
+    await recordAd(
       adsA,
       adRow('5001', { fb: '900_1' }, await tracking.brandMetaConnections(adsA)),
       at,
@@ -407,7 +415,7 @@ describe('PgAdTracking', () => {
     ).toBeNull();
   });
   it('unavailable sources wait for retryAt', async () => {
-    await tracking.recordAd(
+    await recordAd(
       adsA,
       adRow('5001', { fb: '900_1' }, await tracking.brandMetaConnections(adsA)),
       at,
@@ -427,7 +435,7 @@ describe('PgAdTracking', () => {
     );
   });
   it('defer keeps the resume cursor and waits for retryAt', async () => {
-    await tracking.recordAd(
+    await recordAd(
       adsA,
       adRow('5001', { fb: '900_1' }, await tracking.brandMetaConnections(adsA)),
       at,
@@ -451,13 +459,13 @@ describe('PgAdTracking', () => {
   });
   it('a changed creative moves the link to the new post', async () => {
     const conns = await tracking.brandMetaConnections(adsA);
-    await tracking.recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);
-    await tracking.recordAd(adsA, adRow('5001', { fb: '900_2' }, conns), at);
+    await recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);
+    await recordAd(adsA, adRow('5001', { fb: '900_2' }, conns), at);
     expect(await linksOf('900_1')).toEqual([]);
     expect(await linksOf('900_2')).toEqual(['5001']);
   });
   it('list(): origin and ads are derived per tenant', async () => {
-    await tracking.recordAd(
+    await recordAd(
       adsA,
       adRow('5001', { fb: '900_1' }, await tracking.brandMetaConnections(adsA)),
       at,
@@ -489,7 +497,7 @@ describe('PgAdTracking', () => {
     expect(await store.list(b, { before: null, limit: 50, origin: 'ad' })).toEqual([]);
   });
   it('list(): a comment seen through an ad source is an ad comment with that ad', async () => {
-    await tracking.recordAd(
+    await recordAd(
       adsA,
       adRow('5001', { ig: '17900000000000001' }, await tracking.brandMetaConnections(adsA)),
       at,

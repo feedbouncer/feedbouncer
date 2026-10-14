@@ -128,7 +128,7 @@ const recordAdOnBoth = () => {
       connection: igA,
     },
   };
-  return tracking.recordAd(adsA, row, new Date(nowMs));
+  return tracking.recordAds(adsA, [row], new Date(nowMs));
 };
 
 describe('PollScheduler', () => {

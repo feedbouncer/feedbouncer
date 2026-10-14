@@ -206,7 +206,7 @@ describe('toNormalizedIgComment', () => {
     });
   });
 
-  it("prefers user.id over a different from.id: user is only present on the account's own comments", () => {
+  it('prefers user.id over a different from.id: user is only present on the account\'s own comments', () => {
     const c = toNormalizedIgComment(
       rawComment({
         from: { id: '17841400000000777', username: 'shop.official' },
@@ -502,6 +502,65 @@ describe('listComments / listReplies', () => {
       const { items } = await drain(graph, first.mediaId, ctx);
       expect(items).toHaveLength(25 * 41);
       expect(new Set(items.map((c) => c.externalId)).size).toBe(25 * 41);
+    });
+
+    it('skips no comment when an already returned one is deleted between calls', async () => {
+      const { graph, igUserId, ctx } = world();
+      const first = graph.addIgComment(igUserId, { text: 't0' });
+      const tops = [first.commentId];
+      for (let t = 1; t < 25; t++) {
+        tops.push(
+          graph.addIgComment(igUserId, { mediaId: first.mediaId, text: `t${t}` }).commentId,
+        );
+      }
+      for (const p of tops) {
+        for (let i = 0; i < 40; i++) {
+          graph.addIgComment(igUserId, { mediaId: first.mediaId, parentId: p, text: `r${i}` });
+        }
+      }
+      let deleted = false;
+      const http = createSafeHttp({
+        allowedHosts: ['graph.facebook.com'],
+        fetch: async (input, init) => {
+          const res = await graph.fetch(input, init);
+          if (!deleted) return res;
+          const j = (await res.json()) as { data: { id: string }[] };
+          j.data = j.data.filter((c) => c.id !== tops[0]);
+          return new Response(JSON.stringify(j), { status: 200 });
+        },
+      });
+      const page = await listComments(
+        cfg,
+        now,
+        { ...ctx, http },
+        {
+          sourceExternalId: first.mediaId,
+          cursor: null,
+          limit: 25,
+          includeReplies: true,
+        },
+      );
+      expect(page.nextCursor).not.toBeNull();
+      deleted = true;
+      const ids = new Set(page.items.map((c) => c.externalId));
+      let cursor = page.nextCursor;
+      for (let calls = 0; cursor && calls < 100; calls++) {
+        const next: Page<NormalizedComment> = await listComments(
+          cfg,
+          now,
+          { ...ctx, http },
+          {
+            sourceExternalId: first.mediaId,
+            cursor,
+            limit: 25,
+            includeReplies: true,
+          },
+        );
+        for (const c of next.items) ids.add(c.externalId);
+        cursor = next.nextCursor;
+      }
+      for (const t of tops) expect(ids.has(t)).toBe(true);
+      expect(ids.size).toBe(25 * 41);
     });
 
     it("drops malformed replies, keeps a reply's own parent_id, ignores non-array replies", async () => {

@@ -137,13 +137,14 @@ function nextCursorOf(edge: Record<string, unknown>): string | null {
 
 /**
  * Position inside a comments page when a call stops early: re-read the page at
- * `after`, resume at top-level index `i`; with `t`/`r` the replies of comment `t`
- * continue from reply cursor `r`. Opaque to callers, validated on the way in.
+ * `after` and continue past top-level comment `s`, the last one emitted; with
+ * `r` the replies of `s` continue from reply cursor `r`. Anchoring on the
+ * comment id keeps the position correct when comments are deleted in between.
+ * Opaque to callers, validated on the way in.
  */
 interface Resume {
   a: string | null;
-  i: number;
-  t: string | null;
+  s: string | null;
   r: string | null;
 }
 const RESUME_PREFIX = 'ir_';
@@ -156,10 +157,10 @@ function decodeResume(cursor: string | null): Resume {
       const s: unknown = JSON.parse(
         Buffer.from(cursor.slice(RESUME_PREFIX.length), 'base64url').toString(),
       );
-      if (isObj(s) && Number.isInteger(s.i) && (s.i as number) >= 0 && (s.i as number) < 1000) {
+      if (isObj(s)) {
         const ok = (v: unknown) => v === null || (typeof v === 'string' && CURSOR.test(v));
-        if (ok(s.a) && ok(s.r) && (s.t === null || gid(s.t)) && (s.r === null) === (s.t === null)) {
-          return s as unknown as Resume;
+        if (ok(s.a) && ok(s.r) && (s.s === null || gid(s.s)) && (s.r === null || s.s !== null)) {
+          return { a: s.a as string | null, s: s.s as string | null, r: s.r as string | null };
         }
       }
     } catch {
@@ -169,7 +170,7 @@ function decodeResume(cursor: string | null): Resume {
   if (cursor !== null && !CURSOR.test(cursor)) {
     throw new ConnectorError('permanent', 'invalid_cursor');
   }
-  return { a: cursor, i: 0, t: null, r: null };
+  return { a: cursor, s: null, r: null };
 }
 
 const withParent = (c: NormalizedComment, parent: string): NormalizedComment => ({
@@ -189,21 +190,19 @@ async function list(
 ): Promise<Page<NormalizedComment>> {
   const id = graphId(parentId);
   const inline = req.includeReplies === true && segment === 'comments';
-  const resume = inline
-    ? decodeResume(req.cursor)
-    : { a: req.cursor, i: 0, t: null as string | null, r: null as string | null };
+  const resume = inline ? decodeResume(req.cursor) : { a: req.cursor, s: null, r: null };
   if (!inline && req.cursor !== null && !CURSOR.test(req.cursor)) {
     throw new ConnectorError('permanent', 'invalid_cursor');
   }
   const limit = Math.min(100, Math.max(1, Number.isFinite(req.limit) ? Math.trunc(req.limit) : 25));
   // One Graph request per call, so one budget acquire per request: a comment's
   // further reply pages are carried in the cursor, never fetched in a loop.
-  if (resume.t !== null && resume.r !== null) {
+  if (resume.s !== null && resume.r !== null) {
     const more = await list(
       cfg,
       nowMs,
       ctx,
-      resume.t,
+      resume.s,
       'replies',
       sourceFallback,
       {
@@ -212,11 +211,9 @@ async function list(
       },
       op,
     );
-    const items = more.items.map((c) => withParent(c, resume.t!));
-    const next = more.nextCursor
-      ? { a: resume.a, i: resume.i, t: resume.t, r: more.nextCursor }
-      : { a: resume.a, i: resume.i + 1, t: null, r: null };
-    return { items, nextCursor: encodeResume(next) };
+    const parent = resume.s;
+    const items = more.items.map((c) => withParent(c, parent));
+    return { items, nextCursor: encodeResume({ a: resume.a, s: parent, r: more.nextCursor }) };
   }
   const body = await read(
     cfg,
@@ -237,15 +234,19 @@ async function list(
   }
   const data = body.data as unknown[];
   const items: NormalizedComment[] = [];
-  for (let i = resume.i; i < data.length; i++) {
+  // When the anchor comment is gone, re-read the whole page: duplicates are harmless, gaps are not.
+  const anchor = data.findIndex((raw) => isObj(raw) && raw.id === resume.s);
+  let lastEmitted = resume.s;
+  for (let i = anchor + 1; i < data.length; i++) {
     const raw = data[i];
     // A comment brings at most 1 + INLINE_REPLIES items; keep the page under the runtime cap.
     if (items.length > 0 && items.length + 1 + INLINE_REPLIES > MAX_ITEMS) {
-      return { items, nextCursor: encodeResume({ a: resume.a, i, t: null, r: null }) };
+      return { items, nextCursor: encodeResume({ a: resume.a, s: lastEmitted, r: null }) };
     }
     const top = toNormalizedIgComment(raw, sourceFallback);
     if (!top) continue;
     items.push(top);
+    lastEmitted = top.externalId;
     const edge = inline && isObj(raw) && isObj(raw.replies) ? raw.replies : null;
     if (!edge || !Array.isArray(edge.data)) continue;
     for (const r of edge.data.slice(0, INLINE_REPLIES)) {
@@ -254,8 +255,7 @@ async function list(
     }
     const more = nextCursorOf(edge);
     if (more) {
-      const state = { a: resume.a, i, t: top.externalId, r: more };
-      return { items, nextCursor: encodeResume(state) };
+      return { items, nextCursor: encodeResume({ a: resume.a, s: top.externalId, r: more }) };
     }
   }
   return { items, nextCursor: nextCursorOf(body) };

@@ -115,7 +115,7 @@ export class PgAdTracking {
     }>(
       `SELECT organization_id, brand_id, id, platform, external_account_id FROM connection
         WHERE organization_id = $1 AND brand_id = $2 AND platform IN ('facebook', 'instagram')
-          AND status = 'active'`,
+          AND status <> 'revoked'`,
       [adsScope.organizationId, adsScope.brandId],
     );
     const out: BrandMetaConnections = { facebook: new Map(), instagram: new Map() };
@@ -126,10 +126,6 @@ export class PgAdTracking {
         connectionId: c.id,
       });
     return out;
-  }
-
-  async recordAd(adsScope: ConnectionScope, ad: DiscoveredAdRow, at: Date): Promise<void> {
-    await this.recordAds(adsScope, [ad], at);
   }
 
   /** All ads of one listing page in a single transaction. */
