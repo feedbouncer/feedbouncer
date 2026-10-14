@@ -141,7 +141,7 @@ export async function pollSource(
 const SOURCE_INACCESSIBLE = 'source_inaccessible';
 
 /** The source itself is unreadable (deleted post, no access to the media): retry it much later. */
-const sourceFailure = (err: ConnectorError) =>
+export const sourceFailure = (err: ConnectorError) =>
   err.kind === 'permanent' ||
   err.kind === 'unsupported' ||
   (err.kind === 'not_found' && err.code !== 'connection_not_found');

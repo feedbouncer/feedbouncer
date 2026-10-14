@@ -1,5 +1,6 @@
 import * as z from 'zod';
 import type { Platform } from '@feedbouncer/connectors';
+import { BACKFILL_DEFAULTS } from '../backfill/settings.js';
 import { JobError, type JobDefinition, type RetryPolicy } from '@feedbouncer/jobs';
 
 // Generic external-id shape (Graph ids are digits and underscores). Only safe
@@ -108,3 +109,18 @@ export function enqueueOnly<P>(spec: {
     },
   };
 }
+
+export const backfillPayload = z.strictObject({
+  runId: z.uuid(),
+  segment: z.number().int().min(0).max(100_000),
+});
+export type BackfillPayload = z.infer<typeof backfillPayload>;
+
+export const BACKFILL_JOB = {
+  type: 'connection_backfill' as const,
+  payload: backfillPayload,
+  externalRef: (p: BackfillPayload): string => `backfill:${p.runId}:${p.segment}`,
+  timeoutMs: BACKFILL_DEFAULTS.jobTimeoutMs,
+  policy: { maxAttempts: 8 } satisfies Partial<RetryPolicy>,
+  platforms: ['facebook', 'instagram'] as readonly Platform[] | 'all',
+};
