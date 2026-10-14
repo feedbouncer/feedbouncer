@@ -15,6 +15,10 @@ export interface PickerAccount {
 const INELIGIBLE: Record<string, string> = {
   no_linked_instagram_account: 'No Instagram professional account is linked to this Page',
   insufficient_page_role: 'You need full control or moderation access to this Page',
+  ad_account_disabled: 'This ad account is disabled in Meta',
+  ad_account_unsettled: 'This ad account has an unsettled balance',
+  ad_account_closed: 'This ad account is closed',
+  ad_account_unavailable: "This ad account can't be used right now",
 };
 
 const LIMITATIONS: Record<string, string> = {
@@ -33,8 +37,7 @@ export const isSelectable = (a: PickerAccount): boolean =>
 export function accountNotes(a: PickerAccount, platform: ConnectablePlatform): string[] {
   if (!a.eligible)
     return [own(INELIGIBLE, a.ineligibleReason) ?? 'You need a role that can moderate this Page'];
-  if (a.connection === 'elsewhere')
-    return [outcomeSentence('connected_elsewhere', platform)];
+  if (a.connection === 'elsewhere') return [outcomeSentence('connected_elsewhere', platform)];
   const notes: string[] = [];
   if (a.connection === 'this_brand') notes.push('Connected; selecting it refreshes access');
   for (const l of a.limitations) {

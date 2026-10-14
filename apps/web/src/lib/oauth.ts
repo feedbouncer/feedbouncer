@@ -7,6 +7,7 @@ const SCOPE_TEXT: Record<string, string> = {
   pages_messaging: 'Send private replies',
   instagram_basic: "See your Instagram account's basic info",
   instagram_manage_comments: 'Read, hide, delete and reply to comments',
+  ads_read: 'Read your ads and the comments on them',
   instagram_manage_messages: 'Send one private reply to a commenter',
 };
 

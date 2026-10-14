@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { CommentActions } from '../../../../../../components/comment-actions';
 import { CommentBody } from '../../../../../../components/comment-body';
 import { CommentLinks } from '../../../../../../components/comment-links';
+import { adBadgeTitle } from '../../../../../../lib/ads';
 import { formatUtc } from '../../../../../../lib/format';
 import { isUuid } from '../../../../../../lib/ids';
 import type { Availability, ReplyLimits } from '../../../../../../lib/moderation';
@@ -19,12 +20,19 @@ interface Comment {
   permalink: string | null;
   isOwnAccount: boolean;
   mediaExternalId: string;
+  origin: 'ad' | 'organic';
+  ads: { adId: string; adAccountId: string }[];
   /** Computed by the API with the same rules it applies to a request. */
   availability: Availability;
   replyLimits: ReplyLimits;
 }
 
 const PAGE_SIZE = 50;
+const ORIGINS = ['ad', 'organic'] as const;
+type Origin = (typeof ORIGINS)[number];
+
+const originOf = (v: string | string[] | undefined): Origin | null =>
+  ORIGINS.find((o) => o === v) ?? null;
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 
 function cursor(v: string | string[] | undefined): Date | null {
@@ -46,7 +54,9 @@ export default async function CommentsPage({
   const sp = await searchParams;
   const before = cursor(sp.before);
   const beforeId = isUuid(sp.beforeId) ? sp.beforeId : null;
+  const origin = originOf(sp.origin);
   const query = new URLSearchParams({ limit: String(PAGE_SIZE) });
+  if (origin) query.set('origin', origin);
   if (before) {
     query.set('before', before.toISOString());
     if (beforeId) query.set('beforeId', beforeId);
@@ -61,6 +71,17 @@ export default async function CommentsPage({
   return (
     <main>
       <h1>Comments</h1>
+      <form method="get">
+        <label>
+          Show{' '}
+          <select name="origin" defaultValue={origin ?? ''}>
+            <option value="">All</option>
+            <option value="ad">Ads</option>
+            <option value="organic">Organic</option>
+          </select>
+        </label>{' '}
+        <button type="submit">Filter</button>
+      </form>
       {comments.length === 0 ? <p>No comments yet.</p> : null}
       <ul>
         {comments.map((c) => (
@@ -68,6 +89,12 @@ export default async function CommentsPage({
             <p>
               <strong>{c.authorName ?? 'Unknown author'}</strong> · {formatUtc(c.postedAt)} ·{' '}
               <span>{c.state}</span>
+              {c.origin === 'ad' ? (
+                <>
+                  {' · '}
+                  <span title={c.ads[0] ? adBadgeTitle(c.ads[0]) : undefined}>Ad</span>
+                </>
+              ) : null}
             </p>
             {c.parentCommentId ? <p>Reply to another comment</p> : null}
             <CommentBody body={c.body} />
@@ -91,7 +118,7 @@ export default async function CommentsPage({
       {last && comments.length === PAGE_SIZE ? (
         <p>
           <Link
-            href={`/orgs/${orgId}/brands/${brandId}/comments?before=${encodeURIComponent(last.postedAt)}&beforeId=${last.id}`}
+            href={`/orgs/${orgId}/brands/${brandId}/comments?before=${encodeURIComponent(last.postedAt)}&beforeId=${last.id}${origin ? `&origin=${origin}` : ''}`}
           >
             Older comments
           </Link>

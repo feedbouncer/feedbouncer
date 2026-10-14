@@ -24,6 +24,7 @@ interface ConnectResult {
 const SUBMIT_LABEL: Record<ConnectablePlatform, string> = {
   facebook: 'Connect selected Pages',
   instagram: 'Connect selected Instagram accounts',
+  meta_ads: 'Connect selected ad accounts',
 };
 
 export function AccountPicker(props: {

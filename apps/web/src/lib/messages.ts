@@ -135,8 +135,9 @@ export function outcomeSentence(code: string, platform?: string): string {
   return /[.!?]$/.test(s) ? s : `${s}.`;
 }
 
-export function statusReasonText(code: string | null): string | null {
+export function statusReasonText(code: string | null, platform?: string): string | null {
   if (code === null) return null;
+  if (platform === 'meta_ads') return 'Reconnect to enable ad moderation';
   return own(STATUS_REASONS, code) ?? 'This connection needs attention.';
 }
 

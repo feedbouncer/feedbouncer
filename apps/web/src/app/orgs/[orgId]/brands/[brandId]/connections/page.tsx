@@ -61,6 +61,10 @@ export default async function ConnectionsPage({
         'connections',
       ).connections
     : [];
+  const hasPageOrInstagram = connections.some(
+    (c) => c.platform === 'facebook' || c.platform === 'instagram',
+  );
+  const hasAdAccount = connections.some((c) => c.platform === 'meta_ads');
   return (
     <main>
       <h1>Connections</h1>
@@ -90,7 +94,10 @@ export default async function ConnectionsPage({
               </thead>
               <tbody>
                 {connections.map((c) => {
-                  const reason = statusReasonText(c.statusReason);
+                  const reason = statusReasonText(
+                    c.statusReason ?? (c.status === 'needs_reconnect' ? 'needs_reconnect' : null),
+                    c.platform,
+                  );
                   return (
                     <tr key={c.id}>
                       <td>{platformLabel(c.platform)}</td>
@@ -134,6 +141,9 @@ export default async function ConnectionsPage({
               label={PLATFORM_COPY[p].connectLabel}
             />
           ))}
+          {hasPageOrInstagram && !hasAdAccount ? (
+            <p>Connect your ad account to moderate comments on your ads.</p>
+          ) : null}
           <p>
             While the FeedBouncer Meta app is in review, only people with a role on the app can
             connect Pages and Instagram accounts.
@@ -144,6 +154,7 @@ export default async function ConnectionsPage({
       )}
       <p>
         <Link href={`/orgs/${orgId}/brands/${brandId}/comments`}>Comments</Link> ·{' '}
+        <Link href={`/orgs/${orgId}/brands/${brandId}/ads`}>Ads</Link> ·{' '}
         <Link href={`/orgs/${orgId}`}>Back to organization</Link>
       </p>
     </main>
