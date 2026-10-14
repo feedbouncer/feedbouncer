@@ -29,6 +29,7 @@ interface IgMedia {
   id: string;
   igUserId: string;
   live: boolean;
+  createdAtMs: number;
 }
 interface IgComment {
   id: string;
@@ -123,7 +124,8 @@ export function addIgComment(
   const parent = o.parentId ? s.comments.get(o.parentId) : undefined;
   if (o.parentId && !parent) throw new Error('unknown parent comment');
   const mid = o.mediaId ?? parent?.mediaId ?? mediaId(s);
-  if (!s.media.has(mid)) s.media.set(mid, { id: mid, igUserId, live: o.live ?? false });
+  if (!s.media.has(mid))
+    s.media.set(mid, { id: mid, igUserId, live: o.live ?? false, createdAtMs: now });
   const id = igId(s);
   const authorId = o.authorId ?? igId(s);
   s.comments.set(id, {
@@ -141,6 +143,18 @@ export function addIgComment(
     privateReplies: [],
   });
   return { mediaId: mid, commentId: id };
+}
+
+export function addIgMedia(
+  s: IgState,
+  now: number,
+  igUserId: string,
+  o: { createdAtMs?: number } = {},
+): { mediaId: string } {
+  if (!s.accounts.has(igUserId)) throw new Error('unknown instagram account');
+  const id = mediaId(s);
+  s.media.set(id, { id, igUserId, live: false, createdAtMs: o.createdAtMs ?? now });
+  return { mediaId: id };
 }
 
 function comment(s: IgState, id: string): IgComment {
@@ -282,6 +296,24 @@ export function routeInstagram(
       },
     });
   };
+
+  if (account && second === 'media' && path.length === 2 && method === 'GET') {
+    const items = [...s.media.values()]
+      .filter((m) => m.igUserId === account.id)
+      .sort((a, b) => b.createdAtMs - a.createdAtMs || b.id.localeCompare(a.id));
+    const p = page(items, query);
+    return host.reply(200, {
+      data: p.slice.map((m) => ({
+        id: m.id,
+        timestamp: host.graphTime(m.createdAtMs),
+        permalink: `https://www.instagram.com/p/${m.id}/`,
+      })),
+      paging: {
+        cursors: { after: p.after },
+        ...(p.more ? { next: `https://graph.facebook.com/${first}/media?after=${p.after}` } : {}),
+      },
+    });
+  }
 
   if (account) {
     if (path.length !== 2 || second !== 'messages' || method !== 'POST') return missing();
