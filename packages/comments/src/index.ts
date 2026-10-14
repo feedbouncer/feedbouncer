@@ -13,3 +13,5 @@ export * from './jobs/lifecycle.js';
 export * from './webhook-router.js';
 export * from './reconnect-notifier.js';
 export * from './scheduler.js';
+export * from './backfill/settings.js';
+export * from './backfill/store.js';
