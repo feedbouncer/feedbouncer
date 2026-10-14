@@ -181,3 +181,31 @@ describe('without a session', () => {
     });
   }
 });
+
+describe('backfill status', () => {
+  it('never crosses organizations', async () => {
+    await api.pool.query(
+      `INSERT INTO connection_backfill
+         (connection_id, organization_id, brand_id, run_id, status, window_start, window_end)
+       VALUES ($1, $2, $3, gen_random_uuid(), 'running', now() - interval '1 day', now())`,
+      [f.bConnectionId, f.B.orgId, f.B.brandId],
+    );
+    const own = await api.req(
+      'GET',
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections`,
+      {
+        cookie: f.A.owner.cookie,
+      },
+    );
+    expect(own.status).toBe(200);
+    expect(JSON.stringify(own.body)).not.toContain(f.bConnectionId);
+    const cross = await api.req(
+      'GET',
+      `/api/v1/orgs/${f.B.orgId}/brands/${f.B.brandId}/connections`,
+      {
+        cookie: f.A.owner.cookie,
+      },
+    );
+    expect(cross.status).toBe(404);
+  });
+});

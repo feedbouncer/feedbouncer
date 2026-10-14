@@ -16,6 +16,7 @@ const connectionId = '44444444-4444-4444-8444-444444444444';
 /** The row as it stands after `directory.disconnect` returned `disconnected`. */
 function setup(disconnected: boolean, row: { status: string; status_reason: string | null }) {
   const query = vi.fn(async (sql: string) => {
+    if (sql.includes('connection_backfill')) return { rowCount: 0, rows: [] };
     if (sql.includes('FROM brand')) return { rowCount: 1, rows: [{}] };
     if (sql.includes('FROM connection')) return { rowCount: 1, rows: [row] };
     if (sql.includes('FROM audit_event')) return { rowCount: 1, rows: [{ sequence: '7' }] };
@@ -28,7 +29,7 @@ function setup(disconnected: boolean, row: { status: string; status_reason: stri
     },
   } as unknown as PgConnectorStack;
   const enqueue = vi.fn(async () => undefined);
-  const deps = { pool: { query }, log: { error: vi.fn() } } as unknown as AppDeps;
+  const deps = { pool: { query }, log: { error: vi.fn(), warn: vi.fn() } } as unknown as AppDeps;
   const svc = new ConnectionsService(deps, stack, { enqueue } as unknown as JobProducer);
   return { svc, enqueue };
 }
