@@ -12,6 +12,7 @@ export type ActionActor =
   | { type: 'user'; userId: string }
   | { type: 'rule'; ruleId: string }
   | { type: 'classifier' }
+  | { type: 'policy' }
   | { type: 'system' };
 
 export const AUTHOR_KINDS: ReadonlySet<ActionKind> = new Set(['ban_author', 'unban_author']);

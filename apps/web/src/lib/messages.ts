@@ -115,6 +115,7 @@ const ACTOR_TYPES: Record<string, string> = {
   user: 'a team member',
   rule: 'a rule',
   classifier: 'classifier',
+  policy: 'a custom policy',
   system: 'the system',
 };
 

@@ -155,7 +155,7 @@ function validate(i: Request): string | null {
     if (typeof a.userId !== 'string' || !UUID.test(a.userId)) bad('actor');
   } else if (a?.type === 'rule') {
     if (typeof a.ruleId !== 'string' || !UUID.test(a.ruleId)) bad('actor');
-  } else if (a?.type !== 'classifier' && a?.type !== 'system') bad('actor');
+  } else if (a?.type !== 'classifier' && a?.type !== 'policy' && a?.type !== 'system') bad('actor');
   if (!REPLY_KINDS.has(i.kind)) {
     if (i.text !== undefined) bad('text');
     return null;

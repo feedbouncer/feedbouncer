@@ -339,6 +339,15 @@ describe('ModerationActions.request', () => {
     expect(enqueue).toHaveBeenCalledTimes(1);
   });
 
+  it('accepts a policy actor and stores actor_type policy', async () => {
+    const commentId = await seedComment();
+    const r = await request(commentId, 'hide', { actor: { type: 'policy' } });
+    expect(r.status).toBe('accepted');
+    expect(await rowsFor(commentId)).toMatchObject([
+      { actor_type: 'policy', rule_id: null, actor_user_id: null },
+    ]);
+  });
+
   it('user ban on a page-authored comment -> not_eligible author_is_page', async () => {
     const commentId = await seedComment({ authorId: PAGE });
     for (const kind of ['ban_author', 'unban_author'] as const)

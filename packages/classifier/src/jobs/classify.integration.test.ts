@@ -9,6 +9,13 @@ import { PgCommentStore } from '@feedbouncer/comments';
 import { JobDeferral, type JobContext } from '@feedbouncer/jobs';
 import { PgEvaluationStore, bodySha256, type RuleAction } from '@feedbouncer/rules';
 import { createLogger } from '@feedbouncer/service-runtime';
+import {
+  editCommentRow,
+  evaluateRulesFor,
+  fakeJobContext,
+  seedCommentRow,
+  type Seeded,
+} from '../testing.js';
 import { ZERO_SCORES } from '../defaults.js';
 import {
   ClassifierProviderError,
@@ -76,73 +83,12 @@ beforeEach(() => {
   };
 });
 
-interface Seeded {
-  id: string;
-  body: string;
-  t: Tenant;
-}
-const connScope = (t: Tenant, connectionId = t.connectionId) => ({
-  organizationId: t.organizationId,
-  brandId: t.brandId,
-  connectionId,
-});
-
 const tenant = () => seedTenant(ctxDb.c, `clj${++n}`);
-
-async function seedComment(
-  body: string,
-  t?: Tenant,
-  o: { state?: string; own?: boolean } = {},
-): Promise<Seeded> {
-  const tn = t ?? (await tenant());
-  const r = await ctxDb.c.query<{ id: string }>(
-    `INSERT INTO comment (organization_id, brand_id, connection_id, source_id, external_id, body, platform_state,
-       is_own_account, ingest_origin, posted_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'live', now()) RETURNING id`,
-    [
-      tn.organizationId,
-      tn.brandId,
-      tn.connectionId,
-      tn.sourceId,
-      `ext-${randomUUID()}`,
-      body,
-      o.state ?? 'visible',
-      o.own ?? false,
-    ],
-  );
-  return { id: r.rows[0]!.id, body, t: tn };
-}
-
-async function editComment(c: Seeded, body: string): Promise<Seeded> {
-  await ctxDb.c.query('UPDATE comment SET body = $2 WHERE id = $1', [c.id, body]);
-  return { ...c, body };
-}
-
-async function evaluateRules(c: Seeded, status: 'no_match' | 'decided' | 'skipped'): Promise<void> {
-  const row = await evaluations.record(connScope(c.t), {
-    commentId: c.id,
-    sha: Buffer.from(bodySha256(c.body), 'hex'),
-    triggerKey: 'ingest',
-    rulesetVersion: 'v1',
-    status,
-    ...(status === 'skipped' ? { skipReason: 'own_account' as const } : {}),
-    verdict:
-      status === 'decided'
-        ? {
-            decided: {
-              ruleId: c.t.ruleId,
-              ruleName: 'Rule',
-              kind: 'keyword',
-              action: 'hide',
-              evidence: { kind: 'keyword', term: 'x' },
-            },
-            suggestions: [],
-            trace: [],
-          }
-        : { decided: null, suggestions: [], trace: [] },
-  });
-  if (!row) throw new Error('evaluation not recorded');
-}
+const seedComment = async (body: string, t?: Tenant, o: { state?: string; own?: boolean } = {}) =>
+  seedCommentRow(ctxDb.c, t ?? (await tenant()), body, o);
+const editComment = (c: Seeded, body: string) => editCommentRow(ctxDb.c, c, body);
+const evaluateRules = (c: Seeded, status: 'no_match' | 'decided' | 'skipped') =>
+  evaluateRulesFor(evaluations, c, status);
 
 async function setThreshold(t: Tenant, category: string, threshold: number, action: RuleAction) {
   await ctxDb.c.query(
@@ -169,16 +115,8 @@ function job(provider: ClassifierProvider, o: Partial<ClassifyDeps> = {}) {
   });
 }
 
-const ctx = (c: Seeded, attempt: number, connectionId = c.t.connectionId): JobContext => ({
-  scope: connScope(c.t, connectionId),
-  platform: 'facebook',
-  jobType: CLASSIFY_JOB.type,
-  ledgerId: randomUUID(),
-  attempt,
-  isReplay: false,
-  signal: new AbortController().signal,
-  log: quiet,
-});
+const ctx = (c: Seeded, attempt: number, connectionId = c.t.connectionId): JobContext =>
+  fakeJobContext(c.t, attempt, CLASSIFY_JOB.type, quiet, connectionId);
 const payload = (c: { id: string; body: string }): ClassifyPayload => ({
   commentId: c.id,
   bodySha256: bodySha256(c.body),

@@ -19,6 +19,22 @@ afterAll(async () => {
 });
 
 describe('BrandSlots', () => {
+  it('namespaces are independent: a full classify namespace does not block policy slots', async () => {
+    const clf = new BrandSlots(pool, 1);
+    const pol = new BrandSlots(pool, 1, 'fb.policy');
+    const a = await clf.acquire(brandA);
+    expect(a).not.toBeNull();
+    expect(await clf.acquire(brandA)).toBeNull();
+    const b = await pol.acquire(brandA);
+    expect(b).not.toBeNull();
+    await a!.release();
+    await b!.release();
+  });
+
+  it('rejects an invalid namespace', () => {
+    expect(() => new BrandSlots(pool, 1, 'Bad Name')).toThrow(RangeError);
+  });
+
   it('rejects an invalid perBrand', () => {
     expect(() => new BrandSlots(pool, 0)).toThrow(RangeError);
     expect(() => new BrandSlots(pool, 65)).toThrow(RangeError);
