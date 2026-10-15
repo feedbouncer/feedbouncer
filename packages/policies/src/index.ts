@@ -4,3 +4,6 @@ export * from './decide.js';
 export * from './describe.js';
 export * from './evaluator.js';
 export * from './config.js';
+export * from './store.js';
+export * from './evaluations.js';
+export * from './usage.js';
