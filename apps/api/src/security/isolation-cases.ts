@@ -15,6 +15,9 @@ export interface IsolationFixture {
   bDomainId: string;
   /** B's classifier re-run. */
   bClassifierRunId: string;
+  /** B's custom policy and a dry-run preview of it. */
+  bPolicyId: string;
+  bPreviewId: string;
   /** B's live connection and B owner's pending grant, per account-selection platform. */
   bConnectionIds: Record<'facebook' | 'instagram', string>;
   bGrantIds: Record<'facebook' | 'instagram', string>;
@@ -247,6 +250,95 @@ export const CASES: IsolationCase[] = [
     name: "read B's comment classification under A brand",
     url: (f) =>
       `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/comments/${f.bCommentId}/classification`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/policies',
+    name: "list B's policies via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/policies`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/policies',
+    name: 'create a policy in B brand under A path',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/policies`,
+    body: () => ({ name: 'x', text: 'Hide comments asking for DMs', action: 'flag' }),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/policies/:policyId',
+    name: "get B's policy via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/policies/${f.bPolicyId}`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/policies/:policyId',
+    name: "get B's policy id under A's own brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/policies/${f.bPolicyId}`,
+  },
+  {
+    route: 'PATCH /api/v1/orgs/:orgId/brands/:brandId/policies/:policyId',
+    name: "patch B's policy via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/policies/${f.bPolicyId}`,
+    body: () => ({ enabled: true }),
+  },
+  {
+    route: 'PATCH /api/v1/orgs/:orgId/brands/:brandId/policies/:policyId',
+    name: "patch B's policy id under A's own brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/policies/${f.bPolicyId}`,
+    body: () => ({ enabled: true }),
+  },
+  {
+    route: 'DELETE /api/v1/orgs/:orgId/brands/:brandId/policies/:policyId',
+    name: "delete B's policy via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/policies/${f.bPolicyId}`,
+  },
+  {
+    route: 'DELETE /api/v1/orgs/:orgId/brands/:brandId/policies/:policyId',
+    name: "delete B's policy id under A's own brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/policies/${f.bPolicyId}`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/policies/:policyId/runs',
+    name: "apply B's policy via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/policies/${f.bPolicyId}/runs`,
+    body: () => ({ days: 1 }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/policies/:policyId/runs',
+    name: "apply B's policy id under A's own brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/policies/${f.bPolicyId}/runs`,
+    body: () => ({ days: 1 }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/policy-previews',
+    name: 'preview in B brand under A path',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/policy-previews`,
+    body: () => ({ text: 'Hide comments asking for DMs', action: 'flag' }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/policy-previews',
+    name: "preview B's policy text under A's own brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/policy-previews`,
+    body: (f) => ({ text: 'Hide comments asking for DMs', action: 'flag', policyId: f.bPolicyId }),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/policy-previews/:previewId',
+    name: "read B's preview via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/policy-previews/${f.bPreviewId}`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/policy-previews/:previewId',
+    name: "read B's preview id under A's own brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/policy-previews/${f.bPreviewId}`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/comments/:commentId/policy-evaluation',
+    name: "B comment's policy evaluation via A org",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/comments/${f.bCommentId}/policy-evaluation`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/comments/:commentId/policy-evaluation',
+    name: "B comment's policy evaluation under A's own brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/comments/${f.bCommentId}/policy-evaluation`,
   },
   {
     route: 'GET /api/v1/orgs/:orgId/members',

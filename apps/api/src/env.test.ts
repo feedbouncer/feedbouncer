@@ -51,6 +51,31 @@ describe('loadApiEnv', () => {
     });
   });
 
+  describe('policy limits', () => {
+    it('reuses the classifier provider and the default monthly budget', () => {
+      expect(load(base).policy).toEqual({
+        monthlyCallsPerBrand: 20_000,
+        evaluatorConfigured: false,
+      });
+      const env = load({
+        ...base,
+        CLASSIFIER_PROVIDER: 'google',
+        CLASSIFIER_MODEL: 'gemini-2.5-flash',
+        POLICY_MONTHLY_CALLS_PER_BRAND: '500',
+      });
+      expect(env.policy).toEqual({ monthlyCallsPerBrand: 500, evaluatorConfigured: true });
+    });
+    it('is off when POLICY_PROVIDER is none', () => {
+      const env = load({
+        ...base,
+        CLASSIFIER_PROVIDER: 'google',
+        CLASSIFIER_MODEL: 'gemini-2.5-flash',
+        POLICY_PROVIDER: 'none',
+      });
+      expect(env.policy.evaluatorConfigured).toBe(false);
+    });
+  });
+
   it('loads telemetry and health policy with the api metrics port default', () => {
     const env = load(base);
     expect(env.telemetry.metrics.port).toBe(9464);

@@ -16,6 +16,7 @@ import {
   enqueueOnly,
 } from '@feedbouncer/comments';
 import { CLASSIFIER_RERUN_JOB } from '@feedbouncer/classifier';
+import { POLICY_PREVIEW_JOB, POLICY_RUN_JOB } from '@feedbouncer/policies';
 import { createFacebookConnector } from '@feedbouncer/connector-facebook';
 import { createInstagramConnector } from '@feedbouncer/connector-instagram';
 import { createMetaAdsConnector } from '@feedbouncer/connector-meta-ads';
@@ -104,6 +105,8 @@ export function buildMetaDeps(d: {
   jobs.register(enqueueOnly(BACKFILL_JOB));
   // The lane travels with the spec, so QueueSet routes it to the classifier's queue.
   jobs.register(enqueueOnly(CLASSIFIER_RERUN_JOB));
+  jobs.register(enqueueOnly(POLICY_PREVIEW_JOB));
+  jobs.register(enqueueOnly(POLICY_RUN_JOB));
   const queues = new QueueSet({
     connection: redis,
     prefix: env.jobs.prefix,

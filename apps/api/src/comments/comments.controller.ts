@@ -87,6 +87,16 @@ export class CommentsController {
     };
   }
 
+  @Get(':commentId/policy-evaluation')
+  @RequireCapability('comment.moderate')
+  policyEvaluation(
+    @Req() req: OrgRequest,
+    @Param('brandId') brandId: string,
+    @Param('commentId') commentId: string,
+  ) {
+    return this.svc.policyEvaluation(req.org, brandId, parseUuidOr404(commentId));
+  }
+
   @Post(':commentId/actions')
   @RequireCapability('comment.moderate')
   async request(

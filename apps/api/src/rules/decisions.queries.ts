@@ -1,5 +1,6 @@
 import type pg from 'pg';
 import type { Category, Downgrade, Trigger } from '@feedbouncer/classifier';
+import type { Downgrade as PolicyDowngrade, PolicyAction } from '@feedbouncer/policies';
 import type { RuleAction, RuleKind, RuleMode } from '@feedbouncer/rules';
 import type { BrandScope } from '../tenancy/brand-scope.js';
 
@@ -7,7 +8,7 @@ export interface DecisionDto {
   id: string;
   outcome: RuleAction;
   mode: RuleMode;
-  actorType: 'user' | 'rule' | 'classifier';
+  actorType: 'user' | 'rule' | 'classifier' | 'policy';
   rule: { id: string; name: string; kind: RuleKind | null; archived: boolean } | null;
   reason: string;
   createdAt: string;
@@ -25,6 +26,25 @@ export interface DecisionDto {
     downgraded: Downgrade | null;
     /** An earlier hide lifted because a re-score fell below the threshold. */
     reversal: boolean;
+  } | null;
+  /** The policy behind a policy decision, as it was at that revision; null otherwise. */
+  policy: {
+    evaluationId: string;
+    policyId: string;
+    name: string;
+    archived: boolean;
+    revision: number;
+    text: string;
+    matches: {
+      policyId: string;
+      name: string;
+      archived: boolean;
+      revision: number;
+      confidence: 'high' | 'low';
+      action: PolicyAction;
+      effectiveAction: PolicyAction;
+      downgrade: PolicyDowngrade | null;
+    }[];
   } | null;
 }
 
@@ -61,12 +81,19 @@ interface DecisionRow {
   triggers: Trigger[] | null;
   downgraded: Downgrade | null;
   reversal: boolean;
+  policy_evaluation_id: string | null;
+  policy_id: string | null;
+  policy_name: string | null;
+  policy_archived: boolean | null;
+  policy_revision: number | null;
+  policy_text: string | null;
+  policy_matches: NonNullable<DecisionDto['policy']>['matches'] | null;
 }
 
 // Rules, classifications and actions are joined on the decision's own organization
 // and brand. The action is the platform call of the decision: a rule evaluation
-// (request_key rule-eval:<id>) or a classification (clf:<id>, clf:<id>:unhide for a
-// reversal); it belongs to the enforced decisions only, not to dry-run suggestions.
+// (request_key rule-eval:<id>), a classification (clf:<id>, clf:<id>:unhide for a
+// reversal) or a policy evaluation (pol:<id>); it belongs to the enforced decisions only, not to dry-run suggestions.
 const DECISION_FROM = `
   FROM decision d
   LEFT JOIN rule r ON r.organization_id = d.organization_id AND r.brand_id = d.brand_id
@@ -75,6 +102,11 @@ const DECISION_FROM = `
                              AND e.id = d.rule_evaluation_id
   LEFT JOIN comment_classification cc ON cc.organization_id = d.organization_id
                                      AND cc.brand_id = d.brand_id AND cc.id = d.classification_id
+  LEFT JOIN custom_policy_revision pr ON pr.organization_id = d.organization_id
+                                     AND pr.brand_id = d.brand_id AND pr.id = d.policy_revision_id
+  LEFT JOIN custom_policy cp ON cp.brand_id = pr.brand_id AND cp.id = pr.policy_id
+  LEFT JOIN policy_evaluation pe ON pe.organization_id = d.organization_id
+                                AND pe.brand_id = d.brand_id AND pe.id = d.policy_evaluation_id
   LEFT JOIN moderation_action a ON a.organization_id = d.organization_id AND a.brand_id = d.brand_id
                                AND d.mode = 'enforce'
                                AND a.request_key = CASE
@@ -82,6 +114,7 @@ const DECISION_FROM = `
                                  WHEN d.actor_type = 'classifier' AND d.reversal
                                    THEN 'clf:' || d.classification_id || ':unhide'
                                  WHEN d.actor_type = 'classifier' THEN 'clf:' || d.classification_id
+                                 WHEN d.actor_type = 'policy' THEN 'pol:' || d.policy_evaluation_id
                                END`;
 
 const DECISION_COLUMNS = `
@@ -91,10 +124,25 @@ const DECISION_COLUMNS = `
   COALESCE(d.mode = 'enforce' AND d.outcome = 'flag' AND d.rule_id = e.matched_rule_id
            AND e.outcome <> 'flag', false)
   OR COALESCE(d.actor_type = 'classifier' AND d.outcome = 'flag' AND cc.fallback_at IS NOT NULL
-              AND d.created_at >= cc.fallback_at, false) AS fallback,
+              AND d.created_at >= cc.fallback_at, false)
+  OR COALESCE(d.actor_type = 'policy' AND d.outcome = 'flag' AND pe.fallback_at IS NOT NULL
+              AND d.created_at >= pe.fallback_at, false) AS fallback,
   a.kind AS action_kind, a.status AS action_status, a.outcome_code AS action_outcome_code,
   d.classification_id, d.category, d.confidence::text AS confidence, d.threshold::text AS threshold,
-  d.classifier_provider, d.classifier_model, d.reversal, cc.triggers, cc.downgraded`;
+  d.classifier_provider, d.classifier_model, d.reversal, cc.triggers, cc.downgraded,
+  d.policy_evaluation_id, pr.policy_id, cp.name AS policy_name,
+  (cp.archived_at IS NOT NULL) AS policy_archived, pr.revision AS policy_revision,
+  pr.text AS policy_text,
+  (SELECT COALESCE(json_agg(json_build_object(
+      'policyId', mr.policy_id, 'name', mp.name, 'archived', mp.archived_at IS NOT NULL,
+      'revision', mr.revision, 'confidence', m.confidence, 'action', m.configured_action,
+      'effectiveAction', m.effective_action, 'downgrade', m.downgrade)
+      ORDER BY mp.created_at, mp.id), '[]'::json)
+     FROM policy_evaluation_match m
+     JOIN custom_policy_revision mr ON mr.brand_id = m.brand_id AND mr.id = m.revision_id
+     JOIN custom_policy mp ON mp.brand_id = mr.brand_id AND mp.id = mr.policy_id
+    WHERE m.organization_id = d.organization_id AND m.brand_id = d.brand_id
+      AND m.evaluation_id = d.policy_evaluation_id) AS policy_matches`;
 
 function toClassifier(r: DecisionRow): DecisionDto['classifier'] {
   if (r.actor_type !== 'classifier' || r.classification_id === null) return null;
@@ -110,6 +158,20 @@ function toClassifier(r: DecisionRow): DecisionDto['classifier'] {
     triggers: r.triggers ?? [],
     downgraded: r.downgraded,
     reversal: r.reversal,
+  };
+}
+
+function toPolicy(r: DecisionRow): DecisionDto['policy'] {
+  if (r.actor_type !== 'policy' || r.policy_evaluation_id === null) return null;
+  if (r.policy_id === null || r.policy_name === null || r.policy_revision === null) return null;
+  return {
+    evaluationId: r.policy_evaluation_id,
+    policyId: r.policy_id,
+    name: r.policy_name,
+    archived: r.policy_archived === true,
+    revision: r.policy_revision,
+    text: r.policy_text ?? '',
+    matches: r.policy_matches ?? [],
   };
 }
 
@@ -130,6 +192,7 @@ const toDecision = (r: DecisionRow): DecisionDto => ({
       ? { kind: r.action_kind, status: r.action_status, outcomeCode: r.action_outcome_code }
       : null,
   classifier: toClassifier(r),
+  policy: toPolicy(r),
 });
 
 /** All decisions on one comment, newest first. */
@@ -170,15 +233,17 @@ export interface ActivityQuery {
   kind?: RuleKind | undefined;
   outcome?: RuleAction | undefined;
   mode?: RuleMode | undefined;
-  /** Only decisions of this actor; both rules and the classifier when absent. */
-  source?: 'rule' | 'classifier' | undefined;
+  /** Only decisions of this actor; rules, the classifier and policies when absent. */
+  source?: 'rule' | 'classifier' | 'policy' | undefined;
+  /** Only decisions made by a revision of this policy. */
+  policyId?: string | undefined;
   category?: Category | undefined;
   /** Decision sequence: only older decisions are returned. */
   before?: string | undefined;
   limit: number;
 }
 
-/** Rule and classifier decisions of a brand, newest first. Returns one row more than `limit` when there is a next page. */
+/** Rule, classifier and policy decisions of a brand, newest first. Returns one row more than `limit` when there is a next page. */
 export async function listActivity(
   pool: pg.Pool,
   scope: BrandScope,
@@ -197,6 +262,7 @@ export async function listActivity(
         AND ($6::text IS NULL OR d.mode = $6)
         AND ($7::bigint IS NULL OR d.sequence < $7)
         AND ($10::text IS NULL OR d.category = $10)
+        AND ($11::uuid IS NULL OR pr.policy_id = $11)
       ORDER BY d.sequence DESC LIMIT $8`,
     [
       scope.organizationId,
@@ -207,8 +273,9 @@ export async function listActivity(
       q.mode ?? null,
       q.before ?? null,
       q.limit + 1,
-      q.source ? [q.source] : ['rule', 'classifier'],
+      q.source ? [q.source] : ['rule', 'classifier', 'policy'],
       q.category ?? null,
+      q.policyId ?? null,
     ],
   );
   return rows.map((r) => ({

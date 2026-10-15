@@ -23,7 +23,15 @@ export type AuditAction =
   | 'brand_domain.removed'
   | 'classifier_threshold.updated'
   | 'classifier_threshold.reset'
-  | 'classifier.rerun_requested';
+  | 'classifier.rerun_requested'
+  | 'policy.created'
+  | 'policy.revised'
+  | 'policy.renamed'
+  | 'policy.enabled'
+  | 'policy.disabled'
+  | 'policy.archived'
+  | 'policy.preview_requested'
+  | 'policy.run_requested';
 
 export interface AuditInput {
   organizationId: string;
@@ -38,7 +46,10 @@ export interface AuditInput {
     | 'rule'
     | 'brand_domain'
     | 'classifier_threshold'
-    | 'classifier_run';
+    | 'classifier_run'
+    | 'custom_policy'
+    | 'policy_preview'
+    | 'policy_run';
   subjectId: string | null;
   /** Ids, roles and booleans only: never emails, people's names or tokens. */
   details?: Readonly<Record<string, string | number | boolean | null>>;
