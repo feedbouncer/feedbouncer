@@ -122,7 +122,7 @@ export async function pollSource(
           /* telemetry never fails a job */
         }
       } else if (r.outcome === 'updated') updated++;
-      if (d.applied && r.needsHook && r.hookBody !== null) {
+      if (d.applied && r.hookBody !== null) {
         // One failing item must not starve the rest; its marker stays pending.
         try {
           await d.applied.onApplied({

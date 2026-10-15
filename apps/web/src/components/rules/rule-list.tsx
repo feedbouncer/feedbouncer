@@ -47,7 +47,11 @@ export function RuleList(props: { orgId: string; brandId: string; rules: RuleVie
   }
 
   if (props.rules.length === 0) return <p>No rules yet.</p>;
-  const last = props.rules.length - 1;
+  // Trusted-author rules are always checked first, so they are never moved or passed.
+  const movable = (index: number) => {
+    const r = props.rules[index];
+    return r !== undefined && !isTrustedAuthorList(r);
+  };
   return (
     <div>
       {error ? <p role="alert">{error}</p> : null}
@@ -116,7 +120,7 @@ export function RuleList(props: { orgId: string; brandId: string; rules: RuleVie
                 </label>
               </td>
               <td>
-                {i > 0 ? (
+                {movable(i) && movable(i - 1) ? (
                   <button
                     type="button"
                     disabled={busy}
@@ -126,7 +130,7 @@ export function RuleList(props: { orgId: string; brandId: string; rules: RuleVie
                     ▲
                   </button>
                 ) : null}
-                {i < last ? (
+                {movable(i) && movable(i + 1) ? (
                   <button
                     type="button"
                     disabled={busy}

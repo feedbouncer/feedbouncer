@@ -2,7 +2,6 @@ import { Controller, Get, Inject, Param, Query, Req, UseGuards } from '@nestjs/c
 import { z } from 'zod';
 import { RULE_ACTIONS, RULE_KINDS, RULE_MODES } from '@feedbouncer/rules';
 import { SessionGuard } from '../auth/session.guard.js';
-import { ApiError } from '../http/errors.js';
 import { parseBody, zUuid } from '../http/validation.js';
 import { RequireCapability } from '../tenancy/capability.decorator.js';
 import { OrgAccessGuard, type OrgRequest } from '../tenancy/org-access.guard.js';
@@ -16,7 +15,7 @@ const ActivityQuery = z.strictObject({
   kind: z.enum(RULE_KINDS).optional(),
   outcome: z.enum(RULE_ACTIONS).optional(),
   mode: z.enum(RULE_MODES).optional(),
-  before: z.string().optional(),
+  before: z.string().regex(CURSOR).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
@@ -29,7 +28,6 @@ export class ActivityController {
   @RequireCapability('rule.read')
   list(@Req() req: OrgRequest, @Param('brandId') brandId: string, @Query() query: unknown) {
     const q = parseBody(ActivityQuery, query);
-    if (q.before !== undefined && !CURSOR.test(q.before)) throw new ApiError(400, 'invalid_cursor');
     return this.rules.activity(req.org, brandId, q);
   }
 }

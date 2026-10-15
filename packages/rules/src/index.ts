@@ -39,6 +39,8 @@ export { describeDecision, describeFallback } from './reason.js';
 export { analyzeRules, type AnalyzableRule, type RuleWarnings } from './shadowing.js';
 export {
   DomainLimitError,
+  InvalidRuleActionError,
+  InvalidRuleConditionsError,
   MAX_DOMAINS_PER_BRAND,
   MAX_RULES_PER_BRAND,
   PgRuleStore,

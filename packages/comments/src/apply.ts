@@ -13,9 +13,7 @@ export async function applyPlatformComment(
 ): Promise<{
   commentId: string;
   outcome: ApplyOutcome;
-  bodyChanged: boolean;
-  /** The rule hook is owed for `hookBody` (new text, or an earlier delivery that never completed). */
-  needsHook: boolean;
+  /** The body the rule hook is owed (new text, or an earlier delivery that never completed). */
   hookBody: string | null;
 }> {
   const r = await store.upsertFromPlatform(scope, c, o);
@@ -24,8 +22,6 @@ export async function applyPlatformComment(
   return {
     commentId: r.commentId,
     outcome: r.created ? 'created' : r.applied ? 'updated' : 'stale',
-    bodyChanged: r.bodyChanged,
-    needsHook: r.needsHook,
     hookBody: r.hookBody,
   };
 }

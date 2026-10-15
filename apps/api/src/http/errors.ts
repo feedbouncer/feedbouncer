@@ -88,14 +88,19 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   service_unavailable: 'Service temporarily unavailable. Try again shortly.',
 };
 
+export interface ErrorIssue {
+  path: string;
+  message: string;
+}
+
 export class ApiError extends Error {
   override name = 'ApiError';
   constructor(
     readonly status: number,
     readonly code: ErrorCode,
     message?: string,
-    /** Machine-readable specifics of this error (never request values), merged into the envelope. */
-    readonly details?: Readonly<Record<string, unknown>>,
+    /** Specifics merged into the envelope: schema problems or a limit, never request values. */
+    readonly details?: { readonly issues?: readonly ErrorIssue[]; readonly max?: number },
   ) {
     super(message ?? DEFAULT_MESSAGES[code]);
   }
@@ -104,7 +109,7 @@ export class ApiError extends Error {
 export const notFound = (): ApiError => new ApiError(404, 'not_found');
 
 export function errorBody(e: ApiError): {
-  error: { code: ErrorCode; message: string } & Record<string, unknown>;
+  error: { code: ErrorCode; message: string; issues?: readonly ErrorIssue[]; max?: number };
 } {
   return { error: { ...e.details, code: e.code, message: e.message } };
 }

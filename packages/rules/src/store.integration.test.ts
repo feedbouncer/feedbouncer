@@ -272,7 +272,7 @@ describe('PgRuleStore own domains', () => {
     expect(d).not.toBe('exists');
     expect(await tx((c) => store.addDomain(c, scope, 'example.com'))).toBe('exists');
     const id = (d as { id: string }).id;
-    expect(await tx((c) => store.removeDomain(c, other.scope, id))).toBe(false);
+    expect(await tx((c) => store.removeDomain(c, other.scope, id))).toBeNull();
     expect(await store.listDomains(other.scope)).toEqual([]);
     expect((await store.listDomains(scope)).map((x) => x.domain)).toEqual(['example.com']);
     for (let i = 1; i < MAX_DOMAINS_PER_BRAND; i++)
@@ -281,7 +281,7 @@ describe('PgRuleStore own domains', () => {
       DomainLimitError,
     );
     expect(await tx((c) => store.addDomain(c, scope, 'example.com'))).toBe('exists');
-    expect(await tx((c) => store.removeDomain(c, scope, id))).toBe(true);
+    expect(await tx((c) => store.removeDomain(c, scope, id))).toMatchObject({ id });
   });
 });
 

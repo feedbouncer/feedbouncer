@@ -37,6 +37,18 @@ export class RuleLimitError extends Error {
     this.name = 'RuleLimitError';
   }
 }
+export class InvalidRuleConditionsError extends Error {
+  constructor() {
+    super('invalid_conditions');
+    this.name = 'InvalidRuleConditionsError';
+  }
+}
+export class InvalidRuleActionError extends Error {
+  constructor() {
+    super('invalid_action_for_conditions');
+    this.name = 'InvalidRuleActionError';
+  }
+}
 export class DomainLimitError extends Error {
   constructor() {
     super('domain_limit_reached');
@@ -185,9 +197,9 @@ export class PgRuleStore {
       enabled: patch.enabled ?? row.enabled,
     };
     const parsed = ruleConditionsSchema.safeParse(merged.conditions);
-    if (!parsed.success) throw new TypeError('invalid_conditions');
+    if (!parsed.success) throw new InvalidRuleConditionsError();
     if (checkActionForConditions(parsed.data, merged.action) !== null)
-      throw new TypeError('invalid_action_for_conditions');
+      throw new InvalidRuleActionError();
     const { rows } = await tx.query<RuleRow>(
       `UPDATE rule SET name = $4, conditions = $5::jsonb, action = $6, mode = $7, enabled = $8
         WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND archived_at IS NULL
@@ -281,13 +293,19 @@ export class PgRuleStore {
     return r ? { id: r.id, domain: r.domain, createdAt: r.created_at } : 'exists';
   }
 
-  async removeDomain(tx: pg.PoolClient, scope: BrandScope, domainId: string): Promise<boolean> {
-    if (!(await this.#lockBrand(tx, scope))) return false;
-    const { rowCount } = await tx.query(
-      `DELETE FROM brand_domain WHERE organization_id = $1 AND brand_id = $2 AND id = $3`,
+  async removeDomain(
+    tx: pg.PoolClient,
+    scope: BrandScope,
+    domainId: string,
+  ): Promise<BrandDomain | null> {
+    if (!(await this.#lockBrand(tx, scope))) return null;
+    const { rows } = await tx.query<{ id: string; domain: string; created_at: Date }>(
+      `DELETE FROM brand_domain WHERE organization_id = $1 AND brand_id = $2 AND id = $3
+       RETURNING id, domain, created_at`,
       [scope.organizationId, scope.brandId, domainId],
     );
-    return (rowCount ?? 0) > 0;
+    const r = rows[0];
+    return r ? { id: r.id, domain: r.domain, createdAt: r.created_at } : null;
   }
 
   /** Changes whenever the brand's rules or own domains are written. */

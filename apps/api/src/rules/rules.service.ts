@@ -5,6 +5,8 @@ import { can, type Capability } from '@feedbouncer/authz';
 import { withTransaction } from '@feedbouncer/db';
 import {
   DomainLimitError,
+  InvalidRuleActionError,
+  InvalidRuleConditionsError,
   PgRuleStore,
   RuleLimitError,
   analyzeRules,
@@ -171,7 +173,7 @@ export class RulesService {
       });
     } catch (e) {
       // The store re-checks the merged rule: the stored conditions or the new action do not fit.
-      if (e instanceof TypeError && e.message === 'invalid_action_for_conditions')
+      if (e instanceof InvalidRuleActionError)
         throw invalidRule([
           {
             code: 'custom',
@@ -180,7 +182,7 @@ export class RulesService {
             input: undefined,
           },
         ]);
-      if (e instanceof TypeError && e.message === 'invalid_conditions')
+      if (e instanceof InvalidRuleConditionsError)
         throw invalidRule([
           {
             code: 'custom',
@@ -241,7 +243,6 @@ export class RulesService {
             action: 'brand_domain.added',
             subjectType: 'brand_domain',
             subjectId: r.id,
-            details: { domain },
           });
         return r;
       });
@@ -256,18 +257,11 @@ export class RulesService {
   async removeDomain(org: OrgContext, brandId: unknown, domainId: string): Promise<void> {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     await this.#write(org, 'brand.write', async (c) => {
-      const found = await c.query<{ domain: string }>(
-        `SELECT domain FROM brand_domain WHERE organization_id = $1 AND brand_id = $2 AND id = $3`,
-        [scope.organizationId, scope.brandId, domainId],
-      );
-      const domain = found.rows[0]?.domain;
-      if (domain === undefined || !(await this.#store.removeDomain(c, scope, domainId)))
-        throw notFound();
+      if (!(await this.#store.removeDomain(c, scope, domainId))) throw notFound();
       await this.#audit(c, org, scope, {
         action: 'brand_domain.removed',
         subjectType: 'brand_domain',
         subjectId: domainId,
-        details: { domain },
       });
     });
   }

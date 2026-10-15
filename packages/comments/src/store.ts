@@ -247,10 +247,7 @@ export class PgCommentStore {
     commentId: string;
     created: boolean;
     applied: boolean;
-    bodyChanged: boolean;
     /** A live body the rule hook has not yet been told about (new, edited, or a failed delivery). */
-    needsHook: boolean;
-    /** The stored body to deliver when `needsHook`. */
     hookBody: string | null;
   }> {
     return withTransaction(this.pool, async (tx) => {
@@ -284,7 +281,7 @@ export class PgCommentStore {
       );
       const newBody = noNul(c.body);
       const live = (o.origin ?? 'live') === 'live';
-      const newSha = live ? bodySha(newBody) : null;
+      const newSha = live && c.platformState !== 'deleted' ? bodySha(newBody) : null;
       const up = await tx.query<{ id: string; created: boolean }>(
         `INSERT INTO comment (organization_id, brand_id, connection_id, source_id, external_id, author_id,
                               parent_external_id, parent_comment_id, body, platform_state, posted_at,
@@ -359,7 +356,7 @@ export class PgCommentStore {
             : prev.rows[0]?.pending === true && !(applied && bodyChanged)
               ? prev.rows[0].body
               : null;
-      return { commentId, created, applied, bodyChanged, needsHook: hookBody !== null, hookBody };
+      return { commentId, created, applied, hookBody };
     });
   }
 

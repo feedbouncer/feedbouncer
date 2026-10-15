@@ -408,7 +408,7 @@ describe('decisions', () => {
     }
     const bad = await call('GET', '/rule-activity?before=nope', undefined, org.owner.cookie, dec);
     expect(bad.status).toBe(400);
-    expect(bad.body.error.code).toBe('invalid_cursor');
+    expect(bad.body.error.code).toBe('invalid_request');
   });
 });
 

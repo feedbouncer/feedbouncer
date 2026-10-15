@@ -69,7 +69,7 @@ export function ingestCommentJob(d: {
           ({ commentId, outcome } = r);
           // The row is committed: a throwing hook retries the job without losing the comment.
           // Delivery is at least once: the pending marker survives a failed or lost hook call.
-          if (d.applied && r.needsHook && r.hookBody !== null) {
+          if (d.applied && r.hookBody !== null) {
             await d.applied.onApplied({
               scope: ctx.scope,
               platform: rec.platform,
