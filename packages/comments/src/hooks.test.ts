@@ -18,4 +18,16 @@ describe('CompositeActionOutcomeObserver', () => {
       new CompositeActionOutcomeObserver([a]).onActionOutcome(e),
     ).resolves.toBeUndefined();
   });
+  it('still calls later observers when one throws synchronously', async () => {
+    const a = {
+      onActionOutcome: vi.fn(() => {
+        throw new Error('sync');
+      }),
+    };
+    const b = { onActionOutcome: vi.fn().mockResolvedValue(undefined) };
+    await expect(new CompositeActionOutcomeObserver([a, b]).onActionOutcome(e)).rejects.toThrow(
+      'sync',
+    );
+    expect(b.onActionOutcome).toHaveBeenCalledWith(e);
+  });
 });
