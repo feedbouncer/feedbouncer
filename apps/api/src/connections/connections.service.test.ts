@@ -1,3 +1,4 @@
+import { PgBackfillStore } from '@feedbouncer/comments';
 import { describe, expect, it, vi } from 'vitest';
 import type { PgConnectorStack } from '@feedbouncer/connectors';
 import type { JobProducer } from '@feedbouncer/jobs';
@@ -30,7 +31,12 @@ function setup(disconnected: boolean, row: { status: string; status_reason: stri
   } as unknown as PgConnectorStack;
   const enqueue = vi.fn(async () => undefined);
   const deps = { pool: { query }, log: { error: vi.fn(), warn: vi.fn() } } as unknown as AppDeps;
-  const svc = new ConnectionsService(deps, stack, { enqueue } as unknown as JobProducer);
+  const svc = new ConnectionsService(
+    deps,
+    stack,
+    { enqueue } as unknown as JobProducer,
+    new PgBackfillStore(deps.pool),
+  );
   return { svc, enqueue };
 }
 

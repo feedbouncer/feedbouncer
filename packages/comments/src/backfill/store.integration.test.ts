@@ -200,7 +200,7 @@ describe('PgBackfillStore', () => {
       ...scope,
       organizationId: (await seedTenant(ctx.c, `bf-x-${n}`)).organizationId,
     };
-    await expect(store.request(wrong, T0)).rejects.toThrow();
+    await expect(store.request(wrong, T0)).rejects.toThrow('backfill_connection_not_found');
     expect(await store.cancel(wrong, at(1))).toBeUndefined();
     expect(await store.claim(scope, runId, 0, at(2))).not.toBeNull();
   });

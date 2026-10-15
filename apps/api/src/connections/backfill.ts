@@ -10,15 +10,14 @@ export async function requestBackfill(
   scope: ConnectionScope,
   platform: Platform,
   now: Date,
-): Promise<'enqueued' | 'up_to_date' | 'not_applicable'> {
-  if (!isBackfillPlatform(platform)) return 'not_applicable';
+): Promise<void> {
+  if (!isBackfillPlatform(platform)) return;
   const r = await store.request(scope, now);
-  if (r.kind === 'up_to_date') return 'up_to_date';
+  if (r.kind === 'up_to_date') return;
   await producer.enqueue({
     scope,
     platform,
     type: BACKFILL_JOB.type,
     payload: { runId: r.runId, segment: r.segment },
   });
-  return 'enqueued';
 }

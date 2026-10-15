@@ -106,7 +106,9 @@ export class PgBackfillStore {
          RETURNING run_id`,
         [...key(scope), windowStart, now, this.s.maxComments],
       );
-      return { kind: 'started', runId: r.rows[0]!.run_id, segment: 0 };
+      const row = r.rows[0];
+      if (!row) throw new Error('backfill_connection_not_found');
+      return { kind: 'started', runId: row.run_id, segment: 0 };
     });
   }
 

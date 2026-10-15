@@ -1,4 +1,5 @@
 import { Module, type DynamicModule } from '@nestjs/common';
+import { PgBackfillStore } from '@feedbouncer/comments';
 import { Reflector } from '@nestjs/core';
 import { createAccountDeletionHooks } from './auth/account-deletion.js';
 import { createAuth, type AuthHooks } from './auth/auth.js';
@@ -39,6 +40,7 @@ import {
   ACCOUNT_DELETION,
   AUTH,
   AUTH_EMAILS,
+  BACKFILL_STORE,
   COMMENTS,
   CONNECTOR_STACK,
   DEPS,
@@ -91,6 +93,7 @@ export class AppModule {
         { provide: CONNECTOR_STACK, useValue: deps.connectors?.stack ?? null },
         { provide: JOB_PRODUCER, useValue: deps.producer },
         { provide: COMMENTS, useValue: deps.comments },
+        { provide: BACKFILL_STORE, useValue: new PgBackfillStore(deps.pool) },
         {
           provide: AUTH_EMAILS,
           inject: [DEPS],

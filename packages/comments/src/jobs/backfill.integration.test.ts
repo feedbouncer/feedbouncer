@@ -196,6 +196,21 @@ describe('connection_backfill job', () => {
     expect(r.map((x) => x.posted_at.getTime())).toEqual([t - DAY, t - 2 * DAY]);
   });
 
+  it('reconnect after an outage imports outage comments on posts older than the outage', async () => {
+    await job().handle(ctxFor(scope), await start());
+    const post = graph.addPost(pageId, { createdAtMs: t - DAY }).postId;
+    await pool.query(
+      `INSERT INTO audit_event (organization_id, brand_id, actor_type, action, subject_type, subject_id, created_at)
+       VALUES ($1, $2, 'system', 'connection.reconnect_required', 'connection', $3, $4)`,
+      [a.organizationId, a.brandId, scope.connectionId, new Date(t + 10 * DAY)],
+    );
+    t += 12 * DAY;
+    graph.addComment(pageId, { postId: post, createdAtMs: t - 1.5 * DAY });
+    graph.addComment(pageId, { postId: post, createdAtMs: t - 11.5 * DAY });
+    const out = await job().handle(ctxFor(scope), await start());
+    expect(out).toMatchObject({ result: 'completed', imported: 1 });
+  });
+
   it('account with no posts completes with zero', async () => {
     const out = await job().handle(ctxFor(scope), await start());
     expect(out).toEqual({ result: 'completed', imported: 0, limited: false });

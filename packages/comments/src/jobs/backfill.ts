@@ -74,6 +74,8 @@ export function connectionBackfillJob(d: {
     let exhausted = run.sourcesExhausted;
     let commentCursor = run.commentCursor;
     let imported = run.importedCount;
+    // Posts are listed from the full window even on a gap run: outage comments land on older posts.
+    const sourcesSince = new Date(run.windowEnd.getTime() - s.windowDays * 86_400_000);
 
     const save = (c: {
       importedDelta?: number;
@@ -115,7 +117,7 @@ export function connectionBackfillJob(d: {
         }
         try {
           const page = await client.listRecentSources(
-            { since: run.windowStart, cursor: sourceCursor, limit: s.pageSize },
+            { since: sourcesSince, cursor: sourceCursor, limit: s.pageSize },
             { priority: 'background' },
           );
           queue = page.items.map((x) => x.externalId);

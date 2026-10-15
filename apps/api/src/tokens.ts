@@ -12,3 +12,5 @@ export const CONNECTOR_STACK = Symbol('CONNECTOR_STACK');
 export const JOB_PRODUCER = Symbol('JOB_PRODUCER');
 /** Comment store and moderation actions, or null when not configured. */
 export const COMMENTS = Symbol('COMMENTS');
+/** Per-connection backfill run state. */
+export const BACKFILL_STORE = Symbol('BACKFILL_STORE');

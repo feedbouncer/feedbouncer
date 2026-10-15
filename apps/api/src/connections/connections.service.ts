@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { PgBackfillStore } from '@feedbouncer/comments';
+import type { PgBackfillStore } from '@feedbouncer/comments';
 import type { PgConnectorStack } from '@feedbouncer/connectors';
 import type { JobProducer } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
@@ -8,7 +8,7 @@ import { ApiError, notFound } from '../http/errors.js';
 import { parseUuidOr404 } from '../http/validation.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
-import { CONNECTOR_STACK, DEPS, JOB_PRODUCER } from '../tokens.js';
+import { BACKFILL_STORE, CONNECTOR_STACK, DEPS, JOB_PRODUCER } from '../tokens.js';
 import { enqueueLifecycle } from './lifecycle.js';
 
 export type ConnectionViewStatus =
@@ -63,15 +63,12 @@ export function viewStatus(status: string, reason: string | null): ConnectionVie
 
 @Injectable()
 export class ConnectionsService {
-  readonly #backfill: PgBackfillStore;
-
   constructor(
     @Inject(DEPS) private readonly deps: AppDeps,
     @Inject(CONNECTOR_STACK) private readonly stack: PgConnectorStack | null,
     @Inject(JOB_PRODUCER) private readonly producer: JobProducer | null,
-  ) {
-    this.#backfill = new PgBackfillStore(deps.pool);
-  }
+    @Inject(BACKFILL_STORE) private readonly backfill: PgBackfillStore,
+  ) {}
 
   async list(org: OrgContext, brandId: unknown): Promise<ConnectionView[]> {
     const brand = await requireBrand(this.deps.pool, org, brandId);
@@ -88,7 +85,7 @@ export class ConnectionsService {
         ORDER BY created_at, id`,
       [brand.organizationId, brand.brandId],
     );
-    const bf = await this.#backfill.views(brand, new Date());
+    const bf = await this.backfill.views(brand, new Date());
     const views: ConnectionView[] = [];
     for (const row of r.rows) {
       const status = viewStatus(row.status, row.status_reason);
@@ -133,7 +130,7 @@ export class ConnectionsService {
     const disconnected = await this.stack.directory.disconnect(scope, org.actorUserId);
     if (!disconnected && !(await this.isUserDisconnected(scope))) return;
     try {
-      await this.#backfill.cancel(scope, new Date());
+      await this.backfill.cancel(scope, new Date());
     } catch (err) {
       // The runtime refuses a revoked connection, so platform calls stop anyway.
       this.deps.log.warn('backfill cancel failed', {
