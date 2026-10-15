@@ -10,6 +10,7 @@
     { "path": "packages/connector-meta-ads" },
     { "path": "packages/jobs" },
     { "path": "packages/comments" },
+    { "path": "packages/rules" },
     { "path": "packages/observability" },
     { "path": "apps/placeholder-app" },
     { "path": "apps/api" },
