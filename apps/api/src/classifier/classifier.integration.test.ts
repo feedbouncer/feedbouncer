@@ -213,15 +213,24 @@ describe('classifier settings', () => {
   });
 
   it('PUT records one audit event per changed category with before/after and the author', async () => {
+    const o = await orgWithRoles(api, 'clfaud', {
+      owner: A.owner,
+      admin: A.admin,
+      member: A.member,
+    });
+    const r = await send('PUT', o, '/classifier/settings', admin(o), {
+      categories: [{ category: 'spam', threshold: 0.6, action: 'hide' }],
+    });
+    expect(r.status).toBe(200);
     const rows = await api.pool.query(
       `SELECT action, actor_user_id, subject_type, subject_id, details FROM audit_event
         WHERE brand_id = $1 AND action LIKE 'classifier_threshold.%' ORDER BY sequence`,
-      [A.brandId],
+      [o.brandId],
     );
     expect(rows.rows).toHaveLength(1);
     expect(rows.rows[0]).toMatchObject({
       action: 'classifier_threshold.updated',
-      actor_user_id: A.admin.userId,
+      actor_user_id: o.admin.userId,
       subject_type: 'classifier_threshold',
       details: {
         category: 'spam',
@@ -440,6 +449,74 @@ describe('classifier re-runs', () => {
     expect(after.rows[0]).toEqual(before.rows[0]);
   });
 
+  it('keeps the run and reports counts when only some connections could be enqueued', async () => {
+    const o = await orgWithRoles(api, 'clfpart', {
+      owner: A.owner,
+      admin: A.admin,
+      member: A.member,
+    });
+    const ok = (await api.seedConnection(o, { platform: 'facebook', externalAccountId: 'pt-ok' }))
+      .scope;
+    const bad = (await api.seedConnection(o, { platform: 'facebook', externalAccountId: 'pt-bad' }))
+      .scope;
+    const spy = vi.spyOn(api.deps.producer!, 'enqueue').mockImplementation(async (req) => {
+      if (req.scope.connectionId === bad.connectionId) throw new Error('redis down');
+      return { status: 'enqueued' } as never;
+    });
+    try {
+      const r = await send('POST', o, '/classifier/reruns', admin(o), { days: 4 });
+      expect(r.status).toBe(202);
+      expect(r.body).toEqual({ runId: expect.any(String), enqueued: 1, failed: 1 });
+      expect(spy.mock.calls.map(([q]) => q.scope.connectionId).sort()).toEqual(
+        [ok.connectionId, bad.connectionId].sort(),
+      );
+      const run = await api.pool.query(
+        'SELECT 1 FROM classifier_run WHERE id = $1 AND brand_id = $2',
+        [r.body.runId, o.brandId],
+      );
+      expect(run.rowCount).toBe(1);
+      const audit = await api.pool.query(
+        `SELECT details FROM audit_event WHERE brand_id = $1 AND action = 'classifier.rerun_requested'`,
+        [o.brandId],
+      );
+      expect(audit.rows).toEqual([{ details: { days: 4 } }]);
+      spy.mockClear();
+      const again = await send('POST', o, '/classifier/reruns', admin(o), { days: 4 });
+      expect(again.status).toBe(409);
+      expect(again.body.error.code).toBe('classifier_rerun_too_soon');
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('still answers 503 when withdrawing the run fails', async () => {
+    const o = await orgWithRoles(api, 'clfdel', {
+      owner: A.owner,
+      admin: A.admin,
+      member: A.member,
+    });
+    await api.seedConnection(o, { platform: 'facebook', externalAccountId: 'del-1' });
+    const enq = vi.spyOn(api.deps.producer!, 'enqueue').mockRejectedValue(new Error('redis down'));
+    const del = vi.spyOn(api.pool, 'query');
+    try {
+      del.mockImplementation(((sql: unknown, ...rest: unknown[]) =>
+        typeof sql === 'string' && sql.startsWith('DELETE FROM classifier_run')
+          ? Promise.reject(new Error('db down'))
+          : (del.getMockImplementation() as never) &&
+            Reflect.apply(Object.getPrototypeOf(api.pool).query, api.pool, [
+              sql,
+              ...rest,
+            ])) as never);
+      const r = await send('POST', o, '/classifier/reruns', admin(o), { days: 2 });
+      expect(r.status).toBe(503);
+      expect(r.body.error.code).toBe('temporarily_unavailable');
+    } finally {
+      del.mockRestore();
+      enq.mockRestore();
+    }
+  });
+
   it('withdraws the run when the queue refuses, so the caller can retry at once', async () => {
     await api.pool.query(
       `UPDATE classifier_run SET created_at = now() - interval '16 minutes' WHERE brand_id = $1`,
@@ -622,6 +699,53 @@ describe('classification and the decision log', () => {
       classifier: { category: 'scam_phishing', score: 0.9, reversal: false },
     });
     expect(fb.body.decisions[1].fallback).toBe(false);
+  });
+
+  it('populates the decision action through the clf:<id> and clf:<id>:unhide request keys', async () => {
+    const { commentId, scope } = await seedClassified(P, { hate_speech: 0.93 });
+    const cid = (
+      await api.pool.query('SELECT id FROM comment_classification WHERE comment_id = $1', [
+        commentId,
+      ])
+    ).rows[0].id as string;
+    const action = (key: string, kind: string, status: string, code: string) =>
+      api.pool.query(
+        `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind,
+           actor_type, request_key, status, outcome_code, completed_at)
+         VALUES ($1, $2, $3, $4, $5, 'classifier', $6, $7, $8, now())`,
+        [
+          scope.organizationId,
+          scope.brandId,
+          scope.connectionId,
+          commentId,
+          kind,
+          key,
+          status,
+          code,
+        ],
+      );
+    await action(`clf:${cid}`, 'hide', 'applied', 'ok');
+    const hidden = await get(P, `/comments/${commentId}/decisions`);
+    expect(hidden.body.decisions[0].action).toEqual({
+      kind: 'hide',
+      status: 'applied',
+      outcomeCode: 'ok',
+    });
+    await store.recordReversal(
+      { organizationId: P.orgId, brandId: P.brandId },
+      cid,
+      'hate_speech',
+      0.3,
+      0.8,
+      'Restored: the score fell below the threshold',
+    );
+    await action(`clf:${cid}:unhide`, 'unhide', 'applied', 'restored');
+    const after = await get(P, `/comments/${commentId}/decisions`);
+    expect(after.body.decisions[0]).toMatchObject({
+      outcome: 'approve',
+      action: { kind: 'unhide', status: 'applied', outcomeCode: 'restored' },
+    });
+    expect(after.body.decisions[1].action).toMatchObject({ kind: 'hide' });
   });
 
   it('a classifier decision on the comment list is the latest decision with its evidence', async () => {

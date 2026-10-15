@@ -11,10 +11,11 @@ import {
   type ModerationActionView,
   type RefusalCode,
 } from '@feedbouncer/comments';
-import { PgClassificationStore, type ClassificationView } from '@feedbouncer/classifier';
+import type { ClassificationView } from '@feedbouncer/classifier';
 import { systemClock, type ConnectorCapabilities } from '@feedbouncer/connectors';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
+import { ClassifierService } from '../classifier/classifier.service.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import {
@@ -121,6 +122,7 @@ export class CommentsService {
   constructor(
     @Inject(DEPS) private readonly deps: AppDeps,
     @Inject(COMMENTS) private readonly comments: AppDeps['comments'],
+    @Inject(ClassifierService) private readonly classifier: ClassifierService,
   ) {}
 
   #configured(): NonNullable<AppDeps['comments']> {
@@ -167,7 +169,7 @@ export class CommentsService {
     const { store } = this.#configured();
     const scope = await requireBrand(this.deps.pool, org, brandId);
     if (!(await store.load(scope, commentId))) throw notFound();
-    return new PgClassificationStore(this.deps.pool).latestForComment(scope, commentId);
+    return this.classifier.latestForComment(scope, commentId);
   }
 
   async actions(

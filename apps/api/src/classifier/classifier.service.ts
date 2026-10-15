@@ -129,8 +129,9 @@ export class ClassifierService {
 
   /**
    * Records the run under the brand lock (one per 15 minutes) and fans out one
-   * job per active connection. If the queue refuses, the run is withdrawn so the
-   * caller can retry at once.
+   * job per active connection. If no job could be enqueued the run is withdrawn so
+   * the caller can retry at once; if some were, the run stays and the counts say
+   * how many connections were skipped.
    */
   async rerun(org: OrgContext, scope: BrandScope, days: number, now = new Date()) {
     const producer = this.producer;
@@ -171,13 +172,28 @@ export class ClassifierService {
         }),
       ),
     );
-    const failed = results.find((r) => r.status === 'rejected');
-    if (failed) {
-      this.deps.log.error('classifier rerun enqueue failed', errorFields(failed.reason));
-      await deleteRun(this.deps.pool, scope, runId);
+    const enqueued = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - enqueued;
+    if (failed > 0) {
+      const first = results.find((r) => r.status === 'rejected');
+      this.deps.log.error('classifier rerun enqueue failed', {
+        runId,
+        enqueued,
+        failed,
+        ...errorFields(first?.status === 'rejected' ? first.reason : undefined),
+      });
+    }
+    if (enqueued === 0 && failed > 0) {
+      // Nothing is running, so the run is withdrawn and a retry is safe. If even that
+      // fails the row stays and blocks retries until the interval has passed.
+      try {
+        await deleteRun(this.deps.pool, scope, runId);
+      } catch (e) {
+        this.deps.log.error('classifier rerun withdraw failed', { runId, ...errorFields(e) });
+      }
       throw new ApiError(503, 'temporarily_unavailable');
     }
-    return { runId };
+    return { runId, enqueued, failed };
   }
 
   run(scope: BrandScope, runId: string): Promise<RerunReport> {
