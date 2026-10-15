@@ -85,4 +85,26 @@ describe('decide', () => {
         .downgraded,
     ).toBeNull();
   });
+  it('rounds raw scores before comparing and records the rounded score', () => {
+    const v = decide({ ...ZERO_SCORES, spam: 0.79996 }, P, ok);
+    expect(v.outcome).toBe('flag');
+    expect(v.primary).toMatchObject({ score: 0.8, threshold: 0.8 });
+  });
+  it('non-finite scores never trigger', () => {
+    const p0 = resolvePolicy([{ category: 'spam', threshold: 0, action: 'hide' }]);
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(decide({ ...ZERO_SCORES, hate_speech: bad, spam: bad }, p0, ok)).toEqual({
+        outcome: null,
+        primary: null,
+        triggers: [],
+        downgraded: null,
+      });
+    }
+  });
+  it('low-signal input downgrades remove to flag', () => {
+    const policy = resolvePolicy([{ category: 'spam', threshold: 0.5, action: 'remove' }]);
+    const v = decide({ ...ZERO_SCORES, spam: 0.9 }, policy, { lowSignal: true, languageSupported: true });
+    expect(v).toMatchObject({ outcome: 'flag', downgraded: 'low_signal' });
+    expect(v.primary).toMatchObject({ action: 'remove', effectiveAction: 'flag' });
+  });
 });

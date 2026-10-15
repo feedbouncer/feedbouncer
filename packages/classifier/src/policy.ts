@@ -31,7 +31,9 @@ export function decide(
   const triggers: Trigger[] = [];
   for (const c of CATEGORIES) {
     const { threshold, action } = policy[c];
-    const score = scores[c];
+    const raw = scores[c];
+    if (!Number.isFinite(raw)) continue;
+    const score = roundScore(raw);
     if (score < threshold) continue;
     const effectiveAction: RuleAction = cap !== null && DESTRUCTIVE.has(action) ? 'flag' : action;
     if (effectiveAction !== action) downgraded = cap;
