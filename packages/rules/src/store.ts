@@ -6,6 +6,7 @@ import {
   type RuleInput,
   type RulePatch,
 } from './conditions.js';
+import { ruleOrder } from './engine.js';
 import type { RuleAction, RuleKind, RuleMode, RuleRecord } from './types.js';
 
 export type { BrandScope };
@@ -45,6 +46,40 @@ export class DomainLimitError extends Error {
 
 const COLS = `id, name, kind, conditions, action, mode, enabled, priority, created_at, updated_at`;
 const ORDER = `ORDER BY priority, created_at, id`;
+
+/**
+ * Change token. The rule part hashes the full text of every non-archived row
+ * (so any edit, enable/disable or reorder changes it regardless of timestamp
+ * resolution) plus the count of archived rows (archiving removes a row from
+ * the hash and adds to the count). Own domains are hashed by id set.
+ */
+const VERSION_SQL = `SELECT
+    (SELECT count(*) FILTER (WHERE archived_at IS NOT NULL) || ':'
+         || COALESCE(md5(string_agg(r::text, '|' ORDER BY r.id) FILTER (WHERE archived_at IS NULL)), '-')
+       FROM rule r WHERE organization_id = $1 AND brand_id = $2)
+    || '|' ||
+    (SELECT count(*) || ':' || COALESCE(md5(string_agg(id::text, ',' ORDER BY id)), '-')
+       FROM brand_domain WHERE organization_id = $1 AND brand_id = $2) AS v`;
+
+const isPinned = (conditions: unknown): boolean => {
+  const c = conditions as { type?: unknown; list?: unknown } | null;
+  return c?.type === 'author' && c.list === 'trusted';
+};
+/** Engine evaluation order; engine.ruleOrder is the single source of truth. */
+function inEngineOrder<
+  T extends { id: string; priority: number; conditions: unknown } & (
+    | { createdAt: Date }
+    | { created_at: Date }
+  ),
+>(rows: T[]): T[] {
+  const key = (r: T) => ({
+    id: r.id,
+    priority: r.priority,
+    createdAt: 'createdAt' in r ? r.createdAt : r.created_at,
+    pinned: isPinned(r.conditions),
+  });
+  return [...rows].sort((a, b) => ruleOrder(key(a), key(b)));
+}
 
 interface RuleRow {
   id: string;
@@ -89,7 +124,7 @@ export class PgRuleStore {
         WHERE organization_id = $1 AND brand_id = $2 AND archived_at IS NULL ${ORDER}`,
       [scope.organizationId, scope.brandId],
     );
-    return rows.map(toRule);
+    return inEngineOrder(rows.map(toRule));
   }
 
   async get(scope: BrandScope, ruleId: string): Promise<StoredRule | null> {
@@ -261,24 +296,12 @@ export class PgRuleStore {
     return (rowCount ?? 0) > 0;
   }
 
-  /**
-   * Cheap change token: row count + newest updated_at of rules (archived rows
-   * included, so archiving bumps it) and count + id-set hash of own domains
-   * (domains are deleted outright, so a timestamp alone would let an add
-   * followed by a remove return to an earlier token). updated_at is set from
-   * now() (transaction start). Two edits committed with the same count and the
-   * same timestamp are a theoretical collision; RuleSetCache entries therefore
-   * also expire after 60 s.
-   */
+  /** Cheap change token; see VERSION_SQL. */
   async version(scope: BrandScope): Promise<string> {
-    const { rows } = await this.#pool.query<{ v: string }>(
-      `SELECT (SELECT count(*) || ':' || COALESCE(max(updated_at)::text, '-') FROM rule
-                WHERE organization_id = $1 AND brand_id = $2)
-           || '|' ||
-              (SELECT count(*) || ':' || COALESCE(md5(string_agg(id::text, ',' ORDER BY id)), '-') FROM brand_domain
-                WHERE organization_id = $1 AND brand_id = $2) AS v`,
-      [scope.organizationId, scope.brandId],
-    );
+    const { rows } = await this.#pool.query<{ v: string }>(VERSION_SQL, [
+      scope.organizationId,
+      scope.brandId,
+    ]);
     return rows[0]!.v;
   }
 
@@ -291,13 +314,7 @@ export class PgRuleStore {
       await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       const q = <T extends pg.QueryResultRow>(sql: string) =>
         c.query<T>(sql, [scope.organizationId, scope.brandId]);
-      const v = await q<{ v: string }>(
-        `SELECT (SELECT count(*) || ':' || COALESCE(max(updated_at)::text, '-') FROM rule
-                  WHERE organization_id = $1 AND brand_id = $2)
-             || '|' ||
-                (SELECT count(*) || ':' || COALESCE(md5(string_agg(id::text, ',' ORDER BY id)), '-') FROM brand_domain
-                  WHERE organization_id = $1 AND brand_id = $2) AS v`,
-      );
+      const v = await q<{ v: string }>(VERSION_SQL);
       const rules = await q<RuleRow>(
         `SELECT ${COLS} FROM rule
           WHERE organization_id = $1 AND brand_id = $2 AND archived_at IS NULL AND enabled ${ORDER}`,
@@ -308,7 +325,7 @@ export class PgRuleStore {
       await c.query('COMMIT');
       return {
         version: v.rows[0]!.v,
-        records: rules.rows.map((r) => ({
+        records: inEngineOrder(rules.rows).map((r) => ({
           id: r.id,
           name: r.name,
           conditions: r.conditions,

@@ -212,6 +212,58 @@ describe('PgRuleStore rules', () => {
   });
 });
 
+describe('PgRuleStore ordering and tokens', () => {
+  const trusted = ruleInputSchema.parse({
+    name: 'vip',
+    conditions: {
+      type: 'author',
+      list: 'trusted',
+      platform: 'facebook',
+      entries: [{ externalId: 'u1' }],
+    },
+    action: 'approve',
+  });
+
+  it('lists and loads pinned trusted-author rules first', async () => {
+    const { scope } = await fresh();
+    const a = await tx((c) => store.create(c, scope, kw('first')));
+    const t = await tx((c) => store.create(c, scope, trusted));
+    await ctx.c.query('UPDATE rule SET priority = 9999 WHERE id = $1', [t.id]);
+    expect((await store.list(scope)).map((r) => r.id)).toEqual([t.id, a.id]);
+    expect((await store.loadActive(scope)).records.map((r) => r.id)).toEqual([t.id, a.id]);
+  });
+
+  it('moves the token on enable/disable, edit, reorder and archive', async () => {
+    const { scope } = await fresh();
+    const a = await tx((c) => store.create(c, scope, kw('t1')));
+    const b = await tx((c) => store.create(c, scope, kw('t2')));
+    const steps: (() => Promise<unknown>)[] = [
+      () => tx((c) => store.update(c, scope, a.id, { enabled: false })),
+      () => tx((c) => store.update(c, scope, a.id, { enabled: true })),
+      () => tx((c) => store.update(c, scope, a.id, { name: 't1b' })),
+      () => tx((c) => store.reorder(c, scope, [b.id, a.id])),
+      () => tx((c) => store.archive(c, scope, a.id)),
+    ];
+    for (const step of steps) {
+      const before = await store.version(scope);
+      await step();
+      expect(await store.version(scope)).not.toBe(before);
+    }
+  });
+
+  it('does not update archived rules and rejects unparseable stored conditions', async () => {
+    const { scope } = await fresh();
+    const a = await tx((c) => store.create(c, scope, kw('arch')));
+    await tx((c) => store.archive(c, scope, a.id));
+    expect(await tx((c) => store.update(c, scope, a.id, { name: 'x' }))).toBeNull();
+    const b = await tx((c) => store.create(c, scope, kw('broken')));
+    await ctx.c.query(`UPDATE rule SET conditions = '{"type":"keyword"}' WHERE id = $1`, [b.id]);
+    await expect(tx((c) => store.update(c, scope, b.id, { name: 'y' }))).rejects.toThrow(
+      new TypeError('invalid_conditions'),
+    );
+  });
+});
+
 describe('PgRuleStore own domains', () => {
   it('adds, dedups, scopes removal and enforces the limit', async () => {
     const { scope } = await fresh();
