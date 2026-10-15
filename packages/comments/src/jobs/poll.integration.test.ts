@@ -293,6 +293,39 @@ beforeEach(async () => {
 });
 
 describe('ad poll job', () => {
+  it('redelivers a failed hook on the next poll, once, then stays quiet', async () => {
+    const { postId } = graph.addDarkPost(pageId);
+    graph.addAd(adAccountId, { storyId: postId });
+    await discover();
+    graph.addComment(pageId, { postId, message: 'retry me', createdAtMs: nowMs - 30_000 });
+    const bodies: string[] = [];
+    let failing = true;
+    const job = adPollJob({
+      runtime,
+      directory,
+      store,
+      tracking,
+      clock,
+      settings,
+      applied: {
+        onApplied: async (e) => {
+          bodies.push(e.body);
+          if (failing) throw new Error('hook down');
+        },
+      },
+    });
+    const go = () =>
+      job.handle(jobCtx(fbScope, 'facebook', POLL_JOB.type), POLL_JOB.payload.parse({ bucket: 1 }));
+    await expect(go()).rejects.toThrow('hook down');
+    failing = false;
+    advance(10 * 60_000);
+    await go();
+    expect(bodies).toEqual(['retry me', 'retry me']);
+    advance(10 * 60_000);
+    await go();
+    expect(bodies).toHaveLength(2);
+  });
+
   it('calls the applied hook for new comments only, not for unchanged re-reads', async () => {
     const { postId } = graph.addDarkPost(pageId);
     graph.addAd(adAccountId, { storyId: postId });
@@ -301,7 +334,22 @@ describe('ad poll job', () => {
       message: 'known',
       createdAtMs: nowMs - 90_000,
     });
-    await ingest(fbScope, { postId, commentId: known.commentId });
+    await ingestCommentJob({
+      runtime,
+      directory,
+      store,
+      clock,
+      applied: { onApplied: async () => {} },
+    }).handle(
+      jobCtx(fbScope, 'facebook', INGEST_JOB.type),
+      INGEST_JOB.payload.parse({
+        sourceExternalId: postId,
+        commentExternalId: known.commentId,
+        event: 'created',
+        platformEventSec: Math.floor(t / 1000),
+        changeId: '0123456789abcdef',
+      }),
+    );
     await discover();
     const b = graph.addComment(pageId, { postId, message: 'second', createdAtMs: nowMs - 60_000 });
     const c = graph.addComment(pageId, { postId, message: 'third', createdAtMs: nowMs - 30_000 });

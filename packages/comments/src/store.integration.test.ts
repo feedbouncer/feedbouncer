@@ -91,6 +91,30 @@ describe('PgCommentStore', () => {
     expect((await store.load(t, a.commentId))?.body).toBe('second');
   });
 
+  it('keeps a live body pending for the hook until it is marked delivered', async () => {
+    const c = comment({ body: 'pending one' });
+    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    expect(a).toMatchObject({ needsHook: true, hookBody: 'pending one' });
+    const again = await store.upsertFromPlatform(scope(), c, own(2));
+    expect(again).toMatchObject({ bodyChanged: false, needsHook: true, hookBody: 'pending one' });
+    // Delivering an older version leaves a newer pending body alone.
+    await store.upsertFromPlatform(scope(), { ...c, body: 'pending two' }, own(3));
+    await store.markHookDelivered(scope(), a.commentId, 'pending one');
+    const still = await store.upsertFromPlatform(scope(), { ...c, body: 'pending two' }, own(4));
+    expect(still).toMatchObject({ needsHook: true, hookBody: 'pending two' });
+    await store.markHookDelivered(scope(), a.commentId, 'pending two');
+    const done = await store.upsertFromPlatform(scope(), { ...c, body: 'pending two' }, own(5));
+    expect(done).toMatchObject({ needsHook: false, hookBody: null });
+  });
+
+  it('never marks backfilled comments pending', async () => {
+    const r = await store.upsertFromPlatform(scope(), comment({ body: 'old' }), {
+      ...own(1),
+      origin: 'backfill',
+    });
+    expect(r).toMatchObject({ needsHook: false, hookBody: null });
+  });
+
   it('creates once and is idempotent for the same snapshot', async () => {
     const c = comment();
     const a = await store.upsertFromPlatform(scope(), c, own(1));
@@ -101,6 +125,8 @@ describe('PgCommentStore', () => {
       created: false,
       applied: false,
       bodyChanged: false,
+      needsHook: true,
+      hookBody: 'hello',
     });
     expect(
       (
@@ -153,6 +179,8 @@ describe('PgCommentStore', () => {
       created: false,
       applied: true,
       bodyChanged: true,
+      needsHook: true,
+      hookBody: 'v3',
     });
     expect(await store.load(t, stale.commentId)).toMatchObject({
       body: 'v3',
@@ -446,7 +474,7 @@ describe('per-connection comment identity', () => {
       normalized({ sourceExternalId: 'admedia', externalId: 'k1' }),
       { ...opts(), adSourceId: adSrc },
     );
-    expect(again).toEqual({ commentId: r.commentId, outcome: 'updated', bodyChanged: false });
+    expect(again).toMatchObject({ commentId: r.commentId, outcome: 'updated', bodyChanged: false });
     expect((await rowOf(r.commentId)).ad_source_id).toBe(adSrc);
   });
   it('a stale read through an ad source still records the ad path', async () => {

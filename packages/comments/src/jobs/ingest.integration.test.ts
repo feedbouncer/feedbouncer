@@ -227,11 +227,63 @@ describe('comment ingest job: applied hook', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('a throwing hook fails the job but the comment stays stored', async () => {
+  it('a throwing hook fails the job but the comment stays stored; the retry delivers once more', async () => {
     const c = graph.addComment(pageId, { message: 'keep me' });
     failing = true;
     await expect(runHooked(payload(c, 'created'))).rejects.toThrow('hook down');
     expect(await rowsFor(c.commentId)).toHaveLength(1);
+    expect(calls).toHaveLength(1);
+    failing = false;
+    tick();
+    const r = await runHooked(payload(c, 'created'));
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({ commentId: r.commentId, body: 'keep me' });
+    // Delivered: an unchanged re-read does not call it again.
+    tick();
+    await runHooked(payload(c, 'updated'));
+    expect(calls).toHaveLength(2);
+  });
+
+  it('a failure after delivery (before it was recorded) redelivers: at least once', async () => {
+    const c = graph.addComment(pageId, { message: 'crashy' });
+    const flaky = new Proxy(store, {
+      get(target, key) {
+        if (key === 'markHookDelivered') return async () => Promise.reject(new Error('crash'));
+        const v: unknown = Reflect.get(target, key);
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    const crashing = ingestCommentJob({
+      ...deps,
+      store: flaky,
+      applied: { onApplied: async (e) => void calls.push({ ...e, platform: e.platform }) },
+    });
+    await expect(
+      crashing.handle(jobCtx(), INGEST_JOB.payload.parse(payload(c, 'created'))),
+    ).rejects.toThrow('crash');
+    expect(calls).toHaveLength(1);
+    tick();
+    await runHooked(payload(c, 'created'));
+    expect(calls).toHaveLength(2);
+    tick();
+    await runHooked(payload(c, 'updated'));
+    expect(calls).toHaveLength(2);
+  });
+
+  it('an edit while a delivery is pending keeps the latest body pending', async () => {
+    const c = graph.addComment(pageId, { message: 'v1' });
+    failing = true;
+    await expect(runHooked(payload(c, 'created'))).rejects.toThrow();
+    graph.editComment(c.commentId, 'v2');
+    tick();
+    await expect(runHooked(payload(c, 'updated'))).rejects.toThrow();
+    failing = false;
+    tick();
+    await runHooked(payload(c, 'updated'));
+    expect(calls.map((x) => x.body)).toEqual(['v1', 'v2', 'v2']);
+    tick();
+    await runHooked(payload(c, 'updated'));
+    expect(calls).toHaveLength(3);
   });
 });
 

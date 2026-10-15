@@ -67,14 +67,16 @@ export function ingestCommentJob(d: {
           });
           ({ commentId, outcome } = r);
           // The row is committed: a throwing hook retries the job without losing the comment.
-          if (r.outcome !== 'stale' && r.bodyChanged) {
-            await d.applied?.onApplied({
+          // Delivery is at least once: the pending marker survives a failed or lost hook call.
+          if (d.applied && r.needsHook && r.hookBody !== null) {
+            await d.applied.onApplied({
               scope: ctx.scope,
               platform: rec.platform,
               commentId: r.commentId,
-              body: c.body,
-              outcome: r.outcome,
+              body: r.hookBody,
+              outcome: r.outcome === 'created' ? 'created' : 'updated',
             });
+            await d.store.markHookDelivered(ctx.scope, r.commentId, r.hookBody);
           }
         }
       }

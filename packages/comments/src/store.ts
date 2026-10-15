@@ -4,6 +4,7 @@
 //   when it is strictly newer than the stored one.
 // - `deleted` is terminal: no snapshot or action moves a comment out of it.
 // Every statement is filtered by organization_id + brand_id (+ connection_id).
+import { createHash } from 'node:crypto';
 import type pg from 'pg';
 import { withTransaction } from '@feedbouncer/db';
 import type {
@@ -190,14 +191,35 @@ async function linkChildren(
   );
 }
 
+const bodySha = (body: string): Buffer => createHash('sha256').update(body, 'utf8').digest();
+
 export class PgCommentStore {
   constructor(private readonly pool: pg.Pool) {}
+
+  /** Clears the pending hook marker, only while it still names the delivered body version. */
+  async markHookDelivered(scope: ConnectionScope, commentId: string, body: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE comment SET hook_pending_sha256 = NULL
+        WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND id = $4
+          AND hook_pending_sha256 = $5`,
+      [...ids(scope), commentId, bodySha(noNul(body))],
+    );
+  }
 
   async upsertFromPlatform(
     scope: ConnectionScope,
     c: NormalizedComment,
     o: { ownAccountExternalId: string; syncedAt: Date; origin?: IngestOrigin },
-  ): Promise<{ commentId: string; created: boolean; applied: boolean; bodyChanged: boolean }> {
+  ): Promise<{
+    commentId: string;
+    created: boolean;
+    applied: boolean;
+    bodyChanged: boolean;
+    /** A live body the rule hook has not yet been told about (new, edited, or a failed delivery). */
+    needsHook: boolean;
+    /** The stored body to deliver when `needsHook`. */
+    hookBody: string | null;
+  }> {
     return withTransaction(this.pool, async (tx) => {
       const sourceId = await upsertSource(tx, scope, c.sourceExternalId);
       let authorId: string | null = null;
@@ -221,23 +243,28 @@ export class PgCommentStore {
         authorId = a.rows[0].id;
       }
       // Locks the row so the body compared below is the one this upsert replaces.
-      const prev = await tx.query<{ body: string }>(
-        `SELECT body FROM comment
+      const prev = await tx.query<{ body: string; pending: boolean }>(
+        `SELECT body, hook_pending_sha256 IS NOT NULL AS pending FROM comment
           WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND external_id = $4
             FOR UPDATE`,
         [...ids(scope), c.externalId],
       );
       const newBody = noNul(c.body);
+      const live = (o.origin ?? 'live') === 'live';
+      const newSha = live ? bodySha(newBody) : null;
       const up = await tx.query<{ id: string; created: boolean }>(
         `INSERT INTO comment (organization_id, brand_id, connection_id, source_id, external_id, author_id,
                               parent_external_id, parent_comment_id, body, platform_state, posted_at,
-                              permalink, is_own_account, platform_synced_at, ingest_origin)
+                              permalink, is_own_account, platform_synced_at, ingest_origin, hook_pending_sha256)
          VALUES ($1, $2, $3, $4, $5, $6, $7::text,
                  (SELECT p.id FROM comment p
                    WHERE p.organization_id = $1 AND p.brand_id = $2 AND p.connection_id = $3
                      AND p.external_id = $7::text),
-                 $8, $9, $10, $11, $12, $13, $14)
+                 $8, $9, $10, $11, $12, $13, $14, $15)
          ON CONFLICT (connection_id, external_id) DO UPDATE SET
+           hook_pending_sha256 = CASE WHEN comment.body IS DISTINCT FROM EXCLUDED.body
+                                      THEN EXCLUDED.hook_pending_sha256
+                                      ELSE comment.hook_pending_sha256 END,
            body = EXCLUDED.body,
            author_id = COALESCE(EXCLUDED.author_id, comment.author_id),
            parent_external_id = COALESCE(comment.parent_external_id, EXCLUDED.parent_external_id),
@@ -264,6 +291,7 @@ export class PgCommentStore {
           c.author !== null && c.author.externalId === o.ownAccountExternalId,
           o.syncedAt,
           o.origin ?? 'live',
+          newSha,
         ],
       );
       let commentId: string;
@@ -285,7 +313,14 @@ export class PgCommentStore {
       await linkChildren(tx, scope, commentId, c.externalId);
       const bodyChanged =
         applied && (created || prev.rows[0] === undefined || prev.rows[0].body !== newBody);
-      return { commentId, created, applied, bodyChanged };
+      // A new live body, or an earlier one whose delivery was never recorded.
+      const hookBody =
+        applied && live && bodyChanged
+          ? newBody
+          : prev.rows[0]?.pending === true && !(applied && bodyChanged)
+            ? prev.rows[0].body
+            : null;
+      return { commentId, created, applied, bodyChanged, needsHook: hookBody !== null, hookBody };
     });
   }
 

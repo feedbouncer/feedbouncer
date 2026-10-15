@@ -4,7 +4,7 @@ import type { Platform } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { ActionActor, ActionKind } from './action-kinds.js';
 
-/** Called after a live comment snapshot was stored and its text is new (created or edited). Throwing retries the job. */
+/** Called after a live comment snapshot was stored and its text is new (created or edited). Throwing retries the job. Delivery is at least once: keep it idempotent. */
 export interface CommentAppliedHook {
   onApplied(e: {
     scope: ConnectionScope;

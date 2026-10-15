@@ -114,14 +114,15 @@ export async function pollSource(
           /* telemetry never fails a job */
         }
       } else if (r.outcome === 'updated') updated++;
-      if (r.outcome !== 'stale' && r.bodyChanged) {
-        await d.applied?.onApplied({
+      if (d.applied && r.needsHook && r.hookBody !== null) {
+        await d.applied.onApplied({
           scope,
           platform,
           commentId: r.commentId,
-          body: c.body,
-          outcome: r.outcome,
+          body: r.hookBody,
+          outcome: r.outcome === 'created' ? 'created' : 'updated',
         });
+        await d.store.markHookDelivered(scope, r.commentId, r.hookBody);
       }
       if (newest === null || c.postedAt > newest) newest = c.postedAt;
     }
