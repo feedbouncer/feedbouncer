@@ -28,6 +28,11 @@ describe('ruleConditionsSchema', () => {
     expect(r.success).toBe(false);
     expect(JSON.stringify(r.error?.issues)).toContain('"patterns",1');
   });
+  it('does not leak pattern text into regex issues', () => {
+    const r = parse({ type: 'regex', patterns: ['(secretterm'] });
+    expect(r.success).toBe(false);
+    expect(JSON.stringify(r.error?.issues)).not.toContain('secretterm');
+  });
   it('normalises link domains to ASCII and rejects invalid ones', () => {
     const r = parse({
       type: 'link_domain',

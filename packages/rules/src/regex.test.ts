@@ -31,4 +31,16 @@ describe('compilePattern', () => {
       expect((e as Error).message.length).toBeLessThanOrEqual(300);
     }
   });
+  it('never echoes the pattern in the error message', () => {
+    for (const p of ['(secretterm', '[secretterm', '(secretterm)\\1', 'secretterm(?=x)']) {
+      try {
+        compilePattern(p);
+        expect.unreachable();
+      } catch (e) {
+        expect(e).toBeInstanceOf(RegexCompileError);
+        expect((e as Error).message).not.toContain('secretterm');
+        expect((e as Error).message).toMatch(/^Invalid regular expression/);
+      }
+    }
+  });
 });

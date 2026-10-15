@@ -16,7 +16,11 @@ export function compilePattern(p: string): CompiledPattern {
     const re = new RE2(p, 'iu');
     return { test: (s) => re.test(s) };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'invalid pattern';
-    throw new RegexCompileError(`Invalid regular expression: ${msg}`.slice(0, 300));
+    // RE2 messages look like "<reason>: <pattern fragment>". Keep only the reason so
+    // user-supplied pattern text never reaches error messages, issues or logs.
+    const raw = e instanceof Error ? e.message : '';
+    const reason = raw.split(': ')[0] ?? '';
+    const safe = /^[a-z][a-z \-()\]\[]{0,60}$/i.test(reason) ? `: ${reason}` : '.';
+    throw new RegexCompileError(`Invalid regular expression${safe}`);
   }
 }
