@@ -13,7 +13,8 @@ describe('prepareInput', () => {
     }
   });
   it('three or more letters/digits in any script is not low-signal', () => {
-    for (const s of ['buy', '無料です', 'бесплатно', '123']) expect(prepareInput(s).lowSignal).toBe(false);
+    for (const s of ['buy', '無料です', 'бесплатно', '123'])
+      expect(prepareInput(s).lowSignal).toBe(false);
   });
   it('truncates deterministically at a grapheme boundary and records it', () => {
     const long = 'a'.repeat(MAX_INPUT_CHARS - 1) + '👨‍👩‍👧' + 'tail';
@@ -41,6 +42,12 @@ describe('prepareInput', () => {
     expect(p.text.length).toBe(MAX_INPUT_CHARS);
   });
   it('text within the limit is unchanged', () => {
-    expect(prepareInput('Hello there')).toEqual({ text: 'Hello there', empty: false, lowSignal: false, truncated: false, inputChars: 11 });
+    expect(prepareInput('Hello there')).toEqual({
+      text: 'Hello there',
+      empty: false,
+      lowSignal: false,
+      truncated: false,
+      inputChars: 11,
+    });
   });
 });

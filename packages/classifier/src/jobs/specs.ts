@@ -19,6 +19,11 @@ export type ClassifyPayload = z.output<typeof ClassifyPayload>;
 /** 3 provider attempts are handled in-job; the 4th framework attempt only covers crashes. */
 export const MAX_PROVIDER_ATTEMPTS = 3;
 
+/** Fixed delay for a per-brand cap deferral; the framework adds at most 10% jitter. */
+export const BRAND_BUSY_RETRY_MS = 30_000;
+/** Longest CLASSIFIER_MAX_WAIT_MINUTES an operator may configure. */
+export const MAX_CONFIGURABLE_WAIT_MS = 90 * 60_000;
+
 export const CLASSIFY_JOB = {
   type: 'comment_classify' as const,
   lane: CLASSIFIER_LANE,

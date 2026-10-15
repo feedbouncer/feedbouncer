@@ -23,7 +23,12 @@ import type { ClassifierProvider, RawClassification } from '../provider.js';
 import type { BrandSlots } from '../slots.js';
 import type { ClassificationRecord, ClassificationRow, PgClassificationStore } from '../store.js';
 import type { PgThresholdStore } from '../thresholds-store.js';
-import { CLASSIFY_JOB, MAX_PROVIDER_ATTEMPTS, type ClassifyPayload } from './specs.js';
+import {
+  BRAND_BUSY_RETRY_MS,
+  CLASSIFY_JOB,
+  MAX_PROVIDER_ATTEMPTS,
+  type ClassifyPayload,
+} from './specs.js';
 
 export interface ClassifyDeps {
   comments: Pick<PgCommentStore, 'load'>;
@@ -45,12 +50,10 @@ type RequestResult = Awaited<ReturnType<ModerationActions['request']>>;
 /** Null when the action went through (or is pending); otherwise a closed snake_case code. */
 function fallbackCode(r: RequestResult): string | null {
   if (r.status === 'refused') return SAFE_CODE.test(r.code) ? r.code : 'refused';
-  if (
-    r.status === 'recorded' &&
-    (r.action.status === 'not_eligible' || r.action.status === 'failed')
-  ) {
-    const code = r.action.outcomeCode ?? r.action.status;
-    return SAFE_CODE.test(code) ? code : r.action.status;
+  const s = r.action.status;
+  if (s === 'failed' || (r.status === 'recorded' && s === 'not_eligible')) {
+    const code = r.action.outcomeCode ?? s;
+    return SAFE_CODE.test(code) ? code : s;
   }
   return null;
 }
@@ -108,7 +111,7 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
         if (now() - p.requestedAt > d.maxWaitMs)
           return { ...base, status: 'unclassified', unclassifiedReason: 'queue_timeout', input };
         const lease = await d.slots.acquire(brand.brandId);
-        if (!lease) throw new JobDeferral('classifier_brand_busy', null);
+        if (!lease) throw new JobDeferral('classifier_brand_busy', BRAND_BUSY_RETRY_MS);
         try {
           raw = await d.provider.classify(input, ctx.signal);
         } catch (e) {
@@ -122,7 +125,9 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
           });
           return { ...base, status: 'unclassified', unclassifiedReason: err.code, input };
         } finally {
-          await lease.release();
+          await lease
+            .release()
+            .catch(() => ctx.log.warn('classifier.slot_release_failed', { commentId: row.id }));
         }
       }
     }
@@ -143,7 +148,8 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
       input,
       scoresReused,
       ruleEvaluationId: ruleEval.id,
-      ruleDecided: ruleEval.status === 'decided',
+      // Thresholds apply only when the rules found nothing; any other status leaves the decision to them.
+      ruleDecided: ruleEval.status !== 'no_match',
       policy,
       verdict,
       reason: describeClassification(verdict, { truncated: input.truncated }),

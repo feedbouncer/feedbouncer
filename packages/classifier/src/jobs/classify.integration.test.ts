@@ -118,13 +118,14 @@ async function editComment(c: Seeded, body: string): Promise<Seeded> {
   return { ...c, body };
 }
 
-async function evaluateRules(c: Seeded, status: 'no_match' | 'decided'): Promise<void> {
+async function evaluateRules(c: Seeded, status: 'no_match' | 'decided' | 'skipped'): Promise<void> {
   const row = await evaluations.record(connScope(c.t), {
     commentId: c.id,
     sha: Buffer.from(bodySha256(c.body), 'hex'),
     triggerKey: 'ingest',
     rulesetVersion: 'v1',
     status,
+    ...(status === 'skipped' ? { skipReason: 'own_account' as const } : {}),
     verdict:
       status === 'decided'
         ? {
@@ -565,6 +566,79 @@ describe('comment_classify', () => {
     );
     expect(
       await count(`SELECT 1 FROM decision WHERE comment_id = $1 AND outcome = 'approve'`, [c.id]),
+    ).toBe(1);
+  });
+
+  it('without a rule evaluation on ingest the job fails retryably and records nothing', async () => {
+    const c = await seedComment('too early');
+    const p = new FakeProvider([S({ spam: 0.99 })]);
+    await expect(job(p).handle(ctx(c, 1), payload(c))).rejects.toMatchObject({
+      kind: 'retryable',
+      code: 'rule_evaluation_pending',
+    });
+    expect(p.calls).toBe(0);
+    expect(await count(`SELECT 1 FROM comment_classification WHERE comment_id = $1`, [c.id])).toBe(
+      0,
+    );
+    expect(actions.request).not.toHaveBeenCalled();
+  });
+
+  it('a skipped rule evaluation records rules_not_evaluated with no action or decision', async () => {
+    const c = await seedComment('skipped upstream');
+    await evaluateRules(c, 'skipped');
+    const p = new FakeProvider([S({ hate_speech: 0.99 })]);
+    const r = await job(p).handle(ctx(c, 1), payload(c));
+    expect(r).toMatchObject({ result: 'skipped' });
+    expect(p.calls).toBe(0);
+    expect(
+      (await one(`SELECT skip_reason FROM comment_classification WHERE comment_id = $1`, [c.id]))
+        .skip_reason,
+    ).toBe('rules_not_evaluated');
+    expect(actions.request).not.toHaveBeenCalled();
+    expect(await count(`SELECT 1 FROM decision WHERE comment_id = $1`, [c.id])).toBe(0);
+  });
+
+  it('releases the brand slot after a provider failure', async () => {
+    const c = await seedComment('fails then frees');
+    await evaluateRules(c, 'no_match');
+    const p = new FakeProvider([new ClassifierProviderError('timeout', true)]);
+    await expect(job(p).handle(ctx(c, 1), payload(c))).rejects.toMatchObject({ kind: 'retryable' });
+    await job(p).handle(ctx(c, 3), payload(c));
+    const a = await slots.acquire(c.t.brandId);
+    const b = await slots.acquire(c.t.brandId);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    await a!.release();
+    await b!.release();
+  });
+
+  it('defers with a fixed retry delay when the brand is at its cap', async () => {
+    const t = await tenant();
+    const held = [await slots.acquire(t.brandId), await slots.acquire(t.brandId)];
+    const c = await seedComment('busy delay', t);
+    await evaluateRules(c, 'no_match');
+    await expect(job(new FakeProvider([S()])).handle(ctx(c, 1), payload(c))).rejects.toMatchObject({
+      retryAfterMs: 30_000,
+    });
+    for (const h of held) await h!.release();
+  });
+
+  it('an accepted replay whose action already failed falls back to a flag', async () => {
+    const c = await seedComment('replayed failure');
+    await evaluateRules(c, 'no_match');
+    actions.request.mockResolvedValueOnce({
+      status: 'accepted',
+      action: { status: 'failed', outcomeCode: 'enqueue_failed' },
+    });
+    const r = await job(new FakeProvider([S({ scam_phishing: 0.9 })])).handle(
+      ctx(c, 1),
+      payload(c),
+    );
+    expect(r.fallback).toBe('enqueue_failed');
+    expect(
+      await count(`SELECT 1 FROM decision WHERE classification_id = $1 AND outcome = 'flag'`, [
+        r.classificationId,
+      ]),
     ).toBe(1);
   });
 
