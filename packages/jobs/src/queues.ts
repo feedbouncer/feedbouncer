@@ -48,18 +48,18 @@ export class QueueSet {
   readonly #connection: Redis;
   readonly #prefix: string;
   readonly #addTimeoutMs: number;
-  readonly #laneOf: LaneOf;
+  private readonly laneOf: LaneOf;
 
   constructor(o: { connection: Redis; prefix: string; addTimeoutMs?: number; laneOf?: LaneOf }) {
     if (!QUEUE_PREFIX.test(o.prefix)) throw new RangeError('invalid queue prefix');
     this.#connection = o.connection;
     this.#prefix = o.prefix;
     this.#addTimeoutMs = o.addTimeoutMs ?? ADD_TIMEOUT_MS;
-    this.#laneOf = o.laneOf ?? NO_LANES;
+    this.laneOf = o.laneOf ?? NO_LANES;
   }
 
   nameFor(p: Platform, jobType: string): string {
-    return queueName(p, this.#laneOf(jobType));
+    return queueName(p, this.laneOf(jobType));
   }
 
   queue(p: Platform, lane: string | null = null): Queue {
@@ -76,7 +76,7 @@ export class QueueSet {
 
   async add(p: Platform, jobType: string, ledgerId: string, key: string): Promise<void> {
     const data: QueueJobData = { v: 1, ledgerId };
-    const added = this.queue(p, this.#laneOf(jobType)).add(jobType, data, {
+    const added = this.queue(p, this.laneOf(jobType)).add(jobType, data, {
       ...JOB_ADD_OPTIONS,
       jobId: bullJobId(key),
     });
