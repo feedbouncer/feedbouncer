@@ -21,7 +21,7 @@ export interface JobsConfig {
   readonly defaultPolicy: RetryPolicy;
   /** JOB_CONCURRENCY (default 2), JOB_CONCURRENCY_<PLATFORM>; 0 disables the consumer. */
   readonly concurrency: Readonly<Record<Platform, number>>;
-  /** JOB_CONCURRENCY_LANE_<LANE> (default 2) per platform; 0 disables. */
+  /** JOB_CONCURRENCY_LANE_<LANE> (default 2 unless the caller supplies one) per platform; 0 disables. */
   readonly laneConcurrency: Readonly<Record<string, number>>;
   readonly dlqRetentionMs: number;
   readonly dedupWindowMs: number;
@@ -30,7 +30,10 @@ export interface JobsConfig {
   readonly bull: { readonly lockDurationMs: number; readonly stalledIntervalMs: number };
 }
 
-export function loadJobsConfig(env: Env, o: { lanes?: readonly string[] } = {}): JobsConfig {
+export function loadJobsConfig(
+  env: Env,
+  o: { lanes?: readonly string[]; laneDefaults?: Readonly<Record<string, number>> } = {},
+): JobsConfig {
   const prefix = readString(env, 'JOB_QUEUE_PREFIX', {
     fallback: 'fb',
     maxLength: 32,
@@ -48,7 +51,11 @@ export function loadJobsConfig(env: Env, o: { lanes?: readonly string[] } = {}):
   const laneConcurrency = Object.fromEntries(
     (o.lanes ?? []).map((l) => [
       l,
-      readInt(env, `JOB_CONCURRENCY_LANE_${l.toUpperCase()}`, { min: 0, max: 64, fallback: 2 }),
+      readInt(env, `JOB_CONCURRENCY_LANE_${l.toUpperCase()}`, {
+        min: 0,
+        max: 64,
+        fallback: o.laneDefaults?.[l] ?? 2,
+      }),
     ]),
   );
 

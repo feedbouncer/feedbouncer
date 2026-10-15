@@ -20,7 +20,9 @@ For how to write a job, see [docs/jobs/defining-a-job.md](../jobs/defining-a-job
   process does not consume that platform's queue.
 - Lanes: slow work runs on `lane-<lane>-<platform>` queues so it cannot delay connector
   jobs. The `classify` lane (comment classification) has `JOB_CONCURRENCY_LANE_CLASSIFY`
-  consumers per platform (default 2, `0` off). The classifier itself is configured with
+  consumers per platform (default 4, `0` off; keep it above `CLASSIFIER_BRAND_MAX_IN_FLIGHT`,
+  the worker warns at startup otherwise). Lane consumers start only for platforms whose own
+  concurrency is above 0. The classifier itself is configured with
   `CLASSIFIER_PROVIDER`, `CLASSIFIER_MODEL`, `CLASSIFIER_API_KEY` (or `_FILE`),
   `CLASSIFIER_BASE_URL`, `CLASSIFIER_ALLOW_HTTP`, `CLASSIFIER_TIMEOUT_MS` (1000..25000,
   default 10000), `CLASSIFIER_LANGUAGES` (default `en,es,pt,fr,de,it,nl`),

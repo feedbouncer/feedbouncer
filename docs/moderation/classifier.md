@@ -107,9 +107,18 @@ or rule acted on it afterwards.
   (default 2) of the provider calls at a time. Further work for that brand is
   deferred and retried.
 - Total concurrency per platform is `JOB_CONCURRENCY_LANE_CLASSIFY`
-  (default 2, `0` disables the lane in that process).
+  (default 4, `0` disables the lane in that process). Keep it **above**
+  `CLASSIFIER_BRAND_MAX_IN_FLIGHT`: when the two are equal, one brand's backlog
+  can hold every slot and other brands wait until they time out. The worker
+  logs a warning at startup when the lane is not wider than the per-brand cap.
+- Lane consumers start only for platforms whose own concurrency
+  (`JOB_CONCURRENCY`, `JOB_CONCURRENCY_<PLATFORM>`) is above 0.
 - A classification that waits longer than `CLASSIFIER_MAX_WAIT_MINUTES`
-  (default 30) is recorded as Not classified.
+  (default 30) is recorded as Not classified. After a model or prompt change a
+  large re-run can exceed this wait and record Not classified for part of the
+  comments, because stored scores can no longer be reused for the new model. A
+  re-run may be requested again once 15 minutes have passed; comments that
+  already have scores for the current model are reused.
 
 ## Configuration
 
@@ -127,7 +136,7 @@ and model for display.
 | `CLASSIFIER_LANGUAGES`           | `en,es,pt,fr,de,it,nl` | Lower-case ISO 639 codes the model is trusted for.                                                    |
 | `CLASSIFIER_BRAND_MAX_IN_FLIGHT` | `2`                    | 1 to 16 concurrent provider calls per brand.                                                          |
 | `CLASSIFIER_MAX_WAIT_MINUTES`    | `30`                   | 1 to 90.                                                                                              |
-| `JOB_CONCURRENCY_LANE_CLASSIFY`  | `2`                    | Classification workers per platform.                                                                  |
+| `JOB_CONCURRENCY_LANE_CLASSIFY`  | `4`                    | Classification workers per platform.                                                                  |
 
 Base URLs must use `https`, except that `http` is accepted for loopback hosts
 (`localhost`, `127.0.0.1`, `[::1]`) or when `CLASSIFIER_ALLOW_HTTP=true`.

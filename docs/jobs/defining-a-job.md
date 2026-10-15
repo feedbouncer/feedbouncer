@@ -86,7 +86,8 @@ Platform queues are named `platform-<platform>`; lane queues are named
 
 Each lane gets its own workers per platform. Concurrency is
 `JOB_CONCURRENCY_LANE_<LANE>` (default 2, `0` disables the lane in that process). Pass
-`jobs.lanes()` to `loadJobsConfig(env, { lanes })` so the variables are read.
+`jobs.lanes()` to `loadJobsConfig(env, { lanes })` so the variables are read; pass
+`laneDefaults` to give a lane a different default.
 
 Every process that enqueues a type must resolve the same lane for it: construct
 `QueueSet` with `laneOf: jobs.laneOf()`, or `laneMap(definitions)` where only the

@@ -110,10 +110,27 @@ describe('loadWorkerEnv', () => {
   });
 
   describe('classifier', () => {
-    it('is disabled by default and gives the classify lane 2 consumers', () => {
+    it('is disabled by default and gives the classify lane 4 consumers, above the per-brand cap', () => {
       const env = load(base);
       expect(env.classifier.model).toBeNull();
-      expect(env.jobs.laneConcurrency).toEqual({ classify: 2 });
+      expect(env.jobs.laneConcurrency).toEqual({ classify: 4 });
+      expect(env.classifier.perBrandInFlight).toBe(2);
+    });
+    it('warns when the classify lane is not wider than the per-brand cap', () => {
+      const warnings: string[] = [];
+      loadWorkerEnv(
+        { ...base, JOB_CONCURRENCY_LANE_CLASSIFY: '2' },
+        { warn: (m) => warnings.push(m) },
+      );
+      expect(warnings.join('\n')).toMatch(
+        /JOB_CONCURRENCY_LANE_CLASSIFY.*CLASSIFIER_BRAND_MAX_IN_FLIGHT/,
+      );
+      const quiet: string[] = [];
+      loadWorkerEnv(base, { warn: (m) => quiet.push(m) });
+      expect(quiet.join('\n')).not.toMatch(/CLASSIFIER_BRAND_MAX_IN_FLIGHT/);
+      const off: string[] = [];
+      loadWorkerEnv({ ...base, JOB_CONCURRENCY_LANE_CLASSIFY: '0' }, { warn: (m) => off.push(m) });
+      expect(off.join('\n')).not.toMatch(/CLASSIFIER_BRAND_MAX_IN_FLIGHT/);
     });
     it('honors JOB_CONCURRENCY_LANE_CLASSIFY and reads CLASSIFIER_API_KEY_FILE', () => {
       const env = loadWorkerEnv(
