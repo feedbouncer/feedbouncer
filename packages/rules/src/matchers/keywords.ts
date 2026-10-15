@@ -10,6 +10,22 @@ export interface KeywordMatcher {
   covers(text: string): boolean;
 }
 
+// Any character that is neither a letter/digit/mark/underscore nor whitespace.
+const PUNCT = /[^\p{L}\p{N}\p{M}_\s]/u;
+const ALNUM = /[\p{L}\p{N}]/u;
+
+function occurs(haystack: string, needle: string, bounded: boolean): boolean {
+  let i = haystack.indexOf(needle);
+  if (!bounded) return i !== -1;
+  while (i !== -1) {
+    const before = [...haystack.slice(Math.max(0, i - 2), i)].pop();
+    const after = String.fromCodePoint(haystack.codePointAt(i + needle.length) ?? 0x20);
+    if (!(before !== undefined && ALNUM.test(before)) && !ALNUM.test(after)) return true;
+    i = haystack.indexOf(needle, i + 1);
+  }
+  return false;
+}
+
 interface Phrase {
   tokens: string[];
   term: string;
@@ -19,7 +35,7 @@ export function compileKeywords(
   terms: readonly string[],
   mode: 'whole_word' | 'contains',
 ): KeywordMatcher {
-  const substrings: { needle: string; term: string }[] = [];
+  const substrings: { needle: string; term: string; bounded: boolean }[] = [];
   const byFirst = new Map<string, Phrase[]>();
   for (const term of terms) {
     // A term with nothing left after normalisation must never match (an empty
@@ -27,8 +43,14 @@ export function compileKeywords(
     const n = normalizeText(term).trim();
     if (n.length === 0) continue;
     const toks = words(n);
-    if (mode === 'contains' || hasUnspacedScript(n) || toks.length === 0) {
-      substrings.push({ needle: n, term });
+    if (mode === 'contains' || hasUnspacedScript(n)) {
+      substrings.push({ needle: n, term, bounded: false });
+      continue;
+    }
+    // Punctuation is meaningful ("c++", "100%", "@acme"); reducing to word tokens would be
+    // over-broad, so match the whole term as a substring that is not glued to letters/digits.
+    if (toks.length === 0 || PUNCT.test(n)) {
+      substrings.push({ needle: n, term, bounded: true });
       continue;
     }
     const list = byFirst.get(toks[0]!) ?? [];
@@ -46,7 +68,7 @@ export function compileKeywords(
         if (ok) return p.term;
       }
     }
-    for (const s of substrings) if (normalized.includes(s.needle)) return s.term;
+    for (const s of substrings) if (occurs(normalized, s.needle, s.bounded)) return s.term;
     return null;
   };
   return {

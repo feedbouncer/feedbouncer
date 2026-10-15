@@ -36,6 +36,16 @@ describe('keywords whole_word (default)', () => {
       expect(e.covers('')).toBe(false);
     }
   });
+  it('punctuated terms match as a whole, bounded by non-alphanumerics', () => {
+    const p = compileKeywords(['c++', '100%', '@acme'], 'whole_word');
+    expect(p.find(v('I love c++!'))).toBe('c++');
+    expect(p.find(v('c alone'))).toBeNull();
+    expect(p.find(v('abc++'))).toBeNull();
+    expect(p.find(v('100 apples'))).toBeNull();
+    expect(p.find(v('get 100% now'))).toBe('100%');
+    expect(p.find(v('ask acme'))).toBeNull();
+    expect(p.find(v('ask @Acme'))).toBe('@acme');
+  });
   it('covers() reports whether a comment of exactly that text would match', () => {
     expect(m.covers('SCAM')).toBe(true);
     expect(m.covers('hello')).toBe(false);
