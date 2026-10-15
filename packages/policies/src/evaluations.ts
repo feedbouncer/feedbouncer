@@ -4,7 +4,7 @@
 // that won. Every statement filters on organization_id AND brand_id.
 import type pg from 'pg';
 import { withTransaction } from '@feedbouncer/db';
-import { safeFallbackCode, type BrandScope } from '@feedbouncer/rules';
+import type { BrandScope } from '@feedbouncer/rules';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type {
   Downgrade,
@@ -215,7 +215,7 @@ export class PgPolicyEvaluationStore {
           WHERE organization_id = $1 AND brand_id = $2 AND id = $3
             AND status = 'evaluated' AND outcome IS NOT NULL AND fallback_at IS NULL
           RETURNING comment_id, winning_revision_id`,
-        [s.organizationId, s.brandId, evaluationId, safeFallbackCode(code)],
+        [s.organizationId, s.brandId, evaluationId, code],
       );
       const hit = rows[0];
       if (!hit) return false;
@@ -247,17 +247,6 @@ export class PgPolicyEvaluationStore {
           AND fallback_at IS NOT NULL AND recovered_at IS NULL`,
       [s.organizationId, s.brandId, evaluationId],
     );
-  }
-
-  /** Same query as PgClassificationStore.latestActionActor. */
-  async latestActionActor(s: BrandScope, commentId: string): Promise<string | null> {
-    const r = await this.#pool.query<{ actor_type: string }>(
-      `SELECT actor_type FROM moderation_action
-       WHERE organization_id = $1 AND brand_id = $2 AND comment_id = $3 AND status IN ('pending', 'applied')
-       ORDER BY created_at DESC, id DESC LIMIT 1`,
-      [s.organizationId, s.brandId, commentId],
-    );
-    return r.rows[0]?.actor_type ?? null;
   }
 
   /** The newest evaluation of a comment, with each match at the revision that matched. */

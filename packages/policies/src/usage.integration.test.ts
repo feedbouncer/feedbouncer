@@ -45,7 +45,7 @@ describe('PgPolicyUsage', () => {
     expect((await usage.current(bs, 3)).used).toBe(3);
   });
 
-  it('Review Focus 3: with one call left, exactly one of two racing consumers wins', async () => {
+  it('with one call left, exactly one of two racing consumers wins', async () => {
     const b = await seedTenant(db.c, 'usage-last');
     const bs = { organizationId: b.organizationId, brandId: b.brandId };
     expect(await usage.consume(bs, 2)).toBe(true);

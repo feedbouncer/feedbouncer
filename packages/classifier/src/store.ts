@@ -295,17 +295,6 @@ export class PgClassificationStore {
     return (r.rowCount ?? 0) > 0;
   }
 
-  /** Actor type of the newest pending or applied action on the comment, or null when there is none. */
-  async latestActionActor(s: BrandScope, commentId: string): Promise<string | null> {
-    const r = await this.pool.query<{ actor_type: string }>(
-      `SELECT actor_type FROM moderation_action
-       WHERE organization_id = $1 AND brand_id = $2 AND comment_id = $3 AND status IN ('pending', 'applied')
-       ORDER BY created_at DESC, id DESC LIMIT 1`,
-      [s.organizationId, s.brandId, commentId],
-    );
-    return r.rows[0]?.actor_type ?? null;
-  }
-
   async reversibleClassifierHide(
     s: BrandScope,
     commentId: string,

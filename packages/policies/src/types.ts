@@ -35,7 +35,6 @@ export const SKIP_REASONS = [
   'own_account',
   'rules_not_evaluated',
   'rule_decided',
-  'no_enabled_policies',
   'quota_exhausted',
   'policy_changed',
 ] as const;

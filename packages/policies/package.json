@@ -24,7 +24,6 @@
     "@feedbouncer/ai": "workspace:*",
     "@feedbouncer/classifier": "workspace:*",
     "@feedbouncer/comments": "workspace:*",
-    "@feedbouncer/connectors": "workspace:*",
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/jobs": "workspace:*",
     "@feedbouncer/rules": "workspace:*",

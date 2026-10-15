@@ -1,10 +1,9 @@
-import type { ActionOutcomeObserver } from '@feedbouncer/comments';
+import { safeOutcomeCode, type ActionOutcomeObserver } from '@feedbouncer/comments';
 import type { Logger } from '@feedbouncer/service-runtime';
 import { describeFallback } from './describe.js';
 import type { PgClassificationStore } from './store.js';
 
 const KEY = /^clf:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(:unhide)?$/;
-const SAFE_CODE = /^[a-z][a-z_]{0,63}$/;
 
 /** Flags a comment for review when a classifier-requested action could not be completed. */
 export class ClassifierActionFallback implements ActionOutcomeObserver {
@@ -20,7 +19,7 @@ export class ClassifierActionFallback implements ActionOutcomeObserver {
       await this.d.classifications.recordRecovered(scope, id);
       return;
     }
-    const code = e.code && SAFE_CODE.test(e.code) ? e.code : e.status;
+    const code = safeOutcomeCode(e.code, e.status);
     const kind = m[2] ? 'unhide' : e.kind === 'delete' ? 'delete' : 'hide';
     const recorded = await this.d.classifications.recordFallback(
       scope,

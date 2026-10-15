@@ -38,7 +38,7 @@ const policies = [
   { key: 'p2', text: 'Flag comments mentioning competitor prices' },
 ];
 const signal = new AbortController().signal;
-/** Adapt to the shape confirmed in Step 1. */
+/** The provider-level prompt the mock model receives (system message first). */
 const promptOf = (o: unknown) => (o as { prompt: { role: string; content: unknown }[] }).prompt;
 const textOf = (content: unknown) =>
   typeof content === 'string'

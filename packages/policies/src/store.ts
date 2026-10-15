@@ -5,7 +5,7 @@
 import type pg from 'pg';
 import { isUniqueViolation } from '@feedbouncer/db';
 import type { BrandScope } from '@feedbouncer/rules';
-import { normalizePolicyText } from './text.js';
+import { normalizePolicyText, policyWarnings } from './text.js';
 import {
   MAX_ENABLED_POLICIES_PER_BRAND,
   MAX_POLICIES_PER_BRAND,
@@ -62,7 +62,6 @@ export interface PolicyUpdate {
   text?: string;
   action?: PolicyAction;
   enabled?: boolean;
-  vague?: boolean;
 }
 
 type Queryable = Pick<pg.ClientBase, 'query'>;
@@ -260,7 +259,7 @@ export class PgPolicyStore {
         cur.revision + 1,
         nextText,
         nextAction,
-        patch.vague ?? cur.vague,
+        policyWarnings(nextText).length > 0,
         userId,
       );
     if (revised || patch.name !== undefined || patch.enabled !== undefined) {

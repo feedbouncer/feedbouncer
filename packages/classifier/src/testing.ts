@@ -93,5 +93,5 @@ export function fakeJobContext(
     isReplay: false,
     signal: new AbortController().signal,
     log,
-  } as JobContext;
+  };
 }

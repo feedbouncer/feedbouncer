@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
-import { createPool } from '@feedbouncer/db';
+import { createPool, withTransaction } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { PgEvaluationStore, bodySha256 } from '@feedbouncer/rules';
 import { evaluateRulesFor, scopeOf, seedCommentRow } from '@feedbouncer/classifier/testing';
@@ -22,21 +22,6 @@ let conn: ConnectionScope;
 let p1: StoredPolicy;
 let p2: StoredPolicy;
 let n = 0;
-
-async function tx<T>(work: (c: pg.PoolClient) => Promise<T>): Promise<T> {
-  const c = await pool.connect();
-  try {
-    await c.query('BEGIN');
-    const out = await work(c);
-    await c.query('COMMIT');
-    return out;
-  } catch (err) {
-    await c.query('ROLLBACK');
-    throw err;
-  } finally {
-    c.release();
-  }
-}
 
 async function freshComment(tn: Tenant = t) {
   const body = `please DM my other account ${++n}`;
@@ -110,7 +95,7 @@ beforeAll(async () => {
   other = await seedTenant(db.c, 'evals-other');
   a = { organizationId: t.organizationId, brandId: t.brandId };
   conn = scopeOf(t);
-  p1 = await tx((c) =>
+  p1 = await withTransaction(pool, (c) =>
     policies.create(
       c,
       a,
@@ -118,7 +103,7 @@ beforeAll(async () => {
       t.userId,
     ),
   );
-  p2 = await tx((c) =>
+  p2 = await withTransaction(pool, (c) =>
     policies.create(
       c,
       a,
@@ -305,15 +290,6 @@ describe('PgPolicyEvaluationStore', () => {
     );
     expect(r.rows[0].recovered).toBe(true);
 
-    // Unsafe codes are recorded as 'failed' rather than violating the check.
-    const u = await freshComment();
-    const urow = (await store.record(conn, evaluated(u, m2, [m2])))!;
-    expect(await store.recordFallback(a, urow.id, 'Not A Code!', 'reason')).toBe(true);
-    const uc = await db.c.query('SELECT fallback_code FROM policy_evaluation WHERE id = $1', [
-      urow.id,
-    ]);
-    expect(uc.rows[0].fallback_code).toBe('failed');
-
     // No winner: nothing to fall back from.
     const none = await freshComment();
     const nrow = (await store.record(conn, evaluated(none, null, [])))!;
@@ -324,34 +300,6 @@ describe('PgPolicyEvaluationStore', () => {
     expect(await store.recordFallback(a, again.id, 'not_eligible', 'reason')).toBe(true);
     const ds = await decisionsFor(c.commentId);
     expect(ds.map((d) => d.outcome)).toEqual(['hide', 'flag', 'hide']);
-  });
-
-  it('latestActionActor returns the actor of the newest pending or applied action', async () => {
-    const c = await freshComment();
-    expect(await store.latestActionActor(a, c.commentId)).toBeNull();
-    const act = (actor: string, status: string, at: string) =>
-      db.c.query(
-        `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind, actor_type,
-           request_key, status, completed_at, created_at)
-         VALUES ($1, $2, $3, $4, 'hide', $5, $6, $7::text,
-           CASE WHEN $7::text = 'pending' THEN NULL ELSE now() END, $8::timestamptz)`,
-        [
-          t.organizationId,
-          t.brandId,
-          t.connectionId,
-          c.commentId,
-          actor,
-          `k:${randomUUID()}`,
-          status,
-          at,
-        ],
-      );
-    await act('user', 'applied', '2026-10-01T00:00:00Z');
-    await act('policy', 'applied', '2026-10-02T00:00:00Z');
-    await act('rule', 'failed', '2026-10-03T00:00:00Z');
-    expect(await store.latestActionActor(a, c.commentId)).toBe('policy');
-    const os = { organizationId: other.organizationId, brandId: other.brandId };
-    expect(await store.latestActionActor(os, c.commentId)).toBeNull();
   });
 
   it('latestForComment returns the newest evaluation with its matches', async () => {
@@ -406,8 +354,8 @@ describe('PgPolicyEvaluationStore', () => {
     });
   });
 
-  it('Review Focus 5: a decision made by revision 1 still points at revision 1 after edits and archive', async () => {
-    const p = await tx((c) =>
+  it('a decision made by revision 1 still points at revision 1 after edits and archive', async () => {
+    const p = await withTransaction(pool, (c) =>
       policies.create(
         c,
         a,
@@ -418,10 +366,10 @@ describe('PgPolicyEvaluationStore', () => {
     const c = await freshComment();
     const m = match(p, 'high');
     const row = (await store.record(conn, evaluated(c, m, [m])))!;
-    await tx((x) =>
+    await withTransaction(pool, (x) =>
       policies.update(x, a, p.id, { text: 'Hide comments selling likes or followers' }, t.userId),
     );
-    await tx((x) =>
+    await withTransaction(pool, (x) =>
       policies.update(
         x,
         a,
@@ -431,7 +379,7 @@ describe('PgPolicyEvaluationStore', () => {
       ),
     );
     expect((await policies.revisions(a, p.id)).map((r) => r.revision)).toEqual([3, 2, 1]);
-    expect(await tx((x) => policies.archive(x, a, p.id))).toBe(true);
+    expect(await withTransaction(pool, (x) => policies.archive(x, a, p.id))).toBe(true);
     const d = await db.c.query(
       `SELECT r.revision, r.text, r.action, cp.name, cp.archived_at IS NOT NULL AS archived
          FROM decision d

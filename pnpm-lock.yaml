@@ -690,9 +690,6 @@ importers:
       '@feedbouncer/comments':
         specifier: workspace:*
         version: link:../comments
-      '@feedbouncer/connectors':
-        specifier: workspace:*
-        version: link:../connectors
       '@feedbouncer/db':
         specifier: workspace:*
         version: link:../db

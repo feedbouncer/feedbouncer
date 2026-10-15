@@ -11,7 +11,12 @@ import {
   type JobDefinition,
   type JobResult,
 } from '@feedbouncer/jobs';
-import type { CommentRow, ModerationActions, PgCommentStore } from '@feedbouncer/comments';
+import {
+  actionFallbackCode,
+  type CommentRow,
+  type ModerationActions,
+  type PgCommentStore,
+} from '@feedbouncer/comments';
 import { bodySha256, type BrandScope, type PgEvaluationStore } from '@feedbouncer/rules';
 import type { Logger } from '@feedbouncer/service-runtime';
 import { ZERO_SCORES } from '../defaults.js';
@@ -37,7 +42,7 @@ import {
 } from './specs.js';
 
 export interface ClassifyDeps {
-  comments: Pick<PgCommentStore, 'load'>;
+  comments: Pick<PgCommentStore, 'load' | 'latestActionActor'>;
   ruleEvaluations: Pick<PgEvaluationStore, 'find'>;
   classifications: PgClassificationStore;
   thresholds: Pick<PgThresholdStore, 'policy'>;
@@ -48,20 +53,6 @@ export interface ClassifyDeps {
   maxWaitMs: number;
   log: Logger;
   clock?: { now(): number };
-}
-
-const SAFE_CODE = /^[a-z][a-z_]{0,63}$/;
-type RequestResult = Awaited<ReturnType<ModerationActions['request']>>;
-
-/** Null when the action went through (or is pending); otherwise a closed snake_case code. */
-function fallbackCode(r: RequestResult): string | null {
-  if (r.status === 'refused') return SAFE_CODE.test(r.code) ? r.code : 'refused';
-  const s = r.action.status;
-  if (s === 'failed' || (r.status === 'recorded' && s === 'not_eligible')) {
-    const code = r.action.outcomeCode ?? s;
-    return SAFE_CODE.test(code) ? code : s;
-  }
-  return null;
 }
 
 export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPayload> {
@@ -149,7 +140,7 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
     if (
       p.trigger !== 'ingest' &&
       (verdict.outcome === 'hide' || verdict.outcome === 'remove') &&
-      (await d.classifications.latestActionActor(brand, row.id)) === 'user'
+      (await d.comments.latestActionActor(brand, row.id)) === 'user'
     ) {
       const cap = (t: Trigger): Trigger =>
         t.effectiveAction === 'hide' || t.effectiveAction === 'remove'
@@ -210,7 +201,7 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
         actor: { type: 'classifier' },
         requestKey: `clf:${c.id}`,
       });
-      const code = fallbackCode(r);
+      const code = actionFallbackCode(r);
       if (code) {
         await d.classifications.recordFallback(brand, c.id, code, describeFallback(kind, code));
         ctx.log.info('classifier.fallback', { classificationId: c.id, code });
@@ -244,7 +235,7 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
       actor: { type: 'classifier' },
       requestKey: `clf:${c.id}:unhide`,
     });
-    const code = fallbackCode(r);
+    const code = actionFallbackCode(r);
     if (code) {
       await d.classifications.recordFallback(brand, c.id, code, describeFallback('unhide', code), {
         category: prev.category,

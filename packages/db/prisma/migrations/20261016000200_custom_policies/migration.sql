@@ -104,7 +104,7 @@ CREATE TABLE policy_evaluation (
     OR (status = 'failed' AND skip_reason IS NULL AND failure_code IS NOT NULL AND failure_code ~ '^[a-z][a-z_]{0,63}$'
         AND outcome IS NULL)
     OR (status = 'skipped' AND failure_code IS NULL AND outcome IS NULL AND skip_reason IN
-        ('deleted', 'own_account', 'rules_not_evaluated', 'rule_decided', 'no_enabled_policies',
+        ('deleted', 'own_account', 'rules_not_evaluated', 'rule_decided',
          'quota_exhausted', 'policy_changed'))),
   CONSTRAINT policy_evaluation_outcome_check CHECK (
     (outcome IS NULL AND winning_revision_id IS NULL)

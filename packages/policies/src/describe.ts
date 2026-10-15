@@ -39,7 +39,6 @@ function capText(s: string, max: number): string {
 
 const DECISION_MAX = 2000;
 const PREVIEW_MAX = 500;
-const SAFE_CODE = /^[a-z][a-z_]{0,63}$/;
 
 export function describeDecision(d: PolicyDecision, o: { truncated: boolean }): string {
   if (!d.winner) return 'No policy matched.';
@@ -85,10 +84,9 @@ export function describePreviewResult(
   return capText(`${head}: ${body}.`, PREVIEW_MAX - note.length) + note;
 }
 
-/** `code` is a closed snake_case outcome code; anything else is replaced by a fixed word. */
+/** `code` must already be a closed snake_case outcome code (see `safeOutcomeCode`). */
 export function describeFallback(kind: 'hide' | 'delete', code: string): string {
-  const safe = SAFE_CODE.test(code) ? code : 'refused';
-  return `A policy asked to ${kind} this comment, but the platform did not allow it (${safe}). Flagged for review instead.`;
+  return `A policy asked to ${kind} this comment, but the platform did not allow it (${code}). Flagged for review instead.`;
 }
 
 export const SKIP_TEXT: Record<SkipReason, string> = {
@@ -96,7 +94,6 @@ export const SKIP_TEXT: Record<SkipReason, string> = {
   own_account: "Not checked: the comment is from the brand's own account.",
   rules_not_evaluated: 'Not checked: the rules had not evaluated this comment.',
   rule_decided: 'Not checked: a rule already decided this comment.',
-  no_enabled_policies: 'Not checked: no policy was enabled.',
   quota_exhausted:
     'Not checked: the monthly policy-check limit was reached. The comment was left unchanged.',
   policy_changed:

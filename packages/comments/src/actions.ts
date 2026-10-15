@@ -59,6 +59,26 @@ export type RequestActionResult =
   /** Longer than the platform accepts for this kind of reply; `max` is the limit in code points. */
   | { readonly status: 'refused'; readonly code: 'text_too_long'; readonly max: number };
 
+const SAFE_OUTCOME_CODE = /^[a-z][a-z_]{0,63}$/;
+
+/** `code` when it is a closed snake_case code (what fallback columns accept), otherwise `fallback`. */
+export function safeOutcomeCode(code: string | null | undefined, fallback: string): string {
+  return code && SAFE_OUTCOME_CODE.test(code) ? code : fallback;
+}
+
+/**
+ * For automated actors: null when the requested action went through (or is
+ * pending); otherwise a closed snake_case code saying why it did not, to record
+ * as a fallback.
+ */
+export function actionFallbackCode(r: RequestActionResult): string | null {
+  if (r.status === 'refused') return safeOutcomeCode(r.code, 'refused');
+  const s = r.action.status;
+  if (s === 'failed' || (r.status === 'recorded' && s === 'not_eligible'))
+    return safeOutcomeCode(r.action.outcomeCode, s);
+  return null;
+}
+
 export const REQUEST_KEY = /^[A-Za-z0-9._:-]{1,128}$/;
 export const REPLY_KINDS: ReadonlySet<ActionKind> = new Set(['public_reply', 'private_reply']);
 const REQUEST_KEY_UNIQUE = 'moderation_action_organization_id_request_key_key';

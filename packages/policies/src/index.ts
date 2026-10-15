@@ -7,3 +7,7 @@ export * from './config.js';
 export * from './store.js';
 export * from './evaluations.js';
 export * from './usage.js';
+export * from './jobs/specs.js';
+export * from './jobs/evaluate.js';
+export * from './trigger.js';
+export * from './fallback.js';

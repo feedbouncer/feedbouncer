@@ -24,6 +24,8 @@ export const POLICY_SYSTEM_PROMPT = [
 ].join('\n');
 
 export interface PolicyEvaluator {
+  /** False when the deployment has policy evaluation turned off: `evaluate` always rejects. */
+  readonly enabled: boolean;
   readonly id: string;
   readonly model: string;
   /** Exactly one verdict per given key, or throws ClassifierProviderError. */
@@ -49,6 +51,7 @@ export const policyMessage = (
   });
 
 export class DisabledPolicyEvaluator implements PolicyEvaluator {
+  readonly enabled = false;
   readonly id = 'none';
   readonly model = 'none';
   readonly evaluate: PolicyEvaluator['evaluate'] = () =>
@@ -56,6 +59,7 @@ export class DisabledPolicyEvaluator implements PolicyEvaluator {
 }
 
 export class LlmPolicyEvaluator implements PolicyEvaluator {
+  readonly enabled = true;
   readonly id: string;
   readonly model: string;
   constructor(
