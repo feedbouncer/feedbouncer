@@ -89,7 +89,7 @@ export default async function CommentsPage({
       {comments.length === 0 ? <p>No comments yet.</p> : null}
       <ul>
         {comments.map((c) => (
-          <li key={c.id}>
+          <li key={c.id} id={`comment-${c.id}`}>
             <p>
               <strong>{c.authorName ?? 'Unknown author'}</strong> · {formatUtc(c.postedAt)} ·{' '}
               <span>{c.state}</span>
@@ -138,6 +138,8 @@ export default async function CommentsPage({
         </p>
       ) : null}
       <p>
+        <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Rules</Link> ·{' '}
+        <Link href={`/orgs/${orgId}/brands/${brandId}/domains`}>Own domains</Link> ·{' '}
         <Link href={`/orgs/${orgId}`}>Back to organization</Link>
       </p>
     </main>
