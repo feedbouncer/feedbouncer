@@ -22,8 +22,8 @@ policy is evaluated, and nothing else changes.
    because the delete is carried out.
 
 Comments from the brand's own account and comments deleted on the platform
-are never checked. Backfilled historical comments are not checked unless you
-use [Apply to recent comments](#apply-to-recent-comments).
+are never checked. Backfilled historical comments are never checked, including
+by [Apply to recent comments](#apply-to-recent-comments).
 
 ## Writing a policy
 

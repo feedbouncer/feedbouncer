@@ -343,7 +343,6 @@ export class PgPolicyStore {
     return { id: rows[0]!.id };
   }
 
-  /** The brand's connections that can currently receive jobs. */
   /** Removes a run whose jobs could not be enqueued, so it does not hold the interval. */
   async withdrawRun(s: BrandScope, runId: string): Promise<void> {
     await this.#pool.query(
@@ -352,6 +351,7 @@ export class PgPolicyStore {
     );
   }
 
+  /** The brand's connections that can currently receive jobs. */
   async activeConnections(
     s: BrandScope,
     q: Queryable = this.#pool,

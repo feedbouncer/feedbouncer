@@ -173,6 +173,7 @@ services:
       - ./packages/ai/src:/repo/packages/ai/src:ro
       - ./packages/classifier/src:/repo/packages/classifier/src:ro
       - ./packages/comments/src:/repo/packages/comments/src:ro
+      - ./packages/policies/src:/repo/packages/policies/src:ro
       - ./packages/rules/src:/repo/packages/rules/src:ro
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro
@@ -267,6 +268,7 @@ services:
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
       - ./packages/observability/src:/repo/packages/observability/src:ro
+      - ./packages/policies/src:/repo/packages/policies/src:ro
       - ./packages/rules/src:/repo/packages/rules/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro
