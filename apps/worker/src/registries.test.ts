@@ -1,12 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as comments from '@feedbouncer/comments';
-import { RuleActionFallback, RuleTrigger, ruleEvaluateJob } from '@feedbouncer/rules';
+import {
+  CompositeRuleEvaluatedHook,
+  RuleActionFallback,
+  RuleTrigger,
+  ruleEvaluateJob,
+} from '@feedbouncer/rules';
 import type { FacebookConfig } from '@feedbouncer/connector-facebook';
 import {
   ClassifierActionFallback,
   ClassifierTrigger,
   loadClassifierConfig,
 } from '@feedbouncer/classifier';
+import { PolicyActionFallback, PolicyTrigger, loadPolicyConfig } from '@feedbouncer/policies';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { buildConnectorRegistry, buildJobRegistry, type WorkerJobDeps } from './registries.js';
 
@@ -45,6 +51,7 @@ const fakeDeps = {
   log: createLogger('test', 'error', () => {}),
   ingestObserver: { onIngested: () => {} },
   classifier: loadClassifierConfig({}),
+  policy: loadPolicyConfig({}),
   slotsPool: {},
 } as unknown as WorkerJobDeps;
 
@@ -155,7 +162,7 @@ describe('classifier wiring', () => {
     const jobs = buildJobRegistry(fakeDeps);
     for (const p of ['facebook', 'instagram', 'meta_ads'] as const)
       expect(jobs.supports('comment_classify', p)).toBe(true);
-    expect(jobs.lanes()).toEqual(['classify']);
+    expect(jobs.lanes()).toEqual(['classify', 'policy']);
     expect(jobs.laneOf()('comment_classify')).toBe('classify');
     expect(jobs.laneOf()('rule_evaluate')).toBeNull();
   });
@@ -163,7 +170,7 @@ describe('classifier wiring', () => {
     vi.mocked(ruleEvaluateJob).mockClear();
     buildJobRegistry(fakeDeps);
     expect(vi.mocked(ruleEvaluateJob).mock.calls[0]?.[0].evaluated).toBeInstanceOf(
-      ClassifierTrigger,
+      CompositeRuleEvaluatedHook,
     );
   });
   it('fans action outcomes out to both the rule fallback and the classifier fallback', async () => {
@@ -192,6 +199,47 @@ describe('classifier wiring', () => {
     } finally {
       rule.mockRestore();
       classifier.mockRestore();
+    }
+  });
+});
+
+describe('policy wiring', () => {
+  it('registers policy_evaluate and policy_preview on the policy lane and policy_run on none', () => {
+    const jobs = buildJobRegistry(fakeDeps);
+    for (const p of ['facebook', 'instagram', 'meta_ads'] as const)
+      for (const t of ['policy_evaluate', 'policy_preview', 'policy_run'])
+        expect(jobs.supports(t, p)).toBe(true);
+    expect(jobs.laneOf()('policy_evaluate')).toBe('policy');
+    expect(jobs.laneOf()('policy_preview')).toBe('policy');
+    expect(jobs.laneOf()('policy_run')).toBeNull();
+  });
+  it('triggers both the classifier and the policy check after rule evaluation', async () => {
+    const classifier = vi.spyOn(ClassifierTrigger.prototype, 'onEvaluated').mockResolvedValue();
+    const policy = vi.spyOn(PolicyTrigger.prototype, 'onEvaluated').mockResolvedValue();
+    try {
+      vi.mocked(ruleEvaluateJob).mockClear();
+      buildJobRegistry(fakeDeps);
+      const hook = vi.mocked(ruleEvaluateJob).mock.calls[0]?.[0].evaluated;
+      const event = { status: 'no_match' } as never;
+      await hook?.onEvaluated(event);
+      expect(classifier).toHaveBeenCalledWith(event);
+      expect(policy).toHaveBeenCalledWith(event);
+    } finally {
+      classifier.mockRestore();
+      policy.mockRestore();
+    }
+  });
+  it('reports action outcomes to the policy fallback', async () => {
+    const policy = vi.spyOn(PolicyActionFallback.prototype, 'onActionOutcome').mockResolvedValue();
+    try {
+      vi.mocked(comments.executeActionJob).mockClear();
+      buildJobRegistry(fakeDeps);
+      const outcomes = vi.mocked(comments.executeActionJob).mock.calls[0]?.[0].outcomes;
+      const event = { actorType: 'policy', status: 'failed' } as never;
+      await outcomes?.onActionOutcome(event);
+      expect(policy).toHaveBeenCalledWith(event);
+    } finally {
+      policy.mockRestore();
     }
   });
 });

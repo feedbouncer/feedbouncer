@@ -40,11 +40,26 @@ import { JobRegistry, type JobProducer } from '@feedbouncer/jobs';
 import {
   PgEvaluationStore,
   PgRuleStore,
+  CompositeRuleEvaluatedHook,
   RuleActionFallback,
   RuleSetCache,
   RuleTrigger,
   ruleEvaluateJob,
 } from '@feedbouncer/rules';
+import {
+  PgPolicyEvaluationStore,
+  PgPolicyPreviewStore,
+  PgPolicyStore,
+  PgPolicyUsage,
+  POLICY_PREVIEW_JOB,
+  PolicyActionFallback,
+  PolicyTrigger,
+  createPolicyEvaluator,
+  policyEvaluateJob,
+  policyPreviewJob,
+  policyRunJob,
+  type PolicyConfig,
+} from '@feedbouncer/policies';
 import type { Logger } from '@feedbouncer/service-runtime';
 
 /** What the comment jobs need; built once in main.ts from the connector stack. */
@@ -56,6 +71,7 @@ export interface WorkerJobDeps {
   /** Dedicated pool for per-brand slot sessions, which hold a connection for the whole provider call. */
   readonly slotsPool: ReturnType<typeof createPool>;
   readonly classifier: ClassifierConfig;
+  readonly policy: PolicyConfig;
   readonly clock: Clock;
   readonly log: Logger;
   readonly ingestObserver: IngestObserver;
@@ -105,6 +121,7 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
     clock: deps.clock,
     log: deps.log,
   });
+  const policies = new PgPolicyStore(deps.pool);
   registry.register(
     ruleEvaluateJob({
       comments: deps.store,
@@ -112,7 +129,10 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       cache: new RuleSetCache(new PgRuleStore(deps.pool)),
       actions,
       log: deps.log,
-      evaluated: new ClassifierTrigger(deps.producer),
+      evaluated: new CompositeRuleEvaluatedHook([
+        new ClassifierTrigger(deps.producer),
+        new PolicyTrigger(deps.producer, policies),
+      ]),
     }),
   );
   registry.register(
@@ -132,6 +152,40 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
   registry.register(
     classifierRerunJob({ pool: deps.pool, producer: deps.producer, log: deps.log }),
   );
+  const policyEvaluations = new PgPolicyEvaluationStore(deps.pool);
+  const policyUsage = new PgPolicyUsage(deps.pool, deps.clock);
+  const policySlots = new BrandSlots(deps.slotsPool, deps.policy.perBrandInFlight, 'fb.policy');
+  const policyEvaluator = createPolicyEvaluator(deps.policy);
+  registry.register(
+    policyEvaluateJob({
+      comments: deps.store,
+      ruleEvaluations: evaluations,
+      policies,
+      evaluations: policyEvaluations,
+      usage: policyUsage,
+      evaluator: policyEvaluator,
+      slots: policySlots,
+      actions,
+      monthlyCallsPerBrand: deps.policy.monthlyCallsPerBrand,
+      maxWaitMs: deps.policy.maxWaitMs,
+      log: deps.log,
+      clock: deps.clock,
+    }),
+  );
+  registry.register(
+    policyPreviewJob({
+      comments: deps.store,
+      previews: new PgPolicyPreviewStore(deps.pool, deps.clock),
+      evaluator: policyEvaluator,
+      slots: policySlots,
+      usage: policyUsage,
+      monthlyCallsPerBrand: deps.policy.monthlyCallsPerBrand,
+      next: async (scope, platform, payload) => {
+        await deps.producer.enqueue({ scope, platform, type: POLICY_PREVIEW_JOB.type, payload });
+      },
+    }),
+  );
+  registry.register(policyRunJob({ pool: deps.pool, producer: deps.producer, clock: deps.clock }));
   registry.register(
     executeActionJob({
       pool: deps.pool,
@@ -142,6 +196,7 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       outcomes: new CompositeActionOutcomeObserver([
         new RuleActionFallback({ evaluations, log: deps.log }),
         new ClassifierActionFallback({ classifications, log: deps.log }),
+        new PolicyActionFallback({ evaluations: policyEvaluations, log: deps.log }),
       ]),
     }),
   );
