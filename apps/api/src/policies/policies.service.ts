@@ -164,12 +164,9 @@ export class PoliciesService {
     const patch = parsePolicy(policyPatchSchema, body);
     try {
       const updated = await this.#write(org, 'rule.write', async (c) => {
-        const before = await this.#store.get(scope, policyId, c);
-        const r =
-          before &&
-          (await this.#store.update(c, scope, policyId, definedOnly(patch), org.actorUserId));
-        if (!before || !r) throw notFound();
-        const { policy, revised, enabledChanged } = r;
+        const r = await this.#store.update(c, scope, policyId, definedOnly(patch), org.actorUserId);
+        if (!r) throw notFound();
+        const { policy, revised, renamed, enabledChanged } = r;
         const subject = { subjectType: 'custom_policy', subjectId: policyId } as const;
         if (revised)
           await this.#audit(c, org, scope, {
@@ -181,8 +178,7 @@ export class PoliciesService {
               vague: policy.vague,
             },
           });
-        if (patch.name !== undefined && patch.name !== before.name)
-          await this.#audit(c, org, scope, { ...subject, action: 'policy.renamed' });
+        if (renamed) await this.#audit(c, org, scope, { ...subject, action: 'policy.renamed' });
         if (enabledChanged)
           await this.#audit(c, org, scope, {
             ...subject,

@@ -18,7 +18,8 @@ import {
   type PgCommentStore,
 } from '@feedbouncer/comments';
 import { bodySha256, type BrandScope, type PgEvaluationStore } from '@feedbouncer/rules';
-import { mapProviderError, prepareInput, type BrandSlots } from '@feedbouncer/classifier';
+import { mapProviderError, prepareInput } from '@feedbouncer/ai';
+import type { BrandSlots } from '@feedbouncer/db';
 import type { Logger } from '@feedbouncer/service-runtime';
 import { decidePolicies } from '../decide.js';
 import { describeDecision, describeFallback } from '../describe.js';

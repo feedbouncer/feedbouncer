@@ -1,5 +1,5 @@
 import type { RuleAction } from '@feedbouncer/rules';
-import { MAX_INPUT_CHARS } from './prepare.js';
+import { MAX_INPUT_CHARS } from '@feedbouncer/ai';
 import type { Category, ClassifierVerdict, Trigger } from './types.js';
 
 export const CATEGORY_TEXT: Readonly<Record<Category, string>> = {

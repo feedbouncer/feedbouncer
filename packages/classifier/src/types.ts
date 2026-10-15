@@ -12,13 +12,6 @@ export const CATEGORIES = [
 export type Category = (typeof CATEGORIES)[number];
 export type CategoryScores = Readonly<Record<Category, number>>;
 
-/** remove > hide > flag > approve */
-export const ACTION_SEVERITY: Readonly<Record<RuleAction, number>> = {
-  approve: 0,
-  flag: 1,
-  hide: 2,
-  remove: 3,
-};
 /** Tie-break when two triggers have the same action and margin: earlier wins. */
 export const CATEGORY_PRIORITY: readonly Category[] = [
   'hate_speech',
@@ -74,15 +67,3 @@ export const CLASSIFICATION_SKIP_REASONS = [
   'rules_not_evaluated',
 ] as const;
 export type ClassificationSkipReason = (typeof CLASSIFICATION_SKIP_REASONS)[number];
-
-export interface PreparedInput {
-  /** What is sent to the model (possibly truncated). */
-  readonly text: string;
-  /** No visible characters at all: not sent to the model. */
-  readonly empty: boolean;
-  /** Emoji-only or fewer than 3 letters/digits: results never trigger hide/remove. */
-  readonly lowSignal: boolean;
-  readonly truncated: boolean;
-  /** Original length in UTF-16 code units. */
-  readonly inputChars: number;
-}

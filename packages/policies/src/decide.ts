@@ -1,4 +1,4 @@
-import { ACTION_SEVERITY } from '@feedbouncer/classifier';
+import { ACTION_SEVERITY } from '@feedbouncer/rules';
 import type {
   ActivePolicy,
   Downgrade,

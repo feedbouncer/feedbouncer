@@ -1,5 +1,5 @@
 // The comments policy evaluation would consider outside the live path: rules
-// evaluated the current body of a live, visible, third-party comment and decided
+// evaluated the current body of a live, visible, third-party comment on an active connection and decided
 // nothing. Previews and runs share this one query.
 import type pg from 'pg';
 import type { JobContext } from '@feedbouncer/jobs';
@@ -39,6 +39,7 @@ export async function recentUndecidedComments(
       WHERE c.organization_id = $1 AND c.brand_id = $2
         AND ($5::uuid IS NULL OR c.connection_id = $5)
         AND c.ingest_origin = 'live' AND c.platform_state <> 'deleted'
+        AND cn.status = 'active'
         AND NOT c.is_own_account AND c.posted_at >= $3
       ORDER BY c.posted_at DESC, c.id
       LIMIT $4`,

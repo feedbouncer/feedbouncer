@@ -25,9 +25,9 @@ export function DecisionHistory(props: { orgId: string; brandId: string; comment
       const [res, cls, pol] = await Promise.all([
         apiFetch<{ decisions: DecisionView[] }>(`${base}/decisions`),
         apiFetch<{ classification: ClassificationView | null }>(`${base}/classification`),
-        apiFetch<EvaluationView | null>(`${base}/policy-evaluation`),
+        apiFetch<{ evaluation: EvaluationView | null }>(`${base}/policy-evaluation`),
       ]);
-      setEvaluation(pol);
+      setEvaluation(pol.evaluation);
       setClassification(cls.classification);
       setDecisions(res.decisions);
     } catch (err) {

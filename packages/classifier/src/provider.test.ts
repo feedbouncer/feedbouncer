@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ClassifierProviderError, DisabledProvider, rawClassificationSchema } from './provider.js';
+import { ProviderError } from '@feedbouncer/ai';
+import { DisabledProvider, rawClassificationSchema } from './provider.js';
 
 const scores = {
   spam: 0.1,
@@ -44,8 +45,6 @@ describe('DisabledProvider', () => {
     ).rejects.toMatchObject({ code: 'disabled', retryable: false });
   });
   it('error message never carries foreign text', () => {
-    expect(new ClassifierProviderError('auth', false).message).toBe(
-      'classifier provider error: auth',
-    );
+    expect(new ProviderError('auth', false).message).toBe('provider error: auth');
   });
 });

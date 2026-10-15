@@ -2,6 +2,13 @@ import type { Platform } from '@feedbouncer/connectors';
 
 export const RULE_ACTIONS = ['approve', 'flag', 'hide', 'remove'] as const;
 export type RuleAction = (typeof RULE_ACTIONS)[number];
+/** remove > hide > flag > approve */
+export const ACTION_SEVERITY: Readonly<Record<RuleAction, number>> = {
+  approve: 0,
+  flag: 1,
+  hide: 2,
+  remove: 3,
+};
 export const RULE_MODES = ['enforce', 'suggest'] as const;
 export type RuleMode = (typeof RULE_MODES)[number];
 export const RULE_KINDS = [

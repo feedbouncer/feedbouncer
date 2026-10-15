@@ -3,7 +3,8 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type pg from 'pg';
-import { createPool } from '@feedbouncer/db';
+import { ProviderError, type PreparedInput } from '@feedbouncer/ai';
+import { BrandSlots, createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { PgCommentStore } from '@feedbouncer/comments';
 import { JobDeferral, type JobContext } from '@feedbouncer/jobs';
@@ -17,16 +18,10 @@ import {
   type Seeded,
 } from '../testing.js';
 import { ZERO_SCORES } from '../defaults.js';
-import {
-  ClassifierProviderError,
-  DisabledProvider,
-  type ClassifierProvider,
-  type RawClassification,
-} from '../provider.js';
-import { BrandSlots } from '../slots.js';
+import { DisabledProvider, type ClassifierProvider, type RawClassification } from '../provider.js';
 import { PgClassificationStore } from '../store.js';
 import { PgThresholdStore } from '../thresholds-store.js';
-import type { CategoryScores, PreparedInput, Trigger } from '../types.js';
+import type { CategoryScores, Trigger } from '../types.js';
 import { classifyCommentJob, type ClassifyDeps } from './classify.js';
 import { CLASSIFY_JOB, type ClassifyPayload } from './specs.js';
 
@@ -38,11 +33,11 @@ class FakeProvider implements ClassifierProvider {
   readonly model = 'fake-1';
   calls = 0;
   inputs: PreparedInput[] = [];
-  constructor(private readonly script: Array<RawClassification | ClassifierProviderError>) {}
+  constructor(private readonly script: Array<RawClassification | ProviderError>) {}
   async classify(input: PreparedInput): Promise<RawClassification> {
     this.inputs.push(input);
     const next = this.script[Math.min(this.calls++, this.script.length - 1)]!;
-    if (next instanceof ClassifierProviderError) throw next;
+    if (next instanceof ProviderError) throw next;
     return next;
   }
 }
@@ -223,7 +218,7 @@ describe('comment_classify', () => {
   it('provider failures retry with backoff, then mark unclassified with no action', async () => {
     const c = await seedComment('slow provider');
     await evaluateRules(c, 'no_match');
-    const p = new FakeProvider([new ClassifierProviderError('timeout', true)]);
+    const p = new FakeProvider([new ProviderError('timeout', true)]);
     await expect(job(p).handle(ctx(c, 1), payload(c))).rejects.toMatchObject({
       kind: 'retryable',
       code: 'classifier_timeout',
@@ -273,7 +268,7 @@ describe('comment_classify', () => {
     });
     const d = await seedComment('bad key');
     await evaluateRules(d, 'no_match');
-    const p = new FakeProvider([new ClassifierProviderError('auth', false)]);
+    const p = new FakeProvider([new ProviderError('auth', false)]);
     expect(await job(p).handle(ctx(d, 1), payload(d))).toMatchObject({ result: 'unclassified' });
     expect(p.calls).toBe(1);
     expect(
@@ -288,7 +283,7 @@ describe('comment_classify', () => {
   it('invalid model output after retries is unclassified invalid_output and never clamped', async () => {
     const c = await seedComment('weird output');
     await evaluateRules(c, 'no_match');
-    const p = new FakeProvider([new ClassifierProviderError('invalid_output', true)]);
+    const p = new FakeProvider([new ProviderError('invalid_output', true)]);
     await expect(job(p).handle(ctx(c, 1), payload(c))).rejects.toMatchObject({ kind: 'retryable' });
     await expect(job(p).handle(ctx(c, 2), payload(c))).rejects.toMatchObject({ kind: 'retryable' });
     expect(await job(p).handle(ctx(c, 3), payload(c))).toMatchObject({ result: 'unclassified' });
@@ -765,7 +760,7 @@ describe('comment_classify', () => {
   it('releases the brand slot after a provider failure', async () => {
     const c = await seedComment('fails then frees');
     await evaluateRules(c, 'no_match');
-    const p = new FakeProvider([new ClassifierProviderError('timeout', true)]);
+    const p = new FakeProvider([new ProviderError('timeout', true)]);
     await expect(job(p).handle(ctx(c, 1), payload(c))).rejects.toMatchObject({ kind: 'retryable' });
     await job(p).handle(ctx(c, 3), payload(c));
     const a = await slots.acquire(c.t.brandId);

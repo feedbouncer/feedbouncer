@@ -1,10 +1,6 @@
 import { generateText, Output, type LanguageModel } from 'ai';
 import { z } from 'zod';
-import {
-  ClassifierProviderError,
-  mapProviderError,
-  type PreparedInput,
-} from '@feedbouncer/classifier';
+import { ProviderError, mapProviderError, type PreparedInput } from '@feedbouncer/ai';
 import { MAX_ENABLED_POLICIES_PER_BRAND, POLICY_VERDICTS, type PolicyVerdict } from './types.js';
 
 /** Bump when the prompt or output schema changes. */
@@ -28,7 +24,7 @@ export interface PolicyEvaluator {
   readonly enabled: boolean;
   readonly id: string;
   readonly model: string;
-  /** Exactly one verdict per given key, or throws ClassifierProviderError. */
+  /** Exactly one verdict per given key, or throws ProviderError. */
   evaluate(
     input: PreparedInput,
     policies: readonly { key: string; text: string }[],
@@ -55,7 +51,7 @@ export class DisabledPolicyEvaluator implements PolicyEvaluator {
   readonly id = 'none';
   readonly model = 'none';
   readonly evaluate: PolicyEvaluator['evaluate'] = () =>
-    Promise.reject(new ClassifierProviderError('disabled', false));
+    Promise.reject(new ProviderError('disabled', false));
 }
 
 export class LlmPolicyEvaluator implements PolicyEvaluator {
@@ -107,7 +103,7 @@ export class LlmPolicyEvaluator implements PolicyEvaluator {
       throw mapProviderError(e);
     }
     const parsed = schema.safeParse(output);
-    if (!parsed.success) throw new ClassifierProviderError('invalid_output', true);
+    if (!parsed.success) throw new ProviderError('invalid_output', true);
     return parsed.data.results as Readonly<Record<string, PolicyVerdict>>;
   }
 }

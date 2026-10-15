@@ -4,20 +4,18 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type pg from 'pg';
-import { createPool, withTransaction } from '@feedbouncer/db';
+import { ProviderError, type PreparedInput } from '@feedbouncer/ai';
+import { BrandSlots, createPool, withTransaction } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { PgCommentStore, type RequestActionResult } from '@feedbouncer/comments';
 import { JobDeferral, type JobContext } from '@feedbouncer/jobs';
 import { PgEvaluationStore, bodySha256, type RuleAction } from '@feedbouncer/rules';
 import { createLogger } from '@feedbouncer/service-runtime';
 import {
-  BrandSlots,
-  ClassifierProviderError,
   PgClassificationStore,
   PgThresholdStore,
   ZERO_SCORES,
   classifyCommentJob,
-  type PreparedInput,
 } from '@feedbouncer/classifier';
 import {
   editCommentRow,
@@ -465,7 +463,7 @@ describe('policy_evaluate', () => {
 
   it('classifier failure: retryable errors retry through the job; nothing is recorded or actioned until the last attempt', async () => {
     const { t } = await brand();
-    evaluator.evaluate.mockRejectedValue(new ClassifierProviderError('unavailable', true));
+    evaluator.evaluate.mockRejectedValue(new ProviderError('unavailable', true));
     const c = await seed(t, { ruleStatus: 'no_match' });
     for (const attempt of [1, 2, 3, 4]) {
       await expect(job.handle(ctx(c, attempt), payload(c))).rejects.toMatchObject({
@@ -488,7 +486,7 @@ describe('policy_evaluate', () => {
 
   it('a non-retryable error (auth) records failed immediately', async () => {
     const { t } = await brand();
-    evaluator.evaluate.mockRejectedValue(new ClassifierProviderError('auth', false));
+    evaluator.evaluate.mockRejectedValue(new ProviderError('auth', false));
     const c = await seed(t, { ruleStatus: 'no_match' });
     await expect(job.handle(ctx(c, 1), payload(c))).resolves.toMatchObject({ result: 'failed' });
     expect(evaluator.evaluate).toHaveBeenCalledTimes(1);
@@ -508,7 +506,7 @@ describe('policy_evaluate', () => {
 
   it('unusable evaluator output is retried, then recorded as failed and never acted on', async () => {
     const { t } = await brand([{ action: 'hide' }, { action: 'remove' }]);
-    evaluator.evaluate.mockRejectedValue(new ClassifierProviderError('invalid_output', true));
+    evaluator.evaluate.mockRejectedValue(new ProviderError('invalid_output', true));
     const c = await seed(t, { ruleStatus: 'no_match' });
     await expect(job.handle(ctx(c, 1), payload(c))).rejects.toMatchObject({
       kind: 'retryable',
@@ -526,7 +524,7 @@ describe('policy_evaluate', () => {
   it('recovers when the provider comes back before the last attempt', async () => {
     const { t } = await brand();
     evaluator.evaluate
-      .mockRejectedValueOnce(new ClassifierProviderError('timeout', true))
+      .mockRejectedValueOnce(new ProviderError('timeout', true))
       .mockResolvedValue({ p1: 'clear_match' });
     const c = await seed(t, { ruleStatus: 'no_match' });
     await expect(job.handle(ctx(c, 1), payload(c))).rejects.toBeTruthy();

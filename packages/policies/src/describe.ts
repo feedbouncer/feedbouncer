@@ -1,4 +1,4 @@
-import { MAX_INPUT_CHARS } from '@feedbouncer/classifier';
+import { MAX_INPUT_CHARS } from '@feedbouncer/ai';
 import type {
   Downgrade,
   PolicyAction,

@@ -181,11 +181,11 @@ export class CommentsService {
     org: OrgContext,
     brandId: unknown,
     commentId: string,
-  ): Promise<EvaluationView | null> {
+  ): Promise<{ evaluation: EvaluationView | null }> {
     const { store } = this.#configured();
     const scope = await requireBrand(this.deps.pool, org, brandId);
     if (!(await store.load(scope, commentId))) throw notFound();
-    return this.#policyEvaluations.latestForComment(scope, commentId);
+    return { evaluation: await this.#policyEvaluations.latestForComment(scope, commentId) };
   }
 
   async actions(

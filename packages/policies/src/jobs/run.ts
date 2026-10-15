@@ -5,11 +5,13 @@
 import type pg from 'pg';
 import type { JobDefinition, JobProducer } from '@feedbouncer/jobs';
 import { recentUndecidedComments } from '../candidates.js';
+import type { PgPolicyStore } from '../store.js';
 import { RUN_MAX_COMMENTS_PER_CONNECTION } from '../types.js';
 import { POLICY_EVALUATE_JOB, POLICY_RUN_JOB, type PolicyRunPayload } from './specs.js';
 
 export interface RunDeps {
   pool: pg.Pool;
+  policies: Pick<PgPolicyStore, 'loadRun'>;
   producer: Pick<JobProducer, 'enqueue'>;
   clock?: { now(): number };
   maxComments?: number;
@@ -20,11 +22,7 @@ export function policyRunJob(d: RunDeps): JobDefinition<PolicyRunPayload> {
     ...POLICY_RUN_JOB,
     handle: async (ctx, p) => {
       const brand = { organizationId: ctx.scope.organizationId, brandId: ctx.scope.brandId };
-      const { rows } = await d.pool.query<{ since: Date }>(
-        `SELECT since FROM policy_run WHERE organization_id = $1 AND brand_id = $2 AND id = $3`,
-        [brand.organizationId, brand.brandId, p.runId],
-      );
-      const run = rows[0];
+      const run = await d.policies.loadRun(brand, p.runId);
       if (!run) return { result: 'gone' };
       const found = await recentUndecidedComments(d.pool, brand, {
         since: run.since,

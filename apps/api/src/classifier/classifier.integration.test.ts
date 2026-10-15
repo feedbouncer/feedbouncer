@@ -3,12 +3,12 @@
 // recorded through the real store; the worker's jobs are not run.
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { prepareInput } from '@feedbouncer/ai';
 import {
   DEFAULT_THRESHOLDS,
   PgClassificationStore,
   ZERO_SCORES,
   decide,
-  prepareInput,
   type Category,
 } from '@feedbouncer/classifier';
 import { Secret } from '@feedbouncer/service-runtime';

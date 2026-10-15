@@ -39,7 +39,7 @@ export const SKIP_REASONS = [
   'policy_changed',
 ] as const;
 export type SkipReason = (typeof SKIP_REASONS)[number];
-/** ProviderErrorCode from @feedbouncer/classifier plus queue_timeout. */
+/** ProviderErrorCode from @feedbouncer/ai plus queue_timeout. */
 export const FAILURE_CODES = [
   'timeout',
   'rate_limited',

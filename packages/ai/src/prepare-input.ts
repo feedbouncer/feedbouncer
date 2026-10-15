@@ -1,4 +1,14 @@
-import type { PreparedInput } from './types.js';
+export interface PreparedInput {
+  /** What is sent to the model (possibly truncated). */
+  readonly text: string;
+  /** No visible characters at all: not sent to the model. */
+  readonly empty: boolean;
+  /** Emoji-only or fewer than 3 letters/digits: results never trigger hide/remove. */
+  readonly lowSignal: boolean;
+  readonly truncated: boolean;
+  /** Original length in UTF-16 code units. */
+  readonly inputChars: number;
+}
 
 export const MAX_INPUT_CHARS = 4_000;
 const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' });

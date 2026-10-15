@@ -1,5 +1,4 @@
 import {
-  BrandSlots,
   ClassifierActionFallback,
   ClassifierTrigger,
   PgClassificationStore,
@@ -35,7 +34,7 @@ import {
   type ConnectorRuntime,
   type Platform,
 } from '@feedbouncer/connectors';
-import type { createPool } from '@feedbouncer/db';
+import { BrandSlots, type createPool } from '@feedbouncer/db';
 import { JobRegistry, type JobProducer } from '@feedbouncer/jobs';
 import {
   PgEvaluationStore,
@@ -185,7 +184,9 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       },
     }),
   );
-  registry.register(policyRunJob({ pool: deps.pool, producer: deps.producer, clock: deps.clock }));
+  registry.register(
+    policyRunJob({ pool: deps.pool, policies, producer: deps.producer, clock: deps.clock }),
+  );
   registry.register(
     executeActionJob({
       pool: deps.pool,

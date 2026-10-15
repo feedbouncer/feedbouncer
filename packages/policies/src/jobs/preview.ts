@@ -5,7 +5,8 @@
 import { JobDeferral, JobError, type JobContext, type JobDefinition } from '@feedbouncer/jobs';
 import type { PgCommentStore } from '@feedbouncer/comments';
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import { mapProviderError, prepareInput, type BrandSlots } from '@feedbouncer/classifier';
+import { mapProviderError, prepareInput } from '@feedbouncer/ai';
+import type { BrandSlots } from '@feedbouncer/db';
 import { effectiveAction } from '../decide.js';
 import { describePreviewResult } from '../describe.js';
 import type { PolicyEvaluator } from '../evaluator.js';

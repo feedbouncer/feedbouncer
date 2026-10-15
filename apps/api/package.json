@@ -16,6 +16,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
+    "@feedbouncer/ai": "workspace:*",
     "@feedbouncer/authz": "workspace:*",
     "@feedbouncer/classifier": "workspace:*",
     "@feedbouncer/comments": "workspace:*",

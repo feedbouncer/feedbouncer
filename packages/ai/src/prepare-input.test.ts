@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_INPUT_CHARS, prepareInput } from './prepare.js';
+import { MAX_INPUT_CHARS, prepareInput } from './prepare-input.js';
 
 describe('prepareInput', () => {
   it('empty and whitespace / invisible-only text is empty and low-signal', () => {

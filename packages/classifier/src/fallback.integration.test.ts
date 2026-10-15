@@ -7,7 +7,7 @@ import { createLogger } from '@feedbouncer/service-runtime';
 import { DEFAULT_THRESHOLDS, ZERO_SCORES } from './defaults.js';
 import { ClassifierActionFallback } from './fallback.js';
 import { decide } from './policy.js';
-import { prepareInput } from './prepare.js';
+import { prepareInput } from '@feedbouncer/ai';
 import { PgClassificationStore } from './store.js';
 import type { CategoryScores, ThresholdPolicy } from './types.js';
 

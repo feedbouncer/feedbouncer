@@ -1,4 +1,5 @@
 import type pg from 'pg';
+import type { PreparedInput } from '@feedbouncer/ai';
 import { withTransaction } from '@feedbouncer/db';
 import type { BrandScope, RuleAction } from '@feedbouncer/rules';
 import type { ConnectionScope } from '@feedbouncer/secrets';
@@ -11,7 +12,6 @@ import {
   type ClassificationStatus,
   type ClassifierVerdict,
   type Downgrade,
-  type PreparedInput,
   type ThresholdPolicy,
   type Trigger,
   type UnclassifiedReason,

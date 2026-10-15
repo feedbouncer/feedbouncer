@@ -1,25 +1,6 @@
 import { z } from 'zod';
-import type { CategoryScores, PreparedInput } from './types.js';
-
-export type ProviderErrorCode =
-  | 'timeout'
-  | 'rate_limited'
-  | 'unavailable'
-  | 'auth'
-  | 'invalid_output'
-  | 'bad_request'
-  | 'disabled';
-
-/** Closed codes only; a foreign error's message is never copied (it can echo request data). */
-export class ClassifierProviderError extends Error {
-  override name = 'ClassifierProviderError';
-  constructor(
-    readonly code: ProviderErrorCode,
-    readonly retryable: boolean,
-  ) {
-    super(`classifier provider error: ${code}`);
-  }
-}
+import { ProviderError, type PreparedInput } from '@feedbouncer/ai';
+import type { CategoryScores } from './types.js';
 
 const score = z.number().min(0).max(1).refine(Number.isFinite);
 export const rawClassificationSchema = z.strictObject({
@@ -55,6 +36,6 @@ export class DisabledProvider implements ClassifierProvider {
   readonly id = 'none';
   readonly model = 'none';
   readonly classify: ClassifierProvider['classify'] = async () => {
-    throw new ClassifierProviderError('disabled', false);
+    throw new ProviderError('disabled', false);
   };
 }

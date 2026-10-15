@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { createPool } from '@feedbouncer/db';
 import { migratedDb, uuid } from '@feedbouncer/db/testing';
-import { BrandSlots } from './slots.js';
+import { BrandSlots } from './brand-slots.js';
 
 let ctx: Awaited<ReturnType<typeof migratedDb>>;
 let pool: pg.Pool;

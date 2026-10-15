@@ -219,10 +219,15 @@ export class PgPolicyStore {
     policyId: string,
     patch: PolicyUpdate,
     userId: string | null,
-  ): Promise<{ policy: StoredPolicy; revised: boolean; enabledChanged: boolean } | null> {
+  ): Promise<{
+    policy: StoredPolicy;
+    revised: boolean;
+    renamed: boolean;
+    enabledChanged: boolean;
+  } | null> {
     if (!(await this.#lockBrand(c, s))) return null;
-    const { rows: locked } = await c.query<{ enabled: boolean }>(
-      `SELECT enabled FROM custom_policy
+    const { rows: locked } = await c.query<{ enabled: boolean; name: string }>(
+      `SELECT enabled, name FROM custom_policy
         WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND archived_at IS NULL
           FOR UPDATE`,
       [s.organizationId, s.brandId, policyId],
@@ -230,6 +235,7 @@ export class PgPolicyStore {
     const row = locked[0];
     if (!row) return null;
     const enabledChanged = patch.enabled !== undefined && patch.enabled !== row.enabled;
+    const renamed = patch.name !== undefined && patch.name !== row.name;
     if (patch.enabled === true && enabledChanged) {
       const { rows: counted } = await c.query<{ n: number }>(
         `SELECT count(*)::int AS n FROM custom_policy
@@ -255,7 +261,7 @@ export class PgPolicyStore {
         )
         .catch(mapNameTaken);
     }
-    return { policy: (await this.get(s, policyId, c))!, revised, enabledChanged };
+    return { policy: (await this.get(s, policyId, c))!, revised, renamed, enabledChanged };
   }
 
   /** Delete is archive: the policy is disabled and hidden; revisions and decisions stay. */
@@ -341,6 +347,15 @@ export class PgPolicyStore {
       [s.organizationId, s.brandId, r.policyId, r.revisionId, r.days, r.userId],
     );
     return { id: rows[0]!.id };
+  }
+
+  /** The cutoff of a run, or null when it was withdrawn. */
+  async loadRun(s: BrandScope, runId: string): Promise<{ since: Date } | null> {
+    const { rows } = await this.#pool.query<{ since: Date }>(
+      `SELECT since FROM policy_run WHERE organization_id = $1 AND brand_id = $2 AND id = $3`,
+      [s.organizationId, s.brandId, runId],
+    );
+    return rows[0] ?? null;
   }
 
   /** Removes a run whose jobs could not be enqueued, so it does not hold the interval. */

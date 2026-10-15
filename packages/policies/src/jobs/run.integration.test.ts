@@ -15,6 +15,7 @@ import {
 } from '@feedbouncer/classifier/testing';
 import { PgPolicyStore, type StoredPolicy } from '../store.js';
 import { RUN_MAX_COMMENTS_PER_CONNECTION } from '../types.js';
+import { recentUndecidedComments } from '../candidates.js';
 import { policyRunJob } from './run.js';
 import { POLICY_RUN_JOB } from './specs.js';
 
@@ -45,6 +46,7 @@ const brandOf = (t: Tenant) => ({ organizationId: t.organizationId, brandId: t.b
 const makeJob = (maxComments = RUN_MAX_COMMENTS_PER_CONNECTION) =>
   policyRunJob({
     pool,
+    policies: new PgPolicyStore(pool),
     producer: { enqueue },
     clock: { now: () => 1_700_000_000_000 },
     maxComments,
@@ -165,6 +167,23 @@ describe('policy_run', () => {
       await makeJob().handle(ctxFor(mine.t), { runId: '00000000-0000-4000-8000-000000000000' }),
     ).toEqual({ result: 'gone' });
     expect(enqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe('recentUndecidedComments', () => {
+  it('skips comments of connections that are not active', async () => {
+    const { t } = await tenantWithPolicy();
+    const b = await secondConnection(t);
+    const live = await candidate(t);
+    await candidate(b);
+    await db.c.query(`UPDATE connection SET status = 'revoked' WHERE id = $1`, [b.connectionId]);
+
+    const found = await recentUndecidedComments(pool, brandOf(t), {
+      since: new Date(Date.now() - 7 * 86_400_000),
+      limit: 10,
+    });
+
+    expect(found.map((c) => c.commentId)).toEqual([live.id]);
   });
 });
 

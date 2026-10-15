@@ -17,6 +17,8 @@ import {
   type ModerationActions,
   type PgCommentStore,
 } from '@feedbouncer/comments';
+import { mapProviderError, prepareInput } from '@feedbouncer/ai';
+import type { BrandSlots } from '@feedbouncer/db';
 import { bodySha256, type BrandScope, type PgEvaluationStore } from '@feedbouncer/rules';
 import type { Logger } from '@feedbouncer/service-runtime';
 import { ZERO_SCORES } from '../defaults.js';
@@ -26,12 +28,10 @@ import {
   describeReversal,
   MODERATOR_ACTED_NOTE,
 } from '../describe.js';
-import { mapProviderError, PROMPT_VERSION } from '../llm-provider.js';
+import { PROMPT_VERSION } from '../llm-provider.js';
 import { decide, roundScores } from '../policy.js';
 import type { Trigger } from '../types.js';
-import { prepareInput } from '../prepare.js';
 import type { ClassifierProvider, RawClassification } from '../provider.js';
-import type { BrandSlots } from '../slots.js';
 import type { ClassificationRecord, ClassificationRow, PgClassificationStore } from '../store.js';
 import type { PgThresholdStore } from '../thresholds-store.js';
 import {

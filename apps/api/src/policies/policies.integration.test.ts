@@ -4,7 +4,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PgCommentStore } from '@feedbouncer/comments';
-import { BrandSlots } from '@feedbouncer/classifier';
+import { BrandSlots } from '@feedbouncer/db';
 import type { JobContext } from '@feedbouncer/jobs';
 import {
   PgPolicyEvaluationStore,
@@ -623,7 +623,7 @@ describe('decision log and evaluation', () => {
 
     const ev = await get(o(), `/comments/${c.commentId}/policy-evaluation`);
     expect(ev.status).toBe(200);
-    expect(ev.body).toMatchObject({
+    expect(ev.body.evaluation).toMatchObject({
       id: row!.id,
       status: 'evaluated',
       outcome: 'hide',
@@ -650,12 +650,16 @@ describe('decision log and evaluation', () => {
     );
     const r = await get(o(), `/comments/${failed.commentId}/policy-evaluation`);
     expect(r.status).toBe(200);
-    expect(r.body).toMatchObject({ status: 'failed', failureCode: 'unavailable', matches: [] });
+    expect(r.body.evaluation).toMatchObject({
+      status: 'failed',
+      failureCode: 'unavailable',
+      matches: [],
+    });
 
     const unchecked = await candidate(o());
     const none = await get(o(), `/comments/${unchecked.commentId}/policy-evaluation`);
     expect(none.status).toBe(200);
-    expect(none.body ?? null).toBeNull();
+    expect(none.body).toEqual({ evaluation: null });
   });
 
   it('no policy text reaches the audit trail or the log lines', async () => {

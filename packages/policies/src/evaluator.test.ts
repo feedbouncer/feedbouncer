@@ -1,6 +1,6 @@
 import { MockLanguageModelV4 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
-import { ClassifierProviderError, prepareInput } from '@feedbouncer/classifier';
+import { ProviderError, prepareInput } from '@feedbouncer/ai';
 import {
   DisabledPolicyEvaluator,
   LlmPolicyEvaluator,
@@ -125,7 +125,7 @@ describe('DisabledPolicyEvaluator', () => {
   it('fails with a non-retryable disabled error', async () => {
     await expect(
       new DisabledPolicyEvaluator().evaluate(prepareInput('x'), policies, signal),
-    ).rejects.toEqual(new ClassifierProviderError('disabled', false));
+    ).rejects.toEqual(new ProviderError('disabled', false));
   });
 });
 

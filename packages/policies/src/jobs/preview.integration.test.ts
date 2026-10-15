@@ -3,12 +3,12 @@
 // act on a comment, and these tests check that nothing else is written either.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type pg from 'pg';
-import { createPool, withTransaction } from '@feedbouncer/db';
+import { ProviderError } from '@feedbouncer/ai';
+import { BrandSlots, createPool, withTransaction } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { PgCommentStore } from '@feedbouncer/comments';
 import { PgEvaluationStore } from '@feedbouncer/rules';
 import { createLogger } from '@feedbouncer/service-runtime';
-import { BrandSlots, ClassifierProviderError } from '@feedbouncer/classifier';
 import {
   evaluateRulesFor,
   fakeJobContext,
@@ -236,7 +236,7 @@ describe('policy_preview (dry run)', () => {
     evaluator.evaluate
       .mockResolvedValueOnce({ p1: 'no_match' })
       .mockResolvedValueOnce({ p1: 'no_match' })
-      .mockRejectedValueOnce(new ClassifierProviderError('unavailable', true));
+      .mockRejectedValueOnce(new ProviderError('unavailable', true));
     const pv = await create(t);
     const job = makeJob();
 
@@ -255,7 +255,7 @@ describe('policy_preview (dry run)', () => {
     const t = await seedTenant(db.c, `pv${++n}`);
     for (let i = 0; i < 2; i++) await candidate(t);
     evaluator.evaluate
-      .mockRejectedValueOnce(new ClassifierProviderError('unavailable', true))
+      .mockRejectedValueOnce(new ProviderError('unavailable', true))
       .mockResolvedValueOnce({ p1: 'clear_match' });
     const pv = await create(t);
     await makeJob().handle(ctxFor(t, t.connectionId, 5), { previewId: pv.id, chunk: 0 });
@@ -269,7 +269,7 @@ describe('policy_preview (dry run)', () => {
   it('a non-retryable provider error is recorded on the comment straight away', async () => {
     const t = await seedTenant(db.c, `pv${++n}`);
     await candidate(t);
-    evaluator.evaluate.mockRejectedValue(new ClassifierProviderError('bad_request', false));
+    evaluator.evaluate.mockRejectedValue(new ProviderError('bad_request', false));
     const pv = await create(t);
     await makeJob().handle(ctxFor(t, t.connectionId, 1), { previewId: pv.id, chunk: 0 });
     expect(await previews.view(brandOf(t), pv.id)).toMatchObject({ status: 'done', errors: 1 });

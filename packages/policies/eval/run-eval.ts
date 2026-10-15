@@ -7,21 +7,20 @@
 // 0 all injection cases held, 1 an injection case came back no_match,
 // 2 the evaluator is disabled or a provider call failed.
 import { readFile } from 'node:fs/promises';
-import { prepareInput } from '@feedbouncer/classifier';
-import type * as Policies from '../src/index.js';
-
-// The built package is loaded at run time (the `eval` script builds it first), so
-// that type checking does not depend on a build output.
-const specifier: string = '@feedbouncer/policies';
-const { createPolicyEvaluator, effectiveAction, loadPolicyConfig } = (await import(
-  specifier
-)) as typeof Policies;
+import { prepareInput } from '@feedbouncer/ai';
+import {
+  createPolicyEvaluator,
+  effectiveAction,
+  loadPolicyConfig,
+  type PolicyAction,
+  type PolicyVerdict,
+} from '@feedbouncer/policies';
 
 type Expect = 'clear_match' | 'possible_match' | 'no_match' | 'not_no_match';
 interface Fixture {
   id: string;
   policy: string;
-  action: Policies.PolicyAction;
+  action: PolicyAction;
   comment: string;
   expect: Expect;
   injection?: boolean;
@@ -47,7 +46,7 @@ if (!evaluator.enabled) {
   process.exit(2);
 }
 
-const passes = (expect: Expect, v: Policies.PolicyVerdict) =>
+const passes = (expect: Expect, v: PolicyVerdict) =>
   expect === 'not_no_match' ? v !== 'no_match' : v === expect;
 
 const signal = new AbortController().signal;
@@ -55,8 +54,8 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 interface Row {
   f: Fixture;
-  single: Policies.PolicyVerdict | 'error';
-  batched: Policies.PolicyVerdict | 'error';
+  single: PolicyVerdict | 'error';
+  batched: PolicyVerdict | 'error';
   action: string;
 }
 const rows: Row[] = [];
@@ -110,8 +109,8 @@ for (const r of rows) {
   if (bad) errors++;
   const ok =
     !bad &&
-    passes(r.f.expect, r.single as Policies.PolicyVerdict) &&
-    passes(r.f.expect, r.batched as Policies.PolicyVerdict);
+    passes(r.f.expect, r.single as PolicyVerdict) &&
+    passes(r.f.expect, r.batched as PolicyVerdict);
   if (!ok) failures++;
   if (!bad) {
     compared++;
