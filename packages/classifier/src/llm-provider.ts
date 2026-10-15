@@ -28,9 +28,9 @@ export const SYSTEM_PROMPT = [
   'Also return "language": the ISO 639-1 code of the main language of the comment, or "und" if it cannot be determined.',
 ].join('\n');
 
-/** Loose on purpose (some providers reject min/max in structured-output schemas); rawClassificationSchema validates after. */
-const generationSchema = z.looseObject({
-  scores: z.looseObject({
+/** Closed (additionalProperties false, as strict structured output requires) but without min/max, which some providers reject; rawClassificationSchema validates ranges after. */
+const generationSchema = z.strictObject({
+  scores: z.strictObject({
     spam: z.number(),
     scam_phishing: z.number(),
     harassment_abuse: z.number(),

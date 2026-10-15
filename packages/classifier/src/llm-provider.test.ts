@@ -92,6 +92,17 @@ describe('LlmClassifierProvider', () => {
       ).rejects.toMatchObject({ code: 'invalid_output', retryable: true });
     }
   });
+  it('sends a closed JSON schema (additionalProperties false) to the model', async () => {
+    const seen: Array<{ responseFormat?: { schema?: unknown } }> = [];
+    await provider(modelReturning(JSON.stringify({ scores, language: 'en' }), seen)).classify(
+      input('x'),
+      new AbortController().signal,
+    );
+    const schema = JSON.stringify(seen[0]?.responseFormat?.schema);
+    expect(schema).toBeDefined();
+    expect(schema).not.toContain('"additionalProperties":true');
+    expect(schema.match(/"additionalProperties":false/g)?.length).toBe(2);
+  });
   it('non-JSON output is invalid_output', async () => {
     await expect(
       provider(modelReturning('I think this is spam')).classify(
