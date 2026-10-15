@@ -93,7 +93,7 @@ export async function seedTenant(c: pg.ClientBase, label: string): Promise<Tenan
   if (await has('rule')) {
     t.ruleId = await one(
       c,
-      "INSERT INTO rule (organization_id, brand_id, name, conditions, action) VALUES ($1, $2, 'Scam links', '{\"links\":[\"bit.ly\"]}', 'hide') RETURNING id",
+      'INSERT INTO rule (organization_id, brand_id, name, conditions, action) VALUES ($1, $2, \'Scam links\', \'{"type":"link_domain","mode":"blocklist","domains":["bit.ly"],"exemptOwnDomains":true,"shorteners":"ignore","lookalikes":"match"}\', \'hide\') RETURNING id',
       [organizationId, brandId],
     );
   }
