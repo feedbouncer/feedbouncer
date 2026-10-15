@@ -6,6 +6,7 @@ import {
   formatScore,
   hasChanges,
   initialEdits,
+  rerunNotice,
   thresholdsKey,
   transitionText,
   type ThresholdView,
@@ -111,5 +112,17 @@ describe('classifier lib', () => {
         buildThresholdUpdate(original, { spam: edit(spam, { threshold: '' }) }).errors.spam,
       ).toBe('Threshold must be a number between 0 and 1.');
     });
+  });
+});
+
+describe('rerunNotice', () => {
+  it('explains an empty re-run, and reports started and partially failed ones', () => {
+    expect(rerunNotice({ enqueued: 0, failed: 0 })).toBe(
+      'Nothing to re-run: no active connections.',
+    );
+    expect(rerunNotice({ enqueued: 2, failed: 0 })).toBe('Re-run started on 2 connection(s).');
+    expect(rerunNotice({ enqueued: 1, failed: 1 })).toBe(
+      'Re-run started on 1 connection(s); 1 could not be started.',
+    );
   });
 });

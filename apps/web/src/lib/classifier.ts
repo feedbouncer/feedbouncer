@@ -203,3 +203,11 @@ export function buildThresholdUpdate(
   }
   return { items, errors };
 }
+
+/** What the admin is told after requesting a re-run. */
+export function rerunNotice(r: { enqueued: number; failed: number }): string {
+  if (r.enqueued === 0 && r.failed === 0) return 'Nothing to re-run: no active connections.';
+  return r.failed > 0
+    ? `Re-run started on ${r.enqueued} connection(s); ${r.failed} could not be started.`
+    : `Re-run started on ${r.enqueued} connection(s).`;
+}

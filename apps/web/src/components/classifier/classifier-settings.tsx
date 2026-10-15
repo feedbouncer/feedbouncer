@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ApiRequestError, apiFetch } from '../../lib/api-client';
 import {
+  rerunNotice,
   thresholdsKey,
   type PreviewResult,
   type ThresholdItem,
@@ -69,11 +70,7 @@ export function ClassifierSettings(props: {
         method: 'POST',
         body: { days },
       });
-      setNotice(
-        r.failed > 0
-          ? `Re-run started on ${r.enqueued} connection(s); ${r.failed} could not be started.`
-          : `Re-run started on ${r.enqueued} connection(s).`,
-      );
+      setNotice(rerunNotice(r));
     });
   };
 
