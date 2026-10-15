@@ -9,6 +9,7 @@ import { normalizePolicyText, policyWarnings } from './text.js';
 import {
   MAX_ENABLED_POLICIES_PER_BRAND,
   MAX_POLICIES_PER_BRAND,
+  RUN_MIN_INTERVAL_MINUTES,
   type ActivePolicy,
   type PolicyAction,
 } from './types.js';
@@ -333,6 +334,44 @@ export class PgPolicyStore {
       [s.organizationId, s.brandId, runId],
     );
     return rows[0] ? toActive(rows[0]) : null;
+  }
+
+  /**
+   * Records an explicit apply-to-recent-comments request for one policy revision.
+   * 'too_soon' when the brand already started a run within the minimum interval.
+   */
+  async insertRun(
+    c: pg.PoolClient,
+    s: BrandScope,
+    r: { policyId: string; revisionId: string; days: number; userId: string | null },
+  ): Promise<{ id: string } | 'too_soon'> {
+    if (!(await this.#lockBrand(c, s))) throw new TypeError('brand_not_found');
+    const { rowCount } = await c.query(
+      `SELECT 1 FROM policy_run
+        WHERE organization_id = $1 AND brand_id = $2
+          AND created_at > now() - make_interval(mins => $3)`,
+      [s.organizationId, s.brandId, RUN_MIN_INTERVAL_MINUTES],
+    );
+    if ((rowCount ?? 0) > 0) return 'too_soon';
+    const { rows } = await c.query<{ id: string }>(
+      `INSERT INTO policy_run (organization_id, brand_id, policy_id, revision_id, days, since, requested_by_user_id)
+       VALUES ($1, $2, $3, $4, $5, now() - make_interval(days => $5), $6) RETURNING id`,
+      [s.organizationId, s.brandId, r.policyId, r.revisionId, r.days, r.userId],
+    );
+    return { id: rows[0]!.id };
+  }
+
+  /** The brand's connections that can currently receive jobs. */
+  async activeConnections(
+    s: BrandScope,
+    q: Queryable = this.#pool,
+  ): Promise<{ connectionId: string; platform: string }[]> {
+    const { rows } = await q.query<{ id: string; platform: string }>(
+      `SELECT id, platform FROM connection
+        WHERE organization_id = $1 AND brand_id = $2 AND status = 'active' ORDER BY id`,
+      [s.organizationId, s.brandId],
+    );
+    return rows.map((r) => ({ connectionId: r.id, platform: r.platform }));
   }
 
   async #lockBrand(c: pg.PoolClient, s: BrandScope): Promise<boolean> {

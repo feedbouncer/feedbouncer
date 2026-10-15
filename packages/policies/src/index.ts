@@ -14,3 +14,4 @@ export * from './fallback.js';
 export * from './candidates.js';
 export * from './previews.js';
 export * from './jobs/preview.js';
+export * from './jobs/run.js';
