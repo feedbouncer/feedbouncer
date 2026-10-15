@@ -11,6 +11,7 @@
     { "path": "packages/jobs" },
     { "path": "packages/comments" },
     { "path": "packages/rules" },
+    { "path": "packages/ai" },
     { "path": "packages/observability" },
     { "path": "apps/placeholder-app" },
     { "path": "apps/api" },
