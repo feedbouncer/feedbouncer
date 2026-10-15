@@ -4,6 +4,15 @@ The classifier scores every newly ingested comment with a language model and
 applies per-brand thresholds to the scores. It runs only when no moderation
 rule decided the comment, and it never blocks ingestion.
 
+Custom policies written in plain language are a separate stage that runs
+under the same condition: see [policies.md](policies.md). The classifier
+applies fixed categories with thresholds; policies apply sentences you write.
+The two are independent, so a comment can be decided by either or both. If
+both hide it, the second hide changes nothing, and a delete wins over a hide.
+A policy hide is not undone by the classifier's automatic unhide. When
+`POLICY_PROVIDER` is not set, policies reuse the `CLASSIFIER_*` model
+settings.
+
 It is optional. Without `CLASSIFIER_PROVIDER` every comment shows
 "Not classified: no classifier is configured" and nothing else changes.
 

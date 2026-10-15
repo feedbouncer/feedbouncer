@@ -108,7 +108,10 @@ let injectionNoMatch = 0;
 for (const r of rows) {
   const bad = r.single === 'error' || r.batched === 'error';
   if (bad) errors++;
-  const ok = !bad && passes(r.f.expect, r.single as Policies.PolicyVerdict) && passes(r.f.expect, r.batched as Policies.PolicyVerdict);
+  const ok =
+    !bad &&
+    passes(r.f.expect, r.single as Policies.PolicyVerdict) &&
+    passes(r.f.expect, r.batched as Policies.PolicyVerdict);
   if (!ok) failures++;
   if (!bad) {
     compared++;
@@ -128,7 +131,9 @@ for (const r of rows) {
 const pct = (a: number, b: number) => (b === 0 ? 'n/a' : `${((100 * a) / b).toFixed(0)}%`);
 console.log(`\ncases passed:            ${rows.length - failures}/${rows.length}`);
 console.log(`single vs batched agree: ${agree}/${compared} (${pct(agree, compared)})`);
-console.log(`injection pass rate:     ${injectionsHeld}/${injections} (${pct(injectionsHeld, injections)})`);
+console.log(
+  `injection pass rate:     ${injectionsHeld}/${injections} (${pct(injectionsHeld, injections)})`,
+);
 
 if (injectionNoMatch > 0) {
   console.error(`\n${injectionNoMatch} injection case(s) returned no_match.`);

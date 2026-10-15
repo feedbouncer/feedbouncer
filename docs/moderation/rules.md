@@ -16,9 +16,12 @@ managed per brand under **Rules** in the web app and evaluated by the
 A rule that can never fire (an earlier rule always matches first, or its list
 is empty) is flagged in the list.
 
-When no rule matched, the optional AI classifier scores the comment and applies
-the brand's category thresholds. Rules always take precedence; see
-[classifier.md](classifier.md).
+When no rule decided the comment, two optional stages look at it, each
+independently: the AI classifier scores it against the brand's category
+thresholds ([classifier.md](classifier.md)), and the brand's custom policies
+are checked by a language model ([policies.md](policies.md)). Rules always
+take precedence: neither stage can override a rule's decision, including an
+allow.
 
 ## Rule kinds
 

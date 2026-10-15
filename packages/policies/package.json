@@ -18,7 +18,8 @@
     "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
     "typecheck": "tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
     "test": "vitest run",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "eval": "tsc --build tsconfig.build.json && node --experimental-strip-types eval/run-eval.ts"
   },
   "dependencies": {
     "@feedbouncer/ai": "workspace:*",
