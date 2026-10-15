@@ -34,6 +34,8 @@ const MESSAGES: Record<string, string> = {
   invalid_rule: 'This rule has problems. Fix the highlighted fields and try again.',
   rule_limit_reached: 'This brand has reached the maximum number of rules.',
   rule_order_mismatch: 'The rules changed since you opened this page. Reload and try again.',
+  invalid_classifier_settings: 'Check the thresholds and try again.',
+  classifier_rerun_too_soon: 'A re-run was started recently. Try again in a few minutes.',
   invalid_domain: 'Enter a valid domain name.',
   domain_exists: 'This domain is already in the list.',
   domain_limit_reached: 'This brand has reached the maximum number of own domains.',
@@ -112,7 +114,7 @@ const ACTION_KINDS: Record<string, string> = {
 const ACTOR_TYPES: Record<string, string> = {
   user: 'a team member',
   rule: 'a rule',
-  classifier: 'automatic moderation',
+  classifier: 'classifier',
   system: 'the system',
 };
 

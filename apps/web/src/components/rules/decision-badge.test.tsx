@@ -13,6 +13,7 @@ const base: DecisionView = {
   createdAt: '2026-10-15T10:00:00.000Z',
   fallback: false,
   action: null,
+  classifier: null,
 };
 
 const render = (d: DecisionView | null) => renderToStaticMarkup(<DecisionBadge decision={d} />);
@@ -64,5 +65,45 @@ describe('DecisionBadge', () => {
 
   it('renders nothing without a decision', () => {
     expect(render(null)).toBe('');
+  });
+
+  describe('classifier decisions', () => {
+    const clf = (over: object, evidence: object = {}): DecisionView => ({
+      ...base,
+      actorType: 'classifier',
+      rule: null,
+      classifier: {
+        category: 'hate_speech',
+        score: 0.93,
+        threshold: 0.8,
+        provider: 'anthropic',
+        model: 'm',
+        triggers: [],
+        downgraded: null,
+        reversal: false,
+        ...evidence,
+      },
+      ...over,
+    });
+
+    it('names category, score and threshold', () => {
+      expect(render(clf({}))).toContain('Hidden by classifier: Hate speech 0.93 ≥ 0.80');
+    });
+
+    it('reads a reversal as unhidden', () => {
+      const html = render(clf({ outcome: 'approve' }, { score: 0.1, reversal: true }));
+      expect(html).toContain('Unhidden by classifier: Hate speech 0.10 &lt; 0.80');
+    });
+
+    it('reads a fallback as flagged', () => {
+      const html = render(
+        clf({
+          outcome: 'flag',
+          fallback: true,
+          action: { kind: 'hide', status: 'failed', outcomeCode: 'unsupported' },
+        }),
+      );
+      expect(html).toContain('Flagged for review: classifier couldn&#x27;t hide (');
+    });
   });
 });
