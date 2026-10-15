@@ -92,7 +92,7 @@ export function PolicyList(props: {
                     <button
                       type="button"
                       aria-pressed={p.enabled}
-                      aria-label={`Enable ${p.name}`}
+                      aria-label={`${p.enabled ? 'Disable' : 'Enable'} ${p.name}`}
                       disabled={busy || !props.canEdit}
                       onClick={() =>
                         void run(`${base}/${p.id}`, {

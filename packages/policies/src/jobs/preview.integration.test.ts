@@ -275,6 +275,34 @@ describe('policy_preview (dry run)', () => {
     expect(await previews.view(brandOf(t), pv.id)).toMatchObject({ status: 'done', errors: 1 });
   });
 
+  it('does not count skipped rows as not checked', async () => {
+    const t = await seedTenant(db.c, `pv${++n}`);
+    for (let i = 0; i < 2; i++) await candidate(t);
+    evaluator.evaluate.mockResolvedValue({ p1: 'no_match' });
+    const pv = await create(t);
+    await db.c.query(
+      `UPDATE comment SET platform_state = 'deleted'
+        WHERE id = (SELECT comment_id FROM policy_preview_result WHERE preview_id = $1 LIMIT 1)`,
+      [pv.id],
+    );
+    await makeJob().handle(ctxFor(t, t.connectionId), { previewId: pv.id, chunk: 0 });
+    expect(await previews.view(brandOf(t), pv.id)).toMatchObject({ status: 'done', notChecked: 0 });
+  });
+
+  it('expires previews after the retention window', async () => {
+    const t = await seedTenant(db.c, `pv${++n}`);
+    await candidate(t);
+    const pv = await create(t);
+    await db.c.query(
+      `UPDATE policy_preview SET created_at = now() - interval '8 days' WHERE id = $1`,
+      [pv.id],
+    );
+    expect(await previews.view(brandOf(t), pv.id)).toBeNull();
+    expect(await previews.pruneExpired()).toBeGreaterThanOrEqual(1);
+    const { rows } = await db.c.query(`SELECT 1 FROM policy_preview WHERE id = $1`, [pv.id]);
+    expect(rows).toHaveLength(0);
+  });
+
   it('stops with quota_exhausted when the monthly budget runs out', async () => {
     const t = await seedTenant(db.c, `pv${++n}`);
     for (let i = 0; i < 3; i++) await candidate(t);

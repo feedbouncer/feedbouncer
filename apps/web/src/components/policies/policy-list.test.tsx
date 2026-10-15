@@ -46,6 +46,12 @@ describe('PolicyList', () => {
     expect(html).toContain('New policy');
   });
 
+  it('labels the toggle with the action it performs', () => {
+    expect(render(list)).toContain('aria-label="Disable No DM solicitations"');
+    const off = render({ ...list, policies: [{ ...policy, enabled: false }] });
+    expect(off).toContain('aria-label="Enable No DM solicitations"');
+  });
+
   it('shows the paused banner when the monthly budget is used', () => {
     const html = render({ ...list, usage: { ...list.usage, used: 20_000 } });
     expect(html).toContain('Policies are paused until 1 November');

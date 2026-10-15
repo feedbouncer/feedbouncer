@@ -15,7 +15,7 @@ import {
   type ConnectionDirectory,
 } from '@feedbouncer/connectors';
 import { CLASSIFIER_LANE } from '@feedbouncer/classifier';
-import { POLICY_LANE } from '@feedbouncer/policies';
+import { POLICY_LANE, PgPolicyPreviewStore } from '@feedbouncer/policies';
 import { createPool, runJobOnce } from '@feedbouncer/db';
 import {
   JobMetrics,
@@ -59,6 +59,8 @@ try {
   writeStartupConfigError('worker', err);
   process.exit(1);
 }
+
+const PREVIEW_PRUNE_INTERVAL_MS = 3_600_000;
 
 const log = createLogger('worker', env.logLevel);
 installCrashHandlers(log);
@@ -277,6 +279,13 @@ try {
   await jobWorkers.start();
   log.info('job consumers ready', { platforms: jobWorkers.platforms().join(',') || 'none' });
   scheduler?.start();
+  const previewStore = new PgPolicyPreviewStore(pool);
+  const previewPruner = setInterval(() => {
+    previewStore
+      .pruneExpired()
+      .catch((err: unknown) => log.warn('policy preview prune failed', errorFields(err)));
+  }, PREVIEW_PRUNE_INTERVAL_MS);
+  previewPruner.unref();
 
   worker.run().catch((err: unknown) => {
     log.error('worker stopped', errorFields(err));

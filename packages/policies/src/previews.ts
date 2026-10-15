@@ -75,6 +75,15 @@ export class PgPolicyPreviewStore {
     this.#clock = clock;
   }
 
+  /** Deletes previews, and their results, past the retention window. Returns how many were removed. */
+  async pruneExpired(): Promise<number> {
+    const { rowCount } = await this.#pool.query(
+      `DELETE FROM policy_preview WHERE created_at < now() - make_interval(days => $1)`,
+      [PREVIEW_RETENTION_DAYS],
+    );
+    return rowCount ?? 0;
+  }
+
   /**
    * Starts a preview of `r.text` on the brand's recent undecided comments, first
    * discarding previews older than the retention window and stale running ones. Runs
@@ -240,18 +249,21 @@ export class PgPolicyPreviewStore {
       examined: number;
       matched: number;
       errors: number;
+      skipped: number;
     }>(
       `SELECT p.id, p.status, p.text, p.action, p.days, p.since, p.total, p.capped, p.stopped_reason,
               p.created_at, p.completed_at,
               count(r.id) FILTER (WHERE r.verdict IN ('clear_match', 'possible_match', 'no_match'))::int AS examined,
               count(r.id) FILTER (WHERE r.verdict IN ('clear_match', 'possible_match'))::int AS matched,
-              count(r.id) FILTER (WHERE r.verdict = 'error')::int AS errors
+              count(r.id) FILTER (WHERE r.verdict = 'error')::int AS errors,
+              count(r.id) FILTER (WHERE r.verdict = 'skipped')::int AS skipped
          FROM policy_preview p
          LEFT JOIN policy_preview_result r
            ON r.organization_id = p.organization_id AND r.brand_id = p.brand_id AND r.preview_id = p.id
         WHERE p.organization_id = $1 AND p.brand_id = $2 AND p.id = $3
+          AND p.created_at >= now() - make_interval(days => $4)
         GROUP BY p.id`,
-      [s.organizationId, s.brandId, previewId],
+      [s.organizationId, s.brandId, previewId, PREVIEW_RETENTION_DAYS],
     );
     const p = rows[0];
     if (!p) return null;
@@ -286,7 +298,7 @@ export class PgPolicyPreviewStore {
       examined: p.examined,
       matched: p.matched,
       errors: p.errors,
-      notChecked: p.total - p.examined - p.errors,
+      notChecked: p.total - p.examined - p.errors - p.skipped,
       stoppedReason: p.stopped_reason,
       createdAt: p.created_at,
       completedAt: p.completed_at,

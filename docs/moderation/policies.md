@@ -94,7 +94,7 @@ saving the policy.
   comment, the answer, the action it would take and a short reason.
 - It runs in the background and the page updates as results arrive. One
   preview can run per brand at a time.
-- Results are deleted after **7 days**.
+- Results are deleted after **7 days**; an hourly cleanup removes them, and they can no longer be viewed once that time has passed.
 - Preview checks one policy, while live checks send all enabled policies in
   one call. Models can answer a little differently in the two cases, so a
   preview is a good guide, not a guarantee.
