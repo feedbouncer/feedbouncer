@@ -138,6 +138,11 @@ export class ClassifierService {
     const registry = this.deps.connectors?.registry;
     if (!producer || !registry) throw new ApiError(404, 'platform_not_configured');
     const since = new Date(now.getTime() - days * DAY_MS);
+    const connections = (await activeConnections(this.deps.pool, scope)).filter(
+      (x) => registry.get(x.platform as Platform) !== undefined,
+    );
+    // Nothing to re-run: record no run, so the 15-minute window is not consumed.
+    if (connections.length === 0) return { runId: null, enqueued: 0, failed: 0 };
     const runId = await withTransaction(this.deps.pool, async (c) => {
       if (!can(await lockedActor(c, org), 'rule.write')) throw new ApiError(403, 'forbidden');
       const lock = await c.query(
@@ -159,9 +164,6 @@ export class ClassifierService {
       });
       return id;
     });
-    const connections = (await activeConnections(this.deps.pool, scope)).filter(
-      (x) => registry.get(x.platform as Platform) !== undefined,
-    );
     const results = await Promise.allSettled(
       connections.map((x) =>
         producer.enqueue({

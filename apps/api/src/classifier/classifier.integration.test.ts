@@ -408,6 +408,20 @@ describe('classifier re-runs', () => {
     }
   });
 
+  it('a brand with no active connection records no run and does not start the 15-minute window', async () => {
+    const N = await orgWithRoles(api, `clfn${++n}`);
+    for (let i = 0; i < 2; i += 1) {
+      const r = await send('POST', N, '/classifier/reruns', admin(N), { days: 2 });
+      expect(r.status).toBe(202);
+      expect(r.body).toEqual({ runId: null, enqueued: 0, failed: 0 });
+    }
+    const runs = await api.pool.query(
+      'SELECT count(*)::int AS n FROM classifier_run WHERE brand_id = $1',
+      [N.brandId],
+    );
+    expect(runs.rows[0].n).toBe(0);
+  });
+
   it('is allowed again once the last run is older than 15 minutes', async () => {
     await api.pool.query(
       `UPDATE classifier_run SET created_at = now() - interval '16 minutes' WHERE brand_id = $1`,
