@@ -40,13 +40,13 @@ async function rule(t: Tenant, conditions: unknown): Promise<string> {
 async function evaluation(
   t: Tenant,
   commentId: string,
-  o: { org?: string; brand?: string; sha?: Buffer; trigger?: string } = {},
+  o: { org?: string; brand?: string; sha?: Buffer; trigger?: string; run?: string } = {},
 ): Promise<string> {
   return (
     await c.query<{ id: string }>(
       `INSERT INTO rule_evaluation (organization_id, brand_id, connection_id, comment_id, body_sha256,
-                                    trigger_key, ruleset_version, status)
-       VALUES ($1,$2,$3,$4,$5,$6,'v1','no_match') RETURNING id`,
+                                    trigger_key, ruleset_version, status, rule_run_id)
+       VALUES ($1,$2,$3,$4,$5,$6,'v1','no_match',$7) RETURNING id`,
       [
         o.org ?? t.organizationId,
         o.brand ?? t.brandId,
@@ -54,6 +54,7 @@ async function evaluation(
         commentId,
         o.sha ?? sha(),
         o.trigger ?? 'ingest',
+        o.run ?? null,
       ],
     )
   ).rows[0]!.id;
@@ -214,6 +215,54 @@ describe('decision.rule_evaluation_id', () => {
   });
 });
 
+describe('rule_evaluation is an immutable record', () => {
+  const fresh = async () => evaluation(a, await comment(a));
+
+  it('refuses direct DELETE and TRUNCATE', async () => {
+    const ev = await fresh();
+    await expectPgError(c.query('DELETE FROM rule_evaluation WHERE id = $1', [ev]), '23001');
+    await expectPgError(c.query('TRUNCATE rule_evaluation CASCADE'), '23001');
+  });
+
+  it.each([
+    ['status', "status = 'skipped'"],
+    ['outcome', "outcome = 'hide'"],
+    ['trace', "trace = '[{}]'::jsonb"],
+    ['body_sha256', "body_sha256 = '\\x' || repeat('aa', 32)::text::bytea"],
+    ['trigger_key', "trigger_key = 'other'"],
+    ['ruleset_version', "ruleset_version = 'v2'"],
+    ['created_at', "created_at = now() - interval '1 day'"],
+    ['comment_id', 'comment_id = gen_random_uuid()'],
+    ['rule_run_id', 'rule_run_id = gen_random_uuid()'],
+  ])('refuses direct UPDATE of %s', async (_n, set) => {
+    const ev = await fresh();
+    await expectPgError(c.query(`UPDATE rule_evaluation SET ${set} WHERE id = $1`, [ev]), '23001');
+  });
+
+  it('allows the fallback lifecycle columns', async () => {
+    const ev = await fresh();
+    await c.query(
+      "UPDATE rule_evaluation SET fallback_at = now(), fallback_code = 'unsupported' WHERE id = $1",
+      [ev],
+    );
+    await c.query('UPDATE rule_evaluation SET recovered_at = now() WHERE id = $1', [ev]);
+  });
+});
+
+describe('decisions keep naming the rule', () => {
+  it('survives rule rename and archival', async () => {
+    const cm = await comment(a);
+    const ev = await evaluation(a, cm);
+    const d = await decide(a, cm, ev);
+    await c.query("UPDATE rule SET name = 'renamed', archived_at = now() WHERE id = $1", [
+      a.ruleId,
+    ]);
+    const r = await c.query('SELECT rule_id, reason FROM decision WHERE id = $1', [d]);
+    expect(r.rows[0]).toEqual({ rule_id: a.ruleId, reason: 'matched' });
+    await c.query('UPDATE rule SET archived_at = NULL WHERE id = $1', [a.ruleId]);
+  });
+});
+
 describe('rule_run', () => {
   const ins = (status: string, enqueued = 0) =>
     c.query(
@@ -237,8 +286,7 @@ describe('rule_run', () => {
       )
     ).rows[0]!.id;
     const cm = await comment(a);
-    const ev = await evaluation(a, cm, { trigger: run });
-    await c.query('UPDATE rule_evaluation SET rule_run_id = $1 WHERE id = $2', [run, ev]);
+    const ev = await evaluation(a, cm, { trigger: run, run });
     await c.query('DELETE FROM rule_run WHERE id = $1', [run]);
     const r = await c.query('SELECT rule_run_id, brand_id FROM rule_evaluation WHERE id = $1', [
       ev,

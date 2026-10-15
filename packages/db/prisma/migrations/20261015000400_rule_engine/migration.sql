@@ -112,6 +112,43 @@ CREATE INDEX rule_evaluation_rule_run_id_idx ON rule_evaluation (rule_run_id) WH
 CREATE TRIGGER rule_evaluation_set_updated_at_trg BEFORE UPDATE ON rule_evaluation
   FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
 
+-- A rule_evaluation is a durable record of why a decision was made. Only the
+-- fallback bookkeeping columns may change, and rows are removed only by FK
+-- cascade (comment deletion). rule_run_id may be nulled by the rule_run
+-- ON DELETE SET NULL cascade (trigger depth >= 2) but never edited directly.
+CREATE FUNCTION fb_rule_evaluation_guard() RETURNS trigger LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+  IF NEW.id IS DISTINCT FROM OLD.id
+     OR NEW.organization_id IS DISTINCT FROM OLD.organization_id
+     OR NEW.brand_id IS DISTINCT FROM OLD.brand_id
+     OR NEW.connection_id IS DISTINCT FROM OLD.connection_id
+     OR NEW.comment_id IS DISTINCT FROM OLD.comment_id
+     OR NEW.body_sha256 IS DISTINCT FROM OLD.body_sha256
+     OR NEW.trigger_key IS DISTINCT FROM OLD.trigger_key
+     OR NEW.ruleset_version IS DISTINCT FROM OLD.ruleset_version
+     OR NEW.status IS DISTINCT FROM OLD.status
+     OR NEW.skip_reason IS DISTINCT FROM OLD.skip_reason
+     OR NEW.matched_rule_id IS DISTINCT FROM OLD.matched_rule_id
+     OR NEW.outcome IS DISTINCT FROM OLD.outcome
+     OR NEW.trace IS DISTINCT FROM OLD.trace
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at
+     OR (NEW.rule_run_id IS DISTINCT FROM OLD.rule_run_id
+         AND (pg_catalog.pg_trigger_depth() < 2 OR NEW.rule_run_id IS NOT NULL))
+  THEN
+    RAISE EXCEPTION 'rule_evaluation is immutable except fallback columns'
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+  RETURN NEW;
+END
+$$;
+CREATE TRIGGER rule_evaluation_immutable_trg BEFORE UPDATE ON rule_evaluation
+  FOR EACH ROW EXECUTE FUNCTION fb_rule_evaluation_guard();
+CREATE TRIGGER rule_evaluation_no_delete_trg BEFORE DELETE ON rule_evaluation
+  FOR EACH ROW EXECUTE FUNCTION fb_forbid_direct_mutation();
+CREATE TRIGGER rule_evaluation_no_truncate_trg BEFORE TRUNCATE ON rule_evaluation
+  FOR EACH STATEMENT EXECUTE FUNCTION fb_forbid_direct_mutation();
+
 ALTER TABLE decision
   ADD COLUMN rule_evaluation_id uuid,
   ADD CONSTRAINT decision_brand_id_rule_evaluation_id_fkey FOREIGN KEY (brand_id, rule_evaluation_id)
