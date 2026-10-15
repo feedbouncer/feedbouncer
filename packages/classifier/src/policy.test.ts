@@ -103,7 +103,10 @@ describe('decide', () => {
   });
   it('low-signal input downgrades remove to flag', () => {
     const policy = resolvePolicy([{ category: 'spam', threshold: 0.5, action: 'remove' }]);
-    const v = decide({ ...ZERO_SCORES, spam: 0.9 }, policy, { lowSignal: true, languageSupported: true });
+    const v = decide({ ...ZERO_SCORES, spam: 0.9 }, policy, {
+      lowSignal: true,
+      languageSupported: true,
+    });
     expect(v).toMatchObject({ outcome: 'flag', downgraded: 'low_signal' });
     expect(v.primary).toMatchObject({ action: 'remove', effectiveAction: 'flag' });
   });
