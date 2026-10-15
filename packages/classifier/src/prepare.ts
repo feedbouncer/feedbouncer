@@ -3,7 +3,7 @@ import type { PreparedInput } from './types.js';
 export const MAX_INPUT_CHARS = 4_000;
 const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' });
 const INVISIBLE =
-  /[\s­͏؜ᅟᅠ឴឵᠋-᠏​-‏‪-‮⁠-⁤⁦-⁯ㅤ︀-️﻿ﾠ]/gu;
+  /[\s\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0]/gu;
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/gu;
 
 function truncate(s: string): { text: string; truncated: boolean } {
@@ -13,6 +13,12 @@ function truncate(s: string): { text: string; truncated: boolean } {
     if (out.length + segment.length > MAX_INPUT_CHARS) break;
     out += segment;
   }
+  if (out === '') {
+    for (const ch of s) {
+      if (out.length + ch.length > MAX_INPUT_CHARS) break;
+      out += ch;
+    }
+  }
   return { text: out, truncated: true };
 }
 
@@ -21,9 +27,10 @@ export function prepareInput(body: string): PreparedInput {
   const empty = visible.length === 0;
   const letters = visible.match(LETTER_OR_DIGIT)?.length ?? 0;
   const { text, truncated } = truncate(body);
+  const finalText = empty ? '' : text;
   return {
-    text: empty ? '' : text,
-    empty,
+    text: finalText,
+    empty: finalText === '',
     lowSignal: empty || letters < 3,
     truncated,
     inputChars: body.length,
