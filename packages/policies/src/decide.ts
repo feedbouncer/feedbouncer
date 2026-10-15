@@ -34,9 +34,15 @@ export function effectiveAction(
   return { confidence, effectiveAction: downgrade ? 'flag' : action, downgrade };
 }
 
+/** Strictly more severe wins; on equal action a clear match outranks a downgraded possible one. */
+function outranks(a: PolicyMatch, b: PolicyMatch): boolean {
+  const diff = ACTION_SEVERITY[a.effectiveAction] - ACTION_SEVERITY[b.effectiveAction];
+  return diff > 0 || (diff === 0 && a.confidence === 'high' && b.confidence === 'low');
+}
+
 /**
  * Callers must pass `policies` sorted by (policy created_at, id): ties between equally severe
- * matches go to the earliest policy in the given order.
+ * matches of equal confidence go to the earliest policy in the given order.
  */
 export function decidePolicies(
   policies: readonly ActivePolicy[],
@@ -60,8 +66,7 @@ export function decidePolicies(
   }
   let winner: PolicyMatch | null = null;
   for (const m of matches) {
-    if (!winner || ACTION_SEVERITY[m.effectiveAction] > ACTION_SEVERITY[winner.effectiveAction])
-      winner = m;
+    if (!winner || outranks(m, winner)) winner = m;
   }
   return { outcome: winner?.effectiveAction ?? null, winner, matches };
 }

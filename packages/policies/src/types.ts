@@ -60,6 +60,8 @@ export const MAX_NAME_CHARS = 80;
 export const PREVIEW_MAX_COMMENTS = 200;
 export const PREVIEW_MAX_DAYS = 14;
 export const PREVIEW_RETENTION_DAYS = 7;
+/** A preview still running after this long has lost its jobs; the next preview replaces it. */
+export const PREVIEW_STALE_MINUTES = 120;
 export const RUN_MAX_DAYS = 7;
 export const RUN_MAX_COMMENTS_PER_CONNECTION = 500;
 export const RUN_MIN_INTERVAL_MINUTES = 15;

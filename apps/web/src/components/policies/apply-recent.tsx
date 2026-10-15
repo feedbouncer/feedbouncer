@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { apiFetch } from '../../lib/api-client';
-import { plural, policyErrorText } from '../../lib/policies';
+import { plural, policyErrorText, runNotice } from '../../lib/policies';
 
 const DAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
@@ -23,11 +23,11 @@ export function ApplyRecent(props: { orgId: string; brandId: string; policyId: s
     setError(null);
     setNotice(null);
     try {
-      const run = await apiFetch<{ id: string; connections: number }>(
+      const run = await apiFetch<{ connections: number }>(
         `/api/v1/orgs/${props.orgId}/brands/${props.brandId}/policies/${props.policyId}/runs`,
         { method: 'POST', body: { days } },
       );
-      setNotice(`Started on ${plural(run.connections, 'connection')}.`);
+      setNotice(runNotice(run.connections));
     } catch (err) {
       setError(policyErrorText(err));
     } finally {

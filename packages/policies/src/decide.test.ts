@@ -88,14 +88,14 @@ describe('decidePolicies', () => {
     expect(a.winner?.policyId).toBe('p1');
     expect(b).toEqual(a);
   });
-  it('a high-confidence flag and a low-confidence delete resolve to flag, winner = first flag', () => {
+  it('a high-confidence flag and a low-confidence delete resolve to flag, winner = the clear match', () => {
     const d = decidePolicies(
       [pol(1, 'remove'), pol(2, 'flag')],
       v({ r1: 'possible_match', r2: 'clear_match' }),
       plain,
     );
     expect(d.outcome).toBe('flag');
-    expect(d.winner?.policyId).toBe('p1');
+    expect(d.winner?.policyId).toBe('p2');
     expect(d.matches.find((m) => m.policyId === 'p1')?.downgrade).toBe('low_confidence');
   });
   it('throws when a verdict is missing for an active policy', () => {

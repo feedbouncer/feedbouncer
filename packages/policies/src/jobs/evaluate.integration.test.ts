@@ -133,7 +133,6 @@ async function addPolicy(
         name: o.name ?? `Policy ${++n}`,
         text: o.text ?? policyText,
         action: o.action ?? 'hide',
-        vague: false,
       },
       t.userId,
     );

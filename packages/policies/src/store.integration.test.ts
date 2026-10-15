@@ -11,11 +11,10 @@ let store: PgPolicyStore;
 let t: Tenant;
 let a: { organizationId: string; brandId: string };
 
-const base: { name: string; text: string; action: PolicyAction; vague: boolean } = {
+const base: { name: string; text: string; action: PolicyAction } = {
   name: 'No DMs',
   text: 'Hide comments telling people to DM another account',
   action: 'hide',
-  vague: false,
 };
 
 beforeAll(async () => {
@@ -39,7 +38,6 @@ describe('PgPolicyStore', () => {
       enabled: false,
       revision: 1,
       action: 'hide',
-      vague: false,
       archived: false,
     });
     expect(await store.get(a, p.id)).toEqual(p);

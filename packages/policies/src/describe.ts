@@ -1,12 +1,10 @@
 import { MAX_INPUT_CHARS } from '@feedbouncer/classifier';
 import type {
   Downgrade,
-  FailureCode,
   PolicyAction,
   PolicyDecision,
   PolicyMatch,
   PolicyVerdict,
-  SkipReason,
 } from './types.js';
 
 const VERB: Record<PolicyAction, string> = {
@@ -88,30 +86,3 @@ export function describePreviewResult(
 export function describeFallback(kind: 'hide' | 'delete', code: string): string {
   return `A policy asked to ${kind} this comment, but the platform did not allow it (${code}). Flagged for review instead.`;
 }
-
-export const SKIP_TEXT: Record<SkipReason, string> = {
-  deleted: 'Not checked: the comment was deleted.',
-  own_account: "Not checked: the comment is from the brand's own account.",
-  rules_not_evaluated: 'Not checked: the rules had not evaluated this comment.',
-  rule_decided: 'Not checked: a rule already decided this comment.',
-  quota_exhausted:
-    'Not checked: the monthly policy-check limit was reached. The comment was left unchanged.',
-  policy_changed:
-    'Not checked: the policy was edited, disabled or deleted after this check was requested.',
-};
-export const FAILURE_TEXT: Record<FailureCode, string> = {
-  timeout:
-    'Policy check failed: the AI provider did not answer in time. The comment was left unchanged.',
-  rate_limited:
-    'Policy check failed: the AI provider was rate-limiting requests. The comment was left unchanged.',
-  unavailable:
-    'Policy check failed: the AI provider was unavailable. The comment was left unchanged.',
-  auth: 'Policy check failed: the AI provider rejected the deployment credentials. The comment was left unchanged.',
-  invalid_output:
-    'Policy check failed: the AI provider returned an unusable answer. The comment was left unchanged.',
-  bad_request:
-    'Policy check failed: the AI provider rejected the request. The comment was left unchanged.',
-  disabled: 'Policy checks are turned off in this deployment. The comment was left unchanged.',
-  queue_timeout:
-    'Policy check failed: it waited too long in the queue. The comment was left unchanged.',
-};

@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  describeDecision,
-  describeFallback,
-  describePreviewResult,
-  FAILURE_TEXT,
-  SKIP_TEXT,
-} from './describe.js';
-import { FAILURE_CODES, SKIP_REASONS, type PolicyMatch } from './types.js';
+import { describeDecision, describeFallback, describePreviewResult } from './describe.js';
+import type { PolicyMatch } from './types.js';
 
 const m = (o: Partial<PolicyMatch>): PolicyMatch => ({
   policyId: 'p1',
@@ -170,10 +164,6 @@ describe('describePreviewResult', () => {
 });
 
 describe('texts', () => {
-  it('cover every skip reason and failure code', () => {
-    for (const r of SKIP_REASONS) expect(SKIP_TEXT[r].length).toBeGreaterThan(0);
-    for (const c of FAILURE_CODES) expect(FAILURE_TEXT[c].length).toBeGreaterThan(0);
-  });
   it('fallback text', () => {
     expect(describeFallback('hide', 'not_eligible')).toBe(
       'A policy asked to hide this comment, but the platform did not allow it (not_eligible). Flagged for review instead.',

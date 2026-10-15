@@ -18,7 +18,6 @@ import {
   policyIssues,
   policyInputSchema,
   policyPatchSchema,
-  policyWarnings,
   previewRequestSchema,
   runRequestSchema,
   type PolicyUpdate,
@@ -40,7 +39,6 @@ import {
   type PolicyDto,
   type PolicyListDto,
 } from './policies.dto.js';
-import { withdraw } from './policies.queries.js';
 
 function parsePolicy<S extends z.ZodType>(schema: S, body: unknown): z.output<S> {
   const r = schema.safeParse(body ?? {});
@@ -144,15 +142,14 @@ export class PoliciesService {
   async create(org: OrgContext, brandId: unknown, body: unknown): Promise<PolicyDto> {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     const input = parsePolicy(policyInputSchema, body);
-    const vague = policyWarnings(input.text).length > 0;
     try {
       const created = await this.#write(org, 'rule.write', async (c) => {
-        const p = await this.#store.create(c, scope, { ...input, vague }, org.actorUserId);
+        const p = await this.#store.create(c, scope, input, org.actorUserId);
         await this.#audit(c, org, scope, {
           action: 'policy.created',
           subjectType: 'custom_policy',
           subjectId: p.id,
-          details: { revision: p.revision, action: p.action, vague },
+          details: { revision: p.revision, action: p.action, vague: p.vague },
         });
         return p;
       });
@@ -181,7 +178,7 @@ export class PoliciesService {
             details: {
               revision: policy.revision,
               action: policy.action,
-              vague: policyWarnings(policy.text).length > 0,
+              vague: policy.vague,
             },
           });
         if (patch.name !== undefined && patch.name !== before.name)
@@ -280,7 +277,7 @@ export class PoliciesService {
         previewId: created.id,
         ...errorFields(failed.reason),
       });
-      await this.#withdraw('policy_preview', scope, created.id);
+      await this.#withdraw(() => this.#previews.withdraw(scope, created.id), created.id);
       throw new ApiError(503, 'temporarily_unavailable');
     }
     return { id: created.id };
@@ -349,18 +346,18 @@ export class PoliciesService {
         ...errorFields(failed.reason),
       });
     if (enqueued === 0) {
-      await this.#withdraw('policy_run', scope, runId);
+      await this.#withdraw(() => this.#store.withdrawRun(scope, runId), runId);
       throw new ApiError(503, 'temporarily_unavailable');
     }
     return { id: runId, connections: enqueued };
   }
 
   /** If even the withdrawal fails the row stays; a run then blocks retries until the interval passes. */
-  async #withdraw(table: 'policy_run' | 'policy_preview', scope: BrandScope, id: string) {
+  async #withdraw(remove: () => Promise<void>, id: string) {
     try {
-      await withdraw(this.deps.pool, table, scope, id);
+      await remove();
     } catch (e) {
-      this.deps.log.error('policy withdraw failed', { table, id, ...errorFields(e) });
+      this.deps.log.error('policy withdraw failed', { id, ...errorFields(e) });
     }
   }
 }

@@ -325,6 +325,26 @@ describe('policy_preview (dry run)', () => {
     expect(await previews.load(brandOf(t), old.rows[0]!.id)).toBeNull();
   });
 
+  it('replaces a running preview whose jobs were lost', async () => {
+    const t = await seedTenant(db.c, `pv${++n}`);
+    const stale = await create(t);
+    await db.c.query(
+      `UPDATE policy_preview SET created_at = now() - interval '3 hours' WHERE id = $1`,
+      [stale.id],
+    );
+    const fresh = await create(t);
+    expect(await previews.load(brandOf(t), stale.id)).toBeNull();
+    expect(await previews.load(brandOf(t), fresh.id)).toMatchObject({ status: 'running' });
+  });
+
+  it('withdraw removes the preview and frees the brand for the next one', async () => {
+    const t = await seedTenant(db.c, `pv${++n}`);
+    const pv = await create(t);
+    await previews.withdraw(brandOf(t), pv.id);
+    expect(await previews.load(brandOf(t), pv.id)).toBeNull();
+    await expect(create(t)).resolves.toBeDefined();
+  });
+
   it('only processes rows of the connection the job runs for', async () => {
     const t = await seedTenant(db.c, `pv${++n}`);
     const b = await secondConnection(t);

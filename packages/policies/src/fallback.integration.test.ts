@@ -52,7 +52,6 @@ async function seedEvaluated(t: Tenant, action: PolicyAction = 'hide') {
         name: `Fallback ${++n}`,
         text: 'Comments asking people to DM another account',
         action,
-        vague: false,
       },
       t.userId,
     ),

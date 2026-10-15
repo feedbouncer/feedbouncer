@@ -9,6 +9,7 @@ import { recentUndecidedComments } from './candidates.js';
 import {
   PREVIEW_MAX_COMMENTS,
   PREVIEW_RETENTION_DAYS,
+  PREVIEW_STALE_MINUTES,
   type PolicyAction,
   type PolicyVerdict,
 } from './types.js';
@@ -75,7 +76,8 @@ export class PgPolicyPreviewStore {
   }
 
   /**
-   * Starts a preview of `r.text` on the brand's recent undecided comments. Runs
+   * Starts a preview of `r.text` on the brand's recent undecided comments, first
+   * discarding previews older than the retention window and stale running ones. Runs
    * inside the caller's transaction; a second running preview aborts it with
    * PreviewInProgressError and the caller rolls back.
    */
@@ -97,8 +99,10 @@ export class PgPolicyPreviewStore {
   }> {
     await c.query(
       `DELETE FROM policy_preview
-        WHERE organization_id = $1 AND brand_id = $2 AND created_at < now() - make_interval(days => $3)`,
-      [s.organizationId, s.brandId, PREVIEW_RETENTION_DAYS],
+        WHERE organization_id = $1 AND brand_id = $2
+          AND (created_at < now() - make_interval(days => $3)
+               OR (status = 'running' AND created_at < now() - make_interval(mins => $4)))`,
+      [s.organizationId, s.brandId, PREVIEW_RETENTION_DAYS, PREVIEW_STALE_MINUTES],
     );
     const since = new Date(this.#clock.now() - r.days * DAY_MS);
     const { rows } = await c
@@ -145,6 +149,14 @@ export class PgPolicyPreviewStore {
       capped,
       connections: [...connections].map(([connectionId, platform]) => ({ connectionId, platform })),
     };
+  }
+
+  /** Removes a preview whose jobs could not be enqueued, with its results. */
+  async withdraw(s: BrandScope, previewId: string): Promise<void> {
+    await this.#pool.query(
+      `DELETE FROM policy_preview WHERE organization_id = $1 AND brand_id = $2 AND id = $3`,
+      [s.organizationId, s.brandId, previewId],
+    );
   }
 
   async load(s: BrandScope, previewId: string): Promise<PreviewRow | null> {

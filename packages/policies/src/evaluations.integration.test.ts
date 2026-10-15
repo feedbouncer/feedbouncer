@@ -99,7 +99,7 @@ beforeAll(async () => {
     policies.create(
       c,
       a,
-      { name: 'Flag DMs', text: 'Flag comments asking people to DM', action: 'flag', vague: false },
+      { name: 'Flag DMs', text: 'Flag comments asking people to DM', action: 'flag' },
       t.userId,
     ),
   );
@@ -111,7 +111,6 @@ beforeAll(async () => {
         name: 'Hide DMs',
         text: 'Hide comments telling people to DM another account',
         action: 'hide',
-        vague: false,
       },
       t.userId,
     ),
@@ -359,7 +358,7 @@ describe('PgPolicyEvaluationStore', () => {
       policies.create(
         c,
         a,
-        { name: 'Old', text: 'Hide comments selling followers', action: 'hide', vague: false },
+        { name: 'Old', text: 'Hide comments selling followers', action: 'hide' },
         t.userId,
       ),
     );

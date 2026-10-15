@@ -56,7 +56,6 @@ export interface PolicyCreate {
   name: string;
   text: string;
   action: PolicyAction;
-  vague: boolean;
 }
 export interface PolicyUpdate {
   name?: string;
@@ -205,16 +204,8 @@ export class PgPolicyStore {
       )
       .catch(mapNameTaken);
     const id = rows[0]!.id;
-    await this.#insertRevision(
-      c,
-      s,
-      id,
-      1,
-      normalizePolicyText(input.text),
-      input.action,
-      input.vague,
-      userId,
-    );
+    const text = normalizePolicyText(input.text);
+    await this.#insertRevision(c, s, id, 1, text, input.action, userId);
     return (await this.get(s, id, c))!;
   }
 
@@ -253,16 +244,7 @@ export class PgPolicyStore {
     const nextAction = patch.action ?? cur.action;
     const revised = nextText !== cur.text || nextAction !== cur.action;
     if (revised)
-      await this.#insertRevision(
-        c,
-        s,
-        policyId,
-        cur.revision + 1,
-        nextText,
-        nextAction,
-        policyWarnings(nextText).length > 0,
-        userId,
-      );
+      await this.#insertRevision(c, s, policyId, cur.revision + 1, nextText, nextAction, userId);
     if (revised || patch.name !== undefined || patch.enabled !== undefined) {
       // Touches updated_at on a revision too, so the list shows the latest edit time.
       await c
@@ -362,6 +344,14 @@ export class PgPolicyStore {
   }
 
   /** The brand's connections that can currently receive jobs. */
+  /** Removes a run whose jobs could not be enqueued, so it does not hold the interval. */
+  async withdrawRun(s: BrandScope, runId: string): Promise<void> {
+    await this.#pool.query(
+      `DELETE FROM policy_run WHERE organization_id = $1 AND brand_id = $2 AND id = $3`,
+      [s.organizationId, s.brandId, runId],
+    );
+  }
+
   async activeConnections(
     s: BrandScope,
     q: Queryable = this.#pool,
@@ -389,9 +379,9 @@ export class PgPolicyStore {
     revision: number,
     text: string,
     action: PolicyAction,
-    vague: boolean,
     userId: string | null,
   ): Promise<void> {
+    const vague = policyWarnings(text).length > 0;
     await c.query(
       `INSERT INTO custom_policy_revision
          (organization_id, brand_id, policy_id, revision, text, action, vague, created_by_user_id)

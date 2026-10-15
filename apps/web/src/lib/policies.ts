@@ -129,7 +129,6 @@ const SKIP_TEXT: Record<string, string> = {
   own_account: "Not checked: the comment is from the brand's own account.",
   rules_not_evaluated: 'Not checked: the rules had not evaluated this comment.',
   rule_decided: 'Not checked: a rule already decided this comment.',
-  no_enabled_policies: 'Not checked: no policy was enabled.',
   quota_exhausted:
     'Not checked: the monthly policy-check limit was reached. The comment was left unchanged.',
   policy_changed:
@@ -157,6 +156,11 @@ const own = (table: Record<string, string>, key: string | null): string | undefi
   key !== null && Object.hasOwn(table, key) ? table[key] : undefined;
 
 export const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+export const runNotice = (connections: number): string =>
+  connections === 0
+    ? 'No active connections to check.'
+    : `Started on ${plural(connections, 'connection')}.`;
 
 export function usageText(u: PolicyListDto['usage']): string {
   const used = `Monthly policy checks used: ${u.used.toLocaleString('en-US')} of ${u.limit.toLocaleString('en-US')}.`;

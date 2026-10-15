@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiRequestError } from './api-client';
 import {
+  runNotice,
   evaluationText,
   matchText,
   plural,
@@ -176,5 +177,13 @@ describe('policies lib', () => {
       'Another policy already has this name.',
     );
     expect(policyErrorText(new Error('boom'))).toBe('Something went wrong.');
+  });
+});
+
+describe('runNotice', () => {
+  it('does not claim a start when there are no connections', () => {
+    expect(runNotice(0)).toBe('No active connections to check.');
+    expect(runNotice(1)).toBe('Started on 1 connection.');
+    expect(runNotice(3)).toBe('Started on 3 connections.');
   });
 });

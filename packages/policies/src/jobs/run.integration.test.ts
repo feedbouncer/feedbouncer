@@ -62,7 +62,6 @@ async function tenantWithPolicy(): Promise<{ t: Tenant; policy: StoredPolicy }> 
         name: 'No DMs',
         text: 'Comments asking people to DM another account',
         action: 'hide',
-        vague: false,
       },
       t.userId,
     ),
