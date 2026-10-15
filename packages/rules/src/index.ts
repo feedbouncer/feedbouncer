@@ -36,3 +36,4 @@ export {
   type CompiledRuleSet,
 } from './engine.js';
 export { describeDecision, describeFallback } from './reason.js';
+export { analyzeRules, type AnalyzableRule, type RuleWarnings } from './shadowing.js';

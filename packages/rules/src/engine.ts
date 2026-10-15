@@ -40,6 +40,24 @@ export interface CompiledRuleSet {
   invalid: { ruleId: string; reason: 'invalid_conditions' }[];
 }
 
+export interface OrderKey {
+  id: string;
+  priority: number;
+  createdAt: Date;
+  /** Trusted-author rules are evaluated before everything else. */
+  pinned: boolean;
+}
+
+/** Evaluation order: pinned trusted rules first, then priority, createdAt, id. */
+export function ruleOrder(a: OrderKey, b: OrderKey): number {
+  return (
+    Number(b.pinned) - Number(a.pinned) ||
+    a.priority - b.priority ||
+    a.createdAt.getTime() - b.createdAt.getTime() ||
+    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  );
+}
+
 function matcherFor(c: RuleConditions, ctx: BrandContext): Matcher {
   switch (c.type) {
     case 'keyword':
@@ -62,18 +80,22 @@ export function compileRuleSet(
   ctx: BrandContext,
   version: string,
 ): CompiledRuleSet {
-  const ordered = records
+  const entries = records
     .filter((r) => r.enabled)
-    .sort(
-      (a, b) =>
-        a.priority - b.priority ||
-        a.createdAt.getTime() - b.createdAt.getTime() ||
-        (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-    );
+    .map((r) => {
+      const parsed = ruleConditionsSchema.safeParse(r.conditions);
+      const pinned =
+        parsed.success && parsed.data.type === 'author' && parsed.data.list === 'trusted';
+      return {
+        r,
+        parsed,
+        order: { id: r.id, priority: r.priority, createdAt: r.createdAt, pinned },
+      };
+    })
+    .sort((a, b) => ruleOrder(a.order, b.order));
   const rules: CompiledRule[] = [];
   const invalid: CompiledRuleSet['invalid'] = [];
-  for (const r of ordered) {
-    const parsed = ruleConditionsSchema.safeParse(r.conditions);
+  for (const { r, parsed, order } of entries) {
     if (!parsed.success || checkActionForConditions(parsed.data, r.action) !== null) {
       invalid.push({ ruleId: r.id, reason: 'invalid_conditions' });
       continue;
@@ -92,12 +114,10 @@ export function compileRuleSet(
       kind: c.type,
       action: r.action,
       mode: r.mode,
-      pinned: c.type === 'author' && c.list === 'trusted',
+      pinned: order.pinned,
       matcher,
     });
   }
-  // Trusted authors first; stable sort keeps the user's order within each group.
-  rules.sort((a, b) => Number(b.pinned) - Number(a.pinned));
   return { version, rules, invalid };
 }
 
