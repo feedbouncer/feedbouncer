@@ -84,10 +84,8 @@ async function seedComment(
   return { id: r.rows[0]!.id, body };
 }
 
-const since = () => Date.now() - 3_600_000;
-
 describe('classifier_rerun', () => {
-  it('enqueues one comment_classify per live, non-deleted, non-own comment of this connection since `since`', async () => {
+  it('enqueues one comment_classify per live, non-deleted, non-own comment of this connection in the run window', async () => {
     const a = await tenant();
     const b = await tenant();
     const keep = [await seedComment(a), await seedComment(a), await seedComment(a)];
@@ -101,7 +99,7 @@ describe('classifier_rerun', () => {
       `UPDATE classifier_run SET since = now() - interval '1 hour' WHERE id = $1`,
       [runId],
     );
-    const r = await job().handle(ctx(a), { runId, since: since() });
+    const r = await job().handle(ctx(a), { runId });
     expect(r).toEqual({ enqueued: 3, capped: false });
     const calls = producer.enqueue.mock.calls.map((c) => c[0]);
     expect(calls.map((c) => c.payload.trigger)).toEqual(Array(3).fill(`rerun:${runId}`));
@@ -120,7 +118,7 @@ describe('classifier_rerun', () => {
     const b = await tenant();
     await seedComment(b);
     const runId = await seedRun(a);
-    expect(await job().handle(ctx(b), { runId, since: since() })).toEqual({ result: 'gone' });
+    expect(await job().handle(ctx(b), { runId })).toEqual({ result: 'gone' });
     expect(producer.enqueue).not.toHaveBeenCalled();
   });
 
@@ -128,7 +126,7 @@ describe('classifier_rerun', () => {
     const a = await tenant();
     for (let i = 0; i < 5; i++) await seedComment(a);
     const runId = await seedRun(a);
-    const r = await job({ maxComments: 4 }).handle(ctx(a), { runId, since: since() });
+    const r = await job({ maxComments: 4 }).handle(ctx(a), { runId });
     expect(r).toEqual({ enqueued: 4, capped: true });
     expect(producer.enqueue).toHaveBeenCalledTimes(4);
   });
@@ -138,7 +136,7 @@ describe('classifier_rerun', () => {
     await seedComment(a);
     await seedComment(a);
     const runId = await seedRun(a);
-    const p = { runId, since: since() };
+    const p = { runId };
     await job().handle(ctx(a), p);
     await job().handle(ctx(a), p);
     const refs = (i: number) =>
@@ -150,16 +148,6 @@ describe('classifier_rerun', () => {
     expect(producer.enqueue).toHaveBeenCalledTimes(4);
   });
 
-  it('takes the window from the run row, ignoring an older payload since', async () => {
-    const a = await tenant();
-    const recent = await seedComment(a);
-    await seedComment(a, { ageMs: 10 * 86_400_000 });
-    const runId = await seedRun(a);
-    const r = await job().handle(ctx(a), { runId, since: 1 });
-    expect(r).toEqual({ enqueued: 1, capped: false });
-    expect(producer.enqueue.mock.calls[0]![0].payload.commentId).toBe(recent.id);
-  });
-
   it('never reaches back more than 30 days even if the run row says so', async () => {
     const a = await tenant();
     const recent = await seedComment(a);
@@ -169,7 +157,7 @@ describe('classifier_rerun', () => {
       `UPDATE classifier_run SET since = now() - interval '60 days' WHERE id = $1`,
       [runId],
     );
-    const r = await job({ clock: { now: () => Date.now() } }).handle(ctx(a), { runId, since: 1 });
+    const r = await job({ clock: { now: () => Date.now() } }).handle(ctx(a), { runId });
     expect(r).toEqual({ enqueued: 1, capped: false });
     expect(producer.enqueue.mock.calls[0]![0].payload.commentId).toBe(recent.id);
   });
@@ -178,7 +166,7 @@ describe('classifier_rerun', () => {
     const a = await tenant();
     for (let i = 0; i < 4; i++) await seedComment(a);
     const runId = await seedRun(a);
-    const r = await job({ maxComments: 4 }).handle(ctx(a), { runId, since: since() });
+    const r = await job({ maxComments: 4 }).handle(ctx(a), { runId });
     expect(r).toEqual({ enqueued: 4, capped: false });
   });
 });

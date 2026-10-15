@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  decide as decideFailure,
-  JobDeferral,
-  KNOWN_JOB_LANES,
-  classifyFailure,
-} from '@feedbouncer/jobs';
+import { decide as decideFailure, JobDeferral, classifyFailure } from '@feedbouncer/jobs';
 import {
   BRAND_BUSY_RETRY_MS,
   CLASSIFIER_JOB_SPECS,
@@ -37,12 +32,5 @@ describe('classify deferral budget', () => {
     const worstCase = p.maxDeferrals * Math.ceil(BRAND_BUSY_RETRY_MS * 1.1);
     expect(worstCase).toBeLessThanOrEqual(p.maxDeferredMs);
     expect(p.maxDeferrals * BRAND_BUSY_RETRY_MS).toBeGreaterThan(MAX_CONFIGURABLE_WAIT_MS);
-  });
-});
-
-describe('lane declarations', () => {
-  it('match the lane map the DLQ replay CLI uses', () => {
-    const declared = Object.fromEntries(CLASSIFIER_JOB_SPECS.map((s) => [s.type, s.lane]));
-    expect(KNOWN_JOB_LANES).toEqual(declared);
   });
 });

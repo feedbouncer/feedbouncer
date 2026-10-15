@@ -131,7 +131,7 @@ and model for display.
 
 | Variable                         | Default                | Meaning                                                                                               |
 | -------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| `CLASSIFIER_PROVIDER`            | `none`                 | `openai`, `google`, `openai_compatible` or `none`.                                       |
+| `CLASSIFIER_PROVIDER`            | `none`                 | `openai`, `google`, `openai_compatible` or `none`.                                                    |
 | `CLASSIFIER_MODEL`               | none                   | Model id. Required unless the provider is `none`.                                                     |
 | `CLASSIFIER_API_KEY`             | none                   | Secret. Prefer `CLASSIFIER_API_KEY_FILE`. Required except for a keyless `openai_compatible` endpoint. |
 | `CLASSIFIER_BASE_URL`            | provider default       | Required for `openai_compatible`. No credentials, query or fragment.                                  |

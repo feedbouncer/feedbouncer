@@ -382,7 +382,7 @@ describe('classifier re-runs', () => {
       expect(run.rows[0].days).toBe(7);
       expect(run.rows[0].requested_by_user_id).toBe(R.admin.userId);
       for (const q of jobs) {
-        expect(q.payload).toEqual({ runId, since: run.rows[0].since.getTime() });
+        expect(q.payload).toEqual({ runId });
       }
       const audit = await api.pool.query(
         `SELECT actor_user_id, subject_type, subject_id, details FROM audit_event
@@ -512,16 +512,14 @@ describe('classifier re-runs', () => {
     });
     await api.seedConnection(o, { platform: 'facebook', externalAccountId: 'del-1' });
     const enq = vi.spyOn(api.deps.producer!, 'enqueue').mockRejectedValue(new Error('redis down'));
-    const del = vi.spyOn(api.pool, 'query');
-    try {
-      del.mockImplementation(((sql: unknown, ...rest: unknown[]) =>
+    const query = api.pool.query.bind(api.pool) as (...args: unknown[]) => unknown;
+    const del = vi
+      .spyOn(api.pool, 'query')
+      .mockImplementation(((sql: unknown, ...rest: unknown[]) =>
         typeof sql === 'string' && sql.startsWith('DELETE FROM classifier_run')
           ? Promise.reject(new Error('db down'))
-          : (del.getMockImplementation() as never) &&
-            Reflect.apply(Object.getPrototypeOf(api.pool).query, api.pool, [
-              sql,
-              ...rest,
-            ])) as never);
+          : query(sql, ...rest)) as never);
+    try {
       const r = await send('POST', o, '/classifier/reruns', admin(o), { days: 2 });
       expect(r.status).toBe(503);
       expect(r.body.error.code).toBe('temporarily_unavailable');
@@ -696,6 +694,20 @@ describe('classification and the decision log', () => {
       classifier: { category: 'hate_speech', score: 0.3, threshold: 0.8, reversal: true },
     });
     expect(rev.body.decisions[1].classifier.reversal).toBe(false);
+
+    const settingsChanged = await seedClassified(P, { hate_speech: 0.95 });
+    expect(
+      await store.recordReversal(
+        scope,
+        await classificationOf(settingsChanged.commentId),
+        'hate_speech',
+        0.95,
+        0.8,
+        'Unhidden: the current settings no longer hide it',
+      ),
+    ).toBe(true);
+    const kept = await get(P, `/comments/${settingsChanged.commentId}/decisions`);
+    expect(kept.body.decisions[0].classifier).toMatchObject({ score: 0.95, reversal: true });
 
     const flagged = await seedClassified(P, { scam_phishing: 0.9 });
     expect(

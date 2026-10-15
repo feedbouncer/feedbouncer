@@ -43,10 +43,21 @@ function parseBaseUrl(raw: string, name: string, allowHttp: boolean): URL {
   return u;
 }
 
-export function loadModelConfig(env: Env, prefix: string): ModelConfig | null {
+/** Provider and model only, validated like loadModelConfig but without reading the key. Null when disabled. */
+export function describeModelConfig(
+  env: Env,
+  prefix: string,
+): { provider: AiProvider; model: string } | null {
   const provider = readEnum(env, `${prefix}_PROVIDER`, [...AI_PROVIDERS, 'none'] as const, 'none');
   if (provider === 'none') return null;
   const model = readRequiredString(env, `${prefix}_MODEL`, { maxLength: 200, pattern: MODEL_ID });
+  return { provider, model };
+}
+
+export function loadModelConfig(env: Env, prefix: string): ModelConfig | null {
+  const described = describeModelConfig(env, prefix);
+  if (described === null) return null;
+  const { provider, model } = described;
   const rawUrl = readString(env, `${prefix}_BASE_URL`, { fallback: '', maxLength: 2048 });
   const allowHttp =
     readEnum(env, `${prefix}_ALLOW_HTTP`, ['true', 'false'] as const, 'false') === 'true';

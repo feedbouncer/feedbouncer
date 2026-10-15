@@ -41,7 +41,7 @@ export const CLASSIFY_JOB = {
   },
 };
 
-export const RerunPayload = z.strictObject({ runId: z.uuid(), since: z.number().int().positive() });
+export const RerunPayload = z.strictObject({ runId: z.uuid() });
 export type RerunPayload = z.output<typeof RerunPayload>;
 export const RERUN_MAX_COMMENTS_PER_CONNECTION = 5_000;
 

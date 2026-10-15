@@ -1,18 +1,10 @@
 import {
-  AI_PROVIDERS,
-  MODEL_ID,
   createLanguageModel,
+  describeModelConfig,
   loadModelConfig,
   type ModelConfig,
 } from '@feedbouncer/ai';
-import {
-  EnvError,
-  readEnum,
-  readInt,
-  readRequiredString,
-  readString,
-  type Env,
-} from '@feedbouncer/service-runtime';
+import { EnvError, readInt, readString, type Env } from '@feedbouncer/service-runtime';
 import { MAX_CONFIGURABLE_WAIT_MS } from './jobs/specs.js';
 import { LlmClassifierProvider } from './llm-provider.js';
 import { DisabledProvider, type ClassifierProvider } from './provider.js';
@@ -71,10 +63,9 @@ export function describeClassifierProvider(env: Env): {
   model: string;
   enabled: boolean;
 } {
-  const id = readEnum(env, 'CLASSIFIER_PROVIDER', [...AI_PROVIDERS, 'none'] as const, 'none');
-  if (id === 'none') return { id, model: '', enabled: false };
-  const model = readRequiredString(env, 'CLASSIFIER_MODEL', { maxLength: 200, pattern: MODEL_ID });
-  return { id, model, enabled: true };
+  const described = describeModelConfig(env, 'CLASSIFIER');
+  if (described === null) return { id: 'none', model: '', enabled: false };
+  return { id: described.provider, model: described.model, enabled: true };
 }
 
 export function createClassifierProvider(c: ClassifierConfig): ClassifierProvider {

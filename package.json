@@ -24,7 +24,7 @@
     "db:migration:new": "pnpm --dir packages/db run migrate:new",
     "db:status": "pnpm --dir packages/db run migrate:status",
     "secrets": "pnpm --dir packages/secrets run --silent cli",
-    "jobs": "pnpm --dir packages/jobs run --silent cli"
+    "jobs": "pnpm --dir apps/worker run --silent jobs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

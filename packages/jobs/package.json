@@ -23,8 +23,7 @@
     "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
     "typecheck": "tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
     "test": "vitest run",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
-    "cli": "tsc --build tsconfig.build.json && node dist/bin.js"
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@feedbouncer/connectors": "workspace:*",

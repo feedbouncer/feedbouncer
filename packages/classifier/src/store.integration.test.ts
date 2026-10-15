@@ -300,14 +300,7 @@ describe('PgClassificationStore', () => {
     await store.record(connScope(A), first.rec);
     const s = brandScope(A);
     const { commentId, rec } = first;
-    const hit = await store.findReusableScores(
-      s,
-      commentId,
-      rec.sha,
-      'openai',
-      'model-x',
-      'v1',
-    );
+    const hit = await store.findReusableScores(s, commentId, rec.sha, 'openai', 'model-x', 'v1');
     expect(hit?.language).toBe('en');
     expect(hit?.scores.spam).toBe(0.7);
     expect(hit?.scores.profanity).toBe(0.2);
@@ -315,7 +308,7 @@ describe('PgClassificationStore', () => {
       await store.findReusableScores(s, commentId, sha('x'), 'openai', 'model-x', 'v1'),
     ).toBeNull();
     expect(
-      await store.findReusableScores(s, commentId, rec.sha, 'openai', 'model-x', 'v1'),
+      await store.findReusableScores(s, commentId, rec.sha, 'google', 'model-x', 'v1'),
     ).toBeNull();
     expect(
       await store.findReusableScores(s, commentId, rec.sha, 'openai', 'model-y', 'v1'),
@@ -324,14 +317,7 @@ describe('PgClassificationStore', () => {
       await store.findReusableScores(s, commentId, rec.sha, 'openai', 'model-x', 'v2'),
     ).toBeNull();
     expect(
-      await store.findReusableScores(
-        brandScope(B),
-        commentId,
-        rec.sha,
-        'openai',
-        'model-x',
-        'v1',
-      ),
+      await store.findReusableScores(brandScope(B), commentId, rec.sha, 'openai', 'model-x', 'v1'),
     ).toBeNull();
 
     const c = await newComment(A);
@@ -603,7 +589,7 @@ describe('PgClassificationStore', () => {
     expect((await store.previewRows(s, new Date(Date.now() + 60_000), 100)).rows).toEqual([]);
     const capRes = await store.previewRows(s, since, 1);
     expect(capRes.capped).toBe(true);
-    expect(capRes.rows.length).toBeLessThanOrEqual(1);
+    expect(capRes.rows.map((r) => r.commentId)).toEqual([latest.commentId]);
     expect(
       (await store.previewRows(brandScope(B), since, 100)).rows.map((r) => r.commentId),
     ).not.toContain(old.commentId);

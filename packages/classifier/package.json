@@ -29,7 +29,7 @@
     "@feedbouncer/rules": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
-    "ai": "7.0.141",
+    "ai": "7.0.140",
     "pg": "8.23.1",
     "zod": "4.6.5"
   },

@@ -66,7 +66,7 @@ describe('classifier_rerun lane', () => {
       scope,
       platform: 'facebook',
       type: 'classifier_rerun',
-      payload: { runId: randomUUID(), since: Date.now() - 86_400_000 },
+      payload: { runId: randomUUID() },
     });
     expect(r.status).toBe('enqueued');
     expect(

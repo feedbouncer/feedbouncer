@@ -430,28 +430,30 @@ export class PgClassificationStore {
       scores: CategoryScores;
       low_signal: boolean;
       language_supported: boolean;
-      rule_decided: boolean;
     }>(
-      `SELECT DISTINCT ON (cc.comment_id) cc.comment_id, cc.scores, cc.low_signal, cc.language_supported, cc.rule_decided
-       FROM comment_classification cc
-       JOIN comment c ON c.brand_id = cc.brand_id AND c.id = cc.comment_id
-       WHERE cc.organization_id = $1 AND cc.brand_id = $2 AND cc.status = 'classified' AND cc.created_at >= $3
-         AND c.organization_id = $1 AND c.platform_state <> 'deleted' AND c.ingest_origin = 'live'
-       ORDER BY cc.comment_id, cc.created_at DESC, cc.id DESC
+      `SELECT comment_id, scores, low_signal, language_supported
+       FROM (
+         SELECT DISTINCT ON (cc.comment_id) cc.comment_id, cc.scores, cc.low_signal, cc.language_supported,
+                cc.rule_decided, cc.created_at
+         FROM comment_classification cc
+         JOIN comment c ON c.brand_id = cc.brand_id AND c.id = cc.comment_id
+         WHERE cc.organization_id = $1 AND cc.brand_id = $2 AND cc.status = 'classified' AND cc.created_at >= $3
+           AND c.organization_id = $1 AND c.platform_state <> 'deleted' AND c.ingest_origin = 'live'
+         ORDER BY cc.comment_id, cc.created_at DESC, cc.id DESC
+       ) latest
+       WHERE NOT rule_decided
+       ORDER BY created_at DESC, comment_id
        LIMIT $4`,
       [s.organizationId, s.brandId, since, limit + 1],
     );
     return {
       capped: r.rows.length > limit,
-      rows: r.rows
-        .slice(0, limit)
-        .filter((x) => !x.rule_decided)
-        .map((x) => ({
-          commentId: x.comment_id,
-          scores: x.scores,
-          lowSignal: x.low_signal,
-          languageSupported: x.language_supported,
-        })),
+      rows: r.rows.slice(0, limit).map((x) => ({
+        commentId: x.comment_id,
+        scores: x.scores,
+        lowSignal: x.low_signal,
+        languageSupported: x.language_supported,
+      })),
     };
   }
 

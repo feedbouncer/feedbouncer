@@ -170,7 +170,7 @@ export class ClassifierService {
           scope: { ...scope, connectionId: x.id },
           platform: x.platform as Platform,
           type: CLASSIFIER_RERUN_JOB.type,
-          payload: { runId, since: since.getTime() },
+          payload: { runId },
         }),
       ),
     );

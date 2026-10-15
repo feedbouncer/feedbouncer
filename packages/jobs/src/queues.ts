@@ -21,17 +21,6 @@ export function laneMap(defs: Iterable<{ readonly type: string; readonly lane?: 
   return (t) => m.get(t) ?? null;
 }
 
-/**
- * Lanes of job types whose definitions live outside this package, for tools
- * that route jobs without the worker's registry (the DLQ replay CLI). Kept in
- * step with the job specs by a test in the owning package.
- */
-export const KNOWN_JOB_LANES: Readonly<Record<string, string>> = {
-  comment_classify: 'classify',
-  classifier_rerun: 'classify',
-};
-export const knownLaneOf: LaneOf = (t) => KNOWN_JOB_LANES[t] ?? null;
-
 export const QUEUE_PREFIX = /^[a-z][a-z0-9-]{0,31}$/;
 
 /**

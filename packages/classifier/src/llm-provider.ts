@@ -42,12 +42,8 @@ const generationSchema = z.strictObject({
   language: z.string(),
 });
 
-export function buildMessages(text: string): Array<{ role: 'system' | 'user'; content: string }> {
-  return [
-    { role: 'system', content: SYSTEM_PROMPT },
-    { role: 'user', content: JSON.stringify({ comment: text }) },
-  ];
-}
+/** The comment travels only as a JSON-quoted value in the user message, never in the instructions. */
+export const commentMessage = (text: string): string => JSON.stringify({ comment: text });
 
 export function mapProviderError(e: unknown): ClassifierProviderError {
   if (e instanceof ClassifierProviderError) return e;
@@ -90,7 +86,7 @@ export class LlmClassifierProvider implements ClassifierProvider {
         model: this.o.model,
         output: Output.object({ schema: generationSchema }),
         instructions: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: buildMessages(input.text)[1]!.content }],
+        messages: [{ role: 'user', content: commentMessage(input.text) }],
         temperature: 0,
         maxOutputTokens: 200,
         maxRetries: 0,

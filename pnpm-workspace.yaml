@@ -7,15 +7,6 @@ allowBuilds:
   msgpackr-extract: false
   prisma: true
   re2: true
-# Brand-new AI SDK releases pinned exactly (younger than the release-age gate).
-minimumReleaseAgeExclude:
-  - '@ai-sdk/gateway@4.0.114'
-  - '@ai-sdk/provider-utils@5.0.60'
-  - ai@7.0.141
-  - '@ai-sdk/openai@4.0.94'
-  - '@ai-sdk/google@4.0.96'
-  - '@ai-sdk/openai-compatible@3.0.69'
-
 # Security floors for transitive dependencies of prisma (via better-auth's
 # optional peer and packages/db), whose own pins lag the fixes. Selectors only
 # match vulnerable versions, so these stop applying once upstream catches up.
