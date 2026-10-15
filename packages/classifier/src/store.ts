@@ -265,8 +265,25 @@ export class PgClassificationStore {
         return false;
       }
       const t = row.triggers.find((x) => x.effectiveAction === row.outcome) ?? row.triggers[0];
-      const ev =
+      let ev: FallbackEvidence | null =
         evidence ?? (t ? { category: t.category, score: t.score, threshold: t.threshold } : null);
+      if (!ev) {
+        // An unhide that failed: the evidence is the reversal's approve decision.
+        const a = await c.query<{ category: Category; confidence: string; threshold: string }>(
+          `SELECT category, confidence::text AS confidence, threshold::text AS threshold FROM decision
+           WHERE organization_id = $1 AND brand_id = $2 AND classification_id = $3 AND outcome = 'approve'
+             AND category IS NOT NULL AND confidence IS NOT NULL AND threshold IS NOT NULL
+           ORDER BY sequence DESC LIMIT 1`,
+          [s.organizationId, s.brandId, classificationId],
+        );
+        const x = a.rows[0];
+        if (x)
+          ev = {
+            category: x.category,
+            score: Number(x.confidence),
+            threshold: Number(x.threshold),
+          };
+      }
       if (!ev || !row.provider || !row.model)
         throw new Error('classification has no decision evidence');
       await c.query(INSERT_DECISION, [

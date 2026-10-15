@@ -32,3 +32,13 @@ export interface ActionOutcomeObserver {
     code: string | null;
   }): Promise<void>;
 }
+
+/** Fans one outcome out to several observers. Each observer is idempotent; the first error is rethrown so the job retries. */
+export class CompositeActionOutcomeObserver implements ActionOutcomeObserver {
+  constructor(private readonly observers: readonly ActionOutcomeObserver[]) {}
+  async onActionOutcome(e: Parameters<ActionOutcomeObserver['onActionOutcome']>[0]): Promise<void> {
+    const results = await Promise.allSettled(this.observers.map((o) => o.onActionOutcome(e)));
+    const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failed) throw failed.reason;
+  }
+}

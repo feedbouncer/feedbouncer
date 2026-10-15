@@ -13,3 +13,4 @@ export * from './slots.js';
 export * from './jobs/specs.js';
 export * from './trigger.js';
 export * from './jobs/classify.js';
+export * from './fallback.js';

@@ -569,6 +569,109 @@ describe('comment_classify', () => {
     ).toBe(1);
   });
 
+  async function hiddenByClassifier(body: string) {
+    const c = await seedComment(body);
+    await evaluateRules(c, 'no_match');
+    const r1 = await job(new FakeProvider([S({ hate_speech: 0.95 })])).handle(
+      ctx(c, 1),
+      payload(c),
+    );
+    await ctxDb.c.query(
+      `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind, actor_type,
+         request_key, status, completed_at)
+       VALUES ($1, $2, $3, $4, 'hide', 'classifier', $5, 'applied', now())`,
+      [c.t.organizationId, c.t.brandId, c.t.connectionId, c.id, `clf:${r1.classificationId}`],
+    );
+    await ctxDb.c.query(`UPDATE comment SET platform_state = 'hidden' WHERE id = $1`, [c.id]);
+    return c;
+  }
+
+  async function editAndReclassify(c: Seeded, body: string) {
+    const edited = await editComment(c, body);
+    await evaluateRules(edited, 'no_match');
+    actions.request.mockClear();
+    const r = await job(new FakeProvider([S({ hate_speech: 0.1 })])).handle(
+      ctx(edited, 1),
+      payload(edited),
+    );
+    return { edited, r };
+  }
+
+  it('edit that clears a classifier-hidden comment appends an approve decision with evidence', async () => {
+    const c = await hiddenByClassifier('hateful v1');
+    const { r } = await editAndReclassify(c, 'sorry, edited');
+    expect(r).toMatchObject({ reversed: true });
+    expect(actions.request).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'unhide', requestKey: `clf:${r.classificationId}:unhide` }),
+    );
+    const dec = await one(
+      `SELECT outcome, category, confidence::text, threshold::text, reason FROM decision WHERE classification_id = $1`,
+      [r.classificationId],
+    );
+    expect(dec).toMatchObject({
+      outcome: 'approve',
+      category: 'hate_speech',
+      confidence: '0.1000',
+      threshold: '0.8000',
+    });
+    expect(dec.reason).toBe('Unhidden: Hate speech now scores 0.10, below 0.80.');
+  });
+
+  it('does not unhide when a moderator acted after the classifier', async () => {
+    const c = await hiddenByClassifier('hateful v2');
+    await ctxDb.c.query(
+      `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind, actor_type,
+         actor_user_id, request_key, status, completed_at)
+       VALUES ($1, $2, $3, $4, 'hide', 'user', $5, $6, 'applied', now() + interval '1 second')`,
+      [c.t.organizationId, c.t.brandId, c.t.connectionId, c.id, c.t.userId, `user:${randomUUID()}`],
+    );
+    const { r } = await editAndReclassify(c, 'sorry, edited again');
+    expect(r.reversed).toBeUndefined();
+    expect(actions.request).not.toHaveBeenCalled();
+    expect(
+      await count(`SELECT 1 FROM decision WHERE comment_id = $1 AND outcome = 'approve'`, [c.id]),
+    ).toBe(0);
+  });
+
+  it('does not unhide a comment hidden by a rule', async () => {
+    const c = await seedComment('rule hidden');
+    await evaluateRules(c, 'no_match');
+    await ctxDb.c.query(
+      `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind, actor_type,
+         rule_id, request_key, status, completed_at)
+       VALUES ($1, $2, $3, $4, 'hide', 'rule', $5, $6, 'applied', now())`,
+      [
+        c.t.organizationId,
+        c.t.brandId,
+        c.t.connectionId,
+        c.id,
+        c.t.ruleId,
+        `rule-eval:${randomUUID()}`,
+      ],
+    );
+    await ctxDb.c.query(`UPDATE comment SET platform_state = 'hidden' WHERE id = $1`, [c.id]);
+    const { r } = await editAndReclassify(c, 'cleaned up');
+    expect(r.reversed).toBeUndefined();
+    expect(actions.request).not.toHaveBeenCalled();
+  });
+
+  it('a replayed reversal appends one approve decision only', async () => {
+    const c = await hiddenByClassifier('hateful v3');
+    const edited = await editComment(c, 'now polite');
+    await evaluateRules(edited, 'no_match');
+    actions.request.mockClear();
+    const p = new FakeProvider([S({ hate_speech: 0.1 })]);
+    const r1 = await job(p).handle(ctx(edited, 1), payload(edited));
+    const r2 = await job(p).handle(ctx(edited, 1), payload(edited));
+    expect(r2.classificationId).toBe(r1.classificationId);
+    expect(
+      await count(`SELECT 1 FROM decision WHERE comment_id = $1 AND outcome = 'approve'`, [c.id]),
+    ).toBe(1);
+    expect(new Set(actions.request.mock.calls.map((x) => x[0].requestKey))).toEqual(
+      new Set([`clf:${r1.classificationId}:unhide`]),
+    );
+  });
+
   it('without a rule evaluation on ingest the job fails retryably and records nothing', async () => {
     const c = await seedComment('too early');
     const p = new FakeProvider([S({ spam: 0.99 })]);
