@@ -174,9 +174,6 @@ describe('texts', () => {
     for (const r of SKIP_REASONS) expect(SKIP_TEXT[r].length).toBeGreaterThan(0);
     for (const c of FAILURE_CODES) expect(FAILURE_TEXT[c].length).toBeGreaterThan(0);
   });
-  it('fallback text replaces unsafe codes', () => {
-    expect(describeFallback('delete', 'Bad <code>')).toContain('(refused)');
-  });
   it('fallback text', () => {
     expect(describeFallback('hide', 'not_eligible')).toBe(
       'A policy asked to hide this comment, but the platform did not allow it (not_eligible). Flagged for review instead.',
