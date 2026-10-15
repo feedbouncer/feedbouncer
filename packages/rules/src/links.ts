@@ -22,12 +22,14 @@ const TLN = /[\t\n\r]/;
 const NON_TLN_SPACE = /[^\S\t\n\r]+/u;
 const KEEP_LEADING = /[\p{L}\p{N}/\\]/u;
 const TRAILING_CHARS = '.,!?;:\u2026\u00BB\u201D\u2019)*_~';
+const EMBEDDED_SCHEME = /(?:https?|ftp|wss?):\/\//gi;
+const ASCII_PREFIX = /^[a-z0-9_-]{1,63}(?:\.[a-z0-9_-]{1,63})+/i;
 const SCHEME = /^[a-z][a-z0-9+.-]{0,20}:\/\//i;
 // Special schemes a browser accepts with missing or wrong slashes ("https:/x", "http:x", "https:/\x").
 const SPECIAL_SCHEME = /^(https?|ftp|wss?):[/\\]*/i;
 // Anchored and applied to one bounded token, so it cannot backtrack across the text.
 const BARE_HOST =
-  /^[\p{L}\p{N}](?:[\p{L}\p{N}-]{0,62})(?:\.[\p{L}\p{N}](?:[\p{L}\p{N}-]{0,62}))+(?::\d{1,5})?(?:[/?#].*)?$/u;
+  /^[\p{L}\p{N}](?:[\p{L}\p{N}_-]{0,62})(?:\.[\p{L}\p{N}](?:[\p{L}\p{N}_-]{0,62}))+(?::\d{1,5})?(?:[/?#].*)?$/u;
 const SCRIPTS = [/\p{Script=Latin}/u, /\p{Script=Cyrillic}/u, /\p{Script=Greek}/u];
 
 function mixedScript(unicodeHost: string): boolean {
@@ -62,7 +64,7 @@ function splitParts(token: string): string[] {
   let from = 0;
   for (let i = 0; i < token.length; i++) {
     const c = token.charAt(i);
-    if (c !== ',' && c !== ';') continue;
+    if (c !== ',' && c !== ';' && c !== '=' && c !== '&') continue;
     if (c === ',' && /\d/.test(token.charAt(i - 1)) && /\d/.test(token.charAt(i + 1))) continue;
     parts.push(token.slice(from, i));
     from = i + 1;
@@ -92,6 +94,10 @@ function candidates(token: string): Candidate[] {
   for (const raw of splitParts(token.slice(0, MAX_TOKEN))) {
     let part = trim(raw);
     if (part.length < 4) continue;
+    // A scheme in the middle of a token ("see:https://x", "a.comhttps://x") starts another link.
+    for (const m of part.matchAll(EMBEDDED_SCHEME)) {
+      if (m.index > 0) out.push({ text: part.slice(m.index), hasScheme: true });
+    }
     if (part.includes('\\')) {
       // A lenient parser treats "\" as an ordinary character, so "@" still starts the host.
       const authority = part.split(/[?#]/, 1)[0]!;
@@ -131,6 +137,18 @@ function candidates(token: string): Candidate[] {
         out.push({ text: first, hasScheme: false });
     }
     if (BARE_HOST.test(text)) out.push({ text, hasScheme: false });
+    else if (text.includes(':')) {
+      // "see:evil.io" / "evil.io:abc": try both sides of the first colon.
+      const i = text.indexOf(':');
+      for (const piece of [text.slice(0, i), text.slice(i + 1)]) {
+        if (BARE_HOST.test(piece)) out.push({ text: piece, hasScheme: false });
+      }
+    }
+    if (/[^\x00-\x7f]/.test(text)) {
+      // Host directly followed by non-ASCII text: also emit the ASCII-only prefix.
+      const m = ASCII_PREFIX.exec(text);
+      if (m && m[0] !== text) out.push({ text: m[0], hasScheme: false });
+    }
   }
   return out;
 }

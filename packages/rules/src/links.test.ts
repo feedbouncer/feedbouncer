@@ -127,4 +127,26 @@ describe('extractLinks', () => {
       expect(Date.now() - t).toBeLessThan(1000);
     });
   });
+  describe('browser differential (round 3)', () => {
+    it('finds schemes in the middle of a token and concatenated URLs', () => {
+      expect(hosts('see:https://evil.io')).toEqual(['evil.io']);
+      expect(hosts('https://a.com/https://evil.io')).toEqual(['a.com', 'evil.io']);
+      expect(hosts('https://a.comhttps://evil.io')).toContain('evil.io');
+    });
+    it('finds hosts after = and & in attributes and query strings', () => {
+      expect(hosts('<a href=https://evil.io>x</a>')).toEqual(['evil.io']);
+      expect(hosts('href=evil.io')).toEqual(['evil.io']);
+      expect(hosts('src=//evil.io/x')).toEqual(['evil.io']);
+      expect(hosts('a.com/x?u=evil.io&v=1')).toEqual(['a.com', 'evil.io']);
+    });
+    it('finds hosts followed directly by non-ASCII text or punctuation', () => {
+      expect(hosts('evil.io、next')).toEqual(['evil.io']);
+      expect(hosts('evil.io中文')).toContain('evil.io');
+    });
+    it('keeps underscores and colon-prefixed or colon-suffixed hosts', () => {
+      expect(hosts('evil_x.io')).toEqual(['evil_x.io']);
+      expect(hosts('see:evil.io')).toEqual(['evil.io']);
+      expect(hosts('evil.io:abc')).toEqual(['evil.io']);
+    });
+  });
 });
