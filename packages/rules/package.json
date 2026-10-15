@@ -27,6 +27,7 @@
     "@feedbouncer/jobs": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
+    "linkify-it": "6.1.0",
     "pg": "8.23.1",
     "re2": "1.27.0",
     "tldts": "7.4.18",

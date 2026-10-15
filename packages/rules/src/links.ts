@@ -1,4 +1,5 @@
 import { domainToUnicode } from 'node:url';
+import { LinkifyIt } from 'linkify-it';
 import { parse } from 'tldts';
 import { MAX_HOST_CHARS, asciiHost, latinSkeleton } from './domains.js';
 import { linkText } from './normalize.js';
@@ -14,32 +15,30 @@ export interface LinkInfo {
 
 export interface LinkExtraction {
   links: LinkInfo[];
-  /** True when the link cap stopped extraction, so later links were not examined. */
+  /** True when a limit stopped extraction, so some links may not have been examined. */
   truncated: boolean;
 }
 
 // Links are only parsed, never fetched or resolved.
 //
-// Fail closed: the result is the union of two independent views of each token.
-//  1. URL view: the token (first MAX_TOKEN chars) parsed the way a browser would, plus
-//     lenient-parser variants (backslash userinfo, embedded schemes, de-tabbed URLs).
-//  2. Host-run view: every maximal dotted run of host-label characters anywhere in the
-//     token, whatever surrounds it. This is what a linkifier can turn into a link, and it
-//     does not depend on knowing every separator character.
-// Both views only add hosts; nothing in one view can suppress a host found by the other,
-// except the e-mail rule ("me@x.com" is an address, not a link).
+// Fail closed: the result is the union of two views of the text, and neither can hide
+// a host the other found (except that "me@x.com" is an e-mail address, not a link).
+//  1. Scheme view: URLs linkify-it recognises, re-read from the match start to the end
+//     of the token with the WHATWG URL parser (userinfo, IPs, IPv6 literals, ports).
+//  2. Host-run view: every dotted run of host-label characters, validated against the
+//     public suffix list. It does not depend on the separators or markup around it.
 const MAX_LINKS = 50;
 const MAX_TOKEN = 2048;
-// "[" and "]" are kept so IPv6 literals survive; they are trimmed per candidate.
-const SPLIT = /[\s<>"'`(){}|^]+/u;
+/** Host validations one extraction may spend on cutting invalid runs; see runHosts. */
+const MAX_RETRY_VALIDATIONS = 2000;
+/** How far back an "@" is checked for a ":" that makes it URL userinfo. */
+const USERINFO_LOOKBACK = 256;
+
+const linkify = new LinkifyIt({ fuzzyLink: false, fuzzyEmail: false, fuzzyIP: false });
+
+const TOKEN_END = /[\s<>"'`(){}|^,;]/g;
 const TLN = /[\t\n\r]/;
 const NON_TLN_SPACE = /[^\S\t\n\r]+/u;
-const KEEP_LEADING = /[\p{L}\p{N}/\\]/u;
-const TRAILING_CHARS = '.,!?;:…»”’)*_~';
-const EMBEDDED_SCHEME = /(?:https?|ftp|wss?):\/\//gi;
-const SCHEME = /^[a-z][a-z0-9+.-]{0,20}:\/\//i;
-// Special schemes a browser accepts with missing or wrong slashes ("https:/x", "http:x", "https:/\x").
-const SPECIAL_SCHEME = /^(https?|ftp|wss?):[/\\]*/i;
 // Host-label characters: any letter, digit or combining mark (IDN), "-" and "_".
 const LABEL = /[\p{L}\p{N}\p{M}_-]/u;
 // Same, but only scripts that build words with ASCII. A run of these that touches a CJK,
@@ -47,6 +46,8 @@ const LABEL = /[\p{L}\p{N}\p{M}_-]/u;
 const LATIN_LABEL =
   /[\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{Script=Inherited}\p{N}_-]/u;
 const EMAIL_LOCAL = /[\p{L}\p{N}\p{M}._%+-]/u;
+const WHITESPACE = /\s/u;
+const SEPARATORS = '.-_';
 const SCRIPTS = [/\p{Script=Latin}/u, /\p{Script=Cyrillic}/u, /\p{Script=Greek}/u];
 
 function mixedScript(unicodeHost: string): boolean {
@@ -62,115 +63,34 @@ function bareHost(text: string): string | null {
   return host;
 }
 
-/** "scheme://host:junk/x" with the port removed, for a URL whose port is invalid. */
-function withoutPort(url: string): string | null {
-  const s = url.indexOf('://');
-  if (s < 0) return null;
-  let end = url.length;
-  for (const c of '/?#') {
-    const i = url.indexOf(c, s + 3);
-    if (i >= 0 && i < end) end = i;
-  }
-  const hostStart = url.lastIndexOf('@', end - 1) + 1;
-  const colon = url.lastIndexOf(':', end - 1);
-  if (colon < Math.max(hostStart, s + 3) || url.lastIndexOf(']', end - 1) > colon) return null;
-  return url.slice(0, colon) + url.slice(end);
-}
-
-/** Linear scans (no regex backtracking). */
-function trim(part: string): string {
-  let start = 0;
-  for (const ch of part) {
-    if (KEEP_LEADING.test(ch)) break;
-    start += ch.length;
-  }
-  let end = part.length;
-  while (end > start) {
-    const c = part.charAt(end - 1);
-    if (
-      TRAILING_CHARS.includes(c) ||
-      part.charCodeAt(end - 1) <= 0x20 ||
-      part.charCodeAt(end - 1) === 0x7f
-    )
-      end -= 1;
-    else if (c === ']' && !part.includes('[', start)) end -= 1;
-    else break;
-  }
-  return part.slice(start, end);
-}
-
-/** Split on "," ";" "=" "&"; a comma between two digits keeps the part whole ("1,000.com" is one browser host). */
-function splitParts(token: string): string[] {
-  const parts: string[] = [];
-  let from = 0;
-  for (let i = 0; i < token.length; i++) {
-    const c = token.charAt(i);
-    if (c !== ',' && c !== ';' && c !== '=' && c !== '&') continue;
-    if (c === ',' && /\d/.test(token.charAt(i - 1)) && /\d/.test(token.charAt(i + 1))) continue;
-    parts.push(token.slice(from, i));
-    from = i + 1;
-  }
-  parts.push(token.slice(from));
-  return parts;
-}
-
-interface Candidate {
-  text: string;
-  hasScheme: boolean;
-  /** Scheme-relative: require a dotted host so "//todo" is not a link. */
-  needsDot?: boolean;
-}
-
-/** URL view: candidate link texts for one token, as browsers and lenient parsers read it. */
-function urlCandidates(token: string): Candidate[] {
-  const out: Candidate[] = [];
-  for (const raw of splitParts(token.slice(0, MAX_TOKEN))) {
-    let part = trim(raw);
-    if (part.length < 4) continue;
-    // A scheme in the middle of a token ("see:https://x", "a.comhttps://x") starts another link.
-    for (const m of part.matchAll(EMBEDDED_SCHEME)) {
-      if (m.index > 0) out.push({ text: part.slice(m.index), hasScheme: true });
+/**
+ * Hosts of the URLs linkify-it finds in `text`. linkify-it stops a match at "@" and at
+ * other characters a browser would keep, so the URL is re-read to the end of its token.
+ * A backslash ends the authority for a browser but not for lenient parsers, so the host
+ * after the last "@" is emitted as well.
+ */
+function schemeHosts(text: string, out: Set<string>): boolean {
+  let truncated = false;
+  for (const m of linkify.match(text) ?? []) {
+    if (m.schema === 'mailto:') continue;
+    TOKEN_END.lastIndex = m.index;
+    const end = TOKEN_END.exec(text)?.index ?? text.length;
+    let tail = text.slice(m.index, end);
+    if (tail.length > MAX_TOKEN) {
+      tail = tail.slice(0, MAX_TOKEN);
+      truncated = true;
     }
-    if (part.includes('\\')) {
-      // A lenient parser treats "\" as an ordinary character, so "@" still starts the host.
-      const authority = part.split(/[?#]/, 1)[0]!;
+    if (tail.startsWith('//')) tail = `http:${tail}`;
+    const host = asciiHost(tail) ?? asciiHost(m.url);
+    if (host !== null) out.add(host);
+    if (tail.includes('\\')) {
+      const authority = tail.slice(tail.indexOf('//') + 2).split(/[/?#]/, 1)[0]!;
       const at = authority.lastIndexOf('@');
-      if (at >= 0) out.push({ text: authority.slice(at + 1).replace(/\\/g, '/'), hasScheme: true });
-      part = part.replace(/\\/g, '/'); // browser view
+      const lenient = at >= 0 ? asciiHost(authority.slice(at + 1).replace(/\\/g, '/')) : null;
+      if (lenient !== null) out.add(lenient);
     }
-    if (part.startsWith('//')) {
-      out.push({ text: `http:${part}`, hasScheme: true, needsDot: true });
-      continue;
-    }
-    if (SPECIAL_SCHEME.test(part)) {
-      out.push({
-        text: part.replace(SPECIAL_SCHEME, (_m, s: string) => `${s.toLowerCase()}://`),
-        hasScheme: true,
-      });
-      continue;
-    }
-    if (SCHEME.test(part)) {
-      out.push({ text: part, hasScheme: true });
-      continue;
-    }
-    // Schemeless: the host a browser would use for "http://" + part.
-    // Drop userinfo when the token is URL-like; plain "name@host" is an e-mail.
-    const authority = part.split(/[/?#]/, 1)[0]!;
-    const at = authority.lastIndexOf('@');
-    let text = part;
-    if (at >= 0) {
-      const userinfo = authority.slice(0, at);
-      const after = authority.slice(at + 1);
-      const urlLike =
-        part.length > authority.length || userinfo.includes(':') || after.includes(':');
-      if (!urlLike) continue;
-      text = part.slice(at + 1);
-      // "evil.io:80@good.com": a linkifier may read the userinfo as the host.
-      if (userinfo.includes(':')) out.push({ text: userinfo.split(':', 1)[0]!, hasScheme: false });
-    }
-    out.push({ text, hasScheme: false });
   }
-  return out;
+  return truncated;
 }
 
 /** Maximal runs of label characters joined by single dots, as [start, end) code point indexes. */
@@ -191,112 +111,104 @@ function dottedRuns(cps: string[], isLabel: boolean[]): [number, number][] {
   return runs;
 }
 
-const SEPARATORS = '.-_';
-
-/**
- * Host validations (URL parse + tldts) one extraction may spend on retries: cutting an
- * invalid run into suffixes/prefixes, or re-parsing a URL without its port. First-try
- * validations always run and are counted too; once the budget is spent, retries stop and
- * the result is marked truncated so consumers fail closed.
- */
-const MAX_RETRY_VALIDATIONS = 2000;
-
-class Budget {
-  private left = MAX_RETRY_VALIDATIONS;
-  exhausted = false;
-  /** Count a first-try validation; never refused. */
-  spend(): void {
-    this.left -= 1;
+/** "local@host": an e-mail address unless the "@" is URL userinfo ("u:pw@host", "x@host/path"). */
+function isEmailHost(cps: string[], s: number, e: number): boolean {
+  if (s < 2 || cps[s - 1] !== '@' || !EMAIL_LOCAL.test(cps[s - 2]!)) return false;
+  if (e < cps.length && '/?#:'.includes(cps[e]!)) return false;
+  for (let k = s - 2; k >= Math.max(0, s - USERINFO_LOOKBACK); k--) {
+    if (WHITESPACE.test(cps[k]!)) break;
+    if (cps[k] === ':') return false;
   }
-  /** Ask for a retry validation; false (and marks exhaustion) once the budget is spent. */
-  retry(): boolean {
-    if (this.left <= 0) {
-      this.exhausted = true;
-      return false;
-    }
-    this.left -= 1;
-    return true;
-  }
+  return true;
 }
 
 /**
- * Host-run view: hosts of every dotted label run in the token. A run that is not itself a
+ * Host-run view: hosts of every dotted label run in the text. A run that is not itself a
  * public domain also contributes its longest valid suffix and prefix (cut at ".", "-" or
- * "_"), which is what a linkifier with a TLD list or label-length limit would link.
+ * "_"), which is what a linkifier with a TLD list or label-length limit would link. Cuts
+ * cost host validations; once the budget is spent they stop and the result is truncated.
  */
-function runHosts(token: string, budget: Budget): string[] {
-  const cps = Array.from(token);
+function runHosts(text: string, out: Set<string>): boolean {
+  const cps = Array.from(text);
   const n = cps.length;
   const full = cps.map((c) => LABEL.test(c));
   const latin = cps.map((c, k) => full[k]! && LATIN_LABEL.test(c));
-  const out: string[] = [];
-  const seenRuns = new Set<string>();
+  const seen = new Set<string>();
+  let budget = MAX_RETRY_VALIDATIONS;
+  let exhausted = false;
+  const cutHost = (candidate: string): string | null => {
+    if (budget <= 0) {
+      exhausted = true;
+      return null;
+    }
+    budget -= 1;
+    return bareHost(candidate);
+  };
+
   for (const isLabel of [full, latin]) {
     for (let [s, e] of dottedRuns(cps, isLabel)) {
       while (s < e && SEPARATORS.includes(cps[s]!)) s += 1;
       while (e > s && SEPARATORS.includes(cps[e - 1]!)) e -= 1;
       if (e - s < 3) continue;
-      // E-mail address ("me@x.com") or userinfo of a URL ("example.com@evil.io"): the URL
-      // view handles the URL-like forms; plain addresses are not links.
-      if (s >= 2 && cps[s - 1] === '@' && EMAIL_LOCAL.test(cps[s - 2]!)) continue;
+      // "example.com@evil.io": the part before "@" is userinfo, the part after it is the host.
       if (e + 1 < n && cps[e] === '@' && full[e + 1]) continue;
+      if (isEmailHost(cps, s, e)) continue;
       const run = cps.slice(s, e).join('');
-      if (!run.includes('.') || seenRuns.has(run)) continue;
-      seenRuns.add(run);
-      let whole: string | null = null;
-      if (run.length <= MAX_HOST_CHARS) {
-        budget.spend();
-        whole = bareHost(run);
-      }
+      if (!run.includes('.') || seen.has(run)) continue;
+      seen.add(run);
+      budget -= 1;
+      const whole = run.length <= MAX_HOST_CHARS ? bareHost(run) : null;
       if (whole !== null) {
-        out.push(whole);
+        out.add(whole);
         continue;
       }
       const cuts: number[] = [];
       for (let k = 0; k < run.length; k++) if (SEPARATORS.includes(run.charAt(k))) cuts.push(k);
-      // A retry segment needs a dot to be a domain; cuts are tried only while budget lasts.
-      const lastDot = run.lastIndexOf('.');
       const firstDot = run.indexOf('.');
+      const lastDot = run.lastIndexOf('.');
+      // Longest valid suffix (a suffix needs a dot), then longest valid prefix.
       for (const k of cuts) {
-        if (k >= lastDot) break;
+        if (k >= lastDot || exhausted) break;
         if (run.length - k - 1 > MAX_HOST_CHARS || SEPARATORS.includes(run.charAt(k + 1))) continue;
-        if (!budget.retry()) break;
-        const h = bareHost(run.slice(k + 1));
+        const h = cutHost(run.slice(k + 1));
         if (h !== null) {
-          out.push(h);
+          out.add(h);
           break;
         }
       }
-      for (let c = cuts.length - 1; c >= 0; c--) {
+      for (let c = cuts.length - 1; c >= 0 && !exhausted; c--) {
         const k = cuts[c]!;
         if (k <= firstDot) break;
         if (k > MAX_HOST_CHARS || SEPARATORS.includes(run.charAt(k - 1))) continue;
-        if (!budget.retry()) break;
-        const h = bareHost(run.slice(0, k));
+        const h = cutHost(run.slice(0, k));
         if (h !== null) {
-          out.push(h);
+          out.add(h);
           break;
         }
       }
     }
   }
-  return out;
+  return exhausted;
 }
 
 export function extractLinksDetailed(raw: string): LinkExtraction {
-  const seen = new Set<string>();
-  const links: LinkInfo[] = [];
-  let truncated = false;
-  const budget = new Budget();
+  const text = linkText(raw);
+  const hosts = new Set<string>();
+  let truncated = schemeHosts(text, hosts);
+  if (TLN.test(text)) {
+    // WHATWG URL parsing deletes tab/CR/LF anywhere, so a URL broken by them still navigates.
+    for (const chunk of text.split(NON_TLN_SPACE))
+      if (TLN.test(chunk))
+        truncated = schemeHosts(chunk.replace(/[\t\n\r]+/g, ''), hosts) || truncated;
+  }
+  truncated = runHosts(text, hosts) || truncated;
 
-  /** Returns false once the link cap is hit. */
-  const emit = (host: string): boolean => {
-    if (seen.has(host)) return true;
+  const links: LinkInfo[] = [];
+  for (const host of hosts) {
     if (links.length >= MAX_LINKS) {
       truncated = true;
-      return false;
+      break;
     }
-    seen.add(host);
     const unicodeHost = domainToUnicode(host) || host;
     links.push({
       host,
@@ -304,47 +216,8 @@ export function extractLinksDetailed(raw: string): LinkExtraction {
       mixedScript: mixedScript(unicodeHost),
       skeleton: latinSkeleton(unicodeHost),
     });
-    return true;
-  };
-
-  const text = linkText(raw);
-  const work: { token: string; schemeOnly: boolean }[] = [];
-  for (const token of text.split(SPLIT))
-    if (token.length > 0) work.push({ token, schemeOnly: false });
-  if (TLN.test(text)) {
-    // WHATWG URL parsing deletes tab/CR/LF anywhere, so a scheme URL broken by them still navigates.
-    for (const chunk of text.split(NON_TLN_SPACE)) {
-      if (!TLN.test(chunk)) continue;
-      for (const token of chunk.replace(/[\t\n\r]+/g, '').split(SPLIT)) {
-        if (token.length > 0) work.push({ token, schemeOnly: true });
-      }
-    }
   }
-
-  const done = (): LinkExtraction => ({ links, truncated: truncated || budget.exhausted });
-  for (const { token, schemeOnly } of work) {
-    if (token.length > MAX_TOKEN) truncated = true;
-    for (const { text: cand, hasScheme, needsDot } of urlCandidates(token)) {
-      if (schemeOnly && !hasScheme) continue;
-      let host: string | null;
-      budget.spend();
-      if (hasScheme) {
-        host = asciiHost(cand);
-        if (host === null) {
-          // Invalid port ("http://evil.io:abc/x"): a lenient linkifier still links the host.
-          const stripped = withoutPort(cand);
-          if (stripped !== null && budget.retry()) host = asciiHost(stripped);
-        }
-        if (host !== null && needsDot && !host.includes('.')) host = null;
-      } else {
-        host = bareHost(cand);
-      }
-      if (host !== null && !emit(host)) return done();
-    }
-    if (schemeOnly) continue;
-    for (const host of runHosts(token, budget)) if (!emit(host)) return done();
-  }
-  return done();
+  return { links, truncated };
 }
 
 export function extractLinks(raw: string): LinkInfo[] {
