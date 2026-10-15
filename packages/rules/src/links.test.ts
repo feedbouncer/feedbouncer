@@ -115,9 +115,9 @@ describe('extractLinks', () => {
       expect(hosts('//evil.io')).toEqual(['evil.io']);
     });
     it('does not split numbers on a comma between digits', () => {
-      expect(hosts('see 1,000.com')).toEqual(['000.com']);
-      expect(hosts('1,000.com')).toEqual(['000.com']);
-      expect(hosts('a1,000.com')).toEqual(['000.com']);
+      expect(hosts('see 1,000.com').sort()).toEqual(['000.com', '1,000.com']);
+      expect(hosts('1,000.com').sort()).toEqual(['000.com', '1,000.com']);
+      expect(hosts('a1,000.com').sort()).toEqual(['000.com', 'a1,000.com']);
       expect(hosts('evil.io,evil2.io')).toEqual(['evil.io', 'evil2.io']);
     });
     it('handles long punctuation runs in linear time', () => {
@@ -147,6 +147,90 @@ describe('extractLinks', () => {
       expect(hosts('evil_x.io')).toEqual(['evil_x.io']);
       expect(hosts('see:evil.io')).toEqual(['evil.io']);
       expect(hosts('evil.io:abc')).toEqual(['evil.io']);
+    });
+  });
+  describe('every dotted host run is a candidate (round 4)', () => {
+    const has = (s: string, ...want: string[]) =>
+      expect(hosts(s)).toEqual(expect.arrayContaining(want));
+
+    it('finds hosts glued to ASCII punctuation in ASCII-only text', () => {
+      has('evil.io!good', 'evil.io');
+      has('evil.io$x', 'evil.io');
+      has('evil.io+x.com', 'evil.io', 'x.com');
+      has('x.evil.io*good.com', 'x.evil.io', 'good.com');
+      has('evil.io~good.io', 'evil.io', 'good.io');
+      has('evil.io*good.io', 'evil.io', 'good.io');
+      has('evil.io…good.io', 'evil.io', 'good.io');
+    });
+    it('finds hosts on every side of any number of colons', () => {
+      has('a:b:c.evil.io', 'c.evil.io');
+      has('x:y.io:z.com', 'y.io', 'z.com');
+      has('a.com:80:b.com', 'a.com', 'b.com');
+      has('a::evil.io', 'evil.io');
+      has(':evil.io:', 'evil.io');
+      has('http://a.com:80:b.com/x', 'b.com');
+    });
+    it('emits the browser host of comma hosts and retries invalid ports', () => {
+      has('1,000.com', '1,000.com', '000.com');
+      has('http://evil.io:abc/x', 'evil.io');
+      has('http://localhost:abc/x', 'localhost');
+    });
+    it('finds a host next to any ASCII punctuation character', () => {
+      const punct = '!"#$%&\'()*+,/:;<=>?[\\]^`{|}~';
+      for (const p of punct) {
+        expect(hosts(`evil.io${p}x`), `after ${p}`).toContain('evil.io');
+        expect(hosts(`x${p}evil.io`), `before ${p}`).toContain('evil.io');
+      }
+      expect(hosts('evil.io-x')).toContain('evil.io');
+      expect(hosts('evil.io_x')).toContain('evil.io');
+      expect(hosts('evil.io.x')).toContain('evil.io');
+      expect(hosts('evil.io@')).toContain('evil.io');
+      expect(hosts('x@evil.io')).toEqual([]); // e-mail address
+    });
+    it('finds hosts next to CJK and full-width punctuation', () => {
+      has('「evil.io」', 'evil.io');
+      has('【evil.io】', 'evil.io');
+      has('evil.io，next', 'evil.io');
+      has('：evil.io', 'evil.io');
+      has('点击evil.io', 'evil.io');
+      has('evil.io。中文', 'evil.io');
+    });
+    it('finds hosts in markdown and HTML wrappers', () => {
+      has('[t](https://evil.io)', 'evil.io');
+      has('[t](evil.io)', 'evil.io');
+      has('<https://evil.io>', 'evil.io');
+      has('<a href="//evil.io">x</a>', 'evil.io');
+      has('![](evil.io/x.png)', 'evil.io');
+      has('**evil.io**', 'evil.io');
+      has('~~evil.io~~', 'evil.io');
+      has('`evil.io`', 'evil.io');
+    });
+    it('finds every host in concatenated URLs', () => {
+      has('https://a.com|https://b.com', 'a.com', 'b.com');
+      has('https://a.com*https://b.com', 'a.com', 'b.com');
+      has('a.com!b.com?c.com', 'a.com', 'b.com', 'c.com');
+      has('a..evil.io', 'evil.io');
+    });
+    it('finds hosts in long tokens past the first 2048 characters', () => {
+      has(`${'a'.repeat(3000)}!evil.io`, 'evil.io');
+    });
+    it('falls back to a valid suffix or prefix of an invalid run', () => {
+      const under = (s: string) => hosts(s).some((h) => h === 'evil.io' || h.endsWith('.evil.io'));
+      expect(under('xn--a.evil.io')).toBe(true);
+      expect(under(`${'a.'.repeat(200)}evil.io`)).toBe(true);
+      has('evil.io.zzzz', 'evil.io');
+    });
+    it('still ignores e-mail addresses and non-links', () => {
+      expect(hosts('john.doe@gmail.com')).toEqual([]);
+      expect(hosts('v1.2.3 1,000.00 file.txt 3.14 e.g. i.e.')).toEqual([]);
+      expect(hosts('https://example.com@evil.io/x')).toEqual(['evil.io']);
+    });
+    it('stays linear on long dotted and punctuated runs', () => {
+      const t = Date.now();
+      extractLinks('a.'.repeat(10000));
+      extractLinks('a-'.repeat(10000) + '.io');
+      extractLinks('!a.b'.repeat(5000));
+      expect(Date.now() - t).toBeLessThan(2000);
     });
   });
 });
