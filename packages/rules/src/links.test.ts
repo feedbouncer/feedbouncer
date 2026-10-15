@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractLinks } from './links.js';
+import { extractLinks, extractLinksDetailed } from './links.js';
 
 const hosts = (s: string) => extractLinks(s).map((l) => l.host);
 
@@ -21,15 +21,15 @@ describe('extractLinks', () => {
     expect(hosts('example.com.evil.io/path')).toEqual(['example.com.evil.io']);
   });
   it('converts IDN to punycode and flags mixed-script labels', () => {
-    const [l] = extractLinks('https://еxample.com'); // Cyrillic е
+    const [l] = extractLinks('https://\u0435xample.com'); // Cyrillic e
     expect(l!.host).toMatch(/^xn--/);
     expect(l!.mixedScript).toBe(true);
     expect(l!.skeleton).toBe('example.com');
-    const [ok] = extractLinks('español.com');
+    const [ok] = extractLinks('espa\u00F1ol.com');
     expect(ok).toMatchObject({ host: 'xn--espaol-zwa.com', mixedScript: false });
   });
   it('defeats zero-width and full-width dot obfuscation', () => {
-    expect(hosts('evil​.io and bad．io')).toEqual(['evil.io', 'bad.io']);
+    expect(hosts('evil\u200B.io and bad\uFF0Eio')).toEqual(['evil.io', 'bad.io']);
   });
   it('ignores emails, version numbers, file names, decimals and "dot" spelling', () => {
     expect(hosts('mail me@x.com, v1.2.3, file.txt, 3.14, example dot com')).toEqual([]);
@@ -45,6 +45,38 @@ describe('extractLinks', () => {
   });
   it('returns [] for empty and emoji-only text', () => {
     expect(extractLinks('')).toEqual([]);
-    expect(extractLinks('🔥🔥🔥')).toEqual([]);
+    expect(extractLinks('\u{1F525}\u{1F525}\u{1F525}')).toEqual([]);
+  });
+  describe('fail-closed hardening', () => {
+    it('keeps userinfo URLs without a scheme, but not plain e-mail addresses', () => {
+      expect(hosts('name@evil.io/path')).toEqual(['evil.io']);
+      expect(hosts('user:pw@evil.io')).toEqual(['evil.io']);
+      expect(hosts('a@b@evil.io/x?y=1')).toEqual(['evil.io']);
+      expect(hosts('me@x.com')).toEqual([]);
+    });
+    it('emits both views of a backslash userinfo trick', () => {
+      expect(hosts('https://example.com\\@evil.io').sort()).toEqual(['evil.io', 'example.com']);
+      expect(hosts('example.com\\@evil.io/x').sort()).toEqual(['evil.io', 'example.com']);
+    });
+    it('handles scheme-relative and malformed-slash special schemes like a browser', () => {
+      expect(hosts('//evil.io/x')).toEqual(['evil.io']);
+      expect(hosts('https:/evil.io')).toEqual(['evil.io']);
+      expect(hosts('http:evil.io')).toEqual(['evil.io']);
+      expect(hosts('https:/\\evil.io')).toEqual(['evil.io']);
+    });
+    it('does not skip very long tokens', () => {
+      expect(hosts(`https://evil.io/${'a'.repeat(5000)}`)).toEqual(['evil.io']);
+      expect(hosts(`evil.io/${'a'.repeat(5000)}`)).toEqual(['evil.io']);
+    });
+    it('splits comma and semicolon joined links and ignores markdown decoration', () => {
+      expect(hosts('evil.io,evil2.io;evil3.io')).toEqual(['evil.io', 'evil2.io', 'evil3.io']);
+      expect(hosts('https://a.com,https://b.com')).toEqual(['a.com', 'b.com']);
+      expect(hosts('*evil.io* _bad.io_')).toEqual(['evil.io', 'bad.io']);
+    });
+    it('reports when the link cap truncated the result', () => {
+      const many = Array.from({ length: 80 }, (_, i) => `x${i}.com`).join(' ');
+      expect(extractLinksDetailed(many)).toMatchObject({ truncated: true });
+      expect(extractLinksDetailed('a.com')).toMatchObject({ truncated: false });
+    });
   });
 });
