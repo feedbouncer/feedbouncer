@@ -115,7 +115,10 @@ describe('extractLinks', () => {
       expect(hosts('//evil.io')).toEqual(['evil.io']);
     });
     it('does not split numbers on a comma between digits', () => {
-      expect(hosts('costs 1,000.com today')).toEqual([]);
+      expect(hosts('see 1,000.com')).toEqual(['000.com']);
+      expect(hosts('1,000.com')).toEqual(['000.com']);
+      expect(hosts('a1,000.com')).toEqual(['000.com']);
+      expect(hosts('evil.io,evil2.io')).toEqual(['evil.io', 'evil2.io']);
     });
     it('handles long punctuation runs in linear time', () => {
       const t = Date.now();

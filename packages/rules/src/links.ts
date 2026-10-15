@@ -56,7 +56,7 @@ function trim(part: string): string {
   return part.slice(start, end);
 }
 
-/** Split on "," and ";" but not on a comma between two digits ("1,000.com"). */
+/** Split on "," and ";"; a comma between two digits keeps the part whole, and its comma-split tails are tried as well. */
 function splitParts(token: string): string[] {
   const parts: string[] = [];
   let from = 0;
@@ -68,6 +68,8 @@ function splitParts(token: string): string[] {
     from = i + 1;
   }
   parts.push(token.slice(from));
+  // Fail closed: a part kept whole by the digit exception may still hide a link after the comma.
+  for (const part of parts.slice()) if (part.includes(',')) parts.push(...part.split(','));
   return parts;
 }
 
