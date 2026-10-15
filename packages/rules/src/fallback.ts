@@ -30,33 +30,25 @@ export class RuleActionFallback implements ActionOutcomeObserver {
       return;
     }
     const brand = { organizationId: e.scope.organizationId, brandId: e.scope.brandId };
-    try {
-      const info = await this.#evaluations.loadForFallback(brand, evaluationId);
-      if (!info || (info.outcome !== 'hide' && info.outcome !== 'remove')) return;
-      if (e.status === 'applied') {
-        const verb = info.outcome === 'remove' ? 'deleted' : 'hid';
-        await this.#evaluations.recordRecovered(
-          brand,
-          evaluationId,
-          `Rule "${info.ruleName}" ${verb} this comment after a retry.`,
-        );
-        return;
-      }
-      const code = e.code ?? 'failed';
-      const recorded = await this.#evaluations.recordFallback(
+    const info = await this.#evaluations.loadForFallback(brand, evaluationId);
+    if (!info || (info.outcome !== 'hide' && info.outcome !== 'remove')) return;
+    if (e.status === 'applied') {
+      const verb = info.outcome === 'remove' ? 'deleted' : 'hid';
+      await this.#evaluations.recordRecovered(
         brand,
         evaluationId,
-        code,
-        describeFallback(info.ruleName, info.outcome, code, e.platform),
+        `Rule "${info.ruleName}" ${verb} this comment after a retry.`,
       );
-      if (recorded)
-        this.#log.info('rule_action_fallback', { evaluationId, commentId: e.commentId, code });
-    } catch (err) {
-      this.#log.warn('rule_fallback_failed', {
-        evaluationId,
-        actionId: e.actionId,
-        errorName: err instanceof Error ? err.name : 'NonError',
-      });
+      return;
     }
+    const code = e.code ?? 'failed';
+    const recorded = await this.#evaluations.recordFallback(
+      brand,
+      evaluationId,
+      code,
+      describeFallback(info.ruleName, info.outcome, code, e.platform),
+    );
+    if (recorded)
+      this.#log.info('rule_action_fallback', { evaluationId, commentId: e.commentId, code });
   }
 }

@@ -37,10 +37,18 @@ describe('DecisionBadge', () => {
       ...base,
       outcome: 'flag',
       fallback: true,
-      reason: 'Facebook refused',
-      action: { kind: 'delete', status: 'failed', outcomeCode: null },
+      reason: 'Rule "Scams" wanted to delete this comment, but it was refused.',
+      action: { kind: 'delete', status: 'failed', outcomeCode: 'unsupported' },
     });
-    expect(html).toContain('Flagged for review: rule couldn&#x27;t delete (Facebook refused)');
+    expect(html).toContain('Flagged for review: rule couldn&#x27;t delete (');
+    expect(html).not.toContain('wanted to delete');
+  });
+
+  it('shows the fallback sentence alone when no outcome code is known', () => {
+    const reason = 'Rule "Scams" wanted to hide this comment, but it is rate limited.';
+    const html = render({ ...base, outcome: 'flag', fallback: true, reason, action: null });
+    expect(html).toContain('Rule &quot;Scams&quot; wanted to hide this comment');
+    expect(html).not.toContain('rule couldn&#x27;t');
   });
 
   it('renders the reason as escaped text', () => {

@@ -20,9 +20,10 @@ const ATTEMPT: Record<string, string> = { hide: 'hide', delete: 'delete' };
 export function decisionText(d: DecisionView): string {
   const who = d.rule ? `rule ${d.rule.name}` : actorTypeText(d.actorType);
   if (d.fallback) {
-    const tried = d.action ? (ATTEMPT[d.action.kind] ?? 'act') : 'act';
-    const why = d.action?.outcomeCode ? outcomeText(d.action.outcomeCode) : d.reason;
-    return `Flagged for review: rule couldn't ${tried} (${why})`;
+    const code = d.action?.outcomeCode;
+    if (!d.action || !code) return d.reason;
+    const tried = ATTEMPT[d.action.kind] ?? 'act';
+    return `Flagged for review: rule couldn't ${tried} (${outcomeText(code)})`;
   }
   if (d.mode === 'suggest') return `Dry run: would ${VERB[d.outcome]} (${who})`;
   return `${DONE[d.outcome]} by ${who}`;

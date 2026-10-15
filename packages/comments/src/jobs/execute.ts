@@ -362,7 +362,7 @@ export function executeActionJob(d: {
   /** Enqueues the resync ingest after outcomes the platform decided. */
   producer: Pick<JobProducer, 'enqueue'>;
   clock: Clock;
-  /** Told about final statuses and about the first deferral of a throttled or re-authorizing action. */
+  /** Told about final statuses and about every deferral of a throttled or re-authorizing action; observer errors are logged, never thrown. */
   outcomes?: ActionOutcomeObserver;
 }): JobDefinition<ExecutePayload> {
   return {

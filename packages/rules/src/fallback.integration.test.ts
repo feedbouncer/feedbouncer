@@ -197,7 +197,7 @@ describe('RuleActionFallback', () => {
     expect(await evaluation(a.evaluationId)).toMatchObject({ fell_back: false });
   });
 
-  it('does not throw when the store fails', async () => {
+  it('propagates store failures to the caller, which logs them', async () => {
     const s = await seed();
     const broken = new RuleActionFallback({
       evaluations: {
@@ -207,7 +207,7 @@ describe('RuleActionFallback', () => {
       } as unknown as PgEvaluationStore,
       log: quiet,
     });
-    await expect(broken.onActionOutcome(outcome(s, { code: 'failed' }))).resolves.toBeUndefined();
+    await expect(broken.onActionOutcome(outcome(s, { code: 'failed' }))).rejects.toThrow('db down');
   });
 });
 

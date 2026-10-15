@@ -200,10 +200,14 @@ export class PgRuleStore {
       mode: patch.mode ?? row.mode,
       enabled: patch.enabled ?? row.enabled,
     };
-    const parsed = ruleConditionsSchema.safeParse(merged.conditions);
-    if (!parsed.success) throw new InvalidRuleConditionsError();
-    if (checkActionForConditions(parsed.data, merged.action) !== null)
-      throw new InvalidRuleActionError();
+    let conditions: unknown = row.conditions;
+    if (patch.conditions !== undefined || patch.action !== undefined) {
+      const parsed = ruleConditionsSchema.safeParse(merged.conditions);
+      if (!parsed.success) throw new InvalidRuleConditionsError();
+      if (checkActionForConditions(parsed.data, merged.action) !== null)
+        throw new InvalidRuleActionError();
+      conditions = parsed.data;
+    }
     const { rows } = await tx.query<RuleRow>(
       `UPDATE rule SET name = $4, conditions = $5::jsonb, action = $6, mode = $7, enabled = $8
         WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND archived_at IS NULL
@@ -213,7 +217,7 @@ export class PgRuleStore {
         scope.brandId,
         ruleId,
         merged.name,
-        JSON.stringify(parsed.data),
+        JSON.stringify(conditions),
         merged.action,
         merged.mode,
         merged.enabled,

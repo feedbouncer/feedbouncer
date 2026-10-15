@@ -71,6 +71,18 @@ describe('PgRuleStore rules', () => {
     expect(a.enabled).toBe(true);
   });
 
+  it('toggles enabled and mode on a rule stored in an old format', async () => {
+    const { scope } = await fresh();
+    const a = await tx((c) => store.create(c, scope, kw('legacy')));
+    await ctx.c.query(`UPDATE rule SET conditions = '{"type":"old_format"}'::jsonb WHERE id = $1`, [
+      a.id,
+    ]);
+    const off = await tx((c) => store.update(c, scope, a.id, { enabled: false, mode: 'suggest' }));
+    expect(off).toMatchObject({ enabled: false, mode: 'suggest' });
+    expect(off?.conditions).toEqual({ type: 'old_format' });
+    await expect(tx((c) => store.update(c, scope, a.id, { action: 'flag' }))).rejects.toThrow();
+  });
+
   it('lists in evaluation order, hides archived, and isolates tenants', async () => {
     const { scope } = await fresh();
     const other = await fresh();
