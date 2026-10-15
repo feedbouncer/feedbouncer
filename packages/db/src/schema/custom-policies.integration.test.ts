@@ -143,6 +143,36 @@ describe('decision with actor_type policy', () => {
   });
 });
 
+describe('policy deletion', () => {
+  it('refuses a hard delete of a policy that has decisions', async () => {
+    const { policyId, revisionId } = await policy(t);
+    const cid = await comment(t);
+    const ev = await evaluation(t, cid, revisionId);
+    await ctx.c.query(
+      `INSERT INTO decision (organization_id, brand_id, comment_id, outcome, mode, actor_type, reason, policy_evaluation_id, policy_revision_id)
+       VALUES ($1, $2, $3, 'hide', 'enforce', 'policy', 'r', $4, $5)`,
+      [t.organizationId, t.brandId, cid, ev, revisionId],
+    );
+    await expectPgError(ctx.c.query(`DELETE FROM custom_policy WHERE id = $1`, [policyId]), '23503');
+    const n = await ctx.c.query(`SELECT count(*)::int AS n FROM decision WHERE policy_revision_id = $1`, [revisionId]);
+    expect(n.rows[0].n).toBe(1);
+  });
+  it('still lets a brand delete cascade through policies and their decisions', async () => {
+    const x = await seedTenant(ctx.c, 'pol-del');
+    const { revisionId } = await policy(x);
+    const cid = await comment(x);
+    const ev = await evaluation(x, cid, revisionId);
+    await ctx.c.query(
+      `INSERT INTO decision (organization_id, brand_id, comment_id, outcome, mode, actor_type, reason, policy_evaluation_id, policy_revision_id)
+       VALUES ($1, $2, $3, 'hide', 'enforce', 'policy', 'r', $4, $5)`,
+      [x.organizationId, x.brandId, cid, ev, revisionId],
+    );
+    await ctx.c.query(`DELETE FROM brand WHERE id = $1`, [x.brandId]);
+    const n = await ctx.c.query(`SELECT count(*)::int AS n FROM custom_policy WHERE brand_id = $1`, [x.brandId]);
+    expect(n.rows[0].n).toBe(0);
+  });
+});
+
 describe('policy_evaluation', () => {
   it('is unique per (comment, body, trigger) and its evidence is write-once', async () => {
     const { revisionId } = await policy(t);

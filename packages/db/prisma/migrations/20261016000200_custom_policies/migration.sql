@@ -328,15 +328,16 @@ CREATE INDEX policy_usage_organization_id_brand_id_idx ON policy_usage (organiza
 CREATE TRIGGER policy_usage_set_updated_at_trg BEFORE UPDATE ON policy_usage
   FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
 
--- Decisions made by a policy.
+-- Decisions made by a policy. Deferred NO ACTION (as decision_brand_id_rule_id_fkey): brand and
+-- comment cascades still work, but a direct policy hard delete cannot remove decisions.
 ALTER TABLE decision
   ADD COLUMN policy_evaluation_id uuid,
   ADD COLUMN policy_revision_id uuid;
 ALTER TABLE decision
   ADD CONSTRAINT decision_policy_evaluation_id_fkey FOREIGN KEY (brand_id, policy_evaluation_id)
-    REFERENCES policy_evaluation (brand_id, id) ON DELETE CASCADE,
+    REFERENCES policy_evaluation (brand_id, id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
   ADD CONSTRAINT decision_policy_revision_id_fkey FOREIGN KEY (brand_id, policy_revision_id)
-    REFERENCES custom_policy_revision (brand_id, id) ON DELETE CASCADE;
+    REFERENCES custom_policy_revision (brand_id, id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED;
 CREATE INDEX decision_policy_evaluation_id_idx ON decision (policy_evaluation_id) WHERE policy_evaluation_id IS NOT NULL;
 CREATE INDEX decision_policy_revision_id_idx ON decision (policy_revision_id) WHERE policy_revision_id IS NOT NULL;
 ALTER TABLE decision DROP CONSTRAINT decision_actor_type_check,

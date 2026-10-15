@@ -1,10 +1,5 @@
-DELETE FROM moderation_action WHERE actor_type = 'policy';
--- audit_event is append-only, so the rows with the 'policy' actor are removed with
--- the delete guard disabled for this one statement; a NOT VALID constraint would leave
--- the schema different from the one before this migration.
-ALTER TABLE audit_event DISABLE TRIGGER audit_event_append_only_trg;
-DELETE FROM audit_event WHERE actor_type = 'policy';
-ALTER TABLE audit_event ENABLE TRIGGER audit_event_append_only_trg;
+-- No rows are deleted here: if policy moderation_action, audit_event or decision rows
+-- exist, re-adding the old checks fails and the rollback aborts.
 ALTER TABLE audit_event DROP CONSTRAINT audit_event_actor_type_check,
   ADD CONSTRAINT audit_event_actor_type_check CHECK (actor_type IN ('user', 'system', 'rule', 'classifier'));
 ALTER TABLE moderation_action DROP CONSTRAINT moderation_action_actor_type_check,
