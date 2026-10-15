@@ -107,6 +107,48 @@ describe('PgCommentStore', () => {
     expect(done).toMatchObject({ needsHook: false, hookBody: null });
   });
 
+  it('a backfill snapshot with a new body is never evaluated: it replaces and clears the pending marker', async () => {
+    const c = comment({ body: 'live text' });
+    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    expect(a.needsHook).toBe(true);
+    const r = await store.upsertFromPlatform(
+      scope(),
+      { ...c, body: 'backfilled text' },
+      {
+        ...own(2),
+        origin: 'backfill',
+      },
+    );
+    expect(r).toMatchObject({ applied: true, needsHook: false, hookBody: null });
+    expect(await store.pendingHooks(scope(), 100)).not.toContainEqual(
+      expect.objectContaining({ commentId: a.commentId }),
+    );
+  });
+
+  it('pendingHooks lists only this connection, live, non-deleted rows', async () => {
+    const c = comment({ body: 'listed' });
+    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    expect(await store.pendingHooks(scope(), 1000)).toContainEqual({
+      commentId: a.commentId,
+      body: 'listed',
+    });
+    expect(await store.pendingHooks(foreignScope(), 1000)).toEqual([]);
+  });
+
+  it('a delete clears the pending marker', async () => {
+    const c = comment({ body: 'to delete' });
+    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    await store.markDeleted(
+      scope(),
+      { sourceExternalId: c.sourceExternalId, externalId: c.externalId },
+      at(2),
+    );
+    const r = await pool.query('SELECT hook_pending_sha256 FROM comment WHERE id = $1', [
+      a.commentId,
+    ]);
+    expect(r.rows[0].hook_pending_sha256).toBeNull();
+  });
+
   it('never marks backfilled comments pending', async () => {
     const r = await store.upsertFromPlatform(scope(), comment({ body: 'old' }), {
       ...own(1),

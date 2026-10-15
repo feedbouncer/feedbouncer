@@ -196,6 +196,22 @@ const bodySha = (body: string): Buffer => createHash('sha256').update(body, 'utf
 export class PgCommentStore {
   constructor(private readonly pool: pg.Pool) {}
 
+  /** Live, non-deleted comments of one connection whose body the hook was not yet told about. */
+  async pendingHooks(
+    scope: ConnectionScope,
+    limit: number,
+  ): Promise<{ commentId: string; body: string }[]> {
+    const r = await this.pool.query<{ id: string; body: string }>(
+      `SELECT id, body FROM comment
+        WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3
+          AND hook_pending_sha256 IS NOT NULL AND platform_state <> 'deleted'
+        ORDER BY platform_synced_at NULLS FIRST, id
+        LIMIT $4`,
+      [...ids(scope), limit],
+    );
+    return r.rows.map((x) => ({ commentId: x.id, body: x.body }));
+  }
+
   /** Clears the pending hook marker, only while it still names the delivered body version. */
   async markHookDelivered(scope: ConnectionScope, commentId: string, body: string): Promise<void> {
     await this.pool.query(
@@ -315,11 +331,13 @@ export class PgCommentStore {
         applied && (created || prev.rows[0] === undefined || prev.rows[0].body !== newBody);
       // A new live body, or an earlier one whose delivery was never recorded.
       const hookBody =
-        applied && live && bodyChanged
-          ? newBody
-          : prev.rows[0]?.pending === true && !(applied && bodyChanged)
-            ? prev.rows[0].body
-            : null;
+        c.platformState === 'deleted'
+          ? null
+          : applied && live && bodyChanged
+            ? newBody
+            : prev.rows[0]?.pending === true && !(applied && bodyChanged)
+              ? prev.rows[0].body
+              : null;
       return { commentId, created, applied, bodyChanged, needsHook: hookBody !== null, hookBody };
     });
   }
@@ -360,7 +378,7 @@ export class PgCommentStore {
     syncedAt: Date,
   ): Promise<string | null> {
     const r = await this.pool.query<{ id: string }>(
-      `UPDATE comment c SET platform_state = 'deleted',
+      `UPDATE comment c SET platform_state = 'deleted', hook_pending_sha256 = NULL,
               platform_synced_at = GREATEST(c.platform_synced_at, $5)
         WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3
           AND c.external_id = $4
@@ -389,6 +407,7 @@ export class PgCommentStore {
          VALUES ($1, $2, $3, $4, $5, '', 'deleted', $6, $7)
          ON CONFLICT (connection_id, external_id) DO UPDATE SET
            platform_state = 'deleted',
+           hook_pending_sha256 = NULL,
            platform_synced_at = GREATEST(comment.platform_synced_at, EXCLUDED.platform_synced_at)
          WHERE comment.organization_id = $1 AND comment.brand_id = $2
          RETURNING id`,

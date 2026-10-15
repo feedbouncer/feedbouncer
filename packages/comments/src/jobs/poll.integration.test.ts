@@ -292,7 +292,84 @@ beforeEach(async () => {
   graph.removeAds(adAccountId);
 });
 
-describe('ad poll job', () => {
+describe('ad poll job: pending hook delivery', () => {
+  const mkJob = (onApplied: (e: { body: string; commentId: string }) => Promise<void>) =>
+    adPollJob({ runtime, directory, store, tracking, clock, settings, applied: { onApplied } });
+  const go = (job: ReturnType<typeof mkJob>) =>
+    job.handle(jobCtx(fbScope, 'facebook', POLL_JOB.type), POLL_JOB.payload.parse({ bucket: 1 }));
+
+  it('a poison item does not starve a later item; the job still fails', async () => {
+    const { postId } = graph.addDarkPost(pageId);
+    graph.addAd(adAccountId, { storyId: postId });
+    await discover();
+    graph.addComment(pageId, { postId, message: 'poison', createdAtMs: nowMs - 30_000 });
+    graph.addComment(pageId, { postId, message: 'fine', createdAtMs: nowMs - 60_000 });
+    const seen: string[] = [];
+    const job = mkJob(async (e) => {
+      seen.push(e.body);
+      if (e.body === 'poison') throw new Error('poison');
+    });
+    await expect(go(job)).rejects.toThrow('poison');
+    expect(seen.sort()).toEqual(['fine', 'poison']);
+    const done = mkJob(async () => {});
+    advance(10 * 60_000);
+    await go(done);
+    // the later item was cleared: only the poison one is still owed
+    const left = await pool.query(
+      `SELECT body FROM comment WHERE connection_id = $1 AND hook_pending_sha256 IS NOT NULL`,
+      [fbScope.connectionId],
+    );
+    expect(left.rows).toEqual([]);
+  });
+
+  it('delivers a pending comment outside the overlap window via the sweep; skips deleted', async () => {
+    const { postId } = graph.addDarkPost(pageId);
+    graph.addAd(adAccountId, { storyId: postId });
+    await discover();
+    const old = graph.addComment(pageId, {
+      postId,
+      message: 'ancient',
+      createdAtMs: nowMs - 90 * 86_400_000,
+    });
+    const gone = graph.addComment(pageId, {
+      postId,
+      message: 'removed',
+      createdAtMs: nowMs - 80 * 86_400_000,
+    });
+    const mk = (c: { commentId: string }, body: string) =>
+      store.upsertFromPlatform(
+        fbScope,
+        {
+          externalId: c.commentId,
+          sourceExternalId: postId,
+          parentExternalId: null,
+          author: null,
+          body,
+          postedAt: new Date(nowMs - 90 * 86_400_000),
+          platformState: 'visible',
+          permalink: null,
+        },
+        { ownAccountExternalId: pageId, syncedAt: new Date(nowMs - 1000) },
+      );
+    const a = await mk(old, 'ancient');
+    const b = await mk(gone, 'removed');
+    await store.markDeleted(
+      fbScope,
+      { sourceExternalId: postId, externalId: gone.commentId },
+      new Date(nowMs),
+    );
+    const seen: { commentId: string; body: string }[] = [];
+    const job = mkJob(async (e) => void seen.push({ commentId: e.commentId, body: e.body }));
+    await go(job);
+    expect(seen.map((s) => s.commentId)).toContain(a.commentId);
+    expect(seen.map((s) => s.commentId)).not.toContain(b.commentId);
+    const still = await pool.query(
+      `SELECT id FROM comment WHERE id = $1 AND hook_pending_sha256 IS NOT NULL`,
+      [a.commentId],
+    );
+    expect(still.rows).toEqual([]);
+  });
+
   it('redelivers a failed hook on the next poll, once, then stays quiet', async () => {
     const { postId } = graph.addDarkPost(pageId);
     graph.addAd(adAccountId, { storyId: postId });

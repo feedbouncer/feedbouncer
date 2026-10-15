@@ -170,5 +170,7 @@ ALTER TABLE comment
   ADD COLUMN hook_pending_sha256 bytea,
   ADD CONSTRAINT comment_hook_pending_sha256_check
     CHECK (hook_pending_sha256 IS NULL OR octet_length(hook_pending_sha256) = 32);
+CREATE INDEX comment_connection_id_hook_pending_idx
+  ON comment (organization_id, brand_id, connection_id) WHERE hook_pending_sha256 IS NOT NULL;
 
 COMMIT;

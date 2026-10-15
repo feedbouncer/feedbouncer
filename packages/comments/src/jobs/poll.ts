@@ -54,7 +54,13 @@ export async function pollSource(
   ownAccountExternalId: string,
   s: DueSource,
   deadlineMs: number,
-): Promise<{ result: 'done' | 'resume'; created: number; updated: number }> {
+): Promise<{
+  result: 'done' | 'resume';
+  created: number;
+  updated: number;
+  /** The first hook failure of the pass; the pass itself completed and its progress is saved. */
+  hookError?: unknown;
+}> {
   const at = new Date(d.clock.now());
   const deep =
     platform === 'instagram' &&
@@ -70,6 +76,7 @@ export async function pollSource(
   let newest = s.resumeNewestAt;
   let created = 0;
   let updated = 0;
+  let hookError: { error: unknown } | null = null;
   const saveResume = (c: string) =>
     d.tracking.savePollProgress(scope, s.sourceId, {
       kind: 'resume',
@@ -115,14 +122,19 @@ export async function pollSource(
         }
       } else if (r.outcome === 'updated') updated++;
       if (d.applied && r.needsHook && r.hookBody !== null) {
-        await d.applied.onApplied({
-          scope,
-          platform,
-          commentId: r.commentId,
-          body: r.hookBody,
-          outcome: r.outcome === 'created' ? 'created' : 'updated',
-        });
-        await d.store.markHookDelivered(scope, r.commentId, r.hookBody);
+        // One failing item must not starve the rest; its marker stays pending.
+        try {
+          await d.applied.onApplied({
+            scope,
+            platform,
+            commentId: r.commentId,
+            body: r.hookBody,
+            outcome: r.outcome === 'created' ? 'created' : 'updated',
+          });
+          await d.store.markHookDelivered(scope, r.commentId, r.hookBody);
+        } catch (err) {
+          hookError ??= { error: err };
+        }
       }
       if (newest === null || c.postedAt > newest) newest = c.postedAt;
     }
@@ -138,17 +150,30 @@ export async function pollSource(
         at,
         nextPollAt: new Date(at.getTime() + d.settings.intervalSec * 1000),
       });
-      return { result: 'done', created, updated };
+      return {
+        result: 'done',
+        created,
+        updated,
+        ...(hookError ? { hookError: hookError.error } : {}),
+      };
     }
     if (page.nextCursor === cursor) throw new ConnectorError('permanent', 'cursor_stalled');
     cursor = page.nextCursor;
     // Checked after a page: every job advances the pass, and a resume always has a cursor.
     if (d.clock.now() >= deadlineMs) {
       await saveResume(cursor);
-      return { result: 'resume', created, updated };
+      return {
+        result: 'resume',
+        created,
+        updated,
+        ...(hookError ? { hookError: hookError.error } : {}),
+      };
     }
   }
 }
+
+/** Most pending hook deliveries one poll job sweeps before polling. */
+const PENDING_SWEEP_LIMIT = 100;
 
 /** What an unreadable source's code is when the media itself, or the whole account, is refused. */
 const SOURCE_INACCESSIBLE = 'source_inaccessible';
@@ -169,12 +194,30 @@ export function adPollJob(
       if (!rec) throw new JobError('non_retryable', 'connection_not_found');
       const counts = { sources: 0, done: 0, resumed: 0, unavailable: 0, created: 0, updated: 0 };
       let inaccessible = 0;
+      let hookFailure: { error: unknown } | null = null;
       if (rec.status !== 'active') return counts;
       const platform = rec.platform;
       if (platform !== 'facebook' && platform !== 'instagram')
         throw new JobError('non_retryable', 'unsupported_platform');
 
       const client = await d.runtime.connect(ctx.scope);
+      // Pending markers of comments no pass will re-read are delivered here, bounded per job.
+      if (d.applied) {
+        for (const p of await d.store.pendingHooks(ctx.scope, PENDING_SWEEP_LIMIT)) {
+          try {
+            await d.applied.onApplied({
+              scope: ctx.scope,
+              platform,
+              commentId: p.commentId,
+              body: p.body,
+              outcome: 'updated',
+            });
+            await d.store.markHookDelivered(ctx.scope, p.commentId, p.body);
+          } catch (err) {
+            hookFailure ??= { error: err };
+          }
+        }
+      }
       const deadline = d.clock.now() + d.settings.softDeadlineMs;
       const due = await d.tracking.dueSources(ctx.scope, new Date(d.clock.now()), {
         graceDays: d.settings.graceDays,
@@ -197,6 +240,7 @@ export function adPollJob(
           counts[r.result === 'done' ? 'done' : 'resumed']++;
           counts.created += r.created;
           counts.updated += r.updated;
+          if (r.hookError !== undefined) hookFailure ??= { error: r.hookError };
         } catch (err) {
           const ce = err instanceof ConnectorError ? err : null;
           if (ce && sourceFailure(ce)) {
@@ -243,6 +287,8 @@ export function adPollJob(
         await d.directory.markReauthRequired(ctx.scope, 'oauth_access_rejected');
         throw new JobError('non_retryable', 'permission_revoked');
       }
+      // After every source was served: the job fails (and retries) but nothing starved.
+      if (hookFailure) throw hookFailure.error;
       return counts;
     },
   };
