@@ -239,6 +239,40 @@ describe('rule_evaluation is an immutable record', () => {
     await expectPgError(c.query(`UPDATE rule_evaluation SET ${set} WHERE id = $1`, [ev]), '23001');
   });
 
+  it('makes fallback_at, fallback_code and recovered_at write-once and ordered', async () => {
+    const upd = (ev: string, set: string) =>
+      c.query(`UPDATE rule_evaluation SET ${set} WHERE id = $1`, [ev]);
+    const ev = await fresh();
+    await expectPgError(upd(ev, 'recovered_at = now()'), '23001');
+    await expectPgError(upd(ev, "fallback_code = 'unsupported'"), '23001');
+    await upd(ev, "fallback_at = now(), fallback_code = 'unsupported'");
+    await expectPgError(upd(ev, 'fallback_at = NULL'), '23001');
+    await expectPgError(upd(ev, "fallback_at = now() + interval '1 hour'"), '23001');
+    await expectPgError(upd(ev, "fallback_code = 'failed'"), '23001');
+    await expectPgError(upd(ev, 'fallback_code = NULL'), '23001');
+    await upd(ev, 'recovered_at = now()');
+    await expectPgError(upd(ev, 'recovered_at = NULL'), '23001');
+    await expectPgError(upd(ev, "recovered_at = now() + interval '1 hour'"), '23001');
+  });
+
+  it('refuses nulling rule_run_id directly while the run exists', async () => {
+    const run = (
+      await c.query<{ id: string }>(
+        `INSERT INTO rule_run (organization_id, brand_id, connection_id, since, max_comments)
+         VALUES ($1,$2,$3, now(), 10) RETURNING id`,
+        [a.organizationId, a.brandId, a.connectionId],
+      )
+    ).rows[0]!.id;
+    const ev = await evaluation(a, await comment(a), { trigger: run, run });
+    await expectPgError(
+      c.query('UPDATE rule_evaluation SET rule_run_id = NULL WHERE id = $1', [ev]),
+      '23001',
+    );
+    await c.query('DELETE FROM rule_run WHERE id = $1', [run]);
+    const r = await c.query('SELECT rule_run_id FROM rule_evaluation WHERE id = $1', [ev]);
+    expect(r.rows[0].rule_run_id).toBeNull();
+  });
+
   it('allows the fallback lifecycle columns', async () => {
     const ev = await fresh();
     await c.query(

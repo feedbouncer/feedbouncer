@@ -113,7 +113,8 @@ CREATE TRIGGER rule_evaluation_set_updated_at_trg BEFORE UPDATE ON rule_evaluati
   FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
 
 -- A rule_evaluation is a durable record of why a decision was made. Only the
--- fallback bookkeeping columns may change, and rows are removed only by FK
+-- fallback bookkeeping columns may change, each once (NULL -> value; the code
+-- only with fallback_at, recovered_at only after it), and rows are removed only by FK
 -- cascade (comment deletion). rule_run_id may be nulled by the rule_run
 -- ON DELETE SET NULL cascade (trigger depth >= 2) but never edited directly.
 CREATE FUNCTION fb_rule_evaluation_guard() RETURNS trigger LANGUAGE plpgsql
@@ -134,9 +135,16 @@ BEGIN
      OR NEW.trace IS DISTINCT FROM OLD.trace
      OR NEW.created_at IS DISTINCT FROM OLD.created_at
      OR (NEW.rule_run_id IS DISTINCT FROM OLD.rule_run_id
-         AND (pg_catalog.pg_trigger_depth() < 2 OR NEW.rule_run_id IS NOT NULL))
+         AND (pg_catalog.pg_trigger_depth() < 2 OR NEW.rule_run_id IS NOT NULL
+              OR EXISTS (SELECT 1 FROM public.rule_run r WHERE r.id = OLD.rule_run_id)))
+     OR (OLD.fallback_at IS NOT NULL
+         AND (NEW.fallback_at IS DISTINCT FROM OLD.fallback_at
+              OR NEW.fallback_code IS DISTINCT FROM OLD.fallback_code))
+     OR (NEW.fallback_code IS NOT NULL AND NEW.fallback_at IS NULL)
+     OR (OLD.recovered_at IS NOT NULL AND NEW.recovered_at IS DISTINCT FROM OLD.recovered_at)
+     OR (NEW.recovered_at IS NOT NULL AND NEW.fallback_at IS NULL)
   THEN
-    RAISE EXCEPTION 'rule_evaluation is immutable except fallback columns'
+    RAISE EXCEPTION 'rule_evaluation is immutable except write-once fallback columns'
       USING ERRCODE = 'restrict_violation';
   END IF;
   RETURN NEW;
