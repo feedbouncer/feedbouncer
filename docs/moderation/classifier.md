@@ -131,7 +131,7 @@ and model for display.
 
 | Variable                         | Default                | Meaning                                                                                               |
 | -------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| `CLASSIFIER_PROVIDER`            | `none`                 | `anthropic`, `openai`, `google`, `openai_compatible` or `none`.                                       |
+| `CLASSIFIER_PROVIDER`            | `none`                 | `openai`, `google`, `openai_compatible` or `none`.                                       |
 | `CLASSIFIER_MODEL`               | none                   | Model id. Required unless the provider is `none`.                                                     |
 | `CLASSIFIER_API_KEY`             | none                   | Secret. Prefer `CLASSIFIER_API_KEY_FILE`. Required except for a keyless `openai_compatible` endpoint. |
 | `CLASSIFIER_BASE_URL`            | provider default       | Required for `openai_compatible`. No credentials, query or fragment.                                  |
@@ -148,7 +148,6 @@ Base URLs must use `https`, except that `http` is accepted for loopback hosts
 Examples:
 
 ```
-CLASSIFIER_PROVIDER=anthropic  CLASSIFIER_MODEL=claude-haiku-4-5  CLASSIFIER_API_KEY_FILE=/run/secrets/classifier_key
 CLASSIFIER_PROVIDER=openai     CLASSIFIER_MODEL=gpt-5-mini        CLASSIFIER_API_KEY_FILE=/run/secrets/classifier_key
 CLASSIFIER_PROVIDER=google     CLASSIFIER_MODEL=gemini-2.5-flash  CLASSIFIER_API_KEY_FILE=/run/secrets/classifier_key
 CLASSIFIER_PROVIDER=openai_compatible  CLASSIFIER_MODEL=llama3.1

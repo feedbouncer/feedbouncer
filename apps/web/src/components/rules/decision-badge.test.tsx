@@ -76,7 +76,7 @@ describe('DecisionBadge', () => {
         category: 'hate_speech',
         score: 0.93,
         threshold: 0.8,
-        provider: 'anthropic',
+        provider: 'openai',
         model: 'm',
         triggers: [],
         downgraded: null,

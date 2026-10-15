@@ -106,8 +106,8 @@ async function classified(
     sha: hash,
     triggerKey,
     status: 'classified' as const,
-    provider: o.provider ?? 'anthropic',
-    model: o.model ?? 'claude-x',
+    provider: o.provider ?? 'openai',
+    model: o.model ?? 'model-x',
     promptVersion: o.promptVersion ?? 'v1',
     scores,
     language: 'en',
@@ -141,7 +141,7 @@ describe('PgClassificationStore', () => {
       status: 'classified',
       outcome: 'hide',
       ruleDecided: false,
-      provider: 'anthropic',
+      provider: 'openai',
     });
     expect(row!.scores?.hate_speech).toBe(0.93);
     expect(row!.triggers).toHaveLength(1);
@@ -154,8 +154,8 @@ describe('PgClassificationStore', () => {
         category: 'hate_speech',
         confidence: '0.9300',
         threshold: '0.8000',
-        classifier_provider: 'anthropic',
-        classifier_model: 'claude-x',
+        classifier_provider: 'openai',
+        classifier_model: 'model-x',
         classification_id: row!.id,
         reason: 'Classifier: matched policy',
       },
@@ -304,32 +304,32 @@ describe('PgClassificationStore', () => {
       s,
       commentId,
       rec.sha,
-      'anthropic',
-      'claude-x',
+      'openai',
+      'model-x',
       'v1',
     );
     expect(hit?.language).toBe('en');
     expect(hit?.scores.spam).toBe(0.7);
     expect(hit?.scores.profanity).toBe(0.2);
     expect(
-      await store.findReusableScores(s, commentId, sha('x'), 'anthropic', 'claude-x', 'v1'),
+      await store.findReusableScores(s, commentId, sha('x'), 'openai', 'model-x', 'v1'),
     ).toBeNull();
     expect(
-      await store.findReusableScores(s, commentId, rec.sha, 'openai', 'claude-x', 'v1'),
+      await store.findReusableScores(s, commentId, rec.sha, 'openai', 'model-x', 'v1'),
     ).toBeNull();
     expect(
-      await store.findReusableScores(s, commentId, rec.sha, 'anthropic', 'claude-y', 'v1'),
+      await store.findReusableScores(s, commentId, rec.sha, 'openai', 'model-y', 'v1'),
     ).toBeNull();
     expect(
-      await store.findReusableScores(s, commentId, rec.sha, 'anthropic', 'claude-x', 'v2'),
+      await store.findReusableScores(s, commentId, rec.sha, 'openai', 'model-x', 'v2'),
     ).toBeNull();
     expect(
       await store.findReusableScores(
         brandScope(B),
         commentId,
         rec.sha,
-        'anthropic',
-        'claude-x',
+        'openai',
+        'model-x',
         'v1',
       ),
     ).toBeNull();
@@ -344,7 +344,7 @@ describe('PgClassificationStore', () => {
       input: prepareInput(c.body),
     });
     expect(
-      await store.findReusableScores(s, c.id, sha(c.body), 'anthropic', 'claude-x', 'v1'),
+      await store.findReusableScores(s, c.id, sha(c.body), 'openai', 'model-x', 'v1'),
     ).toBeNull();
   });
 
@@ -370,8 +370,8 @@ describe('PgClassificationStore', () => {
       category: 'hate_speech',
       confidence: '0.9300',
       threshold: '0.8000',
-      classifier_provider: 'anthropic',
-      classifier_model: 'claude-x',
+      classifier_provider: 'openai',
+      classifier_model: 'model-x',
       classification_id: id,
       reason: 'Flagged for review: no connector',
     });
@@ -539,8 +539,8 @@ describe('PgClassificationStore', () => {
       category: 'hate_speech',
       confidence: '0.2000',
       threshold: '0.9000',
-      classifier_provider: 'anthropic',
-      classifier_model: 'claude-x',
+      classifier_provider: 'openai',
+      classifier_model: 'model-x',
       classification_id: row!.id,
       reason: 'Approved: policy relaxed',
     });
@@ -619,8 +619,8 @@ describe('PgClassificationStore', () => {
       status: 'classified',
       skipReason: null,
       unclassifiedReason: null,
-      provider: 'anthropic',
-      model: 'claude-x',
+      provider: 'openai',
+      model: 'model-x',
       language: 'en',
       languageSupported: true,
       lowSignal: true,

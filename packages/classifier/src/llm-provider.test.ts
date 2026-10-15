@@ -45,7 +45,7 @@ function modelReturning(text: string, seen: unknown[] = []) {
 const provider = (model: MockLanguageModelV4) =>
   new LlmClassifierProvider({
     model,
-    providerId: 'anthropic',
+    providerId: 'openai',
     modelId: 'test-model',
     timeoutMs: 5_000,
   });

@@ -8,8 +8,8 @@ const classified: ClassificationView = {
   status: 'classified',
   skipReason: null,
   unclassifiedReason: null,
-  provider: 'anthropic',
-  model: 'claude-haiku-4-5',
+  provider: 'openai',
+  model: 'gpt-5-mini',
   scores: Object.fromEntries(CATEGORIES.map((c) => [c, 0.05])) as ClassificationView['scores'],
   language: 'en',
   languageSupported: true,
@@ -39,8 +39,8 @@ describe('ClassificationSummary', () => {
     expect(html).toContain('Spam');
     expect(html).toContain('0.93');
     expect(html).toContain('<strong>');
-    expect(html).toContain('anthropic');
-    expect(html).toContain('claude-haiku-4-5');
+    expect(html).toContain('openai');
+    expect(html).toContain('gpt-5-mini');
   });
 
   it('flags truncated and low-signal text', () => {

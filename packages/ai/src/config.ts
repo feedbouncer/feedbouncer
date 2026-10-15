@@ -9,7 +9,7 @@ import {
   type Env,
 } from '@feedbouncer/service-runtime';
 
-export const AI_PROVIDERS = ['anthropic', 'openai', 'google', 'openai_compatible'] as const;
+export const AI_PROVIDERS = ['openai', 'google', 'openai_compatible'] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 /** Same shape as decision_classifier_model_check. */
 export const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,199}$/;

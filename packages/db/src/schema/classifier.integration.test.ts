@@ -26,7 +26,7 @@ const insertClassified = (over: Record<string, unknown> = {}) => {
   return ctx.c.query<{ id: string }>(
     `INSERT INTO comment_classification (organization_id, brand_id, connection_id, comment_id, body_sha256, trigger_key, status,
        provider, model, prompt_version, scores, language, language_supported, input_chars, policy)
-     VALUES ($1,$2,$3,$4,$5,$6,'classified','anthropic','m','clf-v1',$7::jsonb,'en',true,5,$8::jsonb) RETURNING id`,
+     VALUES ($1,$2,$3,$4,$5,$6,'classified','openai','m','clf-v1',$7::jsonb,'en',true,5,$8::jsonb) RETURNING id`,
     [v.org, v.brand, v.conn, v.comment, v.sha, v.trigger, v.scores, POLICY],
   );
 };
@@ -75,7 +75,7 @@ describe('classifier schema', () => {
       ctx.c.query(
         `INSERT INTO decision (organization_id, brand_id, comment_id, outcome, mode, actor_type, classifier_provider, classifier_model,
            category, confidence, threshold, classification_id, reason)
-         VALUES ($1,$2,$3,'flag','enforce',$4,'anthropic','m',$5,$6,$7,$8,'r')`,
+         VALUES ($1,$2,$3,'flag','enforce',$4,'openai','m',$5,$6,$7,$8,'r')`,
         [A.organizationId, A.brandId, commentA, actor, cat, conf, thr, id]);
     await dec('spam', 0.9, 0.8);
     await expect(dec(null, 0.9, 0.8)).rejects.toThrow(/decision_classifier_evidence_check/);

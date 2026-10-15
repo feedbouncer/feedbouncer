@@ -23,7 +23,6 @@
     "@types/node": "24.13.6"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "4.0.80",
     "@ai-sdk/google": "4.0.96",
     "@ai-sdk/openai": "4.0.94",
     "@ai-sdk/openai-compatible": "3.0.69",

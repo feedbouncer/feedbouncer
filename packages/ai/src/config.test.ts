@@ -8,16 +8,16 @@ describe('loadModelConfig', () => {
     expect(loadModelConfig(env({}), 'CLASSIFIER')).toBeNull();
     expect(loadModelConfig(env({ CLASSIFIER_PROVIDER: 'none' }), 'CLASSIFIER')).toBeNull();
   });
-  it('reads anthropic with a key and no base URL', () => {
+  it('reads openai with a key and no base URL', () => {
     const c = loadModelConfig(
       env({
-        CLASSIFIER_PROVIDER: 'anthropic',
-        CLASSIFIER_MODEL: 'claude-haiku-4-5',
+        CLASSIFIER_PROVIDER: 'openai',
+        CLASSIFIER_MODEL: 'gpt-5-mini',
         CLASSIFIER_API_KEY: 'k'.repeat(40),
       }),
       'CLASSIFIER',
     );
-    expect(c).toMatchObject({ provider: 'anthropic', model: 'claude-haiku-4-5', baseUrl: null });
+    expect(c).toMatchObject({ provider: 'openai', model: 'gpt-5-mini', baseUrl: null });
     expect(JSON.stringify(c)).not.toContain('kkkk');
   });
   it('requires a model id that fits the decision column', () => {
@@ -86,7 +86,7 @@ describe('loadModelConfig', () => {
     try {
       loadModelConfig(
         env({
-          CLASSIFIER_PROVIDER: 'anthropic',
+          CLASSIFIER_PROVIDER: 'openai',
           CLASSIFIER_MODEL: 'bad model!',
           CLASSIFIER_API_KEY: 'sk-secret-value-1234567890',
         }),

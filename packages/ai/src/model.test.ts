@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createLanguageModel } from './model.js';
 
 describe('createLanguageModel', () => {
-  it.each(['anthropic', 'openai', 'google', 'openai_compatible'] as const)(
+  it.each(['openai', 'google', 'openai_compatible'] as const)(
     'builds a model for %s without network I/O',
     (provider) => {
       const m = createLanguageModel({
