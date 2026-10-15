@@ -35,7 +35,7 @@ export function DecisionHistory(props: { orgId: string; brandId: string; comment
         ) : (
           <ul>
             {decisions.map((d) => (
-              <li key={d.id}>{`${decisionText(d)}: ${d.reason} (${formatUtc(d.createdAt)})`}</li>
+              <li key={d.id}>{`${d.fallback ? decisionText(d) : `${decisionText(d)}: ${d.reason}`} (${formatUtc(d.createdAt)})`}</li>
             ))}
           </ul>
         )

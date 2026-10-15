@@ -93,8 +93,8 @@ const DECISION_COLUMNS = `
   d.id, d.sequence::text AS sequence, d.comment_id, d.outcome, d.mode, d.actor_type, d.reason,
   d.created_at, d.rule_id, r.name AS rule_name, r.kind AS rule_kind,
   (r.archived_at IS NOT NULL) AS rule_archived,
-  COALESCE(d.outcome = 'flag' AND d.rule_evaluation_id IS NOT NULL AND e.outcome <> 'flag', false)
-    AS fallback,
+  COALESCE(d.mode = 'enforce' AND d.outcome = 'flag' AND d.rule_id = e.matched_rule_id
+           AND e.outcome <> 'flag', false) AS fallback,
   a.kind AS action_kind, a.status AS action_status, a.outcome_code AS action_outcome_code`;
 
 const toDecision = (r: DecisionRow): DecisionDto => ({

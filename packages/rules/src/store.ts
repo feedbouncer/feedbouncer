@@ -129,8 +129,12 @@ export class PgRuleStore {
     return inEngineOrder(rows.map(toRule));
   }
 
-  async get(scope: BrandScope, ruleId: string): Promise<StoredRule | null> {
-    const { rows } = await this.#pool.query<RuleRow>(
+  async get(
+    scope: BrandScope,
+    ruleId: string,
+    db: pg.Pool | pg.PoolClient = this.#pool,
+  ): Promise<StoredRule | null> {
+    const { rows } = await db.query<RuleRow>(
       `SELECT ${COLS} FROM rule
         WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND archived_at IS NULL`,
       [scope.organizationId, scope.brandId, ruleId],

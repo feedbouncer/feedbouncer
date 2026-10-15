@@ -129,7 +129,7 @@ export default async function RuleActivityPage({
                 <td>{ACTION_LABEL[d.outcome]}</td>
                 <td>{d.mode === 'suggest' ? 'Dry run' : 'Enforced'}</td>
                 <td>{d.reason}</td>
-                <td>{d.fallback ? `${decisionText(d)}` : (d.action?.status ?? '')}</td>
+                <td>{d.fallback ? decisionText(d) : (d.action?.status ?? '')}</td>
               </tr>
             ))}
           </tbody>

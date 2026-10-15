@@ -19,7 +19,7 @@ import {
 } from '@feedbouncer/rules';
 import { recordAudit, type AuditInput } from '../audit/audit.js';
 import type { AppDeps } from '../deps.js';
-import { ApiError, notFound } from '../http/errors.js';
+import { ApiError, notFound, type ErrorIssue } from '../http/errors.js';
 import { requireBrand, type BrandScope } from '../tenancy/brand-scope.js';
 import { lockedActor } from '../tenancy/org-lock.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
@@ -36,18 +36,17 @@ import {
 const MAX_ISSUE_CHARS = 300;
 
 /** Zod issues as {path, message}; values are never echoed (messages come from the schemas). */
-function invalidRule(issues: z.core.$ZodIssue[]): ApiError {
-  return new ApiError(400, 'invalid_rule', undefined, {
-    issues: issues.map((i) => ({
-      path: i.path.join('.'),
-      message: i.message.slice(0, MAX_ISSUE_CHARS),
-    })),
-  });
+function invalidRule(issues: ErrorIssue[]): ApiError {
+  return new ApiError(400, 'invalid_rule', undefined, { issues });
 }
+
+const ruleIssue = (path: string, message: string): ErrorIssue => ({ path, message });
 
 function parseRule<S extends z.ZodType>(schema: S, body: unknown): z.output<S> {
   const r = schema.safeParse(body ?? {});
-  if (!r.success) throw invalidRule(r.error.issues);
+  if (!r.success) throw invalidRule(
+      r.error.issues.map((i) => ruleIssue(i.path.join('.'), i.message.slice(0, MAX_ISSUE_CHARS))),
+    );
   return r.data;
 }
 
@@ -138,7 +137,7 @@ export class RulesService {
     const input = parseRule(ruleInputSchema, body);
     const problem = checkActionForConditions(input.conditions, input.action);
     if (problem !== null)
-      throw invalidRule([{ code: 'custom', path: ['action'], message: problem, input: undefined }]);
+      throw invalidRule([ruleIssue('action', problem)]);
     try {
       const rule = await this.#write(org, 'rule.write', async (c) => {
         const created = await this.#store.create(c, scope, input);
@@ -174,23 +173,9 @@ export class RulesService {
     } catch (e) {
       // The store re-checks the merged rule: the stored conditions or the new action do not fit.
       if (e instanceof InvalidRuleActionError)
-        throw invalidRule([
-          {
-            code: 'custom',
-            path: ['action'],
-            message: 'This action is not allowed for this kind of rule.',
-            input: undefined,
-          },
-        ]);
+        throw invalidRule([ruleIssue('action', 'This action is not allowed for this kind of rule.')]);
       if (e instanceof InvalidRuleConditionsError)
-        throw invalidRule([
-          {
-            code: 'custom',
-            path: ['conditions'],
-            message: 'The rule conditions are not valid.',
-            input: undefined,
-          },
-        ]);
+        throw invalidRule([ruleIssue('conditions', 'The rule conditions are not valid.')]);
       throw e;
     }
     return this.#view(scope, ruleId);
@@ -199,7 +184,7 @@ export class RulesService {
   async archive(org: OrgContext, brandId: unknown, ruleId: string): Promise<void> {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     await this.#write(org, 'rule.write', async (c) => {
-      const before = await this.#store.get(scope, ruleId);
+      const before = await this.#store.get(scope, ruleId, c);
       if (!before || !(await this.#store.archive(c, scope, ruleId))) throw notFound();
       await this.#audit(c, org, scope, {
         action: 'rule.archived',

@@ -29,7 +29,7 @@ describe('DecisionBadge', () => {
       mode: 'suggest',
       rule: { ...base.rule!, name: 'Spam' },
     });
-    expect(html).toContain('Dry run: would delete (Spam)');
+    expect(html).toContain('Dry run: would delete (rule Spam)');
   });
 
   it('explains a fallback to review', () => {

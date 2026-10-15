@@ -24,7 +24,7 @@ export function decisionText(d: DecisionView): string {
     const why = d.action?.outcomeCode ? outcomeText(d.action.outcomeCode) : d.reason;
     return `Flagged for review: rule couldn't ${tried} (${why})`;
   }
-  if (d.mode === 'suggest') return `Dry run: would ${VERB[d.outcome]} (${d.rule?.name ?? who})`;
+  if (d.mode === 'suggest') return `Dry run: would ${VERB[d.outcome]} (${who})`;
   return `${DONE[d.outcome]} by ${who}`;
 }
 

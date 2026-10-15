@@ -37,7 +37,6 @@ const MESSAGES: Record<string, string> = {
   invalid_domain: 'Enter a valid domain name.',
   domain_exists: 'This domain is already in the list.',
   domain_limit_reached: 'This brand has reached the maximum number of own domains.',
-  invalid_cursor: 'This page of results is no longer valid. Start again from the first page.',
   // Where Facebook sends the browser back after sign-in.
   denied: 'Facebook access was not granted. Nothing was connected.',
   missing_permissions:

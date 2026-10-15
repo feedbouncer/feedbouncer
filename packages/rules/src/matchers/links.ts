@@ -40,15 +40,15 @@ export function compileLinkRule(c: LinkDomainConditions, ctx: BrandContext): Mat
       }
     }
 
-    if (v.linksTruncated) {
-      // Fail closed: later links were never examined. Report the first host that would not
-      // have been waved through, else the first host seen.
+    if (v.linksTruncated && allowlist) {
+      // Fail closed: later links were never examined, so none can be assumed allowed.
+      // A blocklist rule only matches hosts it saw: guessing would act on harmless comments.
       const first =
         links.find((l) => !(isOwn(l.host) || (allowlist && under(l.host, c.domains)))) ?? links[0]!;
       const evidence: Evidence = {
         kind: 'link',
         host: first.host,
-        reason: allowlist ? 'not_allowlisted' : 'blocklisted',
+        reason: 'not_allowlisted',
       };
       return evidence;
     }

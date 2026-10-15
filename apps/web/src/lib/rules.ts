@@ -36,6 +36,7 @@ export const RULE_PLATFORMS = [
   'linkedin',
   'x',
   'bluesky',
+  'meta_ads',
 ] as const;
 
 export interface RuleView {

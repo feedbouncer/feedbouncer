@@ -72,7 +72,7 @@ continues itself in a new segment before its timeout. See
 
 | Type            | Platforms | Payload                              | `externalRef`         | Timeout |
 | --------------- | --------- | ------------------------------------ | --------------------- | ------- |
-| `rule_evaluate` | all       | `{ commentId, bodySha256, trigger }` | `<commentId>:<sha>:i` | 30 s    |
+| `rule_evaluate` | all       | `{ commentId, bodySha256, trigger }` | `<commentId>:<sha[0..32]>` | 30 s    |
 
 `rule_evaluate` applies a brand's moderation rules to one version of a comment's
 text. See [rules.md](../moderation/rules.md).

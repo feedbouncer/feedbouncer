@@ -29,7 +29,6 @@ describe('messageFor', () => {
     'invalid_domain',
     'domain_exists',
     'domain_limit_reached',
-    'invalid_cursor',
   ])('has a specific message for %s', (code) => {
     expect(messageFor(code)).not.toBe(FALLBACK);
   });

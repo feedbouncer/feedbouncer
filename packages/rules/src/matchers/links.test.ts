@@ -72,20 +72,13 @@ describe('link rule: blocklist', () => {
   });
 });
 
-describe('link rule: truncated extraction fails closed', () => {
+describe('link rule: truncated extraction fails closed only for allowlists', () => {
   const many = (n: number, own = false) =>
     Array.from({ length: n }, (_, i) => `h${i}.${own ? 'example.com' : 'ok.org'}`).join(' ');
-  it('blocklist: more links than were examined is a match, reported on the first non-own host', () => {
+  it('blocklist: truncation alone is not a match (no examined host is blocked)', () => {
     const m = rule({ mode: 'blocklist', domains: ['evil.io'] });
-    expect(m(v(many(80)), budget)).toEqual({
-      kind: 'link',
-      host: 'h0.ok.org',
-      reason: 'blocklisted',
-    });
-  });
-  it('blocklist: truncated all-own links are still a match (the tail is unexamined)', () => {
-    const m = rule({ mode: 'blocklist', domains: ['evil.io'] });
-    expect(m(v(many(80, true)), budget)).toMatchObject({ kind: 'link', reason: 'blocklisted' });
+    expect(m(v(many(80)), budget)).toBeNull();
+    expect(m(v(many(80, true)), budget)).toBeNull();
   });
   it('allowlist: truncated is a not_allowlisted match', () => {
     const m = rule({ mode: 'allowlist', domains: ['ok.org'] });
