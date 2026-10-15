@@ -36,3 +36,36 @@ export const previewRequestSchema = z.strictObject({
 export const rerunRequestSchema = z.strictObject({
   days: z.number().int().min(1).max(30).default(7),
 });
+
+export interface ThresholdIssue {
+  path: string;
+  message: string;
+}
+
+/**
+ * Flat, per-field issues for a failed update or preview body. The item union
+ * is reduced to the branch the item was written for (the one with the fewest
+ * problems), and item messages carry their category.
+ */
+export function thresholdIssues(error: z.ZodError, body: unknown): ThresholdIssue[] {
+  const flat = (issues: readonly z.core.$ZodIssue[]): z.core.$ZodIssue[] =>
+    issues.flatMap((i) => {
+      if (i.code !== 'invalid_union') return [i];
+      const branches = i.errors
+        .map(flat)
+        .filter((b) => b.length > 0)
+        .map((b) => b.map((x) => ({ ...x, path: [...i.path, ...x.path] })));
+      if (branches.length === 0) return [i];
+      return branches.reduce((best, b) => (b.length < best.length ? b : best));
+    });
+  const list = (body as { categories?: unknown } | null)?.categories;
+  return flat(error.issues).map((i) => {
+    const [root, idx] = i.path;
+    const item =
+      root === 'categories' && typeof idx === 'number' && Array.isArray(list) ? list[idx] : null;
+    const category = (item as { category?: unknown } | null)?.category;
+    const prefix =
+      typeof category === 'string' && CATEGORIES.some((c) => c === category) ? `${category}: ` : '';
+    return { path: i.path.join('.'), message: `${prefix}${i.message}`.slice(0, 300) };
+  });
+}

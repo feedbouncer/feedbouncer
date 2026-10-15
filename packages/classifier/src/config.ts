@@ -1,5 +1,18 @@
-import { createLanguageModel, loadModelConfig, type ModelConfig } from '@feedbouncer/ai';
-import { EnvError, readInt, readString, type Env } from '@feedbouncer/service-runtime';
+import {
+  AI_PROVIDERS,
+  MODEL_ID,
+  createLanguageModel,
+  loadModelConfig,
+  type ModelConfig,
+} from '@feedbouncer/ai';
+import {
+  EnvError,
+  readEnum,
+  readInt,
+  readRequiredString,
+  readString,
+  type Env,
+} from '@feedbouncer/service-runtime';
 import { MAX_CONFIGURABLE_WAIT_MS } from './jobs/specs.js';
 import { LlmClassifierProvider } from './llm-provider.js';
 import { DisabledProvider, type ClassifierProvider } from './provider.js';
@@ -47,6 +60,21 @@ export function loadClassifierConfig(env: Env): ClassifierConfig {
         fallback: 30,
       }) * MINUTE_MS,
   };
+}
+
+/**
+ * Provider and model for display, validated like loadClassifierConfig but never
+ * reading the key, so processes that only show the setting need not hold it.
+ */
+export function describeClassifierProvider(env: Env): {
+  id: string;
+  model: string;
+  enabled: boolean;
+} {
+  const id = readEnum(env, 'CLASSIFIER_PROVIDER', [...AI_PROVIDERS, 'none'] as const, 'none');
+  if (id === 'none') return { id, model: '', enabled: false };
+  const model = readRequiredString(env, 'CLASSIFIER_MODEL', { maxLength: 200, pattern: MODEL_ID });
+  return { id, model, enabled: true };
 }
 
 export function createClassifierProvider(c: ClassifierConfig): ClassifierProvider {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { previewRequestSchema, rerunRequestSchema, thresholdUpdateSchema } from './settings.js';
+import {
+  previewRequestSchema,
+  rerunRequestSchema,
+  thresholdIssues,
+  thresholdUpdateSchema,
+} from './settings.js';
 
 const upd = (categories: unknown) => thresholdUpdateSchema.safeParse({ categories });
 
@@ -53,5 +58,36 @@ describe('preview / rerun requests', () => {
     ).toBe(false);
     expect(rerunRequestSchema.parse({}).days).toBe(7);
     expect(rerunRequestSchema.safeParse({ days: 0 }).success).toBe(false);
+  });
+});
+
+describe('thresholdIssues', () => {
+  const issues = (item: unknown) => {
+    const body = { categories: [item] };
+    const r = thresholdUpdateSchema.safeParse(body);
+    if (r.success) throw new Error('expected failure');
+    return thresholdIssues(r.error, body);
+  };
+  it('flattens a union failure to the matching branch with the category', () => {
+    expect(issues({ category: 'spam', threshold: 1.2, action: 'flag' })).toEqual([
+      { path: 'categories.0.threshold', message: 'spam: Threshold must be between 0 and 1.' },
+    ]);
+    expect(issues({ category: 'spam', threshold: 0.12345, action: 'flag' })).toEqual([
+      {
+        path: 'categories.0.threshold',
+        message: 'spam: Threshold can have at most 4 decimal places.',
+      },
+    ]);
+  });
+  it('reports a bad action by its path', () => {
+    const r = issues({ category: 'spam', threshold: 0.5, action: 'nuke' });
+    expect(r).toHaveLength(1);
+    expect(r[0]!.path).toBe('categories.0.action');
+  });
+  it('keeps non-item issues unprefixed', () => {
+    const body = { categories: [] };
+    const r = thresholdUpdateSchema.safeParse(body);
+    if (r.success) throw new Error('expected failure');
+    expect(thresholdIssues(r.error, body)[0]!.path).toBe('categories');
   });
 });

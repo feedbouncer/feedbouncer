@@ -1,4 +1,5 @@
 import type { RuleAction } from '@feedbouncer/rules';
+import type { ThresholdItem } from './settings.js';
 import { CATEGORIES, type Category, type CategoryScores, type ThresholdPolicy } from './types.js';
 
 const SEVERE = new Set<Category>(['hate_speech', 'scam_phishing']);
@@ -35,4 +36,19 @@ export function resolvePolicy(
     };
   }
   return out as unknown as ThresholdPolicy;
+}
+
+/** The policy that results from applying update items: useDefault restores the default. */
+export function applyItems(
+  policy: ThresholdPolicy,
+  items: readonly ThresholdItem[],
+): ThresholdPolicy {
+  const out: Record<Category, ThresholdPolicy[Category]> = { ...policy };
+  for (const it of items) {
+    out[it.category] =
+      'useDefault' in it
+        ? DEFAULT_THRESHOLDS[it.category]
+        : { category: it.category, threshold: it.threshold, action: it.action, source: 'brand' };
+  }
+  return out;
 }

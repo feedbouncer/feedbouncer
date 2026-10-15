@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createClassifierProvider, loadClassifierConfig } from './config.js';
+import {
+  createClassifierProvider,
+  describeClassifierProvider,
+  loadClassifierConfig,
+} from './config.js';
 import { DisabledProvider } from './provider.js';
 import { LlmClassifierProvider } from './llm-provider.js';
 import { MAX_CONFIGURABLE_WAIT_MS } from './jobs/specs.js';
@@ -40,5 +44,27 @@ describe('loadClassifierConfig', () => {
       MAX_CONFIGURABLE_WAIT_MS,
     );
     expect(() => loadClassifierConfig({ CLASSIFIER_MAX_WAIT_MINUTES: '91' })).toThrow();
+  });
+});
+
+describe('describeClassifierProvider', () => {
+  it('is disabled without a provider', () => {
+    expect(describeClassifierProvider({})).toEqual({ id: 'none', model: '', enabled: false });
+    expect(describeClassifierProvider({ CLASSIFIER_PROVIDER: 'none' }).enabled).toBe(false);
+  });
+  it('reads provider and model without requiring the key', () => {
+    expect(
+      describeClassifierProvider({
+        CLASSIFIER_PROVIDER: 'google',
+        CLASSIFIER_MODEL: 'gemini-2.5-flash',
+      }),
+    ).toEqual({ id: 'google', model: 'gemini-2.5-flash', enabled: true });
+  });
+  it('validates the provider and model', () => {
+    expect(() => describeClassifierProvider({ CLASSIFIER_PROVIDER: 'nope' })).toThrow();
+    expect(() => describeClassifierProvider({ CLASSIFIER_PROVIDER: 'google' })).toThrow();
+    expect(() =>
+      describeClassifierProvider({ CLASSIFIER_PROVIDER: 'google', CLASSIFIER_MODEL: 'bad model!' }),
+    ).toThrow();
   });
 });

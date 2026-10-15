@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_THRESHOLDS, resolvePolicy, ZERO_SCORES } from './defaults.js';
+import { applyItems, DEFAULT_THRESHOLDS, resolvePolicy, ZERO_SCORES } from './defaults.js';
 import { CATEGORIES } from './types.js';
 
 describe('defaults', () => {
@@ -25,5 +25,26 @@ describe('defaults', () => {
     expect(resolvePolicy([{ category: 'sentiment', threshold: 0.1, action: 'remove' }])).toEqual(
       DEFAULT_THRESHOLDS,
     );
+  });
+  describe('applyItems', () => {
+    const current = resolvePolicy([
+      { category: 'spam', threshold: 0.5, action: 'remove' },
+      { category: 'profanity', threshold: 0.3, action: 'hide' },
+    ]);
+    it('useDefault restores the default for that category', () => {
+      const p = applyItems(current, [{ category: 'spam', useDefault: true }]);
+      expect(p.spam).toEqual(DEFAULT_THRESHOLDS.spam);
+    });
+    it('an override sets source brand', () => {
+      const p = applyItems(DEFAULT_THRESHOLDS, [
+        { category: 'spam', threshold: 0.6, action: 'hide' },
+      ]);
+      expect(p.spam).toEqual({ category: 'spam', threshold: 0.6, action: 'hide', source: 'brand' });
+    });
+    it('leaves other categories untouched and does not mutate the input', () => {
+      const p = applyItems(current, [{ category: 'spam', useDefault: true }]);
+      expect(p.profanity).toEqual(current.profanity);
+      expect(current.spam.source).toBe('brand');
+    });
   });
 });
