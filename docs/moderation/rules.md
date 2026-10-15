@@ -16,6 +16,10 @@ managed per brand under **Rules** in the web app and evaluated by the
 A rule that can never fire (an earlier rule always matches first, or its list
 is empty) is flagged in the list.
 
+When no rule matched, the optional AI classifier scores the comment and applies
+the brand's category thresholds. Rules always take precedence; see
+[classifier.md](classifier.md).
+
 ## Rule kinds
 
 - **Keywords:** case-insensitive. Text is normalised first: case, Latin, Greek
