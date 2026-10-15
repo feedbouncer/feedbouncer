@@ -52,3 +52,6 @@ compose.override.yaml
 
 # Integration-test migration fixtures
 packages/db/.tmp/
+
+# Vitest reporter output
+.vitest/

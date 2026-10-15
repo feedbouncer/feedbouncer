@@ -1,5 +1,20 @@
+import { CLASSIFIER_JOB_SPECS } from '@feedbouncer/classifier';
 import { ConnectorRegistry } from '@feedbouncer/connectors';
 import { createPool } from '@feedbouncer/db';
+import {
+  DLQ_USAGE,
+  JobMetrics,
+  JobProducer,
+  JobRegistry,
+  PgJobLedger,
+  QueueSet,
+  UsageError,
+  createProducerConnection,
+  laneMap,
+  loadJobsConfig,
+  parseDlqArgs,
+  runDlq,
+} from '@feedbouncer/jobs';
 import {
   EnvError,
   PG_PROTOCOLS,
@@ -8,14 +23,6 @@ import {
   readUrl,
   resolveFileEnv,
 } from '@feedbouncer/service-runtime';
-import { DLQ_USAGE, UsageError, parseDlqArgs, runDlq } from './cli/dlq.js';
-import { loadJobsConfig } from './config.js';
-import { createProducerConnection } from './connections.js';
-import { JobRegistry } from './definition.js';
-import { PgJobLedger } from './ledger.js';
-import { JobMetrics } from './metrics.js';
-import { JobProducer } from './producer.js';
-import { QueueSet } from './queues.js';
 
 async function main(argv: readonly string[]): Promise<number> {
   const [area, ...rest] = argv;
@@ -31,7 +38,11 @@ async function main(argv: readonly string[]): Promise<number> {
   });
   const redis = createProducerConnection(readUrl(env, 'REDIS_URL', REDIS_PROTOCOLS).href);
   redis.on('error', () => {});
-  const queues = new QueueSet({ connection: redis, prefix: config.prefix });
+  const queues = new QueueSet({
+    connection: redis,
+    prefix: config.prefix,
+    laneOf: laneMap(CLASSIFIER_JOB_SPECS),
+  });
   const ledger = new PgJobLedger(pool);
   // Replay only moves ledger rows back to the queue; it consults neither registry.
   const producer = new JobProducer({

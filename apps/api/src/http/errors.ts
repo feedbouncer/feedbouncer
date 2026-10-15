@@ -44,6 +44,8 @@ export type ErrorCode =
   | 'invalid_domain'
   | 'domain_exists'
   | 'domain_limit_reached'
+  | 'invalid_classifier_settings'
+  | 'classifier_rerun_too_soon'
   | 'service_unavailable';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
@@ -85,6 +87,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_domain: 'Enter a valid domain name.',
   domain_exists: 'This domain is already in the list.',
   domain_limit_reached: 'This brand has reached the maximum number of own domains.',
+  invalid_classifier_settings: 'The classifier settings are not valid.',
+  classifier_rerun_too_soon: 'A re-run was requested recently. Try again in a few minutes.',
   service_unavailable: 'Service temporarily unavailable. Try again shortly.',
 };
 

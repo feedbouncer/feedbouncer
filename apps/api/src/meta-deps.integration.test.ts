@@ -26,6 +26,7 @@ beforeAll(async () => {
 afterAll(() => api.close());
 
 describe('buildMetaDeps job registry', () => {
+  // First: the platform queue must still be untouched when this job is enqueued.
   it('can enqueue connection_backfill for facebook and instagram only', async () => {
     const producer = api.deps.producer!;
     const payload = { runId: randomUUID(), segment: 0 };
@@ -44,5 +45,33 @@ describe('buildMetaDeps job registry', () => {
     await expect(
       producer.enqueue({ scope, platform: 'meta_ads', type: 'connection_backfill', payload }),
     ).rejects.toMatchObject({ code: 'unknown_job_type' });
+  });
+});
+
+describe('classifier_rerun lane', () => {
+  let own: TestApi;
+  beforeAll(async () => {
+    own = await startTestApi({ facebook: FACEBOOK, instagram: { meta: FACEBOOK } });
+  });
+  afterAll(() => own.close());
+
+  it('is enqueued on its lane queue, not the platform queue', async () => {
+    const o = await orgWithRoles(own, 'lane');
+    const { scope } = await own.seedConnection(o, {
+      platform: 'facebook',
+      externalAccountId: 'ext-lane',
+    });
+    const prefix = own.deps.env.jobs.prefix;
+    const r = await own.deps.producer!.enqueue({
+      scope,
+      platform: 'facebook',
+      type: 'classifier_rerun',
+      payload: { runId: randomUUID() },
+    });
+    expect(r.status).toBe('enqueued');
+    expect(
+      (await own.deps.redis.keys(`${prefix}:lane-classify-facebook:*`)).length,
+    ).toBeGreaterThan(0);
+    expect(await own.deps.redis.keys(`${prefix}:platform-facebook:*`)).toEqual([]);
   });
 });

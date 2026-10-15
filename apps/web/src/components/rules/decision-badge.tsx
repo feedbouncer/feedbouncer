@@ -1,3 +1,4 @@
+import { classifierEvidence } from '../../lib/classifier';
 import { actorTypeText, outcomeText } from '../../lib/messages';
 import { ACTION_LABEL, type DecisionView, type RuleAction } from '../../lib/rules';
 
@@ -18,6 +19,17 @@ const VERB: Record<RuleAction, string> = {
 const ATTEMPT: Record<string, string> = { hide: 'hide', delete: 'delete' };
 
 export function decisionText(d: DecisionView): string {
+  if (d.actorType === 'classifier' && d.classifier) {
+    if (d.fallback) {
+      const code = d.action?.outcomeCode;
+      if (!d.action || !code) return d.reason;
+      const tried = ATTEMPT[d.action.kind] ?? 'act';
+      return `Flagged for review: classifier couldn't ${tried} (${outcomeText(code)})`;
+    }
+    const evidence = classifierEvidence(d.classifier);
+    if (d.classifier.reversal) return `Unhidden by classifier: ${evidence}`;
+    return `${DONE[d.outcome]} by classifier: ${evidence}`;
+  }
   const who = d.rule ? `rule ${d.rule.name}` : actorTypeText(d.actorType);
   if (d.fallback) {
     const code = d.action?.outcomeCode;

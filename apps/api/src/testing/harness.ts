@@ -118,6 +118,7 @@ export async function startTestApi(
     facebook: null,
     instagram: null,
     metaAds: null,
+    classifier: { id: 'none', model: '', enabled: false },
     // A random queue prefix per app keeps tests from sharing BullMQ keys.
     jobs: loadJobsConfig({ JOB_QUEUE_PREFIX: `t${randomUUID().replaceAll('-', '').slice(0, 20)}` }),
     ...overrides,

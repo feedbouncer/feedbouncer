@@ -15,6 +15,7 @@ import {
   PgCommentStore,
   enqueueOnly,
 } from '@feedbouncer/comments';
+import { CLASSIFIER_RERUN_JOB } from '@feedbouncer/classifier';
 import { createFacebookConnector } from '@feedbouncer/connector-facebook';
 import { createInstagramConnector } from '@feedbouncer/connector-instagram';
 import { createMetaAdsConnector } from '@feedbouncer/connector-meta-ads';
@@ -101,7 +102,13 @@ export function buildMetaDeps(d: {
   jobs.register(enqueueOnly(EXECUTE_JOB));
   jobs.register(enqueueOnly(LIFECYCLE_JOB));
   jobs.register(enqueueOnly(BACKFILL_JOB));
-  const queues = new QueueSet({ connection: redis, prefix: env.jobs.prefix });
+  // The lane travels with the spec, so QueueSet routes it to the classifier's queue.
+  jobs.register(enqueueOnly(CLASSIFIER_RERUN_JOB));
+  const queues = new QueueSet({
+    connection: redis,
+    prefix: env.jobs.prefix,
+    laneOf: jobs.laneOf(),
+  });
   const producer = new JobProducer({
     ledger: new PgJobLedger(pool),
     jobs,

@@ -27,6 +27,7 @@ export default async function RulesPage({
       <p>
         <Link href={`${brand}/rules/new`}>New rule</Link> ·{' '}
         <Link href={`${brand}/rules/activity`}>Rule activity</Link> ·{' '}
+        <Link href={`${brand}/classifier`}>Classifier</Link> ·{' '}
         <Link href={`${brand}/domains`}>Own domains</Link>
       </p>
       <RuleList orgId={orgId} brandId={brandId} rules={rules} />

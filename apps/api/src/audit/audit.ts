@@ -20,14 +20,25 @@ export type AuditAction =
   | 'rule.archived'
   | 'rule.reordered'
   | 'brand_domain.added'
-  | 'brand_domain.removed';
+  | 'brand_domain.removed'
+  | 'classifier_threshold.updated'
+  | 'classifier_threshold.reset'
+  | 'classifier.rerun_requested';
 
 export interface AuditInput {
   organizationId: string;
   brandId?: string | null;
   actorUserId: string;
   action: AuditAction;
-  subjectType: 'organization' | 'brand' | 'membership' | 'invitation' | 'rule' | 'brand_domain';
+  subjectType:
+    | 'organization'
+    | 'brand'
+    | 'membership'
+    | 'invitation'
+    | 'rule'
+    | 'brand_domain'
+    | 'classifier_threshold'
+    | 'classifier_run';
   subjectId: string | null;
   /** Ids, roles and booleans only: never emails, people's names or tokens. */
   details?: Readonly<Record<string, string | number | boolean | null>>;

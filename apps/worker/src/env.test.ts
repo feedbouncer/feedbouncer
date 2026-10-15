@@ -109,6 +109,50 @@ describe('loadWorkerEnv', () => {
     expect(env.databaseUrl.password).toBe('sentinel-db-pw-123');
   });
 
+  describe('classifier', () => {
+    it('is disabled by default and gives the classify lane 4 consumers, above the per-brand cap', () => {
+      const env = load(base);
+      expect(env.classifier.model).toBeNull();
+      expect(env.jobs.laneConcurrency).toEqual({ classify: 4 });
+      expect(env.classifier.perBrandInFlight).toBe(2);
+    });
+    it('warns when the classify lane is not wider than the per-brand cap', () => {
+      const warnings: string[] = [];
+      loadWorkerEnv(
+        { ...base, JOB_CONCURRENCY_LANE_CLASSIFY: '2' },
+        { warn: (m) => warnings.push(m) },
+      );
+      expect(warnings.join('\n')).toMatch(
+        /JOB_CONCURRENCY_LANE_CLASSIFY.*CLASSIFIER_BRAND_MAX_IN_FLIGHT/,
+      );
+      const quiet: string[] = [];
+      loadWorkerEnv(base, { warn: (m) => quiet.push(m) });
+      expect(quiet.join('\n')).not.toMatch(/CLASSIFIER_BRAND_MAX_IN_FLIGHT/);
+      const off: string[] = [];
+      loadWorkerEnv({ ...base, JOB_CONCURRENCY_LANE_CLASSIFY: '0' }, { warn: (m) => off.push(m) });
+      expect(off.join('\n')).not.toMatch(/CLASSIFIER_BRAND_MAX_IN_FLIGHT/);
+    });
+    it('honors JOB_CONCURRENCY_LANE_CLASSIFY and reads CLASSIFIER_API_KEY_FILE', () => {
+      const env = loadWorkerEnv(
+        {
+          ...base,
+          JOB_CONCURRENCY_LANE_CLASSIFY: '5',
+          CLASSIFIER_PROVIDER: 'google',
+          CLASSIFIER_MODEL: 'gemini-2.5-flash',
+          CLASSIFIER_API_KEY_FILE: '/run/secrets/clf',
+        },
+        {
+          warn: () => {},
+          fs: { size: () => 40, read: () => 'file-sentinel-key-0123456789abcdef\n' },
+        },
+      );
+      expect(env.jobs.laneConcurrency).toEqual({ classify: 5 });
+      expect(env.classifier.model?.provider).toBe('google');
+      for (const out of [JSON.stringify(env), inspect(env, { depth: 10, showHidden: true })])
+        expect(out).not.toContain('file-sentinel-key');
+    });
+  });
+
   describe('instagram', () => {
     it('leaves instagram null unless INSTAGRAM_CONNECTOR_ENABLED=true', () => {
       expect(load({ ...base, ...facebook }).instagram).toBeNull();

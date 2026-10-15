@@ -54,7 +54,12 @@ function job(over: Partial<BullJobLike> = {}) {
   };
   return { j, moved };
 }
-function setup(claim: ClaimResult, handle: () => Promise<unknown>, sink?: JobEventSink) {
+function setup(
+  claim: ClaimResult,
+  handle: () => Promise<unknown>,
+  sink?: JobEventSink,
+  lanes: { defLane?: string; lane?: string | null } = {},
+) {
   const jobs = new JobRegistry();
   const handler = vi.fn(handle);
   jobs.register({
@@ -64,12 +69,15 @@ function setup(claim: ClaimResult, handle: () => Promise<unknown>, sink?: JobEve
     externalRef: (p) => p.ref,
     handle: handler as never,
     timeoutMs: 1_000,
+    ...(lanes.defLane === undefined ? {} : { lane: lanes.defLane }),
   });
   const ledger = fakeLedger(claim);
   const lines: string[] = [];
   const log = createLogger('t', 'debug', (l) => lines.push(l));
   const run = createJobProcessor({
     platform: 'facebook',
+    lane: lanes.lane ?? null,
+    laneOf: jobs.laneOf(),
     ledger,
     jobs,
     metrics: new JobMetrics(log, sink),
@@ -94,6 +102,22 @@ describe('createJobProcessor', () => {
     expect(new Set(claimed).size).toBe(2);
     expect(claimed.every((o) => o.startsWith('w1:facebook:'))).toBe(true);
     expect(completed.sort()).toEqual([...claimed].sort());
+  });
+
+  it('a platform worker rejects a lane job and a lane worker accepts it', async () => {
+    const claim = { status: 'claimed', row: row(), waitMs: 0 } as const;
+    const onPlatform = setup(claim, async () => ({ status: 'ok' }), undefined, {
+      defLane: 'classify',
+    });
+    await expect(onPlatform.run(job().j)).rejects.toThrow(/dead_lettered: invalid_job/);
+    expect(onPlatform.ledger.calls).toEqual(['dlq:invalid_job:']);
+    expect(onPlatform.handler).not.toHaveBeenCalled();
+
+    const onLane = setup(claim, async () => ({ status: 'ok' }), undefined, {
+      defLane: 'classify',
+      lane: 'classify',
+    });
+    expect(await onLane.run(job().j)).toBe('processed');
   });
 
   it('runs the handler and records completion', async () => {

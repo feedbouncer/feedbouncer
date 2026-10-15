@@ -1,6 +1,8 @@
 import { expect, it } from 'vitest';
 import { compileRuleSet, evaluate } from './engine.js';
 
+// 330 evaluate() calls plus a naive-scan comparison over 5000-term lists can clear
+// vitest's 5s default under CI load; give it headroom rather than racing the clock.
 it('evaluates a 2000-char comment against 5000-term lists within a bounded multiple of a naive scan', () => {
   const terms = Array.from({ length: 5000 }, (_, i) => `term${i} word${i % 97}`);
   const authors = Array.from({ length: 5000 }, (_, i) => ({
@@ -68,4 +70,4 @@ it('evaluates a 2000-char comment against 5000-term lists within a bounded multi
   naive.sort((a, b) => a - b);
   expect(sink).toBe(0);
   expect(p95).toBeLessThan(naive[Math.floor(naive.length / 2)]! * 500);
-});
+}, 20000);

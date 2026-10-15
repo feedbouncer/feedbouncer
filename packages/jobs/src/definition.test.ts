@@ -36,4 +36,13 @@ describe('JobRegistry', () => {
     r.register(def());
     expect(() => r.register(def())).toThrow('already registered');
   });
+  it('accepts a valid lane and rejects an invalid one; exposes laneOf and lanes', () => {
+    const r = new JobRegistry();
+    r.register(def({ type: 'lane_job', lane: 'classify' }));
+    r.register(def({ type: 'plain_job' }));
+    expect(r.laneOf()('lane_job')).toBe('classify');
+    expect(r.laneOf()('plain_job')).toBeNull();
+    expect(r.lanes()).toEqual(['classify']);
+    expect(() => r.register(def({ type: 'bad_lane', lane: 'NO' }))).toThrow(/lane/);
+  });
 });

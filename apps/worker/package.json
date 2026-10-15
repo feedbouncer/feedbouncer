@@ -12,9 +12,11 @@
     "format": "prettier --write . --ignore-path ../../.prettierignore --ignore-unknown",
     "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
     "typecheck": "tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
-    "test": "vitest run"
+    "test": "vitest run",
+    "jobs": "tsx src/cli/jobs.ts"
   },
   "dependencies": {
+    "@feedbouncer/classifier": "workspace:*",
     "@feedbouncer/comments": "workspace:*",
     "@feedbouncer/connector-facebook": "workspace:*",
     "@feedbouncer/connector-instagram": "workspace:*",

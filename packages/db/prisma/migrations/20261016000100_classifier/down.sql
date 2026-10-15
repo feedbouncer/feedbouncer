@@ -1,0 +1,11 @@
+DROP INDEX decision_classification_id_idx;
+ALTER TABLE decision DROP CONSTRAINT decision_classifier_evidence_check;
+ALTER TABLE decision DROP CONSTRAINT decision_threshold_check;
+ALTER TABLE decision DROP CONSTRAINT decision_classification_fkey;
+ALTER TABLE decision DROP CONSTRAINT decision_reversal_check;
+ALTER TABLE decision DROP COLUMN reversal, DROP COLUMN threshold, DROP COLUMN classification_id;
+DROP TABLE classifier_run;
+DROP TABLE comment_classification;
+DROP FUNCTION fb_comment_classification_guard();
+DROP FUNCTION fb_valid_classifier_scores(jsonb);
+DROP TABLE classifier_threshold;

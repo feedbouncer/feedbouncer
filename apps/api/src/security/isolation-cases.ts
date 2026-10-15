@@ -13,6 +13,8 @@ export interface IsolationFixture {
   /** B's rule and own domain. */
   bRuleId: string;
   bDomainId: string;
+  /** B's classifier re-run. */
+  bClassifierRunId: string;
   /** B's live connection and B owner's pending grant, per account-selection platform. */
   bConnectionIds: Record<'facebook' | 'instagram', string>;
   bGrantIds: Record<'facebook' | 'instagram', string>;
@@ -210,6 +212,41 @@ export const CASES: IsolationCase[] = [
     name: "B comment's decisions under A brand",
     url: (f) =>
       `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/comments/${f.bCommentId}/decisions`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/classifier/settings',
+    name: "read B's classifier settings via B ids under A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/classifier/settings`,
+  },
+  {
+    route: 'PUT /api/v1/orgs/:orgId/brands/:brandId/classifier/settings',
+    name: "change B's thresholds via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/classifier/settings`,
+    body: () => ({ categories: [{ category: 'spam', threshold: 0, action: 'remove' }] }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/classifier/preview',
+    name: "preview on B's comments via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/classifier/preview`,
+    body: () => ({ categories: [{ category: 'spam', useDefault: true }] }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/classifier/reruns',
+    name: "re-run B's classification via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/classifier/reruns`,
+    body: () => ({ days: 1 }),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/classifier/reruns/:runId',
+    name: "read B's run under A brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/classifier/reruns/${f.bClassifierRunId}`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/comments/:commentId/classification',
+    name: "read B's comment classification under A brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/comments/${f.bCommentId}/classification`,
   },
   {
     route: 'GET /api/v1/orgs/:orgId/members',

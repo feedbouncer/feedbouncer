@@ -34,6 +34,23 @@ function messageOf(fn: () => unknown): string {
 }
 
 describe('loadApiEnv', () => {
+  describe('classifier display', () => {
+    it('is disabled by default', () => {
+      expect(load(base).classifier).toEqual({ id: 'none', model: '', enabled: false });
+    });
+    it('shows provider and model without requiring the key', () => {
+      const env = load({
+        ...base,
+        CLASSIFIER_PROVIDER: 'google',
+        CLASSIFIER_MODEL: 'gemini-2.5-flash',
+      });
+      expect(env.classifier).toEqual({ id: 'google', model: 'gemini-2.5-flash', enabled: true });
+    });
+    it('rejects a provider without a model', () => {
+      expect(() => load({ ...base, CLASSIFIER_PROVIDER: 'google' })).toThrow(EnvError);
+    });
+  });
+
   it('loads telemetry and health policy with the api metrics port default', () => {
     const env = load(base);
     expect(env.telemetry.metrics.port).toBe(9464);

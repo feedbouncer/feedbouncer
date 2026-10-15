@@ -75,6 +75,18 @@ export class CommentsController {
     return { decisions: await this.svc.decisions(req.org, brandId, parseUuidOr404(commentId)) };
   }
 
+  @Get(':commentId/classification')
+  @RequireCapability('comment.moderate')
+  async classification(
+    @Req() req: OrgRequest,
+    @Param('brandId') brandId: string,
+    @Param('commentId') commentId: string,
+  ) {
+    return {
+      classification: await this.svc.classification(req.org, brandId, parseUuidOr404(commentId)),
+    };
+  }
+
   @Post(':commentId/actions')
   @RequireCapability('comment.moderate')
   async request(

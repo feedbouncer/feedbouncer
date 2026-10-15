@@ -1,0 +1,40 @@
+{
+  "name": "@feedbouncer/classifier",
+  "license": "AGPL-3.0-only",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "@feedbouncer/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build tsconfig.build.json",
+    "lint": "eslint .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore --ignore-unknown",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
+    "typecheck": "tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@feedbouncer/ai": "workspace:*",
+    "@feedbouncer/comments": "workspace:*",
+    "@feedbouncer/connectors": "workspace:*",
+    "@feedbouncer/db": "workspace:*",
+    "@feedbouncer/jobs": "workspace:*",
+    "@feedbouncer/rules": "workspace:*",
+    "@feedbouncer/secrets": "workspace:*",
+    "@feedbouncer/service-runtime": "workspace:*",
+    "ai": "7.0.140",
+    "pg": "8.23.1",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "@types/pg": "8.23.1"
+  }
+}

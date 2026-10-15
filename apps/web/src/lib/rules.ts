@@ -1,3 +1,5 @@
+import type { ClassifierEvidence } from './classifier';
+
 export const RULE_ACTIONS = ['approve', 'flag', 'hide', 'remove'] as const;
 export type RuleAction = (typeof RULE_ACTIONS)[number];
 export type RuleMode = 'enforce' | 'suggest';
@@ -65,6 +67,7 @@ export interface DecisionView {
   createdAt: string;
   fallback: boolean;
   action: { kind: string; status: string; outcomeCode: string | null } | null;
+  classifier: ClassifierEvidence | null;
 }
 
 export interface ActivityView extends DecisionView {

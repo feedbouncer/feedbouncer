@@ -158,6 +158,7 @@ export default async function ConnectionsPage({
         <Link href={`/orgs/${orgId}/brands/${brandId}/comments`}>Comments</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/ads`}>Ads</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Rules</Link> ·{' '}
+        <Link href={`/orgs/${orgId}/brands/${brandId}/classifier`}>Classifier</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/domains`}>Own domains</Link> ·{' '}
         <Link href={`/orgs/${orgId}`}>Back to organization</Link>
       </p>

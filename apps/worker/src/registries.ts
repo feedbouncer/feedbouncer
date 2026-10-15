@@ -1,3 +1,14 @@
+import {
+  BrandSlots,
+  ClassifierActionFallback,
+  ClassifierTrigger,
+  PgClassificationStore,
+  PgThresholdStore,
+  classifyCommentJob,
+  classifierRerunJob,
+  createClassifierProvider,
+  type ClassifierConfig,
+} from '@feedbouncer/classifier';
 import { createFacebookConnector, type FacebookConfig } from '@feedbouncer/connector-facebook';
 import { createInstagramConnector, type InstagramConfig } from '@feedbouncer/connector-instagram';
 import { createMetaAdsConnector, type MetaAdsConfig } from '@feedbouncer/connector-meta-ads';
@@ -8,6 +19,7 @@ import {
   PgAdTracking,
   PgBackfillStore,
   type PollSettings,
+  CompositeActionOutcomeObserver,
   executeActionJob,
   ingestCommentJob,
   connectionLifecycleJob,
@@ -41,6 +53,9 @@ export interface WorkerJobDeps {
   readonly directory: ConnectionDirectory;
   readonly store: PgCommentStore;
   readonly pool: ReturnType<typeof createPool>;
+  /** Dedicated pool for per-brand slot sessions, which hold a connection for the whole provider call. */
+  readonly slotsPool: ReturnType<typeof createPool>;
+  readonly classifier: ClassifierConfig;
   readonly clock: Clock;
   readonly log: Logger;
   readonly ingestObserver: IngestObserver;
@@ -81,21 +96,41 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       applied,
     }),
   );
+  const classifications = new PgClassificationStore(deps.pool);
+  const actions = new ModerationActions({
+    pool: deps.pool,
+    store: deps.store,
+    producer: deps.producer,
+    capabilities: deps.capabilities,
+    clock: deps.clock,
+    log: deps.log,
+  });
   registry.register(
     ruleEvaluateJob({
       comments: deps.store,
       evaluations,
       cache: new RuleSetCache(new PgRuleStore(deps.pool)),
-      actions: new ModerationActions({
-        pool: deps.pool,
-        store: deps.store,
-        producer: deps.producer,
-        capabilities: deps.capabilities,
-        clock: deps.clock,
-        log: deps.log,
-      }),
+      actions,
+      log: deps.log,
+      evaluated: new ClassifierTrigger(deps.producer),
+    }),
+  );
+  registry.register(
+    classifyCommentJob({
+      comments: deps.store,
+      ruleEvaluations: evaluations,
+      classifications,
+      thresholds: new PgThresholdStore(deps.pool),
+      provider: createClassifierProvider(deps.classifier),
+      slots: new BrandSlots(deps.slotsPool, deps.classifier.perBrandInFlight),
+      actions,
+      languages: deps.classifier.languages,
+      maxWaitMs: deps.classifier.maxWaitMs,
       log: deps.log,
     }),
+  );
+  registry.register(
+    classifierRerunJob({ pool: deps.pool, producer: deps.producer, log: deps.log }),
   );
   registry.register(
     executeActionJob({
@@ -104,7 +139,10 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       log: deps.log,
       producer: deps.producer,
       clock: deps.clock,
-      outcomes: new RuleActionFallback({ evaluations, log: deps.log }),
+      outcomes: new CompositeActionOutcomeObserver([
+        new RuleActionFallback({ evaluations, log: deps.log }),
+        new ClassifierActionFallback({ classifications, log: deps.log }),
+      ]),
     }),
   );
   registry.register(connectionLifecycleJob({ runtime: deps.runtime, log: deps.log }));

@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { decisionText } from '../../../../../../../components/rules/decision-badge';
+import {
+  CATEGORIES,
+  CATEGORY_LABEL,
+  classifierEvidence,
+} from '../../../../../../../lib/classifier';
 import { formatUtc } from '../../../../../../../lib/format';
 import { isUuid } from '../../../../../../../lib/ids';
 import {
@@ -15,6 +20,7 @@ import { dataOrThrow, requireMe, serverGet } from '../../../../../../../lib/serv
 
 const CURSOR = /^[1-9][0-9]{0,17}$/;
 const MODES = ['enforce', 'suggest'] as const;
+const SOURCES = ['rule', 'classifier'] as const;
 
 const one = (v: string | string[] | undefined): string | undefined =>
   typeof v === 'string' ? v : undefined;
@@ -34,12 +40,16 @@ export default async function RuleActivityPage({
   const kind = RULE_KINDS.find((k) => k === sp.kind);
   const outcome = RULE_ACTIONS.find((a) => a === sp.outcome);
   const mode = MODES.find((m) => m === sp.mode);
+  const source = SOURCES.find((x) => x === sp.source);
+  const category = CATEGORIES.find((c) => c === sp.category);
   const cursor = one(sp.cursor);
   const filters = new URLSearchParams();
   if (ruleId) filters.set('ruleId', ruleId);
   if (kind) filters.set('kind', kind);
   if (outcome) filters.set('outcome', outcome);
   if (mode) filters.set('mode', mode);
+  if (source) filters.set('source', source);
+  if (category) filters.set('category', category);
   const query = new URLSearchParams(filters);
   query.set('limit', '50');
   if (cursor && CURSOR.test(cursor)) query.set('before', cursor);
@@ -100,6 +110,25 @@ export default async function RuleActivityPage({
             <option value="suggest">Dry run</option>
           </select>
         </label>{' '}
+        <label>
+          Source{' '}
+          <select name="source" defaultValue={source ?? ''}>
+            <option value="">All</option>
+            <option value="rule">Rules</option>
+            <option value="classifier">Classifier</option>
+          </select>
+        </label>{' '}
+        <label>
+          Category{' '}
+          <select name="category" defaultValue={category ?? ''}>
+            <option value="">All</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {CATEGORY_LABEL[c]}
+              </option>
+            ))}
+          </select>
+        </label>{' '}
         <button type="submit">Filter</button>
       </form>
       {items.length === 0 ? <p>No rule activity yet.</p> : null}
@@ -109,7 +138,8 @@ export default async function RuleActivityPage({
             <tr>
               <th scope="col">Time</th>
               <th scope="col">Comment</th>
-              <th scope="col">Rule</th>
+              <th scope="col">Source</th>
+              <th scope="col">Evidence</th>
               <th scope="col">Outcome</th>
               <th scope="col">Mode</th>
               <th scope="col">Reason</th>
@@ -125,7 +155,20 @@ export default async function RuleActivityPage({
                     {d.commentExcerpt}
                   </Link>
                 </td>
-                <td>{d.rule ? d.rule.name : 'Unknown rule'}</td>
+                <td>
+                  {d.actorType === 'classifier'
+                    ? 'Classifier'
+                    : d.rule
+                      ? d.rule.name
+                      : 'Unknown rule'}
+                </td>
+                <td>
+                  {d.classifier
+                    ? classifierEvidence(d.classifier)
+                    : d.rule?.kind
+                      ? KIND_LABEL[d.rule.kind]
+                      : ''}
+                </td>
                 <td>{ACTION_LABEL[d.outcome]}</td>
                 <td>{d.mode === 'suggest' ? 'Dry run' : 'Enforced'}</td>
                 <td>{d.reason}</td>

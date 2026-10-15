@@ -55,6 +55,34 @@ describe('JobWorkers', () => {
     await h.waitFor(fbBehind.ledgerId, ['completed']);
   });
 
+  it('a saturated platform queue does not delay lane jobs', async () => {
+    h.jobs.register({
+      type: 'lane_probe',
+      platforms: 'all',
+      lane: 'classify',
+      payload: z.strictObject({ ref: z.string() }),
+      externalRef: (p) => p.ref,
+      handle: async () => ({ ok: true }),
+    });
+    const config = {
+      ...h.config,
+      concurrency: { ...h.config.concurrency, facebook: 1 },
+      laneConcurrency: { classify: 1 },
+    };
+    await h.workers({ config });
+    const blocker = await enqueue('lane-blocker', ['hang']);
+    await expect.poll(() => h.script.runs.get('lane-blocker')?.length ?? 0).toBe(1);
+    const probe = await h.producer.enqueue({
+      scope: h.scope(0, 'facebook'),
+      platform: 'facebook',
+      type: 'lane_probe',
+      payload: { ref: 'p1' },
+    });
+    await h.waitFor(probe.ledgerId, ['completed'], 5_000);
+    h.script.release('lane-blocker');
+    await h.waitFor(blocker.ledgerId, ['completed']);
+  });
+
   it('retries transient failures with growing jittered delays, then completes', async () => {
     await h.workers();
     const r = await enqueue('flaky', ['transient', 'transient', 'ok']);

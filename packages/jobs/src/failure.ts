@@ -20,6 +20,20 @@ export class JobError extends Error {
   }
 }
 
+/** Not a failure: the handler asks to run later (e.g. a per-brand concurrency cap). Bounded by maxDeferrals/maxDeferredMs. */
+export class JobDeferral extends Error {
+  override name = 'JobDeferral';
+  readonly code: string;
+  constructor(
+    code: string,
+    readonly retryAfterMs: number | null,
+  ) {
+    const safe = SNAKE_CASE.test(code) ? code : 'unspecified';
+    super(`deferred: ${safe}`);
+    this.code = safe;
+  }
+}
+
 export type FailureClass =
   | { readonly kind: 'retryable'; readonly code: string }
   | { readonly kind: 'rate_limited'; readonly code: string; readonly retryAfterMs: number | null }
@@ -62,6 +76,9 @@ const nonRetryable = (code: string, targetGone = false): FailureClass => ({
 });
 
 export function classifyFailure(err: unknown): FailureClass {
+  if (err instanceof JobDeferral) {
+    return { kind: 'rate_limited', code: err.code, retryAfterMs: err.retryAfterMs };
+  }
   if (err instanceof JobError) {
     return err.kind === 'retryable'
       ? { kind: 'retryable', code: err.code }

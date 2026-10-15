@@ -63,3 +63,18 @@ describe('assertDedupWindow', () => {
     ).toThrow('JOB_DEDUP_WINDOW_DAYS must cover');
   });
 });
+
+describe('lane concurrency defaults', () => {
+  it('uses 2, a caller-supplied default, and an explicit variable in that order', () => {
+    expect(loadJobsConfig({}, { lanes: ['slow'] }).laneConcurrency).toEqual({ slow: 2 });
+    expect(
+      loadJobsConfig({}, { lanes: ['slow'], laneDefaults: { slow: 4 } }).laneConcurrency,
+    ).toEqual({ slow: 4 });
+    expect(
+      loadJobsConfig(
+        { JOB_CONCURRENCY_LANE_SLOW: '1' },
+        { lanes: ['slow'], laneDefaults: { slow: 4 } },
+      ).laneConcurrency,
+    ).toEqual({ slow: 1 });
+  });
+});

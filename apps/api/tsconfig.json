@@ -19,6 +19,7 @@
     { "path": "../../packages/comments/tsconfig.build.json" },
     { "path": "../../packages/jobs/tsconfig.build.json" },
     { "path": "../../packages/observability/tsconfig.build.json" },
-    { "path": "../../packages/rules/tsconfig.build.json" }
+    { "path": "../../packages/rules/tsconfig.build.json" },
+    { "path": "../../packages/classifier/tsconfig.build.json" }
   ]
 }

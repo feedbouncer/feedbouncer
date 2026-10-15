@@ -1,22 +1,29 @@
 'use client';
 import { useState } from 'react';
 import { ApiRequestError, apiFetch } from '../../lib/api-client';
+import type { ClassificationView } from '../../lib/classifier';
 import { formatUtc } from '../../lib/format';
 import { messageFor } from '../../lib/messages';
 import type { DecisionView } from '../../lib/rules';
+import { ClassificationSummary } from '../classifier/classification-summary';
 import { decisionText } from './decision-badge';
 
 export function DecisionHistory(props: { orgId: string; brandId: string; commentId: string }) {
   const [decisions, setDecisions] = useState<DecisionView[] | null>(null);
+  const [classification, setClassification] = useState<ClassificationView | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function toggle() {
     if (decisions) return setDecisions(null);
     setError(null);
     try {
-      const res = await apiFetch<{ decisions: DecisionView[] }>(
-        `/api/v1/orgs/${props.orgId}/brands/${props.brandId}/comments/${props.commentId}/decisions`,
-      );
+      const base =
+        `/api/v1/orgs/${props.orgId}/brands/${props.brandId}/comments/${props.commentId}` as const;
+      const [res, cls] = await Promise.all([
+        apiFetch<{ decisions: DecisionView[] }>(`${base}/decisions`),
+        apiFetch<{ classification: ClassificationView | null }>(`${base}/classification`),
+      ]);
+      setClassification(cls.classification);
       setDecisions(res.decisions);
     } catch (err) {
       setError(err instanceof ApiRequestError ? messageFor(err.code) : 'Something went wrong.');
@@ -29,6 +36,7 @@ export function DecisionHistory(props: { orgId: string; brandId: string; comment
         {decisions ? 'Hide reasons' : 'Why?'}
       </button>
       {error ? <p role="alert">{error}</p> : null}
+      {decisions ? <ClassificationSummary classification={classification} /> : null}
       {decisions ? (
         decisions.length === 0 ? (
           <p>No decisions yet.</p>

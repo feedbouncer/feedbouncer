@@ -10,6 +10,7 @@ import type { ConnectorCapabilities, Platform } from '@feedbouncer/connectors';
 import type { JobContext } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { createLogger, type Logger } from '@feedbouncer/service-runtime';
+import type { RuleEvaluatedHook } from '../hooks.js';
 import { PgRuleStore } from '../store.js';
 import { RuleSetCache } from '../cache.js';
 import { PgEvaluationStore } from '../evaluations.js';
@@ -162,7 +163,12 @@ function run(
   scope: ConnectionScope,
   commentId: string,
   body: string,
-  o: { log?: Logger; clock?: { now(): number }; platform?: Platform } = {},
+  o: {
+    log?: Logger;
+    clock?: { now(): number };
+    platform?: Platform;
+    evaluated?: RuleEvaluatedHook;
+  } = {},
 ) {
   const job = ruleEvaluateJob({
     comments,
@@ -171,6 +177,7 @@ function run(
     actions,
     log: o.log ?? quiet,
     ...(o.clock ? { clock: o.clock } : {}),
+    ...(o.evaluated ? { evaluated: o.evaluated } : {}),
   });
   const p = RuleEvaluatePayload.parse({
     commentId,
@@ -409,5 +416,72 @@ describe('rule_evaluate', () => {
     expect(lines.map((l) => JSON.parse(l) as Record<string, unknown>)).toContainEqual(
       expect.objectContaining({ msg: 'rule_conditions_invalid', ruleId: bad }),
     );
+  });
+
+  it('calls the evaluated hook after act(), with the evaluation status, once per run', async () => {
+    const e = await env();
+    await addRule(e, kw('spam'), { priority: 10 });
+    const quietC = await comment(e, 'lovely product');
+    const hidden = await comment(e, 'spam here');
+    const seen: unknown[] = [];
+    const evaluated = {
+      onEvaluated: async (x: unknown) => {
+        seen.push(x);
+      },
+    };
+    await run(e.scope, quietC.id, 'lovely product', { evaluated });
+    expect(seen).toEqual([
+      {
+        scope: e.scope,
+        platform: 'facebook',
+        commentId: quietC.id,
+        bodySha256: bodySha256('lovely product'),
+        evaluationId: expect.any(String),
+        status: 'no_match',
+      },
+    ]);
+    await run(e.scope, hidden.id, 'spam here', { evaluated });
+    expect(seen).toHaveLength(2);
+    expect(seen[1]).toMatchObject({ commentId: hidden.id, status: 'decided' });
+  });
+
+  it('does not call the hook for skipped, gone or superseded comments', async () => {
+    const e = await env();
+    const other = await env();
+    await addRule(e, kw('spam'), { priority: 10 });
+    const own = await comment(e, 'spam', { own: true });
+    const del = await comment(e, 'spam', { state: 'deleted' });
+    const cur = await comment(e, 'spam now');
+    const seen: unknown[] = [];
+    const evaluated = {
+      onEvaluated: async (x: unknown) => {
+        seen.push(x);
+      },
+    };
+    expect(await run(e.scope, own.id, 'spam', { evaluated })).toMatchObject({ result: 'skipped' });
+    expect(await run(e.scope, del.id, 'spam', { evaluated })).toMatchObject({ result: 'skipped' });
+    expect(await run(e.scope, cur.id, 'spam before', { evaluated })).toEqual({
+      result: 'superseded',
+    });
+    expect(await run(other.scope, cur.id, 'spam now', { evaluated })).toEqual({ result: 'gone' });
+    expect(seen).toEqual([]);
+  });
+
+  it('a failing hook makes the job retry but the rule action was already requested (idempotent on replay)', async () => {
+    const e = await env();
+    await addRule(e, kw('spam'), { priority: 10 });
+    const c = await comment(e, 'spam');
+    const evaluated = {
+      onEvaluated: async () => {
+        throw new Error('queue down');
+      },
+    };
+    await expect(run(e.scope, c.id, 'spam', { evaluated })).rejects.toThrow('queue down');
+    expect(await actionRows(c.id)).toHaveLength(1);
+    expect(await evals(c.id)).toHaveLength(1);
+    await run(e.scope, c.id, 'spam');
+    expect(await actionRows(c.id)).toHaveLength(1);
+    expect(await evals(c.id)).toHaveLength(1);
+    expect(await decisions(c.id)).toHaveLength(1);
   });
 });
