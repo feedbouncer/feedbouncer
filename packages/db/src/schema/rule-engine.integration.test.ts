@@ -40,13 +40,13 @@ async function rule(t: Tenant, conditions: unknown): Promise<string> {
 async function evaluation(
   t: Tenant,
   commentId: string,
-  o: { org?: string; brand?: string; sha?: Buffer; trigger?: string; run?: string } = {},
+  o: { org?: string; brand?: string; sha?: Buffer; trigger?: string } = {},
 ): Promise<string> {
   return (
     await c.query<{ id: string }>(
       `INSERT INTO rule_evaluation (organization_id, brand_id, connection_id, comment_id, body_sha256,
-                                    trigger_key, ruleset_version, status, rule_run_id)
-       VALUES ($1,$2,$3,$4,$5,$6,'v1','no_match',$7) RETURNING id`,
+                                    trigger_key, ruleset_version, status)
+       VALUES ($1,$2,$3,$4,$5,$6,'v1','no_match') RETURNING id`,
       [
         o.org ?? t.organizationId,
         o.brand ?? t.brandId,
@@ -54,7 +54,6 @@ async function evaluation(
         commentId,
         o.sha ?? sha(),
         o.trigger ?? 'ingest',
-        o.run ?? null,
       ],
     )
   ).rows[0]!.id;
@@ -233,7 +232,6 @@ describe('rule_evaluation is an immutable record', () => {
     ['ruleset_version', "ruleset_version = 'v2'"],
     ['created_at', "created_at = now() - interval '1 day'"],
     ['comment_id', 'comment_id = gen_random_uuid()'],
-    ['rule_run_id', 'rule_run_id = gen_random_uuid()'],
   ])('refuses direct UPDATE of %s', async (_n, set) => {
     const ev = await fresh();
     await expectPgError(c.query(`UPDATE rule_evaluation SET ${set} WHERE id = $1`, [ev]), '23001');
@@ -253,24 +251,6 @@ describe('rule_evaluation is an immutable record', () => {
     await upd(ev, 'recovered_at = now()');
     await expectPgError(upd(ev, 'recovered_at = NULL'), '23001');
     await expectPgError(upd(ev, "recovered_at = now() + interval '1 hour'"), '23001');
-  });
-
-  it('refuses nulling rule_run_id directly while the run exists', async () => {
-    const run = (
-      await c.query<{ id: string }>(
-        `INSERT INTO rule_run (organization_id, brand_id, connection_id, since, max_comments)
-         VALUES ($1,$2,$3, now(), 10) RETURNING id`,
-        [a.organizationId, a.brandId, a.connectionId],
-      )
-    ).rows[0]!.id;
-    const ev = await evaluation(a, await comment(a), { trigger: run, run });
-    await expectPgError(
-      c.query('UPDATE rule_evaluation SET rule_run_id = NULL WHERE id = $1', [ev]),
-      '23001',
-    );
-    await c.query('DELETE FROM rule_run WHERE id = $1', [run]);
-    const r = await c.query('SELECT rule_run_id FROM rule_evaluation WHERE id = $1', [ev]);
-    expect(r.rows[0].rule_run_id).toBeNull();
   });
 
   it('allows the fallback lifecycle columns', async () => {
@@ -294,38 +274,5 @@ describe('decisions keep naming the rule', () => {
     const r = await c.query('SELECT rule_id, reason FROM decision WHERE id = $1', [d]);
     expect(r.rows[0]).toEqual({ rule_id: a.ruleId, reason: 'matched' });
     await c.query('UPDATE rule SET archived_at = NULL WHERE id = $1', [a.ruleId]);
-  });
-});
-
-describe('rule_run', () => {
-  const ins = (status: string, enqueued = 0) =>
-    c.query(
-      `INSERT INTO rule_run (organization_id, brand_id, connection_id, since, max_comments, status, enqueued_count)
-       VALUES ($1,$2,$3, now(), 100, $4, $5)`,
-      [a.organizationId, a.brandId, a.connectionId, status, enqueued],
-    );
-
-  it('checks status and counts', async () => {
-    await ins('queued');
-    await expectPgError(ins('bogus'), '23514', 'rule_run_status_check');
-    await expectPgError(ins('queued', -1), '23514', 'rule_run_enqueued_count_check');
-  });
-
-  it('nulls the run on evaluations when deleted', async () => {
-    const run = (
-      await c.query<{ id: string }>(
-        `INSERT INTO rule_run (organization_id, brand_id, connection_id, since, max_comments)
-         VALUES ($1,$2,$3, now(), 10) RETURNING id`,
-        [a.organizationId, a.brandId, a.connectionId],
-      )
-    ).rows[0]!.id;
-    const cm = await comment(a);
-    const ev = await evaluation(a, cm, { trigger: run, run });
-    await c.query('DELETE FROM rule_run WHERE id = $1', [run]);
-    const r = await c.query('SELECT rule_run_id, brand_id FROM rule_evaluation WHERE id = $1', [
-      ev,
-    ]);
-    expect(r.rows[0].rule_run_id).toBeNull();
-    expect(r.rows[0].brand_id).toBe(a.brandId);
   });
 });

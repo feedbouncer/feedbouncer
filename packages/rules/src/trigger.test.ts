@@ -78,16 +78,12 @@ describe('RuleTrigger', () => {
 
 describe('RuleEvaluatePayload', () => {
   const base = { commentId, bodySha256: sha('x') };
-  it('requires runId exactly for history', () => {
-    expect(RuleEvaluatePayload.safeParse({ ...base, trigger: 'ingest' }).success).toBe(true);
-    expect(
-      RuleEvaluatePayload.safeParse({ ...base, trigger: 'ingest', runId: commentId }).success,
-    ).toBe(false);
+  it('derives one job reference per comment and body version', () => {
+    const p = RuleEvaluatePayload.parse({ ...base, trigger: 'ingest' });
+    expect(RULE_EVALUATE_JOB.externalRef(p)).toBe(`${commentId}:${base.bodySha256.slice(0, 32)}`);
+  });
+  it('rejects the removed history trigger', () => {
     expect(RuleEvaluatePayload.safeParse({ ...base, trigger: 'history' }).success).toBe(false);
-    const h = RuleEvaluatePayload.parse({ ...base, trigger: 'history', runId: scope.brandId });
-    expect(RULE_EVALUATE_JOB.externalRef(h)).toBe(
-      `${commentId}:${base.bodySha256.slice(0, 32)}:${scope.brandId}`,
-    );
   });
   it('rejects a malformed sha and unknown keys', () => {
     expect(

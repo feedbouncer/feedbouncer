@@ -35,8 +35,6 @@ export function ruleEvaluateJob(d: {
         organizationId: ctx.scope.organizationId,
         brandId: ctx.scope.brandId,
       };
-      const triggerKey = p.trigger === 'ingest' ? 'ingest' : p.runId!;
-      const runId = p.trigger === 'history' ? p.runId! : null;
       const sha = Buffer.from(p.bodySha256, 'hex');
 
       // Tenancy guard: the payload id only reaches comments of this job's connection.
@@ -44,9 +42,9 @@ export function ruleEvaluateJob(d: {
       if (!row || row.connectionId !== ctx.scope.connectionId) return { result: 'gone' };
       if (bodySha256(row.body) !== p.bodySha256) return { result: 'superseded' };
 
-      let ev = await d.evaluations.find(brand, p.commentId, sha, triggerKey);
+      let ev = await d.evaluations.find(brand, p.commentId, sha, p.trigger);
       if (!ev) {
-        const base = { commentId: p.commentId, sha, triggerKey, runId };
+        const base = { commentId: p.commentId, sha, triggerKey: p.trigger };
         const skipReason =
           row.platformState === 'deleted' ? 'deleted' : row.isOwnAccount ? 'own_account' : null;
         if (skipReason !== null) {
@@ -91,7 +89,7 @@ export function ruleEvaluateJob(d: {
             verdict,
           })) ??
           // Lost a race with another run of the same key: resume from its row.
-          (await d.evaluations.find(brand, p.commentId, sha, triggerKey));
+          (await d.evaluations.find(brand, p.commentId, sha, p.trigger));
         if (!ev) throw new Error('rule evaluation was neither recorded nor found');
       }
       return act(d, brand, ev, p.commentId, row.platform);

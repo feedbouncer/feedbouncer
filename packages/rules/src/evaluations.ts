@@ -23,9 +23,7 @@ export interface EvaluationRecord {
   commentId: string;
   /** sha256 of the stored body (32 bytes). */
   sha: Buffer;
-  /** 'ingest' or the rule_run id. */
   triggerKey: string;
-  runId: string | null;
   rulesetVersion: string;
   status: EvaluationStatus;
   skipReason?: 'own_account' | 'deleted';
@@ -91,10 +89,10 @@ export class PgEvaluationStore {
     return withTransaction(this.#pool, async (tx) => {
       const { rows } = await tx.query<Row>(
         `INSERT INTO rule_evaluation (organization_id, brand_id, connection_id, comment_id, body_sha256,
-                                      trigger_key, rule_run_id, ruleset_version, status, skip_reason,
+                                      trigger_key, ruleset_version, status, skip_reason,
                                       matched_rule_id, outcome, trace)
-         SELECT c.organization_id, c.brand_id, c.connection_id, c.id, $5::bytea, $6::text, $7::uuid,
-                $8::text, $9::text, $10::text, $11::uuid, $12::text, $13::jsonb
+         SELECT c.organization_id, c.brand_id, c.connection_id, c.id, $5::bytea, $6::text,
+                $7::text, $8::text, $9::text, $10::uuid, $11::text, $12::jsonb
            FROM comment c
           WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3 AND c.id = $4
          ON CONFLICT (comment_id, body_sha256, trigger_key) DO NOTHING
@@ -106,7 +104,6 @@ export class PgEvaluationStore {
           e.commentId,
           e.sha,
           e.triggerKey,
-          e.runId,
           e.rulesetVersion,
           e.status,
           e.status === 'skipped' ? (e.skipReason ?? null) : null,

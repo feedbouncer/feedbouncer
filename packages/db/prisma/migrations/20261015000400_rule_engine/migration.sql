@@ -1,4 +1,4 @@
--- Rule engine: rule kind/archival, own domains, evaluations, history runs.
+-- Rule engine: rule kind/archival, own domains, evaluations.
 BEGIN;
 
 SET LOCAL lock_timeout = '10s';
@@ -29,39 +29,8 @@ CREATE INDEX brand_domain_organization_id_brand_id_idx ON brand_domain (organiza
 CREATE TRIGGER brand_domain_set_updated_at_trg BEFORE UPDATE ON brand_domain
   FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
 
-CREATE TABLE rule_run (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  organization_id uuid NOT NULL,
-  brand_id uuid NOT NULL,
-  connection_id uuid NOT NULL,
-  since timestamptz(3) NOT NULL,
-  max_comments integer NOT NULL,
-  status text NOT NULL DEFAULT 'queued',
-  enqueued_count integer NOT NULL DEFAULT 0,
-  failure_code text,
-  requested_by_user_id uuid,
-  completed_at timestamptz(3),
-  created_at timestamptz(3) NOT NULL DEFAULT now(),
-  updated_at timestamptz(3) NOT NULL DEFAULT now(),
-  CONSTRAINT rule_run_pkey PRIMARY KEY (id),
-  CONSTRAINT rule_run_brand_id_id_key UNIQUE (brand_id, id),
-  CONSTRAINT rule_run_status_check CHECK (status IN ('queued', 'running', 'completed', 'failed')),
-  CONSTRAINT rule_run_enqueued_count_check CHECK (enqueued_count >= 0),
-  CONSTRAINT rule_run_max_comments_check CHECK (max_comments BETWEEN 1 AND 5000),
-  CONSTRAINT rule_run_failure_code_check CHECK (failure_code IS NULL OR failure_code ~ '^[a-z][a-z_]{0,63}$'),
-  CONSTRAINT rule_run_organization_id_brand_id_connection_id_fkey FOREIGN KEY (organization_id, brand_id, connection_id)
-    REFERENCES connection (organization_id, brand_id, id) ON DELETE CASCADE,
-  CONSTRAINT rule_run_requested_by_user_id_fkey FOREIGN KEY (requested_by_user_id)
-    REFERENCES app_user (id) ON DELETE SET NULL
-);
-CREATE INDEX rule_run_connection_id_idx ON rule_run (connection_id);
-CREATE INDEX rule_run_requested_by_user_id_idx ON rule_run (requested_by_user_id) WHERE requested_by_user_id IS NOT NULL;
-CREATE INDEX rule_run_brand_id_created_at_idx ON rule_run (brand_id, created_at DESC);
-CREATE TRIGGER rule_run_set_updated_at_trg BEFORE UPDATE ON rule_run
-  FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
-
 -- One row per (comment, body version, trigger): the durable idempotency guard
--- for rule evaluation. trigger_key is 'ingest' or the rule_run id.
+-- for rule evaluation.
 CREATE TABLE rule_evaluation (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL,
@@ -70,7 +39,6 @@ CREATE TABLE rule_evaluation (
   comment_id uuid NOT NULL,
   body_sha256 bytea NOT NULL,
   trigger_key text NOT NULL,
-  rule_run_id uuid,
   ruleset_version text NOT NULL,
   status text NOT NULL,
   skip_reason text,
@@ -101,22 +69,18 @@ CREATE TABLE rule_evaluation (
   CONSTRAINT rule_evaluation_brand_id_comment_id_fkey FOREIGN KEY (brand_id, comment_id)
     REFERENCES comment (brand_id, id) ON DELETE CASCADE,
   CONSTRAINT rule_evaluation_brand_id_matched_rule_id_fkey FOREIGN KEY (brand_id, matched_rule_id)
-    REFERENCES rule (brand_id, id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
-  CONSTRAINT rule_evaluation_brand_id_rule_run_id_fkey FOREIGN KEY (brand_id, rule_run_id)
-    REFERENCES rule_run (brand_id, id) ON DELETE SET NULL (rule_run_id)
+    REFERENCES rule (brand_id, id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
 );
 CREATE INDEX rule_evaluation_connection_id_idx ON rule_evaluation (connection_id);
 CREATE INDEX rule_evaluation_brand_id_comment_id_idx ON rule_evaluation (brand_id, comment_id);
 CREATE INDEX rule_evaluation_matched_rule_id_idx ON rule_evaluation (matched_rule_id) WHERE matched_rule_id IS NOT NULL;
-CREATE INDEX rule_evaluation_rule_run_id_idx ON rule_evaluation (rule_run_id) WHERE rule_run_id IS NOT NULL;
 CREATE TRIGGER rule_evaluation_set_updated_at_trg BEFORE UPDATE ON rule_evaluation
   FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
 
 -- A rule_evaluation is a durable record of why a decision was made. Only the
 -- fallback bookkeeping columns may change, each once (NULL -> value; the code
 -- only with fallback_at, recovered_at only after it), and rows are removed only by FK
--- cascade (comment deletion). rule_run_id may be nulled by the rule_run
--- ON DELETE SET NULL cascade (trigger depth >= 2) but never edited directly.
+-- cascade (comment deletion).
 CREATE FUNCTION fb_rule_evaluation_guard() RETURNS trigger LANGUAGE plpgsql
 SET search_path = pg_catalog, pg_temp AS $$
 BEGIN
@@ -134,9 +98,6 @@ BEGIN
      OR NEW.outcome IS DISTINCT FROM OLD.outcome
      OR NEW.trace IS DISTINCT FROM OLD.trace
      OR NEW.created_at IS DISTINCT FROM OLD.created_at
-     OR (NEW.rule_run_id IS DISTINCT FROM OLD.rule_run_id
-         AND (pg_catalog.pg_trigger_depth() < 2 OR NEW.rule_run_id IS NOT NULL
-              OR EXISTS (SELECT 1 FROM public.rule_run r WHERE r.id = OLD.rule_run_id)))
      OR (OLD.fallback_at IS NOT NULL
          AND (NEW.fallback_at IS DISTINCT FROM OLD.fallback_at
               OR NEW.fallback_code IS DISTINCT FROM OLD.fallback_code))
