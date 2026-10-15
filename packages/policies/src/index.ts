@@ -11,3 +11,6 @@ export * from './jobs/specs.js';
 export * from './jobs/evaluate.js';
 export * from './trigger.js';
 export * from './fallback.js';
+export * from './candidates.js';
+export * from './previews.js';
+export * from './jobs/preview.js';
