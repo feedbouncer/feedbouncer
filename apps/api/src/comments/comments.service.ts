@@ -16,6 +16,7 @@ import type { AppDeps } from '../deps.js';
 import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
+import { listCommentDecisions, latestDecisions, type DecisionDto } from '../rules/dto.js';
 import { COMMENTS, DEPS } from '../tokens.js';
 
 export interface CommentView {
@@ -42,6 +43,8 @@ export interface CommentView {
   ads: { adId: string; adAccountId: string }[];
   /** Longest reply text per kind, in code points. */
   replyLimits: { public_reply: number; private_reply: number };
+  /** The newest decision on this comment (a rule's, today), or null. */
+  latestDecision: DecisionDto | null;
 }
 
 export interface ListCommentsQuery {
@@ -56,10 +59,7 @@ export interface ListCommentsQuery {
 // Sorts before every comment id, so `before` alone means "posted strictly earlier".
 const MIN_UUID = '00000000-0000-0000-0000-000000000000';
 
-const REFUSALS: Record<
-  Exclude<RefusalCode, 'not_found'>,
-  [number, ErrorCode]
-> = {
+const REFUSALS: Record<Exclude<RefusalCode, 'not_found'>, [number, ErrorCode]> = {
   unsupported: [422, 'unsupported_action'],
   request_key_conflict: [409, 'request_key_conflict'],
   connection_needs_reconnect: [409, 'connection_needs_reconnect'],
@@ -90,6 +90,7 @@ const toView = (
   c: CommentRow,
   caps: ConnectorCapabilities | undefined,
   now: Date,
+  latestDecision: DecisionDto | null,
 ): CommentView => ({
   id: c.id,
   connectionId: c.connectionId,
@@ -107,6 +108,7 @@ const toView = (
   ads: c.ads.map((a) => ({ adId: a.adId, adAccountId: a.adAccountId })),
   availability: availability(c, caps, now),
   replyLimits: caps ? { ...resolveConstraints(caps).maxReplyChars } : { ...DEFAULT_REPLY_LIMITS },
+  latestDecision,
 });
 
 @Injectable()
@@ -135,7 +137,21 @@ export class CommentsService {
     });
     const registry = this.deps.connectors?.registry;
     const now = new Date(systemClock.now());
-    return rows.map((c) => toView(c, registry?.get(c.platform)?.capabilities, now));
+    const decisions = await latestDecisions(
+      this.deps.pool,
+      scope,
+      rows.map((c) => c.id),
+    );
+    return rows.map((c) =>
+      toView(c, registry?.get(c.platform)?.capabilities, now, decisions.get(c.id) ?? null),
+    );
+  }
+
+  async decisions(org: OrgContext, brandId: unknown, commentId: string): Promise<DecisionDto[]> {
+    const { store } = this.#configured();
+    const scope = await requireBrand(this.deps.pool, org, brandId);
+    if (!(await store.load(scope, commentId))) throw notFound();
+    return listCommentDecisions(this.deps.pool, scope, commentId);
   }
 
   async actions(

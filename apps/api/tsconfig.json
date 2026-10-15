@@ -18,6 +18,7 @@
     { "path": "../../packages/connector-instagram/tsconfig.build.json" },
     { "path": "../../packages/comments/tsconfig.build.json" },
     { "path": "../../packages/jobs/tsconfig.build.json" },
-    { "path": "../../packages/observability/tsconfig.build.json" }
+    { "path": "../../packages/observability/tsconfig.build.json" },
+    { "path": "../../packages/rules/tsconfig.build.json" }
   ]
 }

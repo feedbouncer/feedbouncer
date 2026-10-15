@@ -176,6 +176,9 @@ importers:
       '@feedbouncer/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@feedbouncer/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       '@feedbouncer/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets

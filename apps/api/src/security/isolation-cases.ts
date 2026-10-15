@@ -10,6 +10,9 @@ export interface IsolationFixture {
   bConnectionId: string;
   bCommentId: string;
   bGrantId: string;
+  /** B's rule and own domain. */
+  bRuleId: string;
+  bDomainId: string;
   /** B's live connection and B owner's pending grant, per account-selection platform. */
   bConnectionIds: Record<'facebook' | 'instagram', string>;
   bGrantIds: Record<'facebook' | 'instagram', string>;
@@ -142,6 +145,71 @@ export const CASES: IsolationCase[] = [
     name: 'hide B comment under A brand',
     url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/comments/${f.bCommentId}/actions`,
     body: () => ({ kind: 'hide', requestKey: 'iso-1' }),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/rules',
+    name: 'list B rules',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/rules`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/rules',
+    name: 'create a rule in B brand under A path',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/rules`,
+    body: () => ({ name: 'x', conditions: { type: 'keyword', terms: ['x'] }, action: 'flag' }),
+  },
+  {
+    route: 'PUT /api/v1/orgs/:orgId/brands/:brandId/rules/order',
+    name: 'reorder B rules under A path',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/rules/order`,
+    body: (f) => ({ ruleIds: [f.bRuleId] }),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/rules/:ruleId',
+    name: "B's rule under A brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/rules/${f.bRuleId}`,
+  },
+  {
+    route: 'PATCH /api/v1/orgs/:orgId/brands/:brandId/rules/:ruleId',
+    name: "disable B's rule under A brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/rules/${f.bRuleId}`,
+    body: () => ({ enabled: false }),
+  },
+  {
+    route: 'DELETE /api/v1/orgs/:orgId/brands/:brandId/rules/:ruleId',
+    name: "archive B's rule under A brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/rules/${f.bRuleId}`,
+  },
+  {
+    route: 'DELETE /api/v1/orgs/:orgId/brands/:brandId/rules/:ruleId',
+    name: "archive B's rule under B brand from A",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/brands/${f.B.brandId}/rules/${f.bRuleId}`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/domains',
+    name: 'list B domains',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/domains`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/domains',
+    name: 'add a domain to B brand under A path',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/domains`,
+    body: () => ({ domain: 'example.org' }),
+  },
+  {
+    route: 'DELETE /api/v1/orgs/:orgId/brands/:brandId/domains/:domainId',
+    name: "remove B's domain under A brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/domains/${f.bDomainId}`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/rule-activity',
+    name: 'B rule activity under A path',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/rule-activity`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/comments/:commentId/decisions',
+    name: "B comment's decisions under A brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/comments/${f.bCommentId}/decisions`,
   },
   {
     route: 'GET /api/v1/orgs/:orgId/members',
