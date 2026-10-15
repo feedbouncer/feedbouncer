@@ -29,8 +29,8 @@ export const SYSTEM_PROMPT = [
 ].join('\n');
 
 /** Loose on purpose (some providers reject min/max in structured-output schemas); rawClassificationSchema validates after. */
-const generationSchema = z.object({
-  scores: z.object({
+const generationSchema = z.looseObject({
+  scores: z.looseObject({
     spam: z.number(),
     scam_phishing: z.number(),
     harassment_abuse: z.number(),

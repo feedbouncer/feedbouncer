@@ -79,6 +79,19 @@ describe('LlmClassifierProvider', () => {
       retryable: true,
     });
   });
+  it('an extra category or extra top-level key is invalid_output, not silently dropped', async () => {
+    for (const body of [
+      { scores: { ...scores, sentiment: 0.5 }, language: 'en' },
+      { scores, language: 'en', notes: 'x' },
+    ]) {
+      await expect(
+        provider(modelReturning(JSON.stringify(body))).classify(
+          input('x'),
+          new AbortController().signal,
+        ),
+      ).rejects.toMatchObject({ code: 'invalid_output', retryable: true });
+    }
+  });
   it('non-JSON output is invalid_output', async () => {
     await expect(
       provider(modelReturning('I think this is spam')).classify(
