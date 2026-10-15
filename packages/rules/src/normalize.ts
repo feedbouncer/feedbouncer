@@ -5,7 +5,7 @@
 export const MAX_EVAL_CHARS = 20_000;
 
 // Zero-width, joiners, bidi controls, soft hyphen, Hangul fillers, variation selectors, tags.
-const INVISIBLE = /[­͏؜ᅟᅠ឴឵᠋-᠏​-‏‪-‮⁠-⁤⁦-⁯ㅤ︀-️﻿ﾠ\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu;
+const INVISIBLE = /[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu;
 // Combining marks are stripped only after Latin/Greek/Cyrillic bases: in Indic,
 // Thai, Arabic etc. they carry meaning.
 const FOLDABLE_MARKS = /([\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}])\p{Mn}+/gu;

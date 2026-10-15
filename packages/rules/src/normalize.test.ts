@@ -14,11 +14,11 @@ describe('normalizeText', () => {
   });
   it('folds Greek and Cyrillic accents but keeps Devanagari vowel signs', () => {
     expect(normalizeText('Ἀθῆναι')).toBe('αθηναι');
-    expect(normalizeText('हिन्दी')).toBe('हिन्दी');
+    expect(normalizeText('हिन\u094Dदी')).toBe('हिन\u094Dदी');
   });
   it('removes zero-width and bidi control characters', () => {
-    expect(normalizeText('fr​ee mo‍ney⁠ ﻿now­')).toBe('free money now');
-    expect(normalizeText('a‮b')).toBe('ab');
+    expect(normalizeText('fr\u200Bee mo\u200Dney\u2060 \uFEFFnow\u00AD')).toBe('free money now');
+    expect(normalizeText('a\u202Eb')).toBe('ab');
   });
   it('folds full-width compatibility characters', () => {
     expect(normalizeText('ＦＲＥＥ')).toBe('free');
@@ -27,7 +27,7 @@ describe('normalizeText', () => {
     expect(normalizeText('İstanbul')).toBe('istanbul');
   });
   it('is idempotent', () => {
-    const once = normalizeText('Ça Va? ＦＲＥＥ​');
+    const once = normalizeText('Ça Va? ＦＲＥＥ\u200B');
     expect(normalizeText(once)).toBe(once);
   });
   it('returns empty for empty input', () => {
@@ -41,13 +41,13 @@ describe('words', () => {
   });
   it('segments Japanese and Thai without spaces', () => {
     expect(words('無料でお金').length).toBeGreaterThan(1);
-    expect(words('ฟรีเงิน').length).toBeGreaterThan(1);
+    expect(words('ฟร\u0E35เง\u0E34น').length).toBeGreaterThan(1);
   });
 });
 
 describe('hasUnspacedScript', () => {
   it('detects Han, Kana, Thai, Lao, Khmer, Myanmar', () => {
-    for (const s of ['無料', 'かな', 'カナ', 'ฟรี', 'ຟຣີ', 'ឥតគិតថ្លៃ', 'အခမဲ့'])
+    for (const s of ['無料', 'かな', 'カナ', 'ฟร\u0E35', 'ຟຣ\u0EB5', 'ឥតគ\u17B7តថ\u17D2លៃ', 'အခမ\u1032\u1037'])
       expect(hasUnspacedScript(s)).toBe(true);
     for (const s of ['free', 'бесплатно', '무료', 'مجاني'])
       expect(hasUnspacedScript(s)).toBe(false);
@@ -56,7 +56,7 @@ describe('hasUnspacedScript', () => {
 
 describe('stripInvisible / linkText / truncate', () => {
   it('stripInvisible keeps ZWJ out of text but linkText maps ideographic dots', () => {
-    expect(stripInvisible('a‍b')).toBe('ab');
+    expect(stripInvisible('a\u200Db')).toBe('ab');
     expect(linkText('evil。com and bad．io')).toBe('evil.com and bad.io');
   });
   it('linkText keeps accents (IDN hosts) and case for URL parsing', () => {
