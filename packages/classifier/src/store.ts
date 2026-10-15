@@ -126,10 +126,8 @@ RETURNING ${COLUMNS}`;
 
 const INSERT_DECISION = `
 INSERT INTO decision (organization_id, brand_id, comment_id, outcome, mode, actor_type, classifier_provider,
-  classifier_model, category, confidence, threshold, classification_id, reason)
-VALUES ($1, $2, $3, $4, 'enforce', 'classifier', $5, $6, $7, $8, $9, $10, $11)`;
-
-const INSERT_REVERSAL = INSERT_DECISION.replace('reason)', 'reason, reversal)').replace('$11)', '$11, true)');
+  classifier_model, category, confidence, threshold, classification_id, reason, reversal)
+VALUES ($1, $2, $3, $4, 'enforce', 'classifier', $5, $6, $7, $8, $9, $10, $11, $12)`;
 
 const CLF_KEY = /^clf:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
@@ -207,6 +205,7 @@ export class PgClassificationStore {
           primary.threshold,
           row.id,
           classified.reason,
+          false,
         ]);
       }
       await c.query('COMMIT');
@@ -253,12 +252,10 @@ export class PgClassificationStore {
         comment_id: string;
         provider: string | null;
         model: string | null;
-        triggers: Trigger[];
-        outcome: RuleAction | null;
       }>(
         `UPDATE comment_classification SET fallback_at = now(), fallback_code = $4
          WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND fallback_at IS NULL
-         RETURNING comment_id, provider, model, triggers, outcome`,
+         RETURNING comment_id, provider, model`,
         [s.organizationId, s.brandId, classificationId, code],
       );
       const row = u.rows[0];
@@ -266,16 +263,14 @@ export class PgClassificationStore {
         await c.query('ROLLBACK');
         return false;
       }
-      const t = row.triggers.find((x) => x.effectiveAction === row.outcome) ?? row.triggers[0];
-      let ev: FallbackEvidence | null =
-        evidence ?? (t ? { category: t.category, score: t.score, threshold: t.threshold } : null);
+      let ev: FallbackEvidence | null = evidence ?? null;
       if (!ev) {
-        // An unhide that failed: the evidence is the reversal's approve decision.
+        // The evidence is the decision that named the deciding trigger: the hide or delete, else the approve of a reversal.
         const a = await c.query<{ category: Category; confidence: string; threshold: string }>(
           `SELECT category, confidence::text AS confidence, threshold::text AS threshold FROM decision
-           WHERE organization_id = $1 AND brand_id = $2 AND classification_id = $3 AND outcome = 'approve'
+           WHERE organization_id = $1 AND brand_id = $2 AND classification_id = $3 AND outcome IN ('hide', 'delete', 'approve')
              AND category IS NOT NULL AND confidence IS NOT NULL AND threshold IS NOT NULL
-           ORDER BY sequence DESC LIMIT 1`,
+           ORDER BY (outcome = 'approve'), sequence ASC LIMIT 1`,
           [s.organizationId, s.brandId, classificationId],
         );
         const x = a.rows[0];
@@ -300,6 +295,7 @@ export class PgClassificationStore {
         ev.threshold,
         classificationId,
         reason,
+        false,
       ]);
       await c.query('COMMIT');
       return true;
@@ -399,7 +395,7 @@ export class PgClassificationStore {
         return false;
       }
       if (!row.provider || !row.model) throw new Error('classification has no provider');
-      await c.query(INSERT_REVERSAL, [
+      await c.query(INSERT_DECISION, [
         s.organizationId,
         s.brandId,
         row.comment_id,
@@ -411,6 +407,7 @@ export class PgClassificationStore {
         threshold,
         classificationId,
         reason,
+        true,
       ]);
       await c.query('COMMIT');
       return true;

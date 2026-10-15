@@ -368,6 +368,20 @@ describe('PgClassificationStore', () => {
     expect(found?.fallbackAt).toBeInstanceOf(Date);
   });
 
+  it('recordFallback names the category that decided the hide', async () => {
+    const made = await classified(A, { scores: { spam: 0.65, hate_speech: 0.99 } });
+    const policy = {
+      ...DEFAULT_THRESHOLDS,
+      spam: { category: 'spam', threshold: 0.6, action: 'hide', source: 'brand' },
+    } as typeof DEFAULT_THRESHOLDS;
+    const verdict = decide(made.rec.scores, policy, { lowSignal: false, languageSupported: true });
+    const row = await store.record(connScope(A), { ...made.rec, policy, verdict });
+    await store.recordFallback(brandScope(A), row!.id, 'failed', 'r');
+    const d = await decisions(made.commentId);
+    expect(d.rows[0].category).toBe('hate_speech');
+    expect(d.rows[1]).toMatchObject({ outcome: 'flag', category: 'hate_speech' });
+  });
+
   it('recordFallback uses explicit evidence when given', async () => {
     const { rec, commentId } = await classified(A, { scores: { hate_speech: 0.93 } });
     const row = await store.record(connScope(A), rec);
