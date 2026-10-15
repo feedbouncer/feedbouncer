@@ -200,22 +200,37 @@ export class PgCommentStore {
   async pendingHooks(
     scope: ConnectionScope,
     limit: number,
-  ): Promise<{ commentId: string; body: string }[]> {
-    const r = await this.pool.query<{ id: string; body: string }>(
-      `SELECT id, body FROM comment
+  ): Promise<{ commentId: string; body: string; attempted: boolean }[]> {
+    const r = await this.pool.query<{ id: string; body: string; attempted: boolean }>(
+      `SELECT id, body, hook_attempted_at IS NOT NULL AS attempted FROM comment
         WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3
           AND hook_pending_sha256 IS NOT NULL AND platform_state <> 'deleted'
-        ORDER BY platform_synced_at NULLS FIRST, id
+        ORDER BY hook_attempted_at NULLS FIRST, platform_synced_at NULLS FIRST, id
         LIMIT $4`,
       [...ids(scope), limit],
     );
-    return r.rows.map((x) => ({ commentId: x.id, body: x.body }));
+    return r.rows.map((x) => ({ commentId: x.id, body: x.body, attempted: x.attempted }));
+  }
+
+  /** Records a failed delivery so the row rotates behind rows not yet tried. */
+  async markHookFailed(
+    scope: ConnectionScope,
+    commentId: string,
+    body: string,
+    at: Date,
+  ): Promise<void> {
+    await this.pool.query(
+      `UPDATE comment SET hook_attempted_at = $6
+        WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND id = $4
+          AND hook_pending_sha256 = $5`,
+      [...ids(scope), commentId, bodySha(noNul(body)), at],
+    );
   }
 
   /** Clears the pending hook marker, only while it still names the delivered body version. */
   async markHookDelivered(scope: ConnectionScope, commentId: string, body: string): Promise<void> {
     await this.pool.query(
-      `UPDATE comment SET hook_pending_sha256 = NULL
+      `UPDATE comment SET hook_pending_sha256 = NULL, hook_attempted_at = NULL
         WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND id = $4
           AND hook_pending_sha256 = $5`,
       [...ids(scope), commentId, bodySha(noNul(body))],
@@ -259,8 +274,8 @@ export class PgCommentStore {
         authorId = a.rows[0].id;
       }
       // Locks the row so the body compared below is the one this upsert replaces.
-      const prev = await tx.query<{ body: string; pending: boolean }>(
-        `SELECT body, hook_pending_sha256 IS NOT NULL AS pending FROM comment
+      const prev = await tx.query<{ body: string; pending: boolean; state: string }>(
+        `SELECT body, hook_pending_sha256 IS NOT NULL AS pending, platform_state AS state FROM comment
           WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND external_id = $4
             FOR UPDATE`,
         [...ids(scope), c.externalId],
@@ -278,9 +293,13 @@ export class PgCommentStore {
                      AND p.external_id = $7::text),
                  $8, $9, $10, $11, $12, $13, $14, $15)
          ON CONFLICT (connection_id, external_id) DO UPDATE SET
-           hook_pending_sha256 = CASE WHEN comment.body IS DISTINCT FROM EXCLUDED.body
-                                      THEN EXCLUDED.hook_pending_sha256
-                                      ELSE comment.hook_pending_sha256 END,
+           hook_pending_sha256 = CASE
+             WHEN comment.platform_state = 'deleted' OR EXCLUDED.platform_state = 'deleted' THEN NULL
+             WHEN comment.body IS DISTINCT FROM EXCLUDED.body THEN EXCLUDED.hook_pending_sha256
+             ELSE comment.hook_pending_sha256 END,
+           hook_attempted_at = CASE
+             WHEN comment.platform_state = 'deleted' OR comment.body IS DISTINCT FROM EXCLUDED.body
+               THEN NULL ELSE comment.hook_attempted_at END,
            body = EXCLUDED.body,
            author_id = COALESCE(EXCLUDED.author_id, comment.author_id),
            parent_external_id = COALESCE(comment.parent_external_id, EXCLUDED.parent_external_id),
@@ -331,7 +350,7 @@ export class PgCommentStore {
         applied && (created || prev.rows[0] === undefined || prev.rows[0].body !== newBody);
       // A new live body, or an earlier one whose delivery was never recorded.
       const hookBody =
-        c.platformState === 'deleted'
+        c.platformState === 'deleted' || prev.rows[0]?.state === 'deleted'
           ? null
           : applied && live && bodyChanged
             ? newBody
@@ -378,7 +397,7 @@ export class PgCommentStore {
     syncedAt: Date,
   ): Promise<string | null> {
     const r = await this.pool.query<{ id: string }>(
-      `UPDATE comment c SET platform_state = 'deleted', hook_pending_sha256 = NULL,
+      `UPDATE comment c SET platform_state = 'deleted', hook_pending_sha256 = NULL, hook_attempted_at = NULL,
               platform_synced_at = GREATEST(c.platform_synced_at, $5)
         WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3
           AND c.external_id = $4
@@ -408,6 +427,7 @@ export class PgCommentStore {
          ON CONFLICT (connection_id, external_id) DO UPDATE SET
            platform_state = 'deleted',
            hook_pending_sha256 = NULL,
+           hook_attempted_at = NULL,
            platform_synced_at = GREATEST(comment.platform_synced_at, EXCLUDED.platform_synced_at)
          WHERE comment.organization_id = $1 AND comment.brand_id = $2
          RETURNING id`,

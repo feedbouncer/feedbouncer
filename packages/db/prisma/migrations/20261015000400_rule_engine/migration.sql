@@ -168,6 +168,7 @@ CREATE INDEX decision_rule_evaluation_id_idx ON decision (rule_evaluation_id)
 -- same transaction that stores a new live body, cleared once the hook ran.
 ALTER TABLE comment
   ADD COLUMN hook_pending_sha256 bytea,
+  ADD COLUMN hook_attempted_at timestamptz(3),
   ADD CONSTRAINT comment_hook_pending_sha256_check
     CHECK (hook_pending_sha256 IS NULL OR octet_length(hook_pending_sha256) = 32);
 CREATE INDEX comment_connection_id_hook_pending_idx

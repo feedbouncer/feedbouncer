@@ -134,6 +134,9 @@ export async function pollSource(
           await d.store.markHookDelivered(scope, r.commentId, r.hookBody);
         } catch (err) {
           hookError ??= { error: err };
+          await d.store
+            .markHookFailed(scope, r.commentId, r.hookBody, new Date(d.clock.now()))
+            .catch(() => {});
         }
       }
       if (newest === null || c.postedAt > newest) newest = c.postedAt;
@@ -200,8 +203,9 @@ export function adPollJob(
       if (platform !== 'facebook' && platform !== 'instagram')
         throw new JobError('non_retryable', 'unsupported_platform');
 
-      const client = await d.runtime.connect(ctx.scope);
       // Pending markers of comments no pass will re-read are delivered here, bounded per job.
+      // Rows that failed before were rotated to the back; their repeat failures are logged,
+      // not rethrown, so one permanent failure cannot fail every poll job forever.
       if (d.applied) {
         for (const p of await d.store.pendingHooks(ctx.scope, PENDING_SWEEP_LIMIT)) {
           try {
@@ -214,10 +218,19 @@ export function adPollJob(
             });
             await d.store.markHookDelivered(ctx.scope, p.commentId, p.body);
           } catch (err) {
-            hookFailure ??= { error: err };
+            await d.store
+              .markHookFailed(ctx.scope, p.commentId, p.body, new Date(d.clock.now()))
+              .catch(() => {});
+            if (!p.attempted) hookFailure ??= { error: err };
+            else
+              ctx.log.warn('comments.hook_redelivery_failed', {
+                commentId: p.commentId,
+                errorName: err instanceof Error ? err.name : 'unknown',
+              });
           }
         }
       }
+      const client = await d.runtime.connect(ctx.scope);
       const deadline = d.clock.now() + d.settings.softDeadlineMs;
       const due = await d.tracking.dueSources(ctx.scope, new Date(d.clock.now()), {
         graceDays: d.settings.graceDays,

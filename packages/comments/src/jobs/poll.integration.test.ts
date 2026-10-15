@@ -293,6 +293,51 @@ beforeEach(async () => {
 });
 
 describe('ad poll job: pending hook delivery', () => {
+  it('permanently failing rows rotate back and never starve a later pending row', async () => {
+    const mk = (i: number, body: string) =>
+      store.upsertFromPlatform(
+        fbScope,
+        {
+          externalId: `starve_${i}`,
+          sourceExternalId: 'starve_post',
+          parentExternalId: null,
+          author: null,
+          body,
+          postedAt: new Date(nowMs - 40 * 86_400_000),
+          platformState: 'visible',
+          permalink: null,
+        },
+        { ownAccountExternalId: pageId, syncedAt: new Date(nowMs - 100_000 + i) },
+      );
+    for (let i = 0; i < 105; i++) await mk(i, `bad ${i}`);
+    const good = await mk(1000, 'good one');
+    const seenGood: string[] = [];
+    const job = adPollJob({
+      runtime,
+      directory,
+      store,
+      tracking,
+      clock,
+      settings,
+      applied: {
+        onApplied: async (e) => {
+          if (e.body.startsWith('bad')) throw new Error('permanent');
+          seenGood.push(e.commentId);
+        },
+      },
+    });
+    const go = () =>
+      job.handle(jobCtx(fbScope, 'facebook', POLL_JOB.type), POLL_JOB.payload.parse({ bucket: 1 }));
+    await expect(go()).rejects.toThrow('permanent');
+    expect(seenGood).toEqual([]);
+    advance(1_000);
+    await expect(go()).rejects.toThrow('permanent');
+    expect(seenGood).toEqual([good.commentId]);
+    // Rows that already failed once no longer fail the job.
+    advance(1_000);
+    await expect(go()).resolves.toBeDefined();
+  });
+
   const mkJob = (onApplied: (e: { body: string; commentId: string }) => Promise<void>) =>
     adPollJob({ runtime, directory, store, tracking, clock, settings, applied: { onApplied } });
   const go = (job: ReturnType<typeof mkJob>) =>
@@ -311,10 +356,15 @@ describe('ad poll job: pending hook delivery', () => {
     });
     await expect(go(job)).rejects.toThrow('poison');
     expect(seen.sort()).toEqual(['fine', 'poison']);
+    const owed = await pool.query(
+      `SELECT body FROM comment WHERE connection_id = $1 AND hook_pending_sha256 IS NOT NULL`,
+      [fbScope.connectionId],
+    );
+    expect(owed.rows).toEqual([{ body: 'poison' }]);
     const done = mkJob(async () => {});
     advance(10 * 60_000);
     await go(done);
-    // the later item was cleared: only the poison one is still owed
+    // the later item was cleared and the poison one was not: now the hook accepts all
     const left = await pool.query(
       `SELECT body FROM comment WHERE connection_id = $1 AND hook_pending_sha256 IS NOT NULL`,
       [fbScope.connectionId],

@@ -131,8 +131,23 @@ describe('PgCommentStore', () => {
     expect(await store.pendingHooks(scope(), 1000)).toContainEqual({
       commentId: a.commentId,
       body: 'listed',
+      attempted: false,
     });
     expect(await store.pendingHooks(foreignScope(), 1000)).toEqual([]);
+  });
+
+  it('a late visible snapshot does not take a marker from a deleted row', async () => {
+    const c = comment({ body: 'late' });
+    await store.recordDeleted(
+      scope(),
+      { sourceExternalId: c.sourceExternalId, externalId: c.externalId },
+      { syncedAt: at(1), occurredAt: at(1) },
+    );
+    const r = await store.upsertFromPlatform(scope(), c, own(2));
+    expect(r).toMatchObject({ needsHook: false, hookBody: null });
+    expect(await store.pendingHooks(scope(), 1000)).not.toContainEqual(
+      expect.objectContaining({ commentId: r.commentId }),
+    );
   });
 
   it('a delete clears the pending marker', async () => {
