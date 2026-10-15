@@ -10,10 +10,12 @@ import {
 
 /**
  * Rejected outright (never silently normalised): C0/C1 controls except \n and \t, soft hyphen,
- * zero-width and word-joiner characters, BOM, and bidi embedding/override/isolate characters.
+ * zero-width, directional-mark and line/paragraph separator characters, BOM, interlinear annotation,
+ * bidi embedding/override/isolate characters, Unicode tag characters and variation selector supplement
+ * (invisible prompt-smuggling vectors). U+FE00-U+FE0F stays allowed for emoji presentation.
  */
 const FORBIDDEN =
-  /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u00AD\u200B-\u200D\u2060\uFEFF\u202A-\u202E\u2066-\u2069]/u;
+  /[\u{0}-\u{8}\u{B}-\u{1F}\u{7F}-\u{9F}\u{AD}\u{61C}\u{180E}\u{200B}-\u{200F}\u{2028}\u{2029}\u{202A}-\u{202E}\u{2060}\u{2066}-\u{2069}\u{FEFF}\u{FFF9}-\u{FFFB}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/u;
 const WORD = /[\p{L}\p{N}\p{M}]+/gu;
 /** Length in Unicode code points, matching Postgres char_length. */
 const len = (s: string): number => [...s].length;
