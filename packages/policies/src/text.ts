@@ -8,9 +8,15 @@ import {
   RUN_MAX_DAYS,
 } from './types.js';
 
-/** C0/C1 controls except \n, and bidi embedding/override/isolate characters. */
-const FORBIDDEN = /[\u0000-\u0009\u000B-\u001F\u007F-\u009F‪-‮⁦-⁩]/u;
-const WORD = /[\p{L}\p{N}]+/gu;
+/**
+ * Rejected outright (never silently normalised): C0/C1 controls except \n and \t, soft hyphen,
+ * zero-width and word-joiner characters, BOM, and bidi embedding/override/isolate characters.
+ */
+const FORBIDDEN =
+  /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u00AD\u200B-\u200D\u2060\uFEFF\u202A-\u202E\u2066-\u2069]/u;
+const WORD = /[\p{L}\p{N}\p{M}]+/gu;
+/** Length in Unicode code points, matching Postgres char_length. */
+const len = (s: string): number => [...s].length;
 
 export function normalizePolicyText(s: string): string {
   return s
@@ -75,39 +81,49 @@ export function policyWarnings(text: string): PolicyWarning[] {
   return out;
 }
 
-const name = z
-  .string()
-  .transform(normalizePolicyText)
-  .pipe(
-    z
-      .string()
-      .min(1, 'Give the policy a name.')
-      .max(MAX_NAME_CHARS, `Keep the name under ${MAX_NAME_CHARS + 1} characters.`)
-      .refine((s) => !s.includes('\n'), 'The name must be on one line.')
-      .refine((s) => !FORBIDDEN.test(s), 'The name contains characters that are not allowed.'),
-  );
+/** NFC-normalise, reject forbidden characters on the raw input, then collapse whitespace. */
+const cleaned = (what: string) =>
+  z.string().transform((raw, ctx) => {
+    const n = raw.normalize('NFC').replace(/\r\n?/g, '\n');
+    if (FORBIDDEN.test(n)) {
+      ctx.issues.push({
+        code: 'custom',
+        message: `The ${what} contains characters that are not allowed.`,
+        input: raw,
+      });
+      return z.NEVER;
+    }
+    return normalizePolicyText(n);
+  });
 
-const text = z
-  .string()
-  .transform(normalizePolicyText)
-  .pipe(
-    z
-      .string()
-      .min(
-        1,
-        'Write the policy as a sentence, for example “Hide comments telling people to DM another account”.',
-      )
-      .min(
-        MIN_POLICY_CHARS,
-        `Write at least ${MIN_POLICY_CHARS} characters so the policy can be applied.`,
-      )
-      .max(MAX_POLICY_CHARS, `Keep the policy under ${MAX_POLICY_CHARS + 1} characters.`)
-      .refine(
-        (s) => words(s).length >= 2,
-        'Write the policy as a sentence with at least two words.',
-      )
-      .refine((s) => !FORBIDDEN.test(s), 'The policy contains characters that are not allowed.'),
-  );
+const name = cleaned('name').pipe(
+  z
+    .string()
+    .refine((s) => s.length > 0, 'Give the policy a name.')
+    .refine(
+      (s) => len(s) <= MAX_NAME_CHARS,
+      `Keep the name under ${MAX_NAME_CHARS + 1} characters.`,
+    )
+    .refine((s) => !s.includes('\n'), 'The name must be on one line.'),
+);
+
+const text = cleaned('policy').pipe(
+  z
+    .string()
+    .refine(
+      (s) => s.length > 0,
+      'Write the policy as a sentence, for example \u201CHide comments telling people to DM another account\u201D.',
+    )
+    .refine(
+      (s) => len(s) >= MIN_POLICY_CHARS,
+      `Write at least ${MIN_POLICY_CHARS} characters so the policy can be applied.`,
+    )
+    .refine(
+      (s) => len(s) <= MAX_POLICY_CHARS,
+      `Keep the policy under ${MAX_POLICY_CHARS + 1} characters.`,
+    )
+    .refine((s) => words(s).length >= 2, 'Write the policy as a sentence with at least two words.'),
+);
 
 const action = z.enum(POLICY_ACTIONS, { error: 'Choose Flag for review, Hide or Delete.' });
 
