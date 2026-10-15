@@ -49,15 +49,21 @@ describe('PgPolicyStore', () => {
   });
 
   it('editing text or action creates a new revision; name and enabled do not; earlier revisions are unchanged', async () => {
-    const p = await withTransaction(pool, (c) => store.create(c, a, { ...base, name: 'Edits' }, t.userId));
+    const p = await withTransaction(pool, (c) =>
+      store.create(c, a, { ...base, name: 'Edits' }, t.userId),
+    );
     const r1 = p.revisionId;
-    const renamed = await withTransaction(pool, (c) => store.update(c, a, p.id, { name: 'Renamed' }, t.userId));
+    const renamed = await withTransaction(pool, (c) =>
+      store.update(c, a, p.id, { name: 'Renamed' }, t.userId),
+    );
     expect(renamed).toMatchObject({
       revised: false,
       enabledChanged: false,
       policy: { name: 'Renamed', revision: 1 },
     });
-    const enabled = await withTransaction(pool, (c) => store.update(c, a, p.id, { enabled: true }, t.userId));
+    const enabled = await withTransaction(pool, (c) =>
+      store.update(c, a, p.id, { enabled: true }, t.userId),
+    );
     expect(enabled).toMatchObject({
       revised: false,
       enabledChanged: true,
@@ -83,7 +89,9 @@ describe('PgPolicyStore', () => {
       ),
     );
     expect(sameText?.revised).toBe(false);
-    const actionOnly = await withTransaction(pool, (c) => store.update(c, a, p.id, { action: 'remove' }, t.userId));
+    const actionOnly = await withTransaction(pool, (c) =>
+      store.update(c, a, p.id, { action: 'remove' }, t.userId),
+    );
     expect(actionOnly).toMatchObject({ revised: true, policy: { revision: 3, action: 'remove' } });
     const revs = await store.revisions(a, p.id);
     expect(revs.map((r) => r.revision)).toEqual([3, 2, 1]);
@@ -95,8 +103,16 @@ describe('PgPolicyStore', () => {
     const bs = { organizationId: b.organizationId, brandId: b.brandId };
     const ids: string[] = [];
     for (let i = 0; i < 20; i++)
-      ids.push((await withTransaction(pool, (c) => store.create(c, bs, { ...base, name: `p${i}` }, b.userId))).id);
-    const over = withTransaction(pool, (c) => store.create(c, bs, { ...base, name: 'p20' }, b.userId));
+      ids.push(
+        (
+          await withTransaction(pool, (c) =>
+            store.create(c, bs, { ...base, name: `p${i}` }, b.userId),
+          )
+        ).id,
+      );
+    const over = withTransaction(pool, (c) =>
+      store.create(c, bs, { ...base, name: 'p20' }, b.userId),
+    );
     await expect(over).rejects.toBeInstanceOf(PolicyLimitError);
     await expect(over).rejects.toMatchObject({ limit: 'policies', max: 20 });
     for (let i = 0; i < 10; i++)
@@ -119,21 +135,27 @@ describe('PgPolicyStore', () => {
     await expect(
       withTransaction(pool, (c) => store.create(c, a, { ...base, name: 'dup' }, t.userId)),
     ).rejects.toBeInstanceOf(PolicyNameTakenError);
-    const other = await withTransaction(pool, (c) => store.create(c, a, { ...base, name: 'Other' }, t.userId));
+    const other = await withTransaction(pool, (c) =>
+      store.create(c, a, { ...base, name: 'Other' }, t.userId),
+    );
     await expect(
       withTransaction(pool, (c) => store.update(c, a, other.id, { name: 'DUP' }, t.userId)),
     ).rejects.toBeInstanceOf(PolicyNameTakenError);
   });
 
   it('archive disables, hides from list and get, and keeps revisions', async () => {
-    const p = await withTransaction(pool, (c) => store.create(c, a, { ...base, name: 'ToArchive' }, t.userId));
+    const p = await withTransaction(pool, (c) =>
+      store.create(c, a, { ...base, name: 'ToArchive' }, t.userId),
+    );
     await withTransaction(pool, (c) => store.update(c, a, p.id, { enabled: true }, t.userId));
     expect(await withTransaction(pool, (c) => store.archive(c, a, p.id))).toBe(true);
     expect(await withTransaction(pool, (c) => store.archive(c, a, p.id))).toBe(false);
     expect(await store.get(a, p.id)).toBeNull();
     expect((await store.list(a)).some((x) => x.id === p.id)).toBe(false);
     expect(await store.revisions(a, p.id)).toHaveLength(1);
-    expect(await withTransaction(pool, (c) => store.update(c, a, p.id, { enabled: true }, t.userId))).toBeNull();
+    expect(
+      await withTransaction(pool, (c) => store.update(c, a, p.id, { enabled: true }, t.userId)),
+    ).toBeNull();
     // The name is free again once archived.
     await expect(
       withTransaction(pool, (c) => store.create(c, a, { ...base, name: 'ToArchive' }, t.userId)),
@@ -144,11 +166,15 @@ describe('PgPolicyStore', () => {
     const b = await seedTenant(db.c, 'eval-order');
     const bs = { organizationId: b.organizationId, brandId: b.brandId };
     expect(await store.hasEnabled(bs)).toBe(false);
-    const p1 = await withTransaction(pool, (c) => store.create(c, bs, { ...base, name: 'first' }, b.userId));
+    const p1 = await withTransaction(pool, (c) =>
+      store.create(c, bs, { ...base, name: 'first' }, b.userId),
+    );
     const p2 = await withTransaction(pool, (c) =>
       store.create(c, bs, { ...base, name: 'second', action: 'flag' }, b.userId),
     );
-    await withTransaction(pool, (c) => store.create(c, bs, { ...base, name: 'third-disabled' }, b.userId));
+    await withTransaction(pool, (c) =>
+      store.create(c, bs, { ...base, name: 'third-disabled' }, b.userId),
+    );
     await withTransaction(pool, (c) => store.update(c, bs, p2.id, { enabled: true }, b.userId));
     await withTransaction(pool, (c) =>
       store.update(
@@ -178,7 +204,9 @@ describe('PgPolicyStore', () => {
     );
     expect(await store.get(a, p1.id)).toBeNull();
     expect(await store.revisions(a, p1.id)).toEqual([]);
-    expect(await withTransaction(pool, (c) => store.update(c, a, p1.id, { name: 'stolen' }, t.userId))).toBeNull();
+    expect(
+      await withTransaction(pool, (c) => store.update(c, a, p1.id, { name: 'stolen' }, t.userId)),
+    ).toBeNull();
     expect(await withTransaction(pool, (c) => store.archive(c, a, p1.id))).toBe(false);
     // A forged org with the right brand id is invisible too.
     const forged = { organizationId: t.organizationId, brandId: b.brandId };
@@ -189,7 +217,9 @@ describe('PgPolicyStore', () => {
   it('forRun returns the run revision only while it is current and the policy is enabled', async () => {
     const b = await seedTenant(db.c, 'for-run');
     const bs = { organizationId: b.organizationId, brandId: b.brandId };
-    const p = await withTransaction(pool, (c) => store.create(c, bs, { ...base, name: 'run' }, b.userId));
+    const p = await withTransaction(pool, (c) =>
+      store.create(c, bs, { ...base, name: 'run' }, b.userId),
+    );
     await withTransaction(pool, (c) => store.update(c, bs, p.id, { enabled: true }, b.userId));
     const run = async (revisionId: string) =>
       (

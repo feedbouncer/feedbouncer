@@ -167,8 +167,7 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
 
     // A run must not undo a person's decision by hiding or deleting again.
     const moderatorActed =
-      p.trigger !== 'ingest' &&
-      (await d.comments.latestActionActor(brand, row.id)) === 'user';
+      p.trigger !== 'ingest' && (await d.comments.latestActionActor(brand, row.id)) === 'user';
     const verdicts = new Map(policies.map((x, i) => [x.revisionId, byKey[keys[i]!]!]));
     const decision = decidePolicies(policies, verdicts, {
       lowSignal: input.lowSignal,

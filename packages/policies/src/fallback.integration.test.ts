@@ -48,7 +48,12 @@ async function seedEvaluated(t: Tenant, action: PolicyAction = 'hide') {
     policies.create(
       c,
       brandOf(t),
-      { name: `Fallback ${++n}`, text: 'Comments asking people to DM another account', action, vague: false },
+      {
+        name: `Fallback ${++n}`,
+        text: 'Comments asking people to DM another account',
+        action,
+        vague: false,
+      },
       t.userId,
     ),
   );

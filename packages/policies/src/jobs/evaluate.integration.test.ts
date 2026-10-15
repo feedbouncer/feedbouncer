@@ -79,7 +79,12 @@ afterAll(async () => {
   await db.close();
 });
 beforeEach(() => {
-  evaluator = { enabled: true, id: 'openai', model: 'gpt-test', evaluate: vi.fn<PolicyEvaluator['evaluate']>() };
+  evaluator = {
+    enabled: true,
+    id: 'openai',
+    model: 'gpt-test',
+    evaluate: vi.fn<PolicyEvaluator['evaluate']>(),
+  };
   const calls: ActionRequest[] = [];
   actions = {
     calls,
@@ -137,7 +142,10 @@ async function addPolicy(
   });
 }
 const updatePolicy = (t: Tenant, p: StoredPolicy, patch: Parameters<PgPolicyStore['update']>[3]) =>
-  withTransaction(pool, async (c) => (await policies.update(c, brandOf(t), p.id, patch, t.userId))!.policy);
+  withTransaction(
+    pool,
+    async (c) => (await policies.update(c, brandOf(t), p.id, patch, t.userId))!.policy,
+  );
 
 /** A tenant with the given policies, enabled and created in order. */
 async function brand(specs: Parameters<typeof addPolicy>[1][] = [{}]) {
@@ -152,7 +160,8 @@ async function writeRuleEvaluation(
   status: 'no_match' | 'decided' | 'skipped',
   action: RuleAction = 'hide',
 ) {
-  if (status !== 'decided' || action === 'hide') return evaluateRulesFor(ruleEvaluations, c, status);
+  if (status !== 'decided' || action === 'hide')
+    return evaluateRulesFor(ruleEvaluations, c, status);
   const row = await ruleEvaluations.record(scopeOf(c.t), {
     commentId: c.id,
     sha: Buffer.from(bodySha256(c.body), 'hex'),
@@ -285,7 +294,10 @@ describe('policy_evaluate', () => {
     expect(evaluator.evaluate).not.toHaveBeenCalled();
     expect(actions.calls).toEqual([]);
     expect(await decisionsFor(c, 'policy')).toEqual([]);
-    expect(await evaluationFor(c)).toMatchObject({ status: 'skipped', skip_reason: 'rule_decided' });
+    expect(await evaluationFor(c)).toMatchObject({
+      status: 'skipped',
+      skip_reason: 'rule_decided',
+    });
     expect(await usedCalls(t)).toBe(0);
   });
 
@@ -297,7 +309,10 @@ describe('policy_evaluate', () => {
     expect(evaluator.evaluate).not.toHaveBeenCalled();
     expect(actions.calls).toEqual([]);
     expect(await decisionsFor(c, 'policy')).toEqual([]);
-    expect(await evaluationFor(c)).toMatchObject({ status: 'skipped', skip_reason: 'rule_decided' });
+    expect(await evaluationFor(c)).toMatchObject({
+      status: 'skipped',
+      skip_reason: 'rule_decided',
+    });
   });
 
   it('rule precedence also holds for an explicit run', async () => {
@@ -308,7 +323,10 @@ describe('policy_evaluate', () => {
     await job.handle(ctx(c, 1), payload(c, { trigger: `run:${runId}` }));
     expect(evaluator.evaluate).not.toHaveBeenCalled();
     expect(actions.calls).toEqual([]);
-    expect(await evaluationFor(c)).toMatchObject({ status: 'skipped', skip_reason: 'rule_decided' });
+    expect(await evaluationFor(c)).toMatchObject({
+      status: 'skipped',
+      skip_reason: 'rule_decided',
+    });
   });
 
   it('a skipped rule evaluation is recorded as rules_not_evaluated', async () => {
@@ -707,7 +725,9 @@ describe('policy_evaluate', () => {
     // Edited after the run was requested.
     const edited = await seed(t, { ruleStatus: 'no_match' });
     const run1 = await createRun(t, P1);
-    const P1v2 = await updatePolicy(t, P1, { text: 'Comments that ask people to DM a different account' });
+    const P1v2 = await updatePolicy(t, P1, {
+      text: 'Comments that ask people to DM a different account',
+    });
     expect(P1v2.revision).toBe(2);
     await job.handle(ctx(edited, 1), payload(edited, { trigger: `run:${run1}` }));
     expect(await evaluationFor(edited)).toMatchObject({
