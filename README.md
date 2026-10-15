@@ -37,6 +37,7 @@ pnpm test
 | `packages/authz`               | Roles and authorization checks                                                                               |
 | `packages/comments`            | Comments: storage, moderation, lifecycle, webhooks, reconnect emails                                         |
 | `packages/ai`                  | Multi-provider language model configuration and factory                                                      |
+| `packages/classifier`          | AI comment classification: categories, per-brand thresholds and settings schemas                             |
 | `packages/connector-facebook`  | Facebook Pages connector: OAuth, comments, moderation actions                                                |
 | `packages/connector-instagram` | Instagram connector (Facebook Login): comments, moderation actions, replies                                  |
 | `packages/connector-meta-ads`  | Meta Ads connector: ad accounts and active ads; comments are read through the Page and Instagram connections |
