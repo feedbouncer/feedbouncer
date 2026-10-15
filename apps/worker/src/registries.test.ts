@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import * as comments from '@feedbouncer/comments';
 import { RuleActionFallback, RuleTrigger, ruleEvaluateJob } from '@feedbouncer/rules';
 import type { FacebookConfig } from '@feedbouncer/connector-facebook';
-import { ClassifierTrigger, loadClassifierConfig } from '@feedbouncer/classifier';
+import {
+  ClassifierActionFallback,
+  ClassifierTrigger,
+  loadClassifierConfig,
+} from '@feedbouncer/classifier';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { buildConnectorRegistry, buildJobRegistry, type WorkerJobDeps } from './registries.js';
 
@@ -143,7 +147,6 @@ describe('rule engine wiring', () => {
     buildJobRegistry(fakeDeps);
     const outcomes = vi.mocked(comments.executeActionJob).mock.calls[0]?.[0].outcomes;
     expect(outcomes).toBeInstanceOf(comments.CompositeActionOutcomeObserver);
-    expect(RuleActionFallback).toBeDefined();
   });
 });
 
@@ -163,21 +166,32 @@ describe('classifier wiring', () => {
       ClassifierTrigger,
     );
   });
-  it('fans action outcomes out to the classifier fallback as well as the rule fallback', async () => {
-    vi.mocked(comments.executeActionJob).mockClear();
-    buildJobRegistry(fakeDeps);
-    const outcomes = vi.mocked(comments.executeActionJob).mock.calls[0]?.[0].outcomes;
-    expect(outcomes).toBeInstanceOf(comments.CompositeActionOutcomeObserver);
-    // The stub pool has no query(): reaching the classification store proves it is wired.
-    await expect(
-      outcomes?.onActionOutcome({
+  it('fans action outcomes out to both the rule fallback and the classifier fallback', async () => {
+    const rule = vi.spyOn(RuleActionFallback.prototype, 'onActionOutcome').mockResolvedValue();
+    const classifier = vi
+      .spyOn(ClassifierActionFallback.prototype, 'onActionOutcome')
+      .mockResolvedValue();
+    try {
+      vi.mocked(comments.executeActionJob).mockClear();
+      buildJobRegistry(fakeDeps);
+      const outcomes = vi.mocked(comments.executeActionJob).mock.calls[0]?.[0].outcomes;
+      expect(outcomes).toBeInstanceOf(comments.CompositeActionOutcomeObserver);
+      const event = {
         actorType: 'classifier',
         requestKey: 'clf:6f1c2a4e-8d2b-4c3a-9b1e-0a1b2c3d4e5f',
         status: 'failed',
         code: 'x',
         kind: 'hide',
         scope: { organizationId: 'o', brandId: 'b' },
-      } as never),
-    ).rejects.toThrow();
+      } as never;
+      await outcomes?.onActionOutcome(event);
+      expect(rule).toHaveBeenCalledTimes(1);
+      expect(classifier).toHaveBeenCalledTimes(1);
+      expect(rule).toHaveBeenCalledWith(event);
+      expect(classifier).toHaveBeenCalledWith(event);
+    } finally {
+      rule.mockRestore();
+      classifier.mockRestore();
+    }
   });
 });

@@ -97,7 +97,11 @@ or rule acted on it afterwards.
 - **Re-run:** explicitly re-applies the current settings to recent comments.
   It covers at most 30 days (default 7) and 5,000 comments per connection, may
   be requested once per 15 minutes per brand, and reuses stored scores where
-  possible. Hides made by a re-run are reversible by a later re-run.
+  possible. A re-run unhides a comment the classifier hid when the current
+  settings no longer hide it, provided nobody acted on it afterwards. A re-run
+  never hides or deletes a comment again after a moderator acted on it: the
+  comment is flagged for review and the decision says so. A re-run with no
+  active connection records nothing and does not start the 15-minute window.
 
 ## Fairness and limits
 
