@@ -14,6 +14,7 @@ import type {
 import type { IngestOrigin, PgCommentStore } from '../store.js';
 import type { CommentAppliedHook } from '../hooks.js';
 import { applyPlatformComment } from '../apply.js';
+import { deliverPendingHooks } from './pending-hooks.js';
 import { INGEST_JOB, type IngestPayload } from './specs.js';
 
 export type IngestOutcome = 'created' | 'updated' | 'stale' | 'deleted' | 'gone';
@@ -78,6 +79,22 @@ export function ingestCommentJob(d: {
             });
             await d.store.markHookDelivered(ctx.scope, r.commentId, r.hookBody);
           }
+        }
+      }
+      // Comments whose own ingest ran out of retries are delivered by the next event of
+      // their connection; a failure here must not fail this unrelated event.
+      if (d.applied) {
+        try {
+          await deliverPendingHooks(
+            { store: d.store, applied: d.applied, now: () => d.clock.now() },
+            ctx.scope,
+            rec.platform,
+            ctx.log,
+          );
+        } catch (err) {
+          ctx.log.warn('comments.hook_sweep_failed', {
+            errorName: err instanceof Error ? err.name : 'unknown',
+          });
         }
       }
       const { lagMs } = clampLag(p.platformEventSec * 1000, d.clock.now());

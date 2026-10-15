@@ -22,6 +22,7 @@ import type { DueSource, PgAdTracking } from '../ads/tracking.js';
 import { applyPlatformComment } from '../apply.js';
 import type { IngestObserver } from './ingest.js';
 import type { CommentAppliedHook } from '../hooks.js';
+import { deliverPendingHooks } from './pending-hooks.js';
 import { POLL_JOB, type PollPayload } from './specs.js';
 
 export interface PollSettings {
@@ -175,9 +176,6 @@ export async function pollSource(
   }
 }
 
-/** Most pending hook deliveries one poll job sweeps before polling. */
-const PENDING_SWEEP_LIMIT = 100;
-
 /** What an unreadable source's code is when the media itself, or the whole account, is refused. */
 const SOURCE_INACCESSIBLE = 'source_inaccessible';
 
@@ -203,33 +201,14 @@ export function adPollJob(
       if (platform !== 'facebook' && platform !== 'instagram')
         throw new JobError('non_retryable', 'unsupported_platform');
 
-      // Pending markers of comments no pass will re-read are delivered here, bounded per job.
-      // Rows that failed before were rotated to the back; their repeat failures are logged,
-      // not rethrown, so one permanent failure cannot fail every poll job forever.
-      if (d.applied) {
-        for (const p of await d.store.pendingHooks(ctx.scope, PENDING_SWEEP_LIMIT)) {
-          try {
-            await d.applied.onApplied({
-              scope: ctx.scope,
-              platform,
-              commentId: p.commentId,
-              body: p.body,
-              outcome: 'updated',
-            });
-            await d.store.markHookDelivered(ctx.scope, p.commentId, p.body);
-          } catch (err) {
-            await d.store
-              .markHookFailed(ctx.scope, p.commentId, p.body, new Date(d.clock.now()))
-              .catch(() => {});
-            if (!p.attempted) hookFailure ??= { error: err };
-            else
-              ctx.log.warn('comments.hook_redelivery_failed', {
-                commentId: p.commentId,
-                errorName: err instanceof Error ? err.name : 'unknown',
-              });
-          }
-        }
-      }
+      // Pending markers of comments no pass will re-read are delivered here too.
+      if (d.applied)
+        hookFailure = await deliverPendingHooks(
+          { store: d.store, applied: d.applied, now: () => d.clock.now() },
+          ctx.scope,
+          platform,
+          ctx.log,
+        );
       const client = await d.runtime.connect(ctx.scope);
       const deadline = d.clock.now() + d.settings.softDeadlineMs;
       const due = await d.tracking.dueSources(ctx.scope, new Date(d.clock.now()), {

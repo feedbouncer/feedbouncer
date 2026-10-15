@@ -244,6 +244,22 @@ describe('comment ingest job: applied hook', () => {
     expect(calls).toHaveLength(2);
   });
 
+  it('delivers another comment of the connection whose own ingest failed', async () => {
+    const first = graph.addComment(pageId, { message: 'left behind' });
+    failing = true;
+    await expect(runHooked(payload(first, 'created'))).rejects.toThrow('hook down');
+    failing = false;
+    calls.length = 0;
+    tick();
+    const second = graph.addComment(pageId, { message: 'next' });
+    await runHooked(payload(second, 'created'));
+    expect(calls.map((c) => c.body).sort()).toEqual(['left behind', 'next']);
+    calls.length = 0;
+    tick();
+    await runHooked(payload(second, 'updated'));
+    expect(calls).toEqual([]);
+  });
+
   it('a failure after delivery (before it was recorded) redelivers: at least once', async () => {
     const c = graph.addComment(pageId, { message: 'crashy' });
     const flaky = new Proxy(store, {

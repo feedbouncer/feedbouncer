@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as comments from '@feedbouncer/comments';
-import { RuleTrigger } from '@feedbouncer/rules';
+import { RuleActionFallback, RuleTrigger } from '@feedbouncer/rules';
 import type { FacebookConfig } from '@feedbouncer/connector-facebook';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { buildConnectorRegistry, buildJobRegistry, type WorkerJobDeps } from './registries.js';
@@ -121,5 +121,20 @@ describe('rule engine wiring', () => {
     const poll = vi.mocked(comments.adPollJob).mock.calls[0]?.[0];
     expect(ingest?.applied).toBeInstanceOf(RuleTrigger);
     expect(poll?.applied).toBe(ingest?.applied);
+  });
+  it('gives ingest the hook without ad polling, so pending deliveries are swept on every connection', () => {
+    vi.mocked(comments.ingestCommentJob).mockClear();
+    const jobs = buildJobRegistry(fakeDeps);
+    expect(jobs.supports('ad_poll', 'facebook')).toBe(false);
+    expect(vi.mocked(comments.ingestCommentJob).mock.calls[0]?.[0].applied).toBeInstanceOf(
+      RuleTrigger,
+    );
+  });
+  it('reports action outcomes to the rule fallback', () => {
+    vi.mocked(comments.executeActionJob).mockClear();
+    buildJobRegistry(fakeDeps);
+    expect(vi.mocked(comments.executeActionJob).mock.calls[0]?.[0].outcomes).toBeInstanceOf(
+      RuleActionFallback,
+    );
   });
 });
