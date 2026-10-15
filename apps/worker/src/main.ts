@@ -14,6 +14,7 @@ import {
   systemClock,
   type ConnectionDirectory,
 } from '@feedbouncer/connectors';
+import { CLASSIFIER_LANE } from '@feedbouncer/classifier';
 import { createPool, runJobOnce } from '@feedbouncer/db';
 import {
   JobMetrics,
@@ -62,6 +63,12 @@ const log = createLogger('worker', env.logLevel);
 installCrashHandlers(log);
 for (const w of configWarnings) log.warn(w, { appEnv: env.appEnv });
 logConfigurationLoaded(log, env);
+log.info('classifier.config', {
+  provider: env.classifier.model?.provider ?? 'none',
+  model: env.classifier.model?.model ?? 'none',
+  baseUrlHost: env.classifier.model?.baseUrl?.host ?? null,
+  languages: env.classifier.languages.length,
+});
 try {
   const workerId = hostname();
   const connectors = buildConnectorRegistry(env);
@@ -70,9 +77,13 @@ try {
     32,
     connectors.platforms().reduce((sum, p) => sum + env.jobs.concurrency[p], 0),
   );
+  const laneConsumerConnections = Object.values(env.jobs.laneConcurrency).reduce(
+    (sum, n) => sum + n * connectors.platforms().length,
+    0,
+  );
   const pool = createPool(env.databaseUrl, {
     applicationName: 'feedbouncer-worker',
-    max: env.concurrency + 2 + jobConsumerConnections,
+    max: env.concurrency + 2 + jobConsumerConnections + Math.min(32, laneConsumerConnections),
     onIdleError: (err) => log.warn('postgres idle client error', errorFields(err)),
   });
   // PgRefreshLock holds a session per refresh, so it gets a small pool of its own.
@@ -80,6 +91,15 @@ try {
     applicationName: 'feedbouncer-worker-locks',
     max: 4,
     onIdleError: (err) => log.warn('postgres lock pool idle client error', errorFields(err)),
+  });
+  // Each in-flight classification holds one session for its whole provider call.
+  const slotsPool = createPool(env.databaseUrl, {
+    applicationName: 'feedbouncer-worker-classifier-slots',
+    max: Math.max(
+      2,
+      (env.jobs.laneConcurrency[CLASSIFIER_LANE] ?? 0) * connectors.platforms().length,
+    ),
+    onIdleError: (err) => log.warn('postgres slots pool idle client error', errorFields(err)),
   });
   const ledger = new PgJobLedger(pool);
   // Tracing registers its global provider here, before any span-producing code
@@ -132,6 +152,8 @@ try {
       directory: stack.directory,
       store,
       pool,
+      slotsPool,
+      classifier: env.classifier,
       clock: systemClock,
       log,
       ingestObserver: promIngestObserver(telemetry.metrics),
@@ -222,7 +244,13 @@ try {
     await queues.close();
     await health.close();
     mailer?.close();
-    await Promise.allSettled([pool.end(), lockPool.end(), redis.quit(), producerRedis.quit()]);
+    await Promise.allSettled([
+      pool.end(),
+      lockPool.end(),
+      slotsPool.end(),
+      redis.quit(),
+      producerRedis.quit(),
+    ]);
     await metricsServer?.close();
     await telemetry.tracing.shutdown();
   }, log);

@@ -109,6 +109,33 @@ describe('loadWorkerEnv', () => {
     expect(env.databaseUrl.password).toBe('sentinel-db-pw-123');
   });
 
+  describe('classifier', () => {
+    it('is disabled by default and gives the classify lane 2 consumers', () => {
+      const env = load(base);
+      expect(env.classifier.model).toBeNull();
+      expect(env.jobs.laneConcurrency).toEqual({ classify: 2 });
+    });
+    it('honors JOB_CONCURRENCY_LANE_CLASSIFY and reads CLASSIFIER_API_KEY_FILE', () => {
+      const env = loadWorkerEnv(
+        {
+          ...base,
+          JOB_CONCURRENCY_LANE_CLASSIFY: '5',
+          CLASSIFIER_PROVIDER: 'google',
+          CLASSIFIER_MODEL: 'gemini-2.5-flash',
+          CLASSIFIER_API_KEY_FILE: '/run/secrets/clf',
+        },
+        {
+          warn: () => {},
+          fs: { size: () => 40, read: () => 'file-sentinel-key-0123456789abcdef\n' },
+        },
+      );
+      expect(env.jobs.laneConcurrency).toEqual({ classify: 5 });
+      expect(env.classifier.model?.provider).toBe('google');
+      for (const out of [JSON.stringify(env), inspect(env, { depth: 10, showHidden: true })])
+        expect(out).not.toContain('file-sentinel-key');
+    });
+  });
+
   describe('instagram', () => {
     it('leaves instagram null unless INSTAGRAM_CONNECTOR_ENABLED=true', () => {
       expect(load({ ...base, ...facebook }).instagram).toBeNull();

@@ -225,6 +225,17 @@ services:
       JOB_BACKOFF_MAX_MS: ${JOB_BACKOFF_MAX_MS:-}
       JOB_DLQ_RETENTION_DAYS: ${JOB_DLQ_RETENTION_DAYS:-}
       JOB_DEDUP_WINDOW_DAYS: ${JOB_DEDUP_WINDOW_DAYS:-}
+      JOB_CONCURRENCY_LANE_CLASSIFY: ${JOB_CONCURRENCY_LANE_CLASSIFY:-}
+      # Comment classifier; empty provider means disabled (docs/operations/job-queue.md).
+      CLASSIFIER_PROVIDER: ${CLASSIFIER_PROVIDER:-}
+      CLASSIFIER_MODEL: ${CLASSIFIER_MODEL:-}
+      CLASSIFIER_API_KEY: ${CLASSIFIER_API_KEY:-}
+      CLASSIFIER_BASE_URL: ${CLASSIFIER_BASE_URL:-}
+      CLASSIFIER_ALLOW_HTTP: ${CLASSIFIER_ALLOW_HTTP:-}
+      CLASSIFIER_TIMEOUT_MS: ${CLASSIFIER_TIMEOUT_MS:-}
+      CLASSIFIER_LANGUAGES: ${CLASSIFIER_LANGUAGES:-}
+      CLASSIFIER_BRAND_MAX_IN_FLIGHT: ${CLASSIFIER_BRAND_MAX_IN_FLIGHT:-}
+      CLASSIFIER_MAX_WAIT_MINUTES: ${CLASSIFIER_MAX_WAIT_MINUTES:-}
       # Ad discovery and ad comment polling; empty means the default (docs/connectors/meta-ads.md).
       AD_POLL_INTERVAL_SEC: ${AD_POLL_INTERVAL_SEC:-}
       AD_DISCOVERY_INTERVAL_SEC: ${AD_DISCOVERY_INTERVAL_SEC:-}
@@ -241,6 +252,8 @@ services:
     volumes:
       - ./apps/worker/src:/repo/apps/worker/src:ro
       - ./packages/authz/src:/repo/packages/authz/src:ro
+      - ./packages/ai/src:/repo/packages/ai/src:ro
+      - ./packages/classifier/src:/repo/packages/classifier/src:ro
       - ./packages/comments/src:/repo/packages/comments/src:ro
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro

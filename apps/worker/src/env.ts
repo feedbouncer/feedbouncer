@@ -17,6 +17,12 @@ import {
   type SecretFileSystem,
 } from '@feedbouncer/service-runtime';
 import {
+  CLASSIFIER_FILE_VARS,
+  CLASSIFIER_JOB_SPECS,
+  loadClassifierConfig,
+  type ClassifierConfig,
+} from '@feedbouncer/classifier';
+import {
   FACEBOOK_FILE_VARS,
   parseFacebookEnv,
   type FacebookConfig,
@@ -43,7 +49,11 @@ export const WORKER_FILE_VARS = [
   'SMTP_URL',
   ...ENCRYPTION_FILE_VARS,
   ...FACEBOOK_FILE_VARS,
+  ...CLASSIFIER_FILE_VARS,
 ] as const;
+
+/** Queue lanes the registered jobs run on; each gets JOB_CONCURRENCY_LANE_<LANE> consumers. */
+const JOB_LANES = [...new Set(CLASSIFIER_JOB_SPECS.map((s) => s.lane))].sort();
 
 export interface WorkerEnv {
   readonly appEnv: AppEnv;
@@ -54,6 +64,7 @@ export interface WorkerEnv {
   readonly logLevel: LogLevel;
   readonly encryption: Keyring;
   readonly jobs: JobsConfig;
+  readonly classifier: ClassifierConfig;
   readonly telemetry: TelemetryConfig;
   readonly health: HealthPolicy;
   /** Null when FACEBOOK_APP_ID is unset: the connector is not enabled. */
@@ -166,7 +177,8 @@ export function loadWorkerEnv(
     healthPort: readInt(env, 'HEALTH_PORT', { min: 1, max: 65_535, fallback: 3002 }),
     logLevel: readEnum(env, 'LOG_LEVEL', LOG_LEVELS, 'info'),
     encryption: loadEncryptionKeyring(env, appEnv, opts.warn),
-    jobs: loadJobsConfig(env),
+    jobs: loadJobsConfig(env, { lanes: JOB_LANES }),
+    classifier: loadClassifierConfig(env),
     telemetry: loadTelemetryConfig(env, 'worker'),
     health: loadHealthPolicy(env),
     facebook,
@@ -187,6 +199,7 @@ export function loadWorkerEnv(
     metaAdsEnabled: config.metaAds !== null,
     activeKeyId: config.encryption.activeKeyId,
     jobQueuePrefix: config.jobs.prefix,
+    classifierEnabled: config.classifier.model !== null,
     jobDlqRetentionDays: config.jobs.dlqRetentionMs / 86_400_000,
     metricsPort: config.telemetry.metrics.port,
     metricsHost: config.telemetry.metrics.host,

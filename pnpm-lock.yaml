@@ -281,6 +281,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@feedbouncer/classifier':
+        specifier: workspace:*
+        version: link:../../packages/classifier
       '@feedbouncer/comments':
         specifier: workspace:*
         version: link:../../packages/comments

@@ -15,6 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@feedbouncer/classifier": "workspace:*",
     "@feedbouncer/comments": "workspace:*",
     "@feedbouncer/connector-facebook": "workspace:*",
     "@feedbouncer/connector-instagram": "workspace:*",

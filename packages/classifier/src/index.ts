@@ -14,3 +14,4 @@ export * from './jobs/specs.js';
 export * from './trigger.js';
 export * from './jobs/classify.js';
 export * from './fallback.js';
+export * from './config.js';

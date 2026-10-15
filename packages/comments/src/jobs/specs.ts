@@ -96,6 +96,7 @@ export function enqueueOnly<P>(spec: {
   payload: z.ZodType<P>;
   externalRef(p: P): string;
   policy?: Partial<RetryPolicy>;
+  lane?: string;
   platforms: readonly Platform[] | 'all';
 }): JobDefinition<P> {
   return {
@@ -103,6 +104,7 @@ export function enqueueOnly<P>(spec: {
     payload: spec.payload,
     externalRef: (p) => spec.externalRef(p),
     ...(spec.policy ? { policy: spec.policy } : {}),
+    ...(spec.lane !== undefined ? { lane: spec.lane } : {}),
     platforms: spec.platforms,
     handle: async () => {
       throw new JobError('non_retryable', 'not_a_worker');

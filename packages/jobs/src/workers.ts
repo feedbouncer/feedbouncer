@@ -47,7 +47,10 @@ export class JobWorkers {
       this.#platformWorkers.push(p);
     }
     for (const lane of d.jobs.lanes()) {
-      const n = d.config.laneConcurrency[lane] ?? 0;
+      const configured = d.config.laneConcurrency[lane];
+      if (configured === undefined)
+        d.log.warn('lane has no configured concurrency; its consumers are off', { lane });
+      const n = configured ?? 0;
       if (n === 0) continue;
       for (const p of platforms) await this.#startWorker(p, lane, n);
     }

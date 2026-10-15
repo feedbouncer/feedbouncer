@@ -15,7 +15,7 @@ import { JobRegistry } from './definition.js';
 import { PgJobLedger } from './ledger.js';
 import { JobMetrics } from './metrics.js';
 import { JobProducer } from './producer.js';
-import { QueueSet } from './queues.js';
+import { QueueSet, knownLaneOf } from './queues.js';
 
 async function main(argv: readonly string[]): Promise<number> {
   const [area, ...rest] = argv;
@@ -31,7 +31,7 @@ async function main(argv: readonly string[]): Promise<number> {
   });
   const redis = createProducerConnection(readUrl(env, 'REDIS_URL', REDIS_PROTOCOLS).href);
   redis.on('error', () => {});
-  const queues = new QueueSet({ connection: redis, prefix: config.prefix });
+  const queues = new QueueSet({ connection: redis, prefix: config.prefix, laneOf: knownLaneOf });
   const ledger = new PgJobLedger(pool);
   // Replay only moves ledger rows back to the queue; it consults neither registry.
   const producer = new JobProducer({

@@ -147,6 +147,13 @@ describe('job definitions', () => {
     }
   });
 
+  it('enqueueOnly carries the lane so the API enqueues on the lane queue', () => {
+    const r = new JobRegistry();
+    r.register(enqueueOnly({ ...INGEST_JOB, lane: 'classify' }));
+    expect(r.laneOf()(INGEST_JOB.type)).toBe('classify');
+    expect(enqueueOnly(INGEST_JOB)).not.toHaveProperty('lane');
+  });
+
   it('enqueueOnly takes its platforms from the spec', () => {
     expect(enqueueOnly({ ...INGEST_JOB, platforms: ['youtube'] }).platforms).toEqual(['youtube']);
     expect(enqueueOnly({ ...INGEST_JOB, platforms: 'all' }).platforms).toBe('all');
