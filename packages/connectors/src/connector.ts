@@ -6,6 +6,7 @@ import type {
   ConnectorCapabilities,
   NormalizedComment,
   NormalizedSource,
+  RecentSource,
   Page,
   Platform,
   RespondRequest,
@@ -116,6 +117,15 @@ export interface Connector {
   refreshTokens(refreshToken: Secret, ctx: OAuthContext): Promise<TokenSet>;
 
   listSources?(ctx: CallContext, req: { cursor: string | null }): Promise<Page<NormalizedSource>>;
+
+  /**
+   * The connection's own posts/media, newest first. No item is older than
+   * `since`, and `nextCursor` is null once the listing has passed `since`.
+   */
+  listRecentSources?(
+    ctx: CallContext,
+    req: { since: Date; cursor: string | null; limit: number },
+  ): Promise<Page<RecentSource>>;
 
   /** A comment deleted between pages must not fail the listing; return what still exists. */
   listComments(

@@ -206,7 +206,7 @@ describe('toNormalizedIgComment', () => {
     });
   });
 
-  it('prefers user.id over a different from.id: user is only present on the account\'s own comments', () => {
+  it("prefers user.id over a different from.id: user is only present on the account's own comments", () => {
     const c = toNormalizedIgComment(
       rawComment({
         from: { id: '17841400000000777', username: 'shop.official' },

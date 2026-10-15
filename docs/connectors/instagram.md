@@ -31,8 +31,9 @@ Out of scope:
 - Mentions, story replies, live comments and direct messages other than the one
   private reply per comment.
 - Banning an author (Instagram has no such API).
-- Importing comments posted before the account was connected, or while it was
-  disconnected (no backfill).
+- Importing comments older than the backfill window (30 days), or posted
+  while the account was disconnected beyond the outage gap that a reconnect
+  fetches; see [backfill.md](backfill.md).
 
 ## Prerequisites
 
@@ -292,9 +293,12 @@ Known platform limits the code applies:
 - **Ad comments** are polled through the Meta Ads connector and shown with an
   Ad label (see [meta-ads.md](meta-ads.md)). Late replies on older ad comments
   can take up to `AD_IG_DEEP_SCAN_INTERVAL_SEC` (24 hours by default) to appear.
-- **No backfill.** Ad posts are polled (see meta-ads.md); organic posts are
-  webhook-only, so an organic comment posted while the connection was down is
-  not imported.
+- **Backfill is limited.** Connecting imports the last 30 days of comments on
+  the account's recent media, and reconnecting fetches the outage gap; see
+  [backfill.md](backfill.md). Ad posts are polled (see meta-ads.md). Organic
+  comments older than the window are not imported.
+- **Graph calls beyond comments:** `GET /{ig-user-id}/media` lists recent media
+  for backfill (read-only, no extra scope).
 - Meta's deauthorize and data-deletion callbacks are not implemented.
 
 ## Data retention

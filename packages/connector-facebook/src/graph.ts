@@ -10,7 +10,7 @@ export const GRAPH_HOST = 'graph.facebook.com';
 /** Up to three numeric segments: `<id>`, `<page>_<post>`, `<page>_<post>_<n>` (comment ids). */
 export const GRAPH_ID = /^\d{1,32}(_\d{1,32}){0,2}$/;
 const SEGMENT =
-  /^(?:\d{1,32}(?:_\d{1,32}){0,2}|act_\d{1,32}|me|accounts|permissions|comments|replies|blocked|subscribed_apps|messages|oauth|access_token|adaccounts|ads)$/;
+  /^(?:\d{1,32}(?:_\d{1,32}){0,2}|act_\d{1,32}|me|accounts|permissions|comments|replies|blocked|subscribed_apps|messages|oauth|access_token|adaccounts|ads|feed|media)$/;
 /** Ad account id without the `act_` prefix. */
 export const AD_ACCOUNT_ID = /^\d{1,32}$/;
 

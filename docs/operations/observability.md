@@ -149,14 +149,14 @@ configuration summary.
 
 ### Span catalogue
 
-| Span                    | Kind     | Where                       | Notes                                                                                              |
-| ----------------------- | -------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
-| `webhook.receive`       | server   | Webhook gate (intake)       | A new root for every delivery. `feedbouncer.webhook.outcome`: `accepted`, `duplicate`, `rejected`. |
-| `job.enqueue`           | producer | Job producer                | Child of the active span; records `feedbouncer.job.deduplicated`.                                  |
-| `job.run`               | consumer | Job runner, one per attempt | `feedbouncer.job.attempt` is 1 for the first try. Retries are sibling spans in one trace.          |
-| `connector.<operation>` | client   | Platform calls              | `<operation>` is `list_sources`, `list_comments`, `list_replies`, `get_comment` or `act`.          |
-| `moderation.apply`      | internal | `ConnectionClient.act`      | Carries `feedbouncer.action` and `feedbouncer.action.status`.                                      |
-| `HTTP <method> <route>` | server   | API requests                | A new root per request; `<route>` is the route pattern, never the raw path.                        |
+| Span                    | Kind     | Where                       | Notes                                                                                                            |
+| ----------------------- | -------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `webhook.receive`       | server   | Webhook gate (intake)       | A new root for every delivery. `feedbouncer.webhook.outcome`: `accepted`, `duplicate`, `rejected`.               |
+| `job.enqueue`           | producer | Job producer                | Child of the active span; records `feedbouncer.job.deduplicated`.                                                |
+| `job.run`               | consumer | Job runner, one per attempt | `feedbouncer.job.attempt` is 1 for the first try. Retries are sibling spans in one trace.                        |
+| `connector.<operation>` | client   | Platform calls              | `<operation>` is `list_sources`, `list_recent_sources`, `list_comments`, `list_replies`, `get_comment` or `act`. |
+| `moderation.apply`      | internal | `ConnectionClient.act`      | Carries `feedbouncer.action` and `feedbouncer.action.status`.                                                    |
+| `HTTP <method> <route>` | server   | API requests                | A new root per request; `<route>` is the route pattern, never the raw path.                                      |
 
 Failed spans carry `feedbouncer.error.code` and `feedbouncer.error.class`, and the span
 status message is the code. Exceptions are never recorded on spans, so error messages and

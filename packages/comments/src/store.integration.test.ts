@@ -445,4 +445,22 @@ describe('per-connection comment identity', () => {
     expect(stale.outcome).toBe('stale');
     expect((await rowOf(r.commentId)).ad_source_id).toBe(adSrc);
   });
+  it('records ingest origin on insert only', async () => {
+    const c = normalized({ externalId: 'origin-1' });
+    await applyPlatformComment(store, scope(), c, { ...opts(), origin: 'backfill' });
+    await applyPlatformComment(store, scope(), { ...c, body: 'edited' }, opts());
+    const r = await pool.query(
+      `SELECT ingest_origin, body FROM comment WHERE connection_id = $1 AND external_id = 'origin-1'`,
+      [t.connectionId],
+    );
+    expect(r.rows[0]).toEqual({ ingest_origin: 'backfill', body: 'edited' });
+  });
+  it('ingest origin defaults to live', async () => {
+    await applyPlatformComment(store, scope(), normalized({ externalId: 'origin-2' }), opts());
+    const r = await pool.query(
+      `SELECT ingest_origin FROM comment WHERE connection_id = $1 AND external_id = 'origin-2'`,
+      [t.connectionId],
+    );
+    expect(r.rows[0].ingest_origin).toBe('live');
+  });
 });

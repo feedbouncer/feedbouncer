@@ -13,7 +13,7 @@ import {
   type RespondRequest,
 } from '@feedbouncer/connectors';
 import type { FacebookConfig } from './config.js';
-import { callFor } from './comments.js';
+import { callFor } from './graph-call.js';
 import { GRAPH_ID, graphErrorCodes, graphId, graphRequest } from './graph.js';
 import { subscribePageFields, unsubscribePageFields } from './subscriptions.js';
 

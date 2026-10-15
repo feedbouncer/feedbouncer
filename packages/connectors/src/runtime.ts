@@ -42,6 +42,7 @@ import {
   externalIdSchema,
   parseComment,
   parsePage,
+  recentSourceSchema,
   respondRequestSchema,
   sourceSchema,
 } from './schemas.js';
@@ -56,6 +57,7 @@ import {
   type NormalizedComment,
   type NormalizedSource,
   type Page,
+  type RecentSource,
   type Platform,
   type Priority,
   type RespondRequest,
@@ -65,6 +67,7 @@ import {
 
 export type ConnectorOperation =
   | 'list_sources'
+  | 'list_recent_sources'
   | 'list_comments'
   | 'list_replies'
   | 'get_comment'
@@ -97,7 +100,7 @@ export interface RuntimeDeps {
   sync?: SyncRecorder;
 }
 
-/** Per-call options for reads; `background` is for ad discovery and polling. */
+/** Per-call options for reads; `background` is for ad discovery, ad polling and backfill. */
 export interface ListOptions {
   readonly priority?: 'bulk' | 'background';
 }
@@ -237,6 +240,26 @@ export class ConnectionClient {
       sourceSchema,
       await this.#call(opts?.priority ?? 'bulk', 'list_sources', (ctx) => op(ctx, { cursor })),
     );
+  }
+
+  async listRecentSources(
+    req: { since: Date; cursor: string | null; limit?: number },
+    opts?: ListOptions,
+  ): Promise<Page<RecentSource>> {
+    const op = this.connector.listRecentSources?.bind(this.connector);
+    if (!op) throw new ConnectorError('unsupported', 'list_recent_sources');
+    if (
+      !(req.since instanceof Date) ||
+      Number.isNaN(req.since.getTime()) ||
+      !cursorSchema.safeParse(req.cursor).success
+    )
+      throw invalidRequest();
+    const max = this.capabilities.maxPageSize;
+    const limit = Math.min(Math.max(Math.trunc(req.limit ?? max), 1), max);
+    const raw = await this.#call(opts?.priority ?? 'bulk', 'list_recent_sources', (ctx) =>
+      op(ctx, { since: req.since, cursor: req.cursor, limit }),
+    );
+    return parsePage(recentSourceSchema, raw);
   }
 
   async listComments(

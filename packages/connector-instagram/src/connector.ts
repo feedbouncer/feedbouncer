@@ -4,6 +4,7 @@ import { act, IG_LIMITS, lifecycle, respond } from './actions.js';
 import { getComment, listComments, listReplies } from './comments.js';
 import { INSTAGRAM_REQUIRED_SCOPES, INSTAGRAM_SCOPES, type InstagramConfig } from './config.js';
 import { listInstagramAccounts } from './oauth.js';
+import { listRecentMedia } from './sources.js';
 import { instagramWebhookSpec } from './webhook.js';
 
 export function createInstagramConnector(
@@ -17,6 +18,7 @@ export function createInstagramConnector(
       actions: ['hide', 'unhide', 'delete'],
       responses: ['public_reply', 'private_reply'],
       listSources: false,
+      recentSources: true,
       ingestion: 'webhook',
       accountSelection: 'multiple',
       tokens: { refreshable: false, rotatesRefreshToken: false },
@@ -46,6 +48,7 @@ export function createInstagramConnector(
     refreshTokens: () => Promise.reject(new ConnectorError('auth_expired', 'not_refreshable')),
     listAccounts: (token, ctx) => listInstagramAccounts(cfg, now, token, ctx),
     listComments: (ctx, req) => listComments(cfg, now, ctx, req),
+    listRecentSources: (ctx, req) => listRecentMedia(cfg, now, ctx, req),
     listReplies: (ctx, req) => listReplies(cfg, now, ctx, req),
     getComment: (ctx, ref) => getComment(cfg, now, ctx, ref),
     act: act(cfg, now),

@@ -3,6 +3,7 @@ import { act, lifecycle, respond } from './actions.js';
 import { getComment, listComments } from './comments.js';
 import { FACEBOOK_SCOPES, type FacebookConfig } from './config.js';
 import { buildAuthorizationUrl, exchangeCode, listAccounts } from './oauth.js';
+import { listRecentPosts } from './sources.js';
 import { facebookWebhookSpec } from './webhook.js';
 
 export function createFacebookConnector(
@@ -16,6 +17,7 @@ export function createFacebookConnector(
       actions: ['hide', 'unhide', 'delete', 'ban_author', 'unban_author'],
       responses: ['public_reply', 'private_reply'],
       listSources: false,
+      recentSources: true,
       ingestion: 'webhook',
       accountSelection: 'multiple',
       tokens: { refreshable: false, rotatesRefreshToken: false },
@@ -38,6 +40,7 @@ export function createFacebookConnector(
     refreshTokens: () => Promise.reject(new ConnectorError('auth_expired', 'not_refreshable')),
     listAccounts: (token, ctx) => listAccounts(cfg, now, token, ctx),
     listComments: (ctx, req) => listComments(cfg, now, ctx, req),
+    listRecentSources: (ctx, req) => listRecentPosts(cfg, now, ctx, req),
     getComment: (ctx, ref) => getComment(cfg, now, ctx, ref),
     act: (ctx, req) => act(cfg, now, ctx, req),
     respond: (ctx, req) => respond(cfg, now, ctx, req),

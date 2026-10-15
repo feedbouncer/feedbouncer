@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ApiForm } from '../../../../../../components/api-form';
 import { ConnectButton } from '../../../../../../components/connect-button';
+import { backfillText, type BackfillViewDto } from '../../../../../../lib/backfill-text';
+import { formatUtc } from '../../../../../../lib/format';
 import { isUuid } from '../../../../../../lib/ids';
 import { messageFor, statusReasonText } from '../../../../../../lib/messages';
 import { missingPermissionText } from '../../../../../../lib/oauth';
@@ -14,6 +16,7 @@ interface Connection {
   displayName: string | null;
   status: 'connected' | 'needs_reconnect' | 'paused' | 'error' | 'disconnected';
   statusReason: string | null;
+  backfill: BackfillViewDto | null;
 }
 
 const STATUS_LABEL: Record<Connection['status'], string> = {
@@ -89,6 +92,7 @@ export default async function ConnectionsPage({
                   <th scope="col">Platform</th>
                   <th scope="col">Account</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Recent comments</th>
                   <th scope="col">Actions</th>
                 </tr>
               </thead>
@@ -105,6 +109,7 @@ export default async function ConnectionsPage({
                         {STATUS_LABEL[c.status]}
                         {reason ? <p>{reason}</p> : null}
                       </td>
+                      <td>{backfillText(c.backfill, formatUtc)}</td>
                       <td>
                         {c.status === 'needs_reconnect' && isConnectable(c.platform) ? (
                           <ConnectButton

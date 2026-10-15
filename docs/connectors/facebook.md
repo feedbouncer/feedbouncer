@@ -25,7 +25,8 @@ Out of scope:
 - Posting, scheduling or editing posts, reading insights, and inbox
   conversations other than the one private reply per comment.
 - Importing comments posted before a Page was connected, or while it was
-  disconnected (no backfill).
+  disconnected. A Page's recent comments are imported once when it is
+  connected; see [backfill.md](backfill.md).
 - Facebook Login for personal profiles. Only Pages the signed-in person manages
   are listed.
 
@@ -227,9 +228,13 @@ is the log; update it when you test.
 
 Other limits:
 
-- No backfill. Comments posted while a Page was disconnected, or before it was
-  connected, are not imported. Ad posts are polled (see
-  [meta-ads.md](meta-ads.md)); organic posts are webhook-only.
+- Backfill is limited. Connecting a Page imports the last 30 days of comments
+  on its recent posts, and reconnecting fetches only the outage gap; see
+  [backfill.md](backfill.md). Older comments are not imported. Ad posts are
+  polled (see [meta-ads.md](meta-ads.md)); organic posts are otherwise
+  webhook-only.
+- Graph calls beyond comments: `GET /{page-id}/feed` lists the Page's recent
+  posts for backfill (read-only, no extra scope).
 - Comments on ads (dark posts) arrive through the Meta Ads connector, which
   reads them with this Page's connection.
 - Shared Pages: see below.

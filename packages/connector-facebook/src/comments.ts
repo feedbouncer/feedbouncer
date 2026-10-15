@@ -9,7 +9,8 @@ import {
 } from '@feedbouncer/connectors';
 import * as z from 'zod';
 import type { FacebookConfig } from './config.js';
-import { GRAPH_ID, graphId, graphRequest, type GraphCall } from './graph.js';
+import { GRAPH_ID, graphId, graphRequest } from './graph.js';
+import { callFor, parseGraphTime, reporting } from './graph-call.js';
 
 export const COMMENT_FIELDS =
   'id,message,created_time,from{id,name},parent{id},is_hidden,permalink_url';
@@ -26,9 +27,6 @@ const graphComment = z.object({
   permalink_url: z.string().max(2048).optional(),
 });
 
-// Graph returns "2026-10-13T09:00:00+0000"; normalize the offset for unambiguous parsing.
-const parseGraphTime = (s: string): Date => new Date(s.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
-
 export function toNormalizedComment(
   raw: unknown,
   sourceExternalId: string,
@@ -37,7 +35,7 @@ export function toNormalizedComment(
   if (!r.success) return null;
   const c = r.data;
   const postedAt = parseGraphTime(c.created_time);
-  if (!Number.isFinite(postedAt.getTime())) return null;
+  if (postedAt === null) return null;
   return {
     externalId: c.id,
     sourceExternalId,
@@ -50,26 +48,6 @@ export function toNormalizedComment(
     platformState: c.is_hidden ? 'hidden' : 'visible',
     permalink: c.permalink_url?.startsWith('https://') ? c.permalink_url : null,
   };
-}
-
-export const callFor = (cfg: FacebookConfig, nowMs: () => number, ctx: CallContext): GraphCall => ({
-  http: ctx.http,
-  signal: ctx.signal,
-  version: cfg.graphVersion,
-  appSecret: cfg.appSecret,
-  token: ctx.accessToken,
-  nowMs,
-});
-
-async function reporting<T extends { usage: { throttledForMs: number | null } }>(
-  ctx: CallContext,
-  nowMs: () => number,
-  r: T,
-): Promise<T> {
-  if (r.usage.throttledForMs) {
-    await ctx.reportQuota({ remaining: 0, resetAt: new Date(nowMs() + r.usage.throttledForMs) });
-  }
-  return r;
 }
 
 export async function getComment(

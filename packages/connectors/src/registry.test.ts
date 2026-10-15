@@ -8,6 +8,7 @@ const base = (): Connector => ({
   capabilities: {
     actions: ['hide', 'delete'],
     listSources: false,
+    recentSources: false,
     ingestion: 'polling',
     tokens: { refreshable: true, rotatesRefreshToken: false },
     rateLimit: { points: 10, durationSec: 60, urgentReservePoints: 2, defaultRetryAfterMs: 5_000 },
@@ -99,6 +100,12 @@ describe('validateConnector', () => {
     ],
     ['webhook ingestion without spec', withCaps({ ingestion: 'webhook' }), /webhook/],
     ['listSources flag without method', withCaps({ listSources: true }), /listSources/],
+    ['recentSources flag without method', withCaps({ recentSources: true }), /recentSources/],
+    [
+      'listRecentSources method without flag',
+      { ...base(), listRecentSources: async () => ({ items: [], nextCursor: null }) },
+      /recentSources/,
+    ],
     [
       'zero private reply window',
       withCaps({ constraints: { privateReplyWindowMs: 0 } }),

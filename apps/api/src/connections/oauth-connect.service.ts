@@ -14,13 +14,15 @@ import {
   type PgConnectorStack,
   type Platform,
 } from '@feedbouncer/connectors';
+import type { PgBackfillStore } from '@feedbouncer/comments';
 import type { JobProducer } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
-import { CONNECTOR_STACK, DEPS, JOB_PRODUCER } from '../tokens.js';
+import { BACKFILL_STORE, CONNECTOR_STACK, DEPS, JOB_PRODUCER } from '../tokens.js';
+import { requestBackfill } from './backfill.js';
 import { enqueueLifecycle } from './lifecycle.js';
 
 /**
@@ -52,6 +54,7 @@ export class OAuthConnectService {
     @Inject(DEPS) private readonly deps: AppDeps,
     @Inject(CONNECTOR_STACK) private readonly stack: PgConnectorStack | null,
     @Inject(JOB_PRODUCER) private readonly producer: JobProducer | null,
+    @Inject(BACKFILL_STORE) private readonly backfill: PgBackfillStore,
   ) {}
 
   #configured(): { stack: PgConnectorStack; producer: JobProducer } {
@@ -190,5 +193,6 @@ export class OAuthConnectService {
         reason: 'needs_reconnection',
         limit: 1000,
       });
+    await requestBackfill(this.backfill, producer, scope, platform, new Date());
   }
 }

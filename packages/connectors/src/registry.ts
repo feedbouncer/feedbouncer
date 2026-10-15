@@ -42,6 +42,8 @@ export function validateConnector(c: Connector): void {
   if (!int(k.maxPageSize, 1, 500)) fail('capabilities.maxPageSize');
   if (k.tokens.rotatesRefreshToken && !k.tokens.refreshable) fail('capabilities.tokens');
   if (k.listSources !== (typeof c.listSources === 'function')) fail('capabilities.listSources');
+  if (k.recentSources !== (typeof c.listRecentSources === 'function'))
+    fail('capabilities.recentSources');
   const wantsWebhook = k.ingestion !== 'polling';
   if (wantsWebhook !== (c.webhook !== undefined)) fail('webhook');
   if (k.requiredScopes !== undefined && !k.requiredScopes.every((s) => k.defaultScopes.includes(s)))

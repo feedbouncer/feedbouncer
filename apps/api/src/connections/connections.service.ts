@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { PgBackfillStore } from '@feedbouncer/comments';
 import type { PgConnectorStack } from '@feedbouncer/connectors';
 import type { JobProducer } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
@@ -7,7 +8,7 @@ import { ApiError, notFound } from '../http/errors.js';
 import { parseUuidOr404 } from '../http/validation.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
-import { CONNECTOR_STACK, DEPS, JOB_PRODUCER } from '../tokens.js';
+import { BACKFILL_STORE, CONNECTOR_STACK, DEPS, JOB_PRODUCER } from '../tokens.js';
 import { enqueueLifecycle } from './lifecycle.js';
 
 export type ConnectionViewStatus =
@@ -17,6 +18,17 @@ export type ConnectionViewStatus =
   | 'paused'
   | 'error';
 
+export interface BackfillViewDto {
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  importedCount: number;
+  /** ISO time. */
+  completedAt: string | null;
+  limitedTo: number | null;
+  nothingToImport: boolean;
+  failureReason: string | null;
+  skippedSources: number;
+}
+
 export interface ConnectionView {
   id: string;
   platform: string;
@@ -25,6 +37,7 @@ export interface ConnectionView {
   status: ConnectionViewStatus;
   /** A snake_case code; the web app maps it to text. */
   statusReason: string | null;
+  backfill: BackfillViewDto | null;
 }
 
 /** API status for a stored connection; null when it is not shown at all. */
@@ -54,6 +67,7 @@ export class ConnectionsService {
     @Inject(DEPS) private readonly deps: AppDeps,
     @Inject(CONNECTOR_STACK) private readonly stack: PgConnectorStack | null,
     @Inject(JOB_PRODUCER) private readonly producer: JobProducer | null,
+    @Inject(BACKFILL_STORE) private readonly backfill: PgBackfillStore,
   ) {}
 
   async list(org: OrgContext, brandId: unknown): Promise<ConnectionView[]> {
@@ -71,10 +85,12 @@ export class ConnectionsService {
         ORDER BY created_at, id`,
       [brand.organizationId, brand.brandId],
     );
+    const bf = await this.backfill.views(brand, new Date());
     const views: ConnectionView[] = [];
     for (const row of r.rows) {
       const status = viewStatus(row.status, row.status_reason);
       if (status === null) continue;
+      const v = bf.get(row.id);
       views.push({
         id: row.id,
         platform: row.platform,
@@ -82,6 +98,17 @@ export class ConnectionsService {
         externalAccountId: row.external_account_id,
         status,
         statusReason: status === 'connected' ? null : row.status_reason,
+        backfill: v
+          ? {
+              status: v.status,
+              importedCount: v.importedCount,
+              completedAt: v.completedAt?.toISOString() ?? null,
+              limitedTo: v.limitedTo,
+              nothingToImport: v.status === 'completed' && v.importedCount === 0,
+              failureReason: v.failureReason,
+              skippedSources: v.skippedCount,
+            }
+          : null,
       });
     }
     return views;
@@ -102,6 +129,15 @@ export class ConnectionsService {
     if (!rec) throw notFound();
     const disconnected = await this.stack.directory.disconnect(scope, org.actorUserId);
     if (!disconnected && !(await this.isUserDisconnected(scope))) return;
+    try {
+      await this.backfill.cancel(scope, new Date());
+    } catch (err) {
+      // The runtime refuses a revoked connection, so platform calls stop anyway.
+      this.deps.log.warn('backfill cancel failed', {
+        connectionId: scope.connectionId,
+        errorName: err instanceof Error ? err.name : 'NonError',
+      });
+    }
     try {
       await enqueueLifecycle(this.deps.pool, this.producer, scope, rec.platform, 'teardown');
     } catch (err) {

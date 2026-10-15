@@ -176,6 +176,7 @@ describe('facebook connect flow', () => {
       externalAccountId: pageId,
       status: 'connected',
       statusReason: null,
+      backfill: expect.objectContaining({ status: 'pending' }),
     });
     const secret = await api.pool.query<{ encrypted_value: Buffer }>(
       `SELECT encrypted_value FROM connection_secret WHERE connection_id = $1 AND kind = 'access_token'`,
@@ -770,6 +771,143 @@ describe('meta ads connect flow', () => {
       `${WEB}/orgs/${org.orgId}/brands/${org.brandId}/connections?error=missing_permissions&missing=ads_read`,
     );
     expect((await api.pool.query('SELECT id FROM connection')).rows).toEqual(before.rows);
+  });
+});
+
+const backfillJobs = async (connectionId: string) =>
+  (
+    await api.pool.query<{ payload: { runId: string; segment: number } }>(
+      `SELECT payload FROM job_ledger WHERE connection_id = $1 AND job_type = 'connection_backfill'
+        ORDER BY created_at`,
+      [connectionId],
+    )
+  ).rows;
+
+const backfillOf = async (f: OrgFixture, connectionId: string) =>
+  (
+    (await call('GET', base(f), f.owner)).body.connections as { id: string; backfill: unknown }[]
+  ).find((c) => c.id === connectionId)?.backfill;
+
+describe('backfill on connect', () => {
+  it('connecting queues one backfill without calling the platform feed', async () => {
+    const { pageId } = graph.addPage(fbUserId, { name: 'Bf1' });
+    const before = graph.calls().length;
+    const { connectionId } = await connectPage(org, pageId);
+    const jobs = await backfillJobs(connectionId!);
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]!.payload).toMatchObject({ segment: 0 });
+    expect(
+      graph
+        .calls()
+        .slice(before)
+        .some((c) => c.path.includes('/feed')),
+    ).toBe(false);
+  });
+
+  it('connecting twice queues one backfill', async () => {
+    const { pageId } = graph.addPage(fbUserId, { name: 'Bf2' });
+    const a = await connectPage(org, pageId);
+    const b = await connectPage(org, pageId, { reconnectConnectionId: a.connectionId });
+    expect(b.connectionId).toBe(a.connectionId);
+    expect(await backfillJobs(a.connectionId!)).toHaveLength(1);
+  });
+
+  it('reconnecting after a completed run with an outage queues a gap run', async () => {
+    const { pageId } = graph.addPage(fbUserId, { name: 'Bf3' });
+    const a = await connectPage(org, pageId);
+    const id = a.connectionId!;
+    await api.pool.query(
+      `UPDATE connection_backfill SET status = 'completed', completed_at = now(), synced_through = window_end
+        WHERE connection_id = $1`,
+      [id],
+    );
+    await api.pool.query(
+      `UPDATE connection SET status = 'reconnect_required', status_reason = 'oauth_access_rejected' WHERE id = $1`,
+      [id],
+    );
+    await api.pool.query(
+      `INSERT INTO audit_event (organization_id, brand_id, actor_type, action, subject_type, subject_id, created_at)
+       SELECT organization_id, brand_id, 'system', 'connection.reconnect_required', 'connection', id, now() FROM connection WHERE id = $1`,
+      [id],
+    );
+    await connectPage(org, pageId, { reconnectConnectionId: id });
+    expect(await backfillJobs(id)).toHaveLength(2);
+    const row = (
+      await api.pool.query(
+        `SELECT window_start, window_end FROM connection_backfill WHERE connection_id = $1`,
+        [id],
+      )
+    ).rows[0];
+    expect(row.window_end.getTime() - row.window_start.getTime()).toBeLessThan(3_600_000 + 60_000);
+  });
+
+  it('reconnecting after a completed run without an outage queues nothing', async () => {
+    const { pageId } = graph.addPage(fbUserId, { name: 'Bf4' });
+    const a = await connectPage(org, pageId);
+    const id = a.connectionId!;
+    await api.pool.query(
+      `UPDATE connection_backfill SET status = 'completed', completed_at = now(), synced_through = window_end
+        WHERE connection_id = $1`,
+      [id],
+    );
+    await connectPage(org, pageId, { reconnectConnectionId: id });
+    expect(await backfillJobs(id)).toHaveLength(1);
+  });
+
+  it('a backfill that cannot be queued fails the connect like setup', async () => {
+    const { pageId } = graph.addPage(fbUserId, { name: 'Bf5' });
+    const grantId = await grantFor(org);
+    const real = api.deps.producer!.enqueue.bind(api.deps.producer!);
+    const spy = vi.spyOn(api.deps.producer!, 'enqueue').mockImplementation(async (job) => {
+      if (job.type === 'connection_backfill') throw new Error('down');
+      return real(job);
+    });
+    const r = await call('POST', `${base(org)}/facebook/grants/${grantId}/connect`, org.owner, {
+      accountIds: [pageId],
+    });
+    spy.mockRestore();
+    expect(r.status).toBe(503);
+    const listed = (await listConnections(org)).find((c) => c.externalAccountId === pageId);
+    expect(listed).toMatchObject({ status: 'needs_reconnect', statusReason: 'setup_not_queued' });
+  });
+
+  it('disconnect cancels the backfill', async () => {
+    const { pageId } = graph.addPage(fbUserId, { name: 'Bf6' });
+    const { connectionId } = await connectPage(org, pageId);
+    const del = await call('DELETE', `${base(org)}/${connectionId}`, org.owner);
+    expect(del.status).toBe(204);
+    const row = await api.pool.query(
+      `SELECT status, failure_reason FROM connection_backfill WHERE connection_id = $1`,
+      [connectionId],
+    );
+    expect(row.rows[0]).toEqual({ status: 'failed', failure_reason: 'cancelled' });
+  });
+
+  it('lists the backfill status with the connection', async () => {
+    const { pageId } = graph.addPage(fbUserId, { name: 'Bf7' });
+    const { connectionId } = await connectPage(org, pageId);
+    expect(await backfillOf(org, connectionId!)).toEqual({
+      status: 'pending',
+      importedCount: 0,
+      completedAt: null,
+      limitedTo: null,
+      nothingToImport: false,
+      failureReason: null,
+      skippedSources: 0,
+    });
+  });
+
+  it('a stale run is reported as failed', async () => {
+    const { pageId } = graph.addPage(fbUserId, { name: 'Bf8' });
+    const { connectionId } = await connectPage(org, pageId);
+    await api.pool.query(
+      `UPDATE connection_backfill SET heartbeat_at = now() - interval '27 hours' WHERE connection_id = $1`,
+      [connectionId],
+    );
+    expect(await backfillOf(org, connectionId!)).toMatchObject({
+      status: 'failed',
+      failureReason: 'stalled',
+    });
   });
 });
 

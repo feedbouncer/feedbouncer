@@ -105,6 +105,7 @@ export async function pollSource(
             platform,
             lagMs: Math.max(0, d.clock.now() - c.postedAt.getTime()),
             outcome: 'created',
+            origin: 'live',
           });
         } catch {
           /* telemetry never fails a job */
@@ -140,7 +141,7 @@ export async function pollSource(
 const SOURCE_INACCESSIBLE = 'source_inaccessible';
 
 /** The source itself is unreadable (deleted post, no access to the media): retry it much later. */
-const sourceFailure = (err: ConnectorError) =>
+export const sourceFailure = (err: ConnectorError) =>
   err.kind === 'permanent' ||
   err.kind === 'unsupported' ||
   (err.kind === 'not_found' && err.code !== 'connection_not_found');

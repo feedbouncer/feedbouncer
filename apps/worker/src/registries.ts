@@ -4,7 +4,9 @@ import { createMetaAdsConnector, type MetaAdsConfig } from '@feedbouncer/connect
 import {
   adDiscoveryJob,
   adPollJob,
+  connectionBackfillJob,
   PgAdTracking,
+  PgBackfillStore,
   type PollSettings,
   executeActionJob,
   ingestCommentJob,
@@ -72,6 +74,17 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
     }),
   );
   registry.register(connectionLifecycleJob({ runtime: deps.runtime, log: deps.log }));
+  registry.register(
+    connectionBackfillJob({
+      runtime: deps.runtime,
+      directory: deps.directory,
+      store: deps.store,
+      backfill: new PgBackfillStore(deps.pool),
+      producer: deps.producer,
+      clock: deps.clock,
+      observer: deps.ingestObserver,
+    }),
+  );
   if (deps.ads) {
     const tracking = new PgAdTracking(deps.pool, deps.store);
     registry.register(

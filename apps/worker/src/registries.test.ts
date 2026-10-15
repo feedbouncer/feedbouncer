@@ -90,3 +90,12 @@ describe('buildJobRegistry', () => {
     expect(arg?.producer).toBe(producer);
   });
 });
+
+describe('connection_backfill', () => {
+  it('is registered for facebook and instagram without ads enabled', () => {
+    const jobs = buildJobRegistry(fakeDeps);
+    expect(jobs.supports('connection_backfill', 'facebook')).toBe(true);
+    expect(jobs.supports('connection_backfill', 'instagram')).toBe(true);
+    expect(jobs.supports('connection_backfill', 'meta_ads')).toBe(false);
+  });
+});

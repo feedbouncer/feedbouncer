@@ -285,6 +285,25 @@ const toComment = (c: RefComment): NormalizedComment => ({
 });
 ```
 
+## Listing recent sources (`listRecentSources`)
+
+`listRecentSources(ctx, { since, cursor, limit })` is optional and tied to the
+`recentSources` capability. It returns a `Page<RecentSource>` of the account's
+own posts or media, newest first, each with `externalId`, `createdAt` and
+`permalink`. The comment backfill job walks these sources and then reads each
+one with `listComments`.
+
+- Set `capabilities.recentSources` to `true` exactly when you implement it.
+  Without it the runtime throws an `unsupported` error without any I/O, and
+  backfill does not run for that platform.
+- Items older than `since` may be skipped, but a pinned or backdated old post
+  at the top must not end the listing early; stop when a page's last item is
+  older than `since`.
+- Follow the same cursor, validation and `ctx.http` rules as `listComments`.
+  Do not follow `paging.next` URLs; build requests yourself.
+- Backfill calls use `background` priority, the lowest, so they never delay actions or webhook fetches.
+  See [backfill.md](backfill.md).
+
 ## Acting
 
 `act(ctx, { action, target })` returns `{ status: 'applied', platformActionId }`

@@ -16,6 +16,7 @@ import {
 import {
   FAKE_IG_SCOPES,
   addIgComment,
+  addIgMedia,
   addInstagramAccount,
   createIgState,
   igPrivateReplies,
@@ -76,6 +77,12 @@ interface Injected {
   minutes?: number;
   /** Calls to let through before this failure fires. */
   after?: number;
+  /** Fires only on a request whose path ends with this. */
+  path?: string;
+}
+interface PostMeta {
+  createdAtMs: number;
+  pinned: boolean;
 }
 
 export interface FakeGraphOptions {
@@ -100,6 +107,8 @@ export class FakeGraph {
   private readonly pages = new Map<string, Page>();
   private readonly comments = new Map<string, Comment>();
   private readonly posts = new Map<string, string>(); // post id -> page id
+  private readonly postMeta = new Map<string, PostMeta>();
+  private readonly feedExtras = new Map<string, Record<string, unknown>[]>();
   private readonly tokens = new Map<string, TokenInfo>();
   private readonly shortTokens = new Map<string, string>(); // short token -> user id
   private readonly codes = new Map<string, Consent>();
@@ -227,8 +236,33 @@ export class FakeGraph {
     if (!this.pages.has(pageId)) throw new Error('unknown page');
     const postId = `${pageId}_${++this.seq}`;
     this.posts.set(postId, pageId);
+    this.noteCreated(postId);
     this.ads.dark.add(postId);
     return { postId };
+  }
+
+  addPost(pageId: string, o: { createdAtMs?: number; pinned?: boolean } = {}): { postId: string } {
+    if (!this.pages.has(pageId)) throw new Error('unknown page');
+    const postId = `${pageId}_${++this.seq}`;
+    this.posts.set(postId, pageId);
+    this.noteCreated(postId, o);
+    return { postId };
+  }
+
+  /** The Page owner hid the comment; no webhook is produced. */
+  hideComment(commentId: string): void {
+    this.comment(commentId).hidden = true;
+  }
+
+  addIgMedia(igUserId: string, o: { createdAtMs?: number } = {}): { mediaId: string } {
+    return addIgMedia(this.ig, this.clock(), igUserId, o);
+  }
+
+  /** A raw item appended to the first page of that Page's /feed. */
+  injectFeedItem(pageId: string, raw: Record<string, unknown>): void {
+    const items = this.feedExtras.get(pageId) ?? [];
+    items.push(raw);
+    this.feedExtras.set(pageId, items);
   }
 
   /** GET <post>/comments answers 100/33 afterwards. */
@@ -306,6 +340,7 @@ export class FakeGraph {
     if (!this.pages.has(pageId)) throw new Error('unknown page');
     const postId = opts.postId ?? `${pageId}_${++this.seq}`;
     this.posts.set(postId, pageId);
+    this.noteCreated(postId);
     const id = `${postId}_${++this.seq}`;
     this.comments.set(id, {
       id,
@@ -350,6 +385,15 @@ export class FakeGraph {
       code,
       ...(subcode !== undefined ? { subcode } : {}),
       ...(afterCalls > 0 ? { after: afterCalls } : {}),
+    });
+  }
+
+  /** Fails the next call whose path ends with `pathSuffix`. */
+  failNextFor(pathSuffix: string, code: number, subcode?: number): void {
+    this.injected.push({
+      code,
+      path: pathSuffix,
+      ...(subcode !== undefined ? { subcode } : {}),
     });
   }
 
@@ -451,6 +495,14 @@ export class FakeGraph {
     return String(base + ++this.seq);
   }
 
+  private noteCreated(postId: string, o: { createdAtMs?: number; pinned?: boolean } = {}): void {
+    if (this.postMeta.has(postId)) return;
+    this.postMeta.set(postId, {
+      createdAtMs: o.createdAtMs ?? this.clock(),
+      pinned: o.pinned ?? false,
+    });
+  }
+
   private issue(secret: string, info?: TokenInfo): string {
     this.issued.push(secret);
     if (info) this.tokens.set(secret, info);
@@ -491,9 +543,11 @@ export class FakeGraph {
     const bearer = /^Bearer (\S+)$/.exec(headers.get('authorization') ?? '')?.[1] ?? null;
     const info = bearer ? this.tokens.get(bearer) : undefined;
 
-    const due = this.injected.findIndex((i) => (i.after ?? 0) === 0);
+    const suffix = `/${path.join('/')}`;
+    const applies = (i: Injected) => i.path === undefined || suffix.endsWith(i.path);
+    const due = this.injected.findIndex((i) => applies(i) && (i.after ?? 0) === 0);
     const inj = due >= 0 ? this.injected.splice(due, 1)[0] : undefined;
-    for (const i of this.injected) if (i.after) i.after -= 1;
+    for (const i of this.injected) if (i.after && applies(i)) i.after -= 1;
     if (inj) {
       if (inj.minutes !== undefined) {
         const key = info?.id ?? 'app';
@@ -666,6 +720,46 @@ export class FakeGraph {
     }
 
     switch (second) {
+      case 'feed': {
+        if (method !== 'GET') return this.error(100);
+        const sinceSec = query.get('since');
+        const sinceMs =
+          sinceSec !== null && /^\d{1,12}$/.test(sinceSec) ? Number(sinceSec) * 1000 : null;
+        const posts = [...this.posts]
+          .filter(([id, pageId]) => pageId === owner && !this.ads.dark.has(id))
+          .map(([id]) => ({ id, ...(this.postMeta.get(id) ?? { createdAtMs: 0, pinned: false }) }))
+          .filter((p) => sinceMs === null || p.createdAtMs >= sinceMs);
+        posts.sort(
+          (a, b) =>
+            Number(b.pinned) - Number(a.pinned) ||
+            b.createdAtMs - a.createdAtMs ||
+            b.id.localeCompare(a.id),
+        );
+        const items: Record<string, unknown>[] = posts.map((p) => ({
+          id: p.id,
+          created_time: graphTime(p.createdAtMs),
+          permalink_url: `https://www.facebook.com/${p.id}`,
+        }));
+        const limit = Number(query.get('limit') ?? '25');
+        const size = Number.isInteger(limit) && limit > 0 ? limit : 25;
+        const after = query.get('after') ?? '';
+        const start = /^[A-Za-z0-9_-]{1,12}$/.test(after)
+          ? Number(Buffer.from(after, 'base64url').toString('utf8')) || 0
+          : 0;
+        const end = start + size;
+        const data = items.slice(start, end);
+        if (start === 0) data.push(...(this.feedExtras.get(owner) ?? []));
+        const cursor = Buffer.from(String(end), 'utf8').toString('base64url');
+        return this.reply(200, {
+          data,
+          paging: {
+            cursors: { after: cursor },
+            ...(end < items.length
+              ? { next: `https://graph.facebook.com/${first}/feed?after=${cursor}` }
+              : {}),
+          },
+        });
+      }
       case 'comments': {
         if (method === 'GET') {
           const isPost = this.posts.get(first) === owner;

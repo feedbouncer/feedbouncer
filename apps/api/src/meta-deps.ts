@@ -7,6 +7,7 @@
 import { hostname } from 'node:os';
 import type pg from 'pg';
 import {
+  BACKFILL_JOB,
   EXECUTE_JOB,
   INGEST_JOB,
   LIFECYCLE_JOB,
@@ -99,6 +100,7 @@ export function buildMetaDeps(d: {
   jobs.register(enqueueOnly(INGEST_JOB));
   jobs.register(enqueueOnly(EXECUTE_JOB));
   jobs.register(enqueueOnly(LIFECYCLE_JOB));
+  jobs.register(enqueueOnly(BACKFILL_JOB));
   const queues = new QueueSet({ connection: redis, prefix: env.jobs.prefix });
   const producer = new JobProducer({
     ledger: new PgJobLedger(pool),

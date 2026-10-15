@@ -1,6 +1,7 @@
 import * as z from 'zod';
 import type { Platform } from '@feedbouncer/connectors';
 import { JobError, type JobDefinition, type RetryPolicy } from '@feedbouncer/jobs';
+import { BACKFILL_DEFAULTS, BACKFILL_PLATFORMS } from '../backfill/settings.js';
 
 // Generic external-id shape (Graph ids are digits and underscores). Only safe
 // characters, so ids can join the idempotency ref. The comment id is capped at
@@ -108,3 +109,20 @@ export function enqueueOnly<P>(spec: {
     },
   };
 }
+
+export const backfillPayload = z.strictObject({
+  runId: z.uuid(),
+  segment: z.number().int().min(0).max(100_000),
+});
+export type BackfillPayload = z.infer<typeof backfillPayload>;
+
+export const BACKFILL_MAX_ATTEMPTS = 8;
+
+export const BACKFILL_JOB = {
+  type: 'connection_backfill' as const,
+  payload: backfillPayload,
+  externalRef: (p: BackfillPayload): string => `backfill:${p.runId}:${p.segment}`,
+  timeoutMs: BACKFILL_DEFAULTS.jobTimeoutMs,
+  policy: { maxAttempts: BACKFILL_MAX_ATTEMPTS } satisfies Partial<RetryPolicy>,
+  platforms: BACKFILL_PLATFORMS as readonly Platform[],
+};

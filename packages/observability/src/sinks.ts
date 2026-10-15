@@ -10,7 +10,7 @@ import type { FbMetrics } from './metrics.js';
  * because the comments package cannot be imported from this one.
  */
 export interface IngestObserver {
-  onIngested(e: { platform: string; lagMs: number; outcome: string }): void;
+  onIngested(e: { platform: string; lagMs: number; outcome: string; origin: string }): void;
 }
 
 export function promJobSink(m: FbMetrics): JobEventSink {
@@ -50,7 +50,10 @@ export function promWebhookObserver(m: FbMetrics): WebhookObserver {
 
 export function promIngestObserver(m: FbMetrics): IngestObserver {
   return {
-    onIngested: (e) =>
-      m.commentIngestLag.observe({ platform: e.platform, outcome: e.outcome }, e.lagMs / 1000),
+    onIngested: (e) => {
+      // A backfilled comment is old by definition; its age is not ingest lag.
+      if (e.origin === 'backfill') return;
+      m.commentIngestLag.observe({ platform: e.platform, outcome: e.outcome }, e.lagMs / 1000);
+    },
   };
 }
