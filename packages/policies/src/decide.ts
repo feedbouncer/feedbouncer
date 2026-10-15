@@ -34,7 +34,10 @@ export function effectiveAction(
   return { confidence, effectiveAction: downgrade ? 'flag' : action, downgrade };
 }
 
-/** policies must be in tie-break order (policy created_at, id). */
+/**
+ * Callers must pass `policies` sorted by (policy created_at, id): ties between equally severe
+ * matches go to the earliest policy in the given order.
+ */
 export function decidePolicies(
   policies: readonly ActivePolicy[],
   verdicts: ReadonlyMap<string, PolicyVerdict>,

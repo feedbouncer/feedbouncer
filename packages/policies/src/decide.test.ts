@@ -46,6 +46,11 @@ describe('effectiveAction', () => {
       effectiveAction('remove', 'clear_match', { ...plain, moderatorActed: true })?.downgrade,
     ).toBe('moderator_acted');
   });
+  it('low confidence takes precedence over low signal and moderator action; low signal over moderator', () => {
+    const both = { lowSignal: true, moderatorActed: true };
+    expect(effectiveAction('hide', 'clear_match', both)?.downgrade).toBe('low_signal');
+    expect(effectiveAction('hide', 'possible_match', both)?.downgrade).toBe('low_confidence');
+  });
   it('no match yields null', () => {
     expect(effectiveAction('hide', 'no_match', plain)).toBeNull();
   });
