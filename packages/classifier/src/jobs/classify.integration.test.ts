@@ -764,3 +764,51 @@ describe('comment_classify', () => {
     expect(p.calls).toBe(0);
   });
 });
+
+describe('comment_classify re-run semantics', () => {
+  it('re-run reuses stored scores (no provider call) and applies current thresholds without rewriting the old decision', async () => {
+    const t = await tenant();
+    const c = await seedComment('maybe spam', t);
+    await evaluateRules(c, 'no_match');
+    const p = new FakeProvider([S({ spam: 0.7 })]);
+    expect((await job(p).handle(ctx(c, 1), payload(c))).outcome).toBeNull();
+    await setThreshold(t, 'spam', 0.6, 'flag');
+    const r = await job(p).handle(ctx(c, 1), {
+      ...payload(c),
+      trigger: `rerun:${randomUUID()}`,
+    });
+    expect(r.outcome).toBe('flag');
+    expect(p.calls).toBe(1);
+    expect(await count(`SELECT 1 FROM comment_classification WHERE comment_id = $1`, [c.id])).toBe(
+      2,
+    );
+  });
+
+  it('threshold change alone does not touch existing comments (no job, no decision)', async () => {
+    const t = await tenant();
+    const c = await seedComment('maybe spam', t);
+    await evaluateRules(c, 'no_match');
+    await job(new FakeProvider([S({ spam: 0.7 })])).handle(ctx(c, 1), payload(c));
+    const before = await count(`SELECT 1 FROM decision WHERE comment_id = $1`, [c.id]);
+    await setThreshold(t, 'spam', 0.6, 'flag');
+    expect(await count(`SELECT 1 FROM decision WHERE comment_id = $1`, [c.id])).toBe(before);
+    expect(await count(`SELECT 1 FROM comment_classification WHERE comment_id = $1`, [c.id])).toBe(
+      1,
+    );
+  });
+
+  it('re-run skips comments whose rules never ran (backfill)', async () => {
+    const c = await seedComment('old backfilled comment');
+    const p = new FakeProvider([S({ spam: 0.9 })]);
+    const r = await job(p).handle(ctx(c, 1), {
+      ...payload(c),
+      trigger: `rerun:${randomUUID()}`,
+    });
+    expect(r.result).toBe('skipped');
+    expect(p.calls).toBe(0);
+    expect(
+      (await one(`SELECT skip_reason FROM comment_classification WHERE comment_id = $1`, [c.id]))
+        .skip_reason,
+    ).toBe('rules_not_evaluated');
+  });
+});

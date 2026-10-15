@@ -5,6 +5,7 @@ import {
   PgClassificationStore,
   PgThresholdStore,
   classifyCommentJob,
+  classifierRerunJob,
   createClassifierProvider,
   type ClassifierConfig,
 } from '@feedbouncer/classifier';
@@ -127,6 +128,9 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       maxWaitMs: deps.classifier.maxWaitMs,
       log: deps.log,
     }),
+  );
+  registry.register(
+    classifierRerunJob({ pool: deps.pool, producer: deps.producer, log: deps.log }),
   );
   registry.register(
     executeActionJob({
