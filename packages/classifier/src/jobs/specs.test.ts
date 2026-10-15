@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { decide as decideFailure, JobDeferral, classifyFailure } from '@feedbouncer/jobs';
 import {
   BRAND_BUSY_RETRY_MS,
-  CLASSIFIER_JOB_SPECS,
   CLASSIFY_JOB,
   MAX_CONFIGURABLE_WAIT_MS,
 } from './specs.js';
