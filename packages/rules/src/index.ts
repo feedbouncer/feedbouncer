@@ -37,3 +37,14 @@ export {
 } from './engine.js';
 export { describeDecision, describeFallback } from './reason.js';
 export { analyzeRules, type AnalyzableRule, type RuleWarnings } from './shadowing.js';
+export {
+  DomainLimitError,
+  MAX_DOMAINS_PER_BRAND,
+  MAX_RULES_PER_BRAND,
+  PgRuleStore,
+  RuleLimitError,
+  type BrandDomain,
+  type BrandScope,
+  type StoredRule,
+} from './store.js';
+export { RuleSetCache } from './cache.js';
