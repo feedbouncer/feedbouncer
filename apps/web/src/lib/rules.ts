@@ -1,4 +1,5 @@
 import type { ClassifierEvidence } from './classifier';
+import type { PolicyEvidence } from './policies';
 
 export const RULE_ACTIONS = ['approve', 'flag', 'hide', 'remove'] as const;
 export type RuleAction = (typeof RULE_ACTIONS)[number];
@@ -18,6 +19,22 @@ export const ACTION_LABEL: Record<RuleAction, string> = {
   flag: 'Flag for review',
   hide: 'Hide',
   remove: 'Delete',
+};
+
+/** An outcome as the past-tense start of a sentence, e.g. "Hidden by rule X". */
+export const OUTCOME_DONE: Record<RuleAction, string> = {
+  approve: 'Allowed',
+  flag: 'Flagged for review',
+  hide: 'Hidden',
+  remove: 'Deleted',
+};
+
+/** An outcome as a verb, e.g. "would hide". */
+export const OUTCOME_VERB: Record<RuleAction, string> = {
+  approve: 'allow',
+  flag: 'flag for review',
+  hide: 'hide',
+  remove: 'delete',
 };
 
 export const KIND_LABEL: Record<RuleKind, string> = {
@@ -61,13 +78,14 @@ export interface DecisionView {
   id: string;
   outcome: RuleAction;
   mode: RuleMode;
-  actorType: 'user' | 'rule' | 'classifier';
+  actorType: 'user' | 'rule' | 'classifier' | 'policy';
   rule: { id: string; name: string; kind: RuleKind | null; archived: boolean } | null;
   reason: string;
   createdAt: string;
   fallback: boolean;
   action: { kind: string; status: string; outcomeCode: string | null } | null;
   classifier: ClassifierEvidence | null;
+  policy: PolicyEvidence | null;
 }
 
 export interface ActivityView extends DecisionView {

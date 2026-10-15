@@ -8,6 +8,7 @@ import {
 } from '../../../../../../../lib/classifier';
 import { formatUtc } from '../../../../../../../lib/format';
 import { isUuid } from '../../../../../../../lib/ids';
+import type { PolicyListDto } from '../../../../../../../lib/policies';
 import {
   ACTION_LABEL,
   KIND_LABEL,
@@ -20,7 +21,7 @@ import { dataOrThrow, requireMe, serverGet } from '../../../../../../../lib/serv
 
 const CURSOR = /^[1-9][0-9]{0,17}$/;
 const MODES = ['enforce', 'suggest'] as const;
-const SOURCES = ['rule', 'classifier'] as const;
+const SOURCES = ['rule', 'classifier', 'policy'] as const;
 
 const one = (v: string | string[] | undefined): string | undefined =>
   typeof v === 'string' ? v : undefined;
@@ -37,6 +38,7 @@ export default async function RuleActivityPage({
   await requireMe(`/orgs/${orgId}/brands/${brandId}/rules/activity`);
   const sp = await searchParams;
   const ruleId = isUuid(sp.ruleId) ? sp.ruleId : undefined;
+  const policyId = isUuid(sp.policyId) ? sp.policyId : undefined;
   const kind = RULE_KINDS.find((k) => k === sp.kind);
   const outcome = RULE_ACTIONS.find((a) => a === sp.outcome);
   const mode = MODES.find((m) => m === sp.mode);
@@ -45,6 +47,7 @@ export default async function RuleActivityPage({
   const cursor = one(sp.cursor);
   const filters = new URLSearchParams();
   if (ruleId) filters.set('ruleId', ruleId);
+  if (policyId) filters.set('policyId', policyId);
   if (kind) filters.set('kind', kind);
   if (outcome) filters.set('outcome', outcome);
   if (mode) filters.set('mode', mode);
@@ -62,6 +65,7 @@ export default async function RuleActivityPage({
     'rule activity',
   );
   const { rules } = dataOrThrow(await serverGet<{ rules: RuleView[] }>(`${base}/rules`), 'rules');
+  const { policies } = dataOrThrow(await serverGet<PolicyListDto>(`${base}/policies`), 'policies');
   const page = `/orgs/${orgId}/brands/${brandId}/rules/activity`;
   const more = new URLSearchParams(filters);
   if (nextCursor) more.set('cursor', nextCursor);
@@ -116,6 +120,18 @@ export default async function RuleActivityPage({
             <option value="">All</option>
             <option value="rule">Rules</option>
             <option value="classifier">Classifier</option>
+            <option value="policy">Policies</option>
+          </select>
+        </label>{' '}
+        <label>
+          Policy{' '}
+          <select name="policyId" defaultValue={policyId ?? ''}>
+            <option value="">All</option>
+            {policies.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
           </select>
         </label>{' '}
         <label>
@@ -158,16 +174,20 @@ export default async function RuleActivityPage({
                 <td>
                   {d.actorType === 'classifier'
                     ? 'Classifier'
-                    : d.rule
-                      ? d.rule.name
-                      : 'Unknown rule'}
+                    : d.actorType === 'policy'
+                      ? `Policy ${d.policy?.name ?? ''}`.trim()
+                      : d.rule
+                        ? d.rule.name
+                        : 'Unknown rule'}
                 </td>
                 <td>
                   {d.classifier
                     ? classifierEvidence(d.classifier)
-                    : d.rule?.kind
-                      ? KIND_LABEL[d.rule.kind]
-                      : ''}
+                    : d.policy
+                      ? `Revision ${d.policy.revision}`
+                      : d.rule?.kind
+                        ? KIND_LABEL[d.rule.kind]
+                        : ''}
                 </td>
                 <td>{ACTION_LABEL[d.outcome]}</td>
                 <td>{d.mode === 'suggest' ? 'Dry run' : 'Enforced'}</td>

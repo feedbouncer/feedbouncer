@@ -113,9 +113,7 @@ export default async function CommentsPage({
               permalink={c.permalink}
               mediaExternalId={c.mediaExternalId}
             />
-            {c.latestDecision ? (
-              <DecisionHistory orgId={orgId} brandId={brandId} commentId={c.id} />
-            ) : null}
+            <DecisionHistory orgId={orgId} brandId={brandId} commentId={c.id} />
             <CommentActions
               orgId={orgId}
               brandId={brandId}
@@ -139,6 +137,7 @@ export default async function CommentsPage({
       ) : null}
       <p>
         <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Rules</Link> ·{' '}
+        <Link href={`/orgs/${orgId}/brands/${brandId}/policies`}>Policies</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/classifier`}>Classifier</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/domains`}>Own domains</Link> ·{' '}
         <Link href={`/orgs/${orgId}`}>Back to organization</Link>

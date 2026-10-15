@@ -1,20 +1,7 @@
 import { classifierEvidence } from '../../lib/classifier';
 import { actorTypeText, outcomeText } from '../../lib/messages';
-import { ACTION_LABEL, type DecisionView, type RuleAction } from '../../lib/rules';
-
-const DONE: Record<RuleAction, string> = {
-  approve: 'Allowed',
-  flag: 'Flagged for review',
-  hide: 'Hidden',
-  remove: 'Deleted',
-};
-
-const VERB: Record<RuleAction, string> = {
-  approve: 'allow',
-  flag: 'flag for review',
-  hide: 'hide',
-  remove: 'delete',
-};
+import { policyDecisionText } from '../../lib/policies';
+import { ACTION_LABEL, OUTCOME_DONE, OUTCOME_VERB, type DecisionView } from '../../lib/rules';
 
 const ATTEMPT: Record<string, string> = { hide: 'hide', delete: 'delete' };
 
@@ -28,7 +15,12 @@ export function decisionText(d: DecisionView): string {
     }
     const evidence = classifierEvidence(d.classifier);
     if (d.classifier.reversal) return `Unhidden by classifier: ${evidence}`;
-    return `${DONE[d.outcome]} by classifier: ${evidence}`;
+    return `${OUTCOME_DONE[d.outcome]} by classifier: ${evidence}`;
+  }
+  if (d.actorType === 'policy' && d.policy) {
+    if (!d.fallback) return policyDecisionText(d);
+    if (!d.action) return d.reason;
+    return `Flagged for review: a policy's ${ATTEMPT[d.action.kind] ?? 'action'} was not allowed by the platform`;
   }
   const who = d.rule ? `rule ${d.rule.name}` : actorTypeText(d.actorType);
   if (d.fallback) {
@@ -37,8 +29,8 @@ export function decisionText(d: DecisionView): string {
     const tried = ATTEMPT[d.action.kind] ?? 'act';
     return `Flagged for review: rule couldn't ${tried} (${outcomeText(code)})`;
   }
-  if (d.mode === 'suggest') return `Dry run: would ${VERB[d.outcome]} (${who})`;
-  return `${DONE[d.outcome]} by ${who}`;
+  if (d.mode === 'suggest') return `Dry run: would ${OUTCOME_VERB[d.outcome]} (${who})`;
+  return `${OUTCOME_DONE[d.outcome]} by ${who}`;
 }
 
 export function DecisionBadge({ decision }: { decision: DecisionView | null }) {
