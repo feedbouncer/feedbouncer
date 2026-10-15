@@ -31,7 +31,7 @@ beforeEach(() => {
 });
 
 const tenant = () => seedTenant(ctxDb.c, `rrj${++n}`);
-const job = (o: { maxComments?: number } = {}) =>
+const job = (o: { maxComments?: number; clock?: { now(): number } } = {}) =>
   classifierRerunJob({
     pool,
     producer: producer as never,
@@ -97,6 +97,10 @@ describe('classifier_rerun', () => {
     await seedComment(a, { ageMs: 2 * 3_600_000 });
     await seedComment(b);
     const runId = await seedRun(a);
+    await ctxDb.c.query(
+      `UPDATE classifier_run SET since = now() - interval '1 hour' WHERE id = $1`,
+      [runId],
+    );
     const r = await job().handle(ctx(a), { runId, since: since() });
     expect(r).toEqual({ enqueued: 3, capped: false });
     const calls = producer.enqueue.mock.calls.map((c) => c[0]);
@@ -129,7 +133,7 @@ describe('classifier_rerun', () => {
     expect(producer.enqueue).toHaveBeenCalledTimes(4);
   });
 
-  it('replay re-enqueues the same refs (ledger dedups)', async () => {
+  it('a repeated run enqueues identical comment/body/trigger args, so the ledger can dedup them', async () => {
     const a = await tenant();
     await seedComment(a);
     await seedComment(a);
@@ -144,5 +148,37 @@ describe('classifier_rerun', () => {
         .sort();
     expect(refs(0)).toEqual(refs(1));
     expect(producer.enqueue).toHaveBeenCalledTimes(4);
+  });
+
+  it('takes the window from the run row, ignoring an older payload since', async () => {
+    const a = await tenant();
+    const recent = await seedComment(a);
+    await seedComment(a, { ageMs: 10 * 86_400_000 });
+    const runId = await seedRun(a);
+    const r = await job().handle(ctx(a), { runId, since: 1 });
+    expect(r).toEqual({ enqueued: 1, capped: false });
+    expect(producer.enqueue.mock.calls[0]![0].payload.commentId).toBe(recent.id);
+  });
+
+  it('never reaches back more than 30 days even if the run row says so', async () => {
+    const a = await tenant();
+    const recent = await seedComment(a);
+    await seedComment(a, { ageMs: 40 * 86_400_000 });
+    const runId = await seedRun(a);
+    await ctxDb.c.query(
+      `UPDATE classifier_run SET since = now() - interval '60 days' WHERE id = $1`,
+      [runId],
+    );
+    const r = await job({ clock: { now: () => Date.now() } }).handle(ctx(a), { runId, since: 1 });
+    expect(r).toEqual({ enqueued: 1, capped: false });
+    expect(producer.enqueue.mock.calls[0]![0].payload.commentId).toBe(recent.id);
+  });
+
+  it('exactly the maximum is not reported as capped', async () => {
+    const a = await tenant();
+    for (let i = 0; i < 4; i++) await seedComment(a);
+    const runId = await seedRun(a);
+    const r = await job({ maxComments: 4 }).handle(ctx(a), { runId, since: since() });
+    expect(r).toEqual({ enqueued: 4, capped: false });
   });
 });

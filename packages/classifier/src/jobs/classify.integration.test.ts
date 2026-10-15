@@ -784,17 +784,22 @@ describe('comment_classify re-run semantics', () => {
     );
   });
 
-  it('threshold change alone does not touch existing comments (no job, no decision)', async () => {
+  it('a threshold change alone writes nothing; a later re-run appends one decision with no provider call', async () => {
     const t = await tenant();
     const c = await seedComment('maybe spam', t);
     await evaluateRules(c, 'no_match');
-    await job(new FakeProvider([S({ spam: 0.7 })])).handle(ctx(c, 1), payload(c));
-    const before = await count(`SELECT 1 FROM decision WHERE comment_id = $1`, [c.id]);
+    const p = new FakeProvider([S({ spam: 0.7 })]);
+    await job(p).handle(ctx(c, 1), payload(c));
+    const decisions = `SELECT 1 FROM decision WHERE comment_id = $1`;
+    const before = await count(decisions, [c.id]);
     await setThreshold(t, 'spam', 0.6, 'flag');
-    expect(await count(`SELECT 1 FROM decision WHERE comment_id = $1`, [c.id])).toBe(before);
+    expect(await count(decisions, [c.id])).toBe(before);
     expect(await count(`SELECT 1 FROM comment_classification WHERE comment_id = $1`, [c.id])).toBe(
       1,
     );
+    await job(p).handle(ctx(c, 1), { ...payload(c), trigger: `rerun:${randomUUID()}` });
+    expect(p.calls).toBe(1);
+    expect(await count(decisions, [c.id])).toBe(before + 1);
   });
 
   it('re-run skips comments whose rules never ran (backfill)', async () => {
