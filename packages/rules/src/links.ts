@@ -194,11 +194,37 @@ function dottedRuns(cps: string[], isLabel: boolean[]): [number, number][] {
 const SEPARATORS = '.-_';
 
 /**
+ * Host validations (URL parse + tldts) one extraction may spend on retries: cutting an
+ * invalid run into suffixes/prefixes, or re-parsing a URL without its port. First-try
+ * validations always run and are counted too; once the budget is spent, retries stop and
+ * the result is marked truncated so consumers fail closed.
+ */
+const MAX_RETRY_VALIDATIONS = 2000;
+
+class Budget {
+  private left = MAX_RETRY_VALIDATIONS;
+  exhausted = false;
+  /** Count a first-try validation; never refused. */
+  spend(): void {
+    this.left -= 1;
+  }
+  /** Ask for a retry validation; false (and marks exhaustion) once the budget is spent. */
+  retry(): boolean {
+    if (this.left <= 0) {
+      this.exhausted = true;
+      return false;
+    }
+    this.left -= 1;
+    return true;
+  }
+}
+
+/**
  * Host-run view: hosts of every dotted label run in the token. A run that is not itself a
  * public domain also contributes its longest valid suffix and prefix (cut at ".", "-" or
  * "_"), which is what a linkifier with a TLD list or label-length limit would link.
  */
-function runHosts(token: string): string[] {
+function runHosts(token: string, budget: Budget): string[] {
   const cps = Array.from(token);
   const n = cps.length;
   const full = cps.map((c) => LABEL.test(c));
@@ -217,15 +243,24 @@ function runHosts(token: string): string[] {
       const run = cps.slice(s, e).join('');
       if (!run.includes('.') || seenRuns.has(run)) continue;
       seenRuns.add(run);
-      const whole = run.length <= MAX_HOST_CHARS ? bareHost(run) : null;
+      let whole: string | null = null;
+      if (run.length <= MAX_HOST_CHARS) {
+        budget.spend();
+        whole = bareHost(run);
+      }
       if (whole !== null) {
         out.push(whole);
         continue;
       }
       const cuts: number[] = [];
       for (let k = 0; k < run.length; k++) if (SEPARATORS.includes(run.charAt(k))) cuts.push(k);
+      // A retry segment needs a dot to be a domain; cuts are tried only while budget lasts.
+      const lastDot = run.lastIndexOf('.');
+      const firstDot = run.indexOf('.');
       for (const k of cuts) {
+        if (k >= lastDot) break;
         if (run.length - k - 1 > MAX_HOST_CHARS || SEPARATORS.includes(run.charAt(k + 1))) continue;
+        if (!budget.retry()) break;
         const h = bareHost(run.slice(k + 1));
         if (h !== null) {
           out.push(h);
@@ -234,7 +269,9 @@ function runHosts(token: string): string[] {
       }
       for (let c = cuts.length - 1; c >= 0; c--) {
         const k = cuts[c]!;
+        if (k <= firstDot) break;
         if (k > MAX_HOST_CHARS || SEPARATORS.includes(run.charAt(k - 1))) continue;
+        if (!budget.retry()) break;
         const h = bareHost(run.slice(0, k));
         if (h !== null) {
           out.push(h);
@@ -250,6 +287,7 @@ export function extractLinksDetailed(raw: string): LinkExtraction {
   const seen = new Set<string>();
   const links: LinkInfo[] = [];
   let truncated = false;
+  const budget = new Budget();
 
   /** Returns false once the link cap is hit. */
   const emit = (host: string): boolean => {
@@ -283,28 +321,30 @@ export function extractLinksDetailed(raw: string): LinkExtraction {
     }
   }
 
+  const done = (): LinkExtraction => ({ links, truncated: truncated || budget.exhausted });
   for (const { token, schemeOnly } of work) {
     if (token.length > MAX_TOKEN) truncated = true;
     for (const { text: cand, hasScheme, needsDot } of urlCandidates(token)) {
       if (schemeOnly && !hasScheme) continue;
       let host: string | null;
+      budget.spend();
       if (hasScheme) {
         host = asciiHost(cand);
         if (host === null) {
           // Invalid port ("http://evil.io:abc/x"): a lenient linkifier still links the host.
           const stripped = withoutPort(cand);
-          if (stripped !== null) host = asciiHost(stripped);
+          if (stripped !== null && budget.retry()) host = asciiHost(stripped);
         }
         if (host !== null && needsDot && !host.includes('.')) host = null;
       } else {
         host = bareHost(cand);
       }
-      if (host !== null && !emit(host)) return { links, truncated };
+      if (host !== null && !emit(host)) return done();
     }
     if (schemeOnly) continue;
-    for (const host of runHosts(token)) if (!emit(host)) return { links, truncated };
+    for (const host of runHosts(token, budget)) if (!emit(host)) return done();
   }
-  return { links, truncated };
+  return done();
 }
 
 export function extractLinks(raw: string): LinkInfo[] {

@@ -225,6 +225,19 @@ describe('extractLinks', () => {
       expect(hosts('v1.2.3 1,000.00 file.txt 3.14 e.g. i.e.')).toEqual([]);
       expect(hosts('https://example.com@evil.io/x')).toEqual(['evil.io']);
     });
+    it('bounds retry validations per extraction and reports truncation', () => {
+      const run = `${'é.'.repeat(120)}zzzq`;
+      const text = Array.from({ length: 300 }, () => run).join(' ');
+      expect(text.length).toBeGreaterThan(70_000);
+      extractLinksDetailed(text); // warm up
+      const t = performance.now();
+      const r = extractLinksDetailed(text);
+      expect(performance.now() - t).toBeLessThan(200);
+      expect(r.truncated).toBe(true);
+      expect(extractLinksDetailed('see evil.io.zzzz and a.com')).toMatchObject({
+        truncated: false,
+      });
+    });
     it('stays linear on long dotted and punctuated runs', () => {
       const t = Date.now();
       extractLinks('a.'.repeat(10000));
