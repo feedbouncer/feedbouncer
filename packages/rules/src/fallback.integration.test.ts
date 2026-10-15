@@ -222,7 +222,7 @@ describe('RuleActionFallback through the execute job', () => {
       pool,
       store: comments,
       producer: {
-        enqueue: vi.fn(async () => ({ status: 'enqueued', ledgerId: 'l', jobId: 'j' })),
+        enqueue: vi.fn(async () => ({ status: 'enqueued' as const, ledgerId: 'l', jobId: 'j' })),
       } as never,
       capabilities: () => capabilities,
       clock: { now: () => Date.now() },
@@ -251,7 +251,9 @@ describe('RuleActionFallback through the execute job', () => {
       pool,
       runtime,
       log: quiet,
-      producer: { enqueue: vi.fn(async () => ({ status: 'enqueued', ledgerId: 'l', jobId: 'j' })) },
+      producer: {
+        enqueue: vi.fn(async () => ({ status: 'enqueued' as const, ledgerId: 'l', jobId: 'j' })),
+      },
       clock: { now: () => Date.now() },
       outcomes: fallback,
     });

@@ -1,5 +1,4 @@
 // User-supplied patterns run only in RE2 (linear time, no backreferences/look-around).
-// Import form confirmed from node_modules/re2/re2.d.ts: `import RE2 from 're2'` (export =), `new RE2(p, flags)`, `.test(s)`, throws SyntaxError.
 import RE2 from 're2';
 
 export const MAX_PATTERN_CHARS = 500;

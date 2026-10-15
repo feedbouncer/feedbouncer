@@ -32,7 +32,7 @@ describe('RuleTrigger', () => {
       (enqueue.mock.calls[0] as unknown as [{ payload: unknown }])[0].payload,
     );
     expect(RULE_EVALUATE_JOB.externalRef(payload)).toBe(
-      `${commentId}:${sha('Buy now at example.com').slice(0, 32)}:i`,
+      `${commentId}:${sha('Buy now at example.com').slice(0, 32)}`,
     );
   });
 
