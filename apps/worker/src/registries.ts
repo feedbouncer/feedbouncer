@@ -28,6 +28,7 @@ import { JobRegistry, type JobProducer } from '@feedbouncer/jobs';
 import {
   PgEvaluationStore,
   PgRuleStore,
+  RuleActionFallback,
   RuleSetCache,
   RuleTrigger,
   ruleEvaluateJob,
@@ -69,6 +70,7 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
   const registry = new JobRegistry();
   // Live comments whose text is new are evaluated against the brand's rules.
   const applied = new RuleTrigger(deps.producer);
+  const evaluations = new PgEvaluationStore(deps.pool);
   registry.register(
     ingestCommentJob({
       runtime: deps.runtime,
@@ -82,7 +84,7 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
   registry.register(
     ruleEvaluateJob({
       comments: deps.store,
-      evaluations: new PgEvaluationStore(deps.pool),
+      evaluations,
       cache: new RuleSetCache(new PgRuleStore(deps.pool)),
       actions: new ModerationActions({
         pool: deps.pool,
@@ -102,6 +104,7 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       log: deps.log,
       producer: deps.producer,
       clock: deps.clock,
+      outcomes: new RuleActionFallback({ evaluations, log: deps.log }),
     }),
   );
   registry.register(connectionLifecycleJob({ runtime: deps.runtime, log: deps.log }));
