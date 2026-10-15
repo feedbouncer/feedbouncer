@@ -149,6 +149,26 @@ export const editOf = (v: ThresholdView): ThresholdEdit => ({
   useDefault: false,
 });
 
+export const initialEdits = (
+  categories: readonly ThresholdView[],
+): Record<Category, ThresholdEdit> =>
+  Object.fromEntries(categories.map((c) => [c.category, editOf(c)])) as Record<
+    Category,
+    ThresholdEdit
+  >;
+
+/** Changes whenever the server's values change, so edit state built from them can be reset. */
+export const thresholdsKey = (categories: readonly ThresholdView[]): string =>
+  categories.map((c) => `${c.category}:${c.threshold}:${c.action}:${c.source}`).join('|');
+
+export function hasChanges(
+  original: readonly ThresholdView[],
+  edits: Partial<Record<Category, ThresholdEdit>>,
+): boolean {
+  const { items, errors } = buildThresholdUpdate(original, edits);
+  return items.length > 0 || Object.keys(errors).length > 0;
+}
+
 function parseThreshold(text: string): { value: number } | { error: string } {
   const t = text.trim();
   const n = t === '' ? Number.NaN : Number(t);

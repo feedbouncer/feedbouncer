@@ -19,12 +19,13 @@ export function DecisionHistory(props: { orgId: string; brandId: string; comment
     try {
       const base =
         `/api/v1/orgs/${props.orgId}/brands/${props.brandId}/comments/${props.commentId}` as const;
-      const [res, cls] = await Promise.all([
+      const [res, cls] = await Promise.allSettled([
         apiFetch<{ decisions: DecisionView[] }>(`${base}/decisions`),
         apiFetch<{ classification: ClassificationView | null }>(`${base}/classification`),
       ]);
-      setClassification(cls.classification);
-      setDecisions(res.decisions);
+      if (res.status === 'rejected') throw res.reason;
+      setClassification(cls.status === 'fulfilled' ? cls.value.classification : null);
+      setDecisions(res.value.decisions);
     } catch (err) {
       setError(err instanceof ApiRequestError ? messageFor(err.code) : 'Something went wrong.');
     }

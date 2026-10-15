@@ -2,7 +2,12 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ApiRequestError, apiFetch } from '../../lib/api-client';
-import type { PreviewResult, ThresholdItem, ThresholdView } from '../../lib/classifier';
+import {
+  thresholdsKey,
+  type PreviewResult,
+  type ThresholdItem,
+  type ThresholdView,
+} from '../../lib/classifier';
 import { messageFor } from '../../lib/messages';
 import { PreviewPanel } from './preview-panel';
 import { ThresholdTable } from './threshold-table';
@@ -77,6 +82,8 @@ export function ClassifierSettings(props: {
       {error ? <p role="alert">{error}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
       <ThresholdTable
+        key={thresholdsKey(props.categories)}
+        onEdit={() => setPreview(null)}
         categories={props.categories}
         canEdit={props.canEdit}
         onSave={save}

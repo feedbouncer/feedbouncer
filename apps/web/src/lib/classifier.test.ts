@@ -4,6 +4,9 @@ import {
   classificationStatusText,
   classifierEvidence,
   formatScore,
+  hasChanges,
+  initialEdits,
+  thresholdsKey,
   transitionText,
   type ThresholdView,
 } from './classifier';
@@ -62,6 +65,17 @@ describe('classifier lib', () => {
   it('names transitions', () => {
     expect(transitionText('none→hide')).toBe('Not actioned → Hide');
     expect(transitionText('hide→remove')).toBe('Hide → Delete');
+  });
+
+  it('rebuilds edit state from the server values after a reset', () => {
+    const before = [view('spam', { source: 'brand', threshold: 0.7 })];
+    const after = [view('spam')];
+    const stale = { spam: edit(before[0]!, { useDefault: true }) };
+    expect(hasChanges(before, stale)).toBe(true);
+    expect(thresholdsKey(before)).not.toBe(thresholdsKey(after));
+    const fresh = initialEdits(after);
+    expect(fresh.spam).toEqual({ threshold: '0.8', action: 'hide', useDefault: false });
+    expect(hasChanges(after, fresh)).toBe(false);
   });
 
   describe('buildThresholdUpdate', () => {

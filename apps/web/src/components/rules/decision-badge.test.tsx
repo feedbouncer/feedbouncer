@@ -103,7 +103,9 @@ describe('DecisionBadge', () => {
           action: { kind: 'hide', status: 'failed', outcomeCode: 'unsupported' },
         }),
       );
-      expect(html).toContain('Flagged for review: classifier couldn&#x27;t hide (');
+      expect(html).toContain(
+        'Flagged for review: classifier couldn&#x27;t hide (Not available on this platform.)',
+      );
     });
   });
 });

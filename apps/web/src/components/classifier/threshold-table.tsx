@@ -4,6 +4,8 @@ import {
   CATEGORY_LABEL,
   buildThresholdUpdate,
   editOf,
+  hasChanges,
+  initialEdits,
   type Category,
   type ThresholdEdit,
   type ThresholdItem,
@@ -19,14 +21,16 @@ export function ThresholdTable(props: {
   canEdit: boolean;
   onSave: (items: ThresholdItem[]) => Promise<void> | void;
   onPreview?: ((items: ThresholdItem[]) => Promise<void> | void) | undefined;
+  onEdit?: (() => void) | undefined;
 }) {
-  const [edits, setEdits] = useState<Edits>(
-    () => Object.fromEntries(props.categories.map((c) => [c.category, editOf(c)])) as Edits,
-  );
+  const [edits, setEdits] = useState<Edits>(() => initialEdits(props.categories));
   const [errors, setErrors] = useState<Partial<Record<Category, string>>>({});
   const [busy, setBusy] = useState(false);
-  const change = (category: Category, patch: Partial<ThresholdEdit>) =>
+  const dirty = hasChanges(props.categories, edits);
+  const change = (category: Category, patch: Partial<ThresholdEdit>) => {
+    props.onEdit?.();
     setEdits((prev) => ({ ...prev, [category]: { ...prev[category], ...patch } }));
+  };
 
   async function submit(action: (items: ThresholdItem[]) => Promise<void> | void) {
     const { items, errors: found } = buildThresholdUpdate(props.categories, edits);
@@ -69,7 +73,7 @@ export function ThresholdTable(props: {
                         type="number"
                         min={0}
                         max={1}
-                        step={0.01}
+                        step="any"
                         aria-label={`${label} threshold`}
                         aria-invalid={error ? true : undefined}
                         value={e.threshold}
@@ -129,9 +133,10 @@ export function ThresholdTable(props: {
       {deleting ? (
         <p role="note">Delete cannot be undone: deleted comments are removed from the platform.</p>
       ) : null}
+      {props.canEdit && !dirty ? <p>No changes to save.</p> : null}
       {props.canEdit ? (
         <p>
-          <button type="button" disabled={busy} onClick={() => void submit(props.onSave)}>
+          <button type="button" disabled={busy || !dirty} onClick={() => void submit(props.onSave)}>
             Save thresholds
           </button>
           {props.onPreview ? (
