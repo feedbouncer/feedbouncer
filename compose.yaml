@@ -168,6 +168,7 @@ services:
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
       - ./packages/secrets/src:/repo/packages/secrets/src:ro
       - ./packages/comments/src:/repo/packages/comments/src:ro
+      - ./packages/rules/src:/repo/packages/rules/src:ro
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro
       - ./packages/connector-meta-ads/src:/repo/packages/connector-meta-ads/src:ro
