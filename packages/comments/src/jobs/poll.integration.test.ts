@@ -293,6 +293,38 @@ beforeEach(async () => {
 });
 
 describe('ad poll job', () => {
+  it('calls the applied hook for new comments only, not for unchanged re-reads', async () => {
+    const { postId } = graph.addDarkPost(pageId);
+    graph.addAd(adAccountId, { storyId: postId });
+    const known = graph.addComment(pageId, {
+      postId,
+      message: 'known',
+      createdAtMs: nowMs - 90_000,
+    });
+    await ingest(fbScope, { postId, commentId: known.commentId });
+    await discover();
+    const b = graph.addComment(pageId, { postId, message: 'second', createdAtMs: nowMs - 60_000 });
+    const c = graph.addComment(pageId, { postId, message: 'third', createdAtMs: nowMs - 30_000 });
+    advance(1_000);
+    const calls: { commentId: string; body: string; outcome: string }[] = [];
+    await adPollJob({
+      runtime,
+      directory,
+      store,
+      tracking,
+      clock,
+      settings,
+      applied: {
+        onApplied: async (e) => {
+          calls.push({ commentId: e.commentId, body: e.body, outcome: e.outcome });
+        },
+      },
+    }).handle(jobCtx(fbScope, 'facebook', POLL_JOB.type), POLL_JOB.payload.parse({ bucket: 1 }));
+    expect(calls.map((x) => x.body).sort()).toEqual(['second', 'third']);
+    expect(calls.every((x) => x.outcome === 'created')).toBe(true);
+    expect(b.commentId).not.toBe(c.commentId);
+  });
+
   it('ingests comments on a facebook dark post with an ad label', async () => {
     const { postId } = graph.addDarkPost(pageId);
     graph.addAd(adAccountId, { storyId: postId });

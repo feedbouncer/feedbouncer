@@ -35,6 +35,7 @@ import type { Logger } from '@feedbouncer/service-runtime';
 import { AUTHOR_KINDS, type ActionActor, type ActionKind } from '../action-kinds.js';
 import { recordActionAudit, type ActionStatus } from '../actions.js';
 import { setCommentPlatformState } from '../store.js';
+import type { ActionOutcomeObserver, ActionOutcomeStatus } from '../hooks.js';
 import { EXECUTE_JOB, INGEST_JOB, type ExecutePayload, type IngestPayload } from './specs.js';
 
 type Terminal = Exclude<ActionStatus, 'pending'>;
@@ -55,6 +56,8 @@ interface LoadedAction {
   readonly kind: ActionKind;
   readonly actorType: ActionActor['type'];
   readonly actorUserId: string | null;
+  readonly ruleId: string | null;
+  readonly requestKey: string;
   readonly status: ActionStatus;
   readonly replyText: string | null;
   readonly createdAt: Date;
@@ -171,7 +174,7 @@ async function loadForExecution(
   actionId: string,
 ): Promise<LoadedAction | null> {
   const r = await pool.query(
-    `SELECT m.id, m.comment_id, m.kind, m.actor_type, m.actor_user_id, m.status, m.reply_text,
+    `SELECT m.id, m.comment_id, m.kind, m.actor_type, m.actor_user_id, m.rule_id, m.request_key, m.status, m.reply_text,
             m.created_at, c.external_id AS comment_external_id, c.parent_external_id,
             s.external_id AS source_external_id, a.external_id AS author_external_id,
             cn.external_account_id
@@ -194,6 +197,8 @@ async function loadForExecution(
     kind: x.kind as ActionKind,
     actorType: x.actor_type as ActionActor['type'],
     actorUserId: (x.actor_user_id as string | null) ?? null,
+    ruleId: (x.rule_id as string | null) ?? null,
+    requestKey: x.request_key as string,
     status: x.status as ActionStatus,
     replyText: (x.reply_text as string | null) ?? null,
     createdAt: x.created_at as Date,
@@ -315,6 +320,41 @@ async function enqueueResync(
   }
 }
 
+/** Tells the observer about an outcome. Never throws; logs the error class only (no message text). */
+async function notify(
+  d: { log: Logger; outcomes?: ActionOutcomeObserver },
+  scope: ConnectionScope,
+  platform: Platform,
+  a: LoadedAction,
+  status: ActionOutcomeStatus,
+  code: string | null,
+): Promise<void> {
+  if (d.outcomes === undefined) return;
+  try {
+    await d.outcomes.onActionOutcome({
+      scope: {
+        organizationId: scope.organizationId,
+        brandId: scope.brandId,
+        connectionId: scope.connectionId,
+      },
+      platform,
+      actionId: a.id,
+      commentId: a.commentId,
+      kind: a.kind,
+      actorType: a.actorType,
+      ruleId: a.ruleId,
+      requestKey: a.requestKey,
+      status,
+      code,
+    });
+  } catch (err) {
+    d.log.error('moderation.outcome_observer_failed', {
+      actionId: a.id,
+      errorName: err instanceof Error ? err.name : 'unknown',
+    });
+  }
+}
+
 export function executeActionJob(d: {
   pool: pg.Pool;
   runtime: ConnectorRuntime;
@@ -322,6 +362,8 @@ export function executeActionJob(d: {
   /** Enqueues the resync ingest after outcomes the platform decided. */
   producer: Pick<JobProducer, 'enqueue'>;
   clock: Clock;
+  /** Told about final statuses and about the first deferral of a throttled or re-authorizing action. */
+  outcomes?: ActionOutcomeObserver;
 }): JobDefinition<ExecutePayload> {
   return {
     ...EXECUTE_JOB,
@@ -361,7 +403,13 @@ export function executeActionJob(d: {
         outcome = mapAct(r, a.kind, ctx.attempt);
       }
 
-      if (!('final' in outcome)) throw outcome.rethrow;
+      if (!('final' in outcome)) {
+        const e = outcome.rethrow;
+        // The framework defers or retries from here: raise it before the action waits.
+        if (e.kind === 'rate_limited' || e.kind === 'auth_expired')
+          await notify(d, ctx.scope, ctx.platform, a, 'deferred', e.code);
+        throw e;
+      }
       const { result, recorded } = await finish(d.pool, ctx.scope, a, outcome.final);
       d.log.info('moderation action completed', {
         actionId: a.id,
@@ -369,6 +417,8 @@ export function executeActionJob(d: {
         status: outcome.final.status,
         outcomeCode: outcome.final.code,
       });
+      if (recorded)
+        await notify(d, ctx.scope, ctx.platform, a, outcome.final.status, outcome.final.code);
       if (recorded && outcome.final.resync) await enqueueResync(d, ctx.scope, ctx.platform, a);
       if (outcome.rethrow) throw outcome.rethrow;
       return result;

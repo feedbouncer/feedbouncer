@@ -197,7 +197,7 @@ export class PgCommentStore {
     scope: ConnectionScope,
     c: NormalizedComment,
     o: { ownAccountExternalId: string; syncedAt: Date; origin?: IngestOrigin },
-  ): Promise<{ commentId: string; created: boolean; applied: boolean }> {
+  ): Promise<{ commentId: string; created: boolean; applied: boolean; bodyChanged: boolean }> {
     return withTransaction(this.pool, async (tx) => {
       const sourceId = await upsertSource(tx, scope, c.sourceExternalId);
       let authorId: string | null = null;
@@ -220,6 +220,14 @@ export class PgCommentStore {
         if (!a.rows[0]) throw outOfScope();
         authorId = a.rows[0].id;
       }
+      // Locks the row so the body compared below is the one this upsert replaces.
+      const prev = await tx.query<{ body: string }>(
+        `SELECT body FROM comment
+          WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND external_id = $4
+            FOR UPDATE`,
+        [...ids(scope), c.externalId],
+      );
+      const newBody = noNul(c.body);
       const up = await tx.query<{ id: string; created: boolean }>(
         `INSERT INTO comment (organization_id, brand_id, connection_id, source_id, external_id, author_id,
                               parent_external_id, parent_comment_id, body, platform_state, posted_at,
@@ -249,7 +257,7 @@ export class PgCommentStore {
           c.externalId,
           authorId,
           c.parentExternalId,
-          noNul(c.body),
+          newBody,
           c.platformState,
           c.postedAt,
           c.permalink,
@@ -275,7 +283,9 @@ export class PgCommentStore {
         commentId = existing.rows[0].id;
       }
       await linkChildren(tx, scope, commentId, c.externalId);
-      return { commentId, created, applied };
+      const bodyChanged =
+        applied && (created || prev.rows[0] === undefined || prev.rows[0].body !== newBody);
+      return { commentId, created, applied, bodyChanged };
     });
   }
 

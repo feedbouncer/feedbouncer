@@ -21,6 +21,7 @@ import type { PgCommentStore } from '../store.js';
 import type { DueSource, PgAdTracking } from '../ads/tracking.js';
 import { applyPlatformComment } from '../apply.js';
 import type { IngestObserver } from './ingest.js';
+import type { CommentAppliedHook } from '../hooks.js';
 import { POLL_JOB, type PollPayload } from './specs.js';
 
 export interface PollSettings {
@@ -42,6 +43,8 @@ interface PollDeps {
   clock: Clock;
   settings: PollSettings;
   observer?: IngestObserver;
+  /** Called for live comments that are new or whose text changed; a throw retries the job. */
+  applied?: CommentAppliedHook;
 }
 
 export async function pollSource(
@@ -111,6 +114,15 @@ export async function pollSource(
           /* telemetry never fails a job */
         }
       } else if (r.outcome === 'updated') updated++;
+      if (r.outcome !== 'stale' && r.bodyChanged) {
+        await d.applied?.onApplied({
+          scope,
+          platform,
+          commentId: r.commentId,
+          body: c.body,
+          outcome: r.outcome,
+        });
+      }
       if (newest === null || c.postedAt > newest) newest = c.postedAt;
     }
     const reachedBoundary =

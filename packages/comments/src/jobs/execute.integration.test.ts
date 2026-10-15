@@ -37,6 +37,7 @@ import type { ActionKind } from '../action-kinds.js';
 import { ModerationActions } from '../actions.js';
 import { ingestCommentJob } from './ingest.js';
 import { executeActionJob } from './execute.js';
+import type { ActionOutcomeObserver } from '../hooks.js';
 import { EXECUTE_JOB, INGEST_JOB } from './specs.js';
 
 const APP_SECRET = 'fb-app-secret-SENTINEL-0123456789';
@@ -219,6 +220,120 @@ beforeEach(async () => {
 
   const c = graph.addComment(pageId, { message: 'spam here', createdAtMs: nowMs - 60_000 });
   seeded = { ...c, id: await ingestComment(c) };
+});
+
+describe('moderation execute job: outcome observer', () => {
+  type Ev = Parameters<ActionOutcomeObserver['onActionOutcome']>[0];
+  const events: Ev[] = [];
+  let throwing = false;
+  const observed = (rt: ConnectorRuntime = runtime) =>
+    executeActionJob({
+      pool,
+      runtime: rt,
+      log: createLogger('comments-execute-test', 'error', () => {}),
+      producer: { enqueue: resync },
+      clock,
+      outcomes: {
+        onActionOutcome: async (e) => {
+          events.push(e);
+          if (throwing) throw new Error('observer down: secret body text');
+        },
+      },
+    });
+  const runObserved = (actionId: string, rt?: ConnectorRuntime) =>
+    observed(rt).handle(jobCtx(1), EXECUTE_JOB.payload.parse({ actionId }));
+  beforeEach(() => {
+    events.length = 0;
+    throwing = false;
+  });
+
+  it('reports an applied hide with the action context', async () => {
+    const actionId = await requestAction(seeded.id, 'hide');
+    await runObserved(actionId);
+    expect(events).toEqual([
+      {
+        scope,
+        platform: 'facebook',
+        actionId,
+        commentId: seeded.id,
+        kind: 'hide',
+        actorType: 'user',
+        ruleId: null,
+        requestKey: expect.stringMatching(/^rk-/),
+        status: 'applied',
+        code: null,
+      },
+    ]);
+  });
+
+  it('carries rule_id and request_key for rule actions', async () => {
+    const r = await actions.request({
+      scope: t,
+      commentId: seeded.id,
+      kind: 'hide',
+      actor: { type: 'rule', ruleId: t.ruleId },
+      requestKey: 'rule-eval:abc-123',
+    });
+    if (r.status !== 'accepted') throw new Error('not accepted');
+    await runObserved(r.action.id);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      actorType: 'rule',
+      ruleId: t.ruleId,
+      requestKey: 'rule-eval:abc-123',
+      status: 'applied',
+    });
+  });
+
+  it('reports unsupported as failed with code unsupported', async () => {
+    const actionId = await requestAction(seeded.id, 'hide');
+    const real = await runtime.connect(scope);
+    const client = new Proxy(real, {
+      get(target, key) {
+        if (key === 'act') return async () => ({ status: 'unsupported' });
+        const v: unknown = Reflect.get(target, key);
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    const rt = { connect: async () => client } as unknown as ConnectorRuntime;
+    await runObserved(actionId, rt);
+    expect(events.map((e) => [e.status, e.code])).toEqual([['failed', 'unsupported']]);
+  });
+
+  it('reports a throttled platform as deferred before rethrowing', async () => {
+    const actionId = await requestAction(seeded.id, 'hide');
+    graph.throttleNext();
+    await expect(runObserved(actionId)).rejects.toMatchObject({ kind: 'rate_limited' });
+    expect(events.map((e) => [e.status, e.code])).toEqual([['deferred', 'platform_throttled']]);
+  });
+
+  it('reports a re-authorizable auth_expired as deferred with the error code', async () => {
+    const actionId = await requestAction(seeded.id, 'hide');
+    graph.revokePageToken(pageId);
+    const err = await runObserved(actionId).catch((e: unknown) => e);
+    expect(err).toMatchObject({ kind: 'auth_expired', reauthorize: true });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ status: 'deferred', code: (err as ConnectorError).code });
+  });
+
+  it('an observer that throws does not change the job result', async () => {
+    throwing = true;
+    const actionId = await requestAction(seeded.id, 'hide');
+    expect(await runObserved(actionId)).toEqual({
+      status: 'applied',
+      outcomeCode: null,
+      undo: 'unhide',
+    });
+    expect(events).toHaveLength(1);
+    expect(await actionRow(actionId)).toMatchObject({ status: 'applied' });
+  });
+
+  it('an observer that throws does not mask the rate_limited rethrow', async () => {
+    throwing = true;
+    const actionId = await requestAction(seeded.id, 'hide');
+    graph.throttleNext();
+    await expect(runObserved(actionId)).rejects.toMatchObject({ kind: 'rate_limited' });
+  });
 });
 
 describe('moderation execute job', () => {

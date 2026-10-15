@@ -10,12 +10,13 @@ export async function applyPlatformComment(
   scope: ConnectionScope,
   c: NormalizedComment,
   o: { ownAccountExternalId: string; syncedAt: Date; adSourceId?: string; origin?: IngestOrigin },
-): Promise<{ commentId: string; outcome: ApplyOutcome }> {
+): Promise<{ commentId: string; outcome: ApplyOutcome; bodyChanged: boolean }> {
   const r = await store.upsertFromPlatform(scope, c, o);
   // Recorded even for a stale read: the ad path is a fact, not a snapshot.
   if (o.adSourceId !== undefined) await store.markSeenViaAdSource(scope, r.commentId, o.adSourceId);
   return {
     commentId: r.commentId,
     outcome: r.created ? 'created' : r.applied ? 'updated' : 'stale',
+    bodyChanged: r.bodyChanged,
   };
 }

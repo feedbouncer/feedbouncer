@@ -78,12 +78,30 @@ const foreignScope = (): ConnectionScope => ({
 });
 
 describe('PgCommentStore', () => {
+  it('reports bodyChanged only when the applied text is new', async () => {
+    const c = comment({ body: 'first' });
+    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    expect(a).toMatchObject({ created: true, applied: true, bodyChanged: true });
+    const same = await store.upsertFromPlatform(scope(), c, own(2));
+    expect(same).toMatchObject({ created: false, applied: true, bodyChanged: false });
+    const edited = await store.upsertFromPlatform(scope(), { ...c, body: 'second' }, own(3));
+    expect(edited).toMatchObject({ applied: true, bodyChanged: true });
+    const stale = await store.upsertFromPlatform(scope(), { ...c, body: 'third' }, own(2));
+    expect(stale).toMatchObject({ applied: false, bodyChanged: false });
+    expect((await store.load(t, a.commentId))?.body).toBe('second');
+  });
+
   it('creates once and is idempotent for the same snapshot', async () => {
     const c = comment();
     const a = await store.upsertFromPlatform(scope(), c, own(1));
     const b = await store.upsertFromPlatform(scope(), c, own(1));
     expect(a).toMatchObject({ created: true, applied: true });
-    expect(b).toEqual({ commentId: a.commentId, created: false, applied: false });
+    expect(b).toEqual({
+      commentId: a.commentId,
+      created: false,
+      applied: false,
+      bodyChanged: false,
+    });
     expect(
       (
         await pool.query('SELECT count(*)::int AS n FROM comment WHERE external_id = $1', [
@@ -130,7 +148,12 @@ describe('PgCommentStore', () => {
       { ...c, body: 'v3', platformState: 'hidden' },
       own(7),
     );
-    expect(newer).toEqual({ commentId: stale.commentId, created: false, applied: true });
+    expect(newer).toEqual({
+      commentId: stale.commentId,
+      created: false,
+      applied: true,
+      bodyChanged: true,
+    });
     expect(await store.load(t, stale.commentId)).toMatchObject({
       body: 'v3',
       platformState: 'hidden',
@@ -423,7 +446,7 @@ describe('per-connection comment identity', () => {
       normalized({ sourceExternalId: 'admedia', externalId: 'k1' }),
       { ...opts(), adSourceId: adSrc },
     );
-    expect(again).toEqual({ commentId: r.commentId, outcome: 'updated' });
+    expect(again).toEqual({ commentId: r.commentId, outcome: 'updated', bodyChanged: false });
     expect((await rowOf(r.commentId)).ad_source_id).toBe(adSrc);
   });
   it('a stale read through an ad source still records the ad path', async () => {

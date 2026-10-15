@@ -12,6 +12,7 @@ import type {
   Platform,
 } from '@feedbouncer/connectors';
 import type { IngestOrigin, PgCommentStore } from '../store.js';
+import type { CommentAppliedHook } from '../hooks.js';
 import { applyPlatformComment } from '../apply.js';
 import { INGEST_JOB, type IngestPayload } from './specs.js';
 
@@ -34,6 +35,8 @@ export function ingestCommentJob(d: {
   store: PgCommentStore;
   clock: Clock;
   observer?: IngestObserver;
+  /** Called for live comments that are new or whose text changed; a throw retries the job. */
+  applied?: CommentAppliedHook;
 }): JobDefinition<IngestPayload> {
   return {
     ...INGEST_JOB,
@@ -58,10 +61,21 @@ export function ingestCommentJob(d: {
           commentId = await d.store.markDeleted(ctx.scope, ref, syncedAt);
           outcome = 'gone';
         } else {
-          ({ commentId, outcome } = await applyPlatformComment(d.store, ctx.scope, c, {
+          const r = await applyPlatformComment(d.store, ctx.scope, c, {
             ownAccountExternalId: rec.externalAccountId,
             syncedAt,
-          }));
+          });
+          ({ commentId, outcome } = r);
+          // The row is committed: a throwing hook retries the job without losing the comment.
+          if (r.outcome !== 'stale' && r.bodyChanged) {
+            await d.applied?.onApplied({
+              scope: ctx.scope,
+              platform: rec.platform,
+              commentId: r.commentId,
+              body: c.body,
+              outcome: r.outcome,
+            });
+          }
         }
       }
       const { lagMs } = clampLag(p.platformEventSec * 1000, d.clock.now());
