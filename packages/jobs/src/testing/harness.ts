@@ -69,7 +69,7 @@ export async function createJobsHarness(opts: { sink?: JobEventSink } = {}): Pro
   jobs.register(script.definition());
 
   const config: JobsConfig = {
-    ...loadJobsConfig({}),
+    ...loadJobsConfig({}, { lanes: jobs.lanes() }),
     prefix: redis.prefix,
     defaultPolicy: {
       maxAttempts: 3,
@@ -89,7 +89,11 @@ export async function createJobsHarness(opts: { sink?: JobEventSink } = {}): Pro
   const log = createLogger('jobs-test', 'debug', (l) => lines.push(l));
   const metrics = new JobMetrics(log, opts.sink);
   const ledger = new PgJobLedger(pool);
-  const queues = new QueueSet({ connection: producerConnection, prefix: config.prefix });
+  const queues = new QueueSet({
+    connection: producerConnection,
+    prefix: config.prefix,
+    laneOf: jobs.laneOf(),
+  });
   const producer = new JobProducer({
     ledger,
     jobs,

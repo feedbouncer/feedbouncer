@@ -4,6 +4,7 @@ import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
 import type { JobResult } from './failure.js';
 import { SNAKE_CASE } from './keys.js';
+import { LANE, type LaneOf } from './queues.js';
 import { DEFAULT_RETRY_POLICY, resolvePolicy, type RetryPolicy } from './policy.js';
 
 export type { JobResult } from './failure.js';
@@ -32,6 +33,8 @@ export interface JobDefinition<P> {
   readonly policy?: Partial<RetryPolicy>;
   /** 1_000..600_000, default 60_000. */
   readonly timeoutMs?: number;
+  /** Optional isolated queue lane, LANE pattern. Must be the same in every process that enqueues this type. */
+  readonly lane?: string;
   /** Must be safe to repeat (see docs/jobs/defining-a-job.md). */
   readonly handle: (ctx: JobContext, payload: P) => Promise<JobResult>;
 }
@@ -52,6 +55,7 @@ export class JobRegistry {
     }
     const t = def.timeoutMs;
     if (t !== undefined && (!Number.isInteger(t) || t < 1_000 || t > 600_000)) fail('timeoutMs');
+    if (def.lane !== undefined && !LANE.test(def.lane)) fail('lane');
     try {
       resolvePolicy(DEFAULT_RETRY_POLICY, def.policy);
     } catch {
@@ -72,5 +76,13 @@ export class JobRegistry {
 
   all(): JobDefinition<unknown>[] {
     return [...this.#byType.values()];
+  }
+
+  laneOf(): LaneOf {
+    return (t) => this.#byType.get(t)?.lane ?? null;
+  }
+
+  lanes(): string[] {
+    return [...new Set(this.all().flatMap((d) => (d.lane === undefined ? [] : [d.lane])))].sort();
   }
 }

@@ -32,7 +32,7 @@ import type { JobLedgerPort } from './ledger.js';
 import type { JobMetrics } from './metrics.js';
 import { validateJobResult } from './payload.js';
 import { DEFAULT_TIMEOUT_MS, leaseMs, type RetryPolicy } from './policy.js';
-import { queueName } from './queues.js';
+import { NO_LANES, queueName, type LaneOf } from './queues.js';
 
 export interface BullJobLike {
   readonly id?: string | undefined;
@@ -45,6 +45,9 @@ export type RunOutcome = 'processed' | 'duplicate' | 'missing' | 'lost_lease';
 
 export interface RunnerDeps {
   readonly platform: Platform;
+  /** Null for a platform worker; a lane worker only accepts jobs of its lane. */
+  readonly lane?: string | null;
+  readonly laneOf?: LaneOf;
   readonly ledger: JobLedgerPort;
   readonly jobs: JobRegistry;
   /** default <- platform <- job type */
@@ -64,6 +67,8 @@ export function createJobProcessor(
 ): (job: BullJobLike, token?: string) => Promise<RunOutcome> {
   const random = d.random ?? Math.random;
   const now = d.now ?? Date.now;
+  const lane = d.lane ?? null;
+  const laneOf = d.laneOf ?? NO_LANES;
 
   const dropInvalid = (job: BullJobLike, why: string): never => {
     d.log.error('job.invalid_data', { job: job.name, bullId: job.id ?? null, why });
@@ -80,7 +85,7 @@ export function createJobProcessor(
 
     // The ledger guards writes by lease owner alone, so every delivery needs
     // an owner no other concurrent delivery shares. The column holds 200 chars.
-    const owner = `${d.workerId.slice(0, 100)}:${d.platform}:${randomUUID()}`;
+    const owner = `${d.workerId.slice(0, 100)}:${d.lane ?? d.platform}:${randomUUID()}`;
     const claim = await d.ledger.claim(
       ledgerId,
       owner,
@@ -196,7 +201,7 @@ export function createJobProcessor(
         return ok;
       };
 
-      if (row.platform !== d.platform || row.jobType !== job.name) {
+      if (row.platform !== d.platform || row.jobType !== job.name || laneOf(row.jobType) !== lane) {
         return rejectJob('invalid_job', 'invalid', 'queue_mismatch');
       }
 
@@ -299,7 +304,7 @@ export function createJobProcessor(
             'feedbouncer.job.deferrals': row.deferrals,
             'feedbouncer.job.replay': row.replays > 0,
             'messaging.system': 'bullmq',
-            'messaging.destination.name': queueName(d.platform),
+            'messaging.destination.name': queueName(d.platform, lane),
           },
         },
         runClaimed,

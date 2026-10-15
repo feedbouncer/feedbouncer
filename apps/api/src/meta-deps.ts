@@ -101,7 +101,11 @@ export function buildMetaDeps(d: {
   jobs.register(enqueueOnly(EXECUTE_JOB));
   jobs.register(enqueueOnly(LIFECYCLE_JOB));
   jobs.register(enqueueOnly(BACKFILL_JOB));
-  const queues = new QueueSet({ connection: redis, prefix: env.jobs.prefix });
+  const queues = new QueueSet({
+    connection: redis,
+    prefix: env.jobs.prefix,
+    laneOf: jobs.laneOf(),
+  });
   const producer = new JobProducer({
     ledger: new PgJobLedger(pool),
     jobs,

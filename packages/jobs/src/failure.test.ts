@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONNECTOR_ERROR_KINDS, ConnectorError } from '@feedbouncer/connectors';
 import { DEFAULT_RETRY_POLICY } from './policy.js';
-import { JobError, classifyFailure, decide, requireActionSuccess } from './failure.js';
+import { JobDeferral, JobError, classifyFailure, decide, requireActionSuccess } from './failure.js';
 
 const P = {
   ...DEFAULT_RETRY_POLICY,
@@ -192,5 +192,16 @@ describe('classifyFailure and ConnectorError.errorClass', () => {
         const err = new ConnectorError(kind, 'some_code', { reauthorize });
         expect(classifyFailure(err).kind).toBe(err.errorClass);
       }
+  });
+});
+
+describe('JobDeferral', () => {
+  it('classifies as rate_limited so it defers without counting as a failure', () => {
+    const f = classifyFailure(new JobDeferral('classifier_brand_busy', null));
+    expect(f).toEqual({ kind: 'rate_limited', code: 'classifier_brand_busy', retryAfterMs: null });
+    expect(decide(f, S, P, half).type).toBe('defer');
+  });
+  it('sanitises non-snake_case codes', () => {
+    expect(new JobDeferral('Bad Code', 1000).code).toBe('unspecified');
   });
 });

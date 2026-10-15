@@ -12,7 +12,7 @@ import { deriveIdempotencyKey, bullJobId, UUID } from './keys.js';
 import type { LedgerState, PgJobLedger, ReplayFilter, Requeued } from './ledger.js';
 import type { JobMetrics } from './metrics.js';
 import { assertSafePayload } from './payload.js';
-import { queueName, type QueueSet } from './queues.js';
+import type { QueueSet } from './queues.js';
 
 export interface EnqueueRequest {
   readonly scope: ConnectionScope;
@@ -78,7 +78,7 @@ export class JobProducer {
           'feedbouncer.job.type': type,
           'feedbouncer.connector.id': scope.connectionId,
           'messaging.system': 'bullmq',
-          'messaging.destination.name': queueName(platform),
+          'messaging.destination.name': this.d.queues.nameFor(platform, type),
         },
       },
       async (span) => {

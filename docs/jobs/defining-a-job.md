@@ -77,6 +77,29 @@ continues itself in a new segment before its timeout. See
 `rule_evaluate` applies a brand's moderation rules to one version of a comment's
 text. See [rules.md](../moderation/rules.md).
 
+## Lanes
+
+A lane is an isolated queue for slow work, such as LLM calls, so it cannot occupy the
+concurrency slots of connector work. Set `lane` on a definition (`^[a-z][a-z0-9]{0,15}$`).
+Platform queues are named `platform-<platform>`; lane queues are named
+`lane-<lane>-<platform>`, one per platform.
+
+Each lane gets its own workers per platform. Concurrency is
+`JOB_CONCURRENCY_LANE_<LANE>` (default 2, `0` disables the lane in that process). Pass
+`jobs.lanes()` to `loadJobsConfig(env, { lanes })` so the variables are read.
+
+Every process that enqueues a type must resolve the same lane for it: construct
+`QueueSet` with `laneOf: jobs.laneOf()`, or `laneMap(definitions)` where only the
+definitions are available (the API). A platform worker rejects a lane job and a lane
+worker rejects a platform job as `invalid_job` / `queue_mismatch`.
+
+### Deferring a job
+
+Throw `new JobDeferral(code, retryAfterMs)` to run the job later without it counting as
+a failure, for example when a per-brand concurrency cap is reached. `code` is
+snake_case; `retryAfterMs` may be `null` to use the backoff schedule. Deferrals are
+bounded by the policy's `maxDeferrals` and `maxDeferredMs`.
+
 ## Registering and enqueuing
 
 Register definitions in `apps/worker/src/registries.ts` (`buildJobRegistry`). A platform

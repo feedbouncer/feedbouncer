@@ -167,7 +167,11 @@ try {
   );
   worker.on('error', (err) => log.error('worker error', errorFields(err)));
   const metrics = new JobMetrics(log, telemetry.jobSink);
-  const queues = new QueueSet({ connection: producerRedis, prefix: env.jobs.prefix });
+  const queues = new QueueSet({
+    connection: producerRedis,
+    prefix: env.jobs.prefix,
+    laneOf: jobs.laneOf(),
+  });
   const producer = new JobProducer({
     ledger,
     jobs,

@@ -27,7 +27,8 @@ export interface JobWorkersDeps {
 }
 
 export class JobWorkers {
-  readonly #workers = new Map<Platform, Worker>();
+  readonly #workers = new Map<string, Worker>();
+  readonly #platformWorkers: Platform[] = [];
   #timer: NodeJS.Timeout | undefined;
   #inflight: Promise<void> | undefined;
 
@@ -42,41 +43,13 @@ export class JobWorkers {
     const platforms = registered.filter((p) => d.config.concurrency[p] > 0);
 
     for (const p of platforms) {
-      const w = new Worker(
-        queueName(p),
-        createJobProcessor({
-          platform: p,
-          ledger: d.ledger,
-          jobs: d.jobs,
-          metrics: d.metrics,
-          log: d.log,
-          workerId: d.workerId,
-          dlqRetentionMs: d.config.dlqRetentionMs,
-          policyFor: policyResolver(d.config, d.jobs),
-        }),
-        {
-          connection: d.connection,
-          prefix: d.config.prefix,
-          concurrency: d.config.concurrency[p],
-          autorun: false,
-          lockDuration: d.config.bull.lockDurationMs,
-          stalledInterval: d.config.bull.stalledIntervalMs,
-          // Redis stalls are bounded by the ledger's crash counter, not by BullMQ.
-          maxStalledCount: 1_000,
-        },
-      );
-      w.on('error', (e) => d.log.error('job worker error', { platform: p, errorName: e.name }));
-      w.on('failed', (job, e) =>
-        d.log.debug('job left queue', { platform: p, jobId: job?.id ?? null, errorName: e.name }),
-      );
-      this.#workers.set(p, w);
-      w.run().catch((e: unknown) =>
-        d.log.error('job worker stopped', {
-          platform: p,
-          errorName: e instanceof Error ? e.name : 'NonError',
-        }),
-      );
-      await w.waitUntilReady();
+      await this.#startWorker(p, null, d.config.concurrency[p]);
+      this.#platformWorkers.push(p);
+    }
+    for (const lane of d.jobs.lanes()) {
+      const n = d.config.laneConcurrency[lane] ?? 0;
+      if (n === 0) continue;
+      for (const p of platforms) await this.#startWorker(p, lane, n);
     }
 
     void this.sweep();
@@ -84,8 +57,57 @@ export class JobWorkers {
     this.#timer.unref();
   }
 
+  async #startWorker(p: Platform, lane: string | null, concurrency: number): Promise<void> {
+    const { d } = this;
+    const name = queueName(p, lane);
+    const w = new Worker(
+      name,
+      createJobProcessor({
+        platform: p,
+        lane,
+        laneOf: d.jobs.laneOf(),
+        ledger: d.ledger,
+        jobs: d.jobs,
+        metrics: d.metrics,
+        log: d.log,
+        workerId: d.workerId,
+        dlqRetentionMs: d.config.dlqRetentionMs,
+        policyFor: policyResolver(d.config, d.jobs),
+      }),
+      {
+        connection: d.connection,
+        prefix: d.config.prefix,
+        concurrency,
+        autorun: false,
+        lockDuration: d.config.bull.lockDurationMs,
+        stalledInterval: d.config.bull.stalledIntervalMs,
+        // Redis stalls are bounded by the ledger's crash counter, not by BullMQ.
+        maxStalledCount: 1_000,
+      },
+    );
+    w.on('error', (e) => d.log.error('job worker error', { platform: p, lane, errorName: e.name }));
+    w.on('failed', (job, e) =>
+      d.log.debug('job left queue', {
+        platform: p,
+        lane,
+        jobId: job?.id ?? null,
+        errorName: e.name,
+      }),
+    );
+    this.#workers.set(name, w);
+    w.run().catch((e: unknown) =>
+      d.log.error('job worker stopped', {
+        platform: p,
+        lane,
+        errorName: e instanceof Error ? e.name : 'NonError',
+      }),
+    );
+    await w.waitUntilReady();
+  }
+
+  /** Platforms that have a platform worker in this process. */
   platforms(): Platform[] {
-    return [...this.#workers.keys()];
+    return [...new Set(this.#platformWorkers)];
   }
 
   isRunning(): boolean {
@@ -127,6 +149,7 @@ export class JobWorkers {
     await this.#inflight;
     const all = [...this.#workers.values()];
     this.#workers.clear();
+    this.#platformWorkers.length = 0;
     await Promise.all(all.map((w) => w.close()));
   }
 }

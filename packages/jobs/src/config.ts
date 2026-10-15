@@ -21,6 +21,8 @@ export interface JobsConfig {
   readonly defaultPolicy: RetryPolicy;
   /** JOB_CONCURRENCY (default 2), JOB_CONCURRENCY_<PLATFORM>; 0 disables the consumer. */
   readonly concurrency: Readonly<Record<Platform, number>>;
+  /** JOB_CONCURRENCY_LANE_<LANE> (default 2) per platform; 0 disables. */
+  readonly laneConcurrency: Readonly<Record<string, number>>;
   readonly dlqRetentionMs: number;
   readonly dedupWindowMs: number;
   readonly sweepIntervalMs: number;
@@ -28,7 +30,7 @@ export interface JobsConfig {
   readonly bull: { readonly lockDurationMs: number; readonly stalledIntervalMs: number };
 }
 
-export function loadJobsConfig(env: Env): JobsConfig {
+export function loadJobsConfig(env: Env, o: { lanes?: readonly string[] } = {}): JobsConfig {
   const prefix = readString(env, 'JOB_QUEUE_PREFIX', {
     fallback: 'fb',
     maxLength: 32,
@@ -42,6 +44,13 @@ export function loadJobsConfig(env: Env): JobsConfig {
       readInt(env, `JOB_CONCURRENCY_${p.toUpperCase()}`, { min: 0, max: 64, fallback: base }),
     ]),
   ) as Record<Platform, number>;
+
+  const laneConcurrency = Object.fromEntries(
+    (o.lanes ?? []).map((l) => [
+      l,
+      readInt(env, `JOB_CONCURRENCY_LANE_${l.toUpperCase()}`, { min: 0, max: 64, fallback: 2 }),
+    ]),
+  );
 
   let defaultPolicy: RetryPolicy;
   try {
@@ -76,6 +85,7 @@ export function loadJobsConfig(env: Env): JobsConfig {
     prefix,
     defaultPolicy,
     concurrency,
+    laneConcurrency,
     dlqRetentionMs:
       readInt(env, 'JOB_DLQ_RETENTION_DAYS', { min: 1, max: 365, fallback: 14 }) * DAY_MS,
     dedupWindowMs:
