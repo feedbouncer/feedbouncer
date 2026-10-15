@@ -33,6 +33,10 @@ import { InvitationsService } from './invitations/invitations.service.js';
 import { MembersController } from './members/members.controller.js';
 import { MembersService } from './members/members.service.js';
 import { MeController } from './me/me.controller.js';
+import { ActivityController } from './rules/activity.controller.js';
+import { DomainsController } from './rules/domains.controller.js';
+import { RulesController } from './rules/rules.controller.js';
+import { RulesService } from './rules/rules.service.js';
 import { OrgController, OrgsListController } from './orgs/orgs.controller.js';
 import { OrgsService } from './orgs/orgs.service.js';
 import { OrgAccessGuard } from './tenancy/org-access.guard.js';
@@ -70,6 +74,9 @@ export class AppModule {
         OAuthCallbackController,
         CommentsController,
         AdsController,
+        RulesController,
+        DomainsController,
+        ActivityController,
         MembersController,
         OrgInvitationsController,
         InvitationsController,
@@ -86,6 +93,7 @@ export class AppModule {
         ConnectablePlatformPipe,
         CommentsService,
         AdsService,
+        RulesService,
         MembersService,
         InvitationsService,
         { provide: DEPS, useValue: deps },

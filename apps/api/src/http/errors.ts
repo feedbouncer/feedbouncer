@@ -38,6 +38,12 @@ export type ErrorCode =
   | 'unsupported_action'
   | 'request_key_conflict'
   | 'text_too_long'
+  | 'invalid_rule'
+  | 'rule_limit_reached'
+  | 'rule_order_mismatch'
+  | 'invalid_domain'
+  | 'domain_exists'
+  | 'domain_limit_reached'
   | 'service_unavailable';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
@@ -73,8 +79,19 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   unsupported_action: 'This action is not supported for this platform.',
   request_key_conflict: 'This request key was already used for a different action.',
   text_too_long: 'Reply is too long for this platform.',
+  invalid_rule: 'The rule is not valid.',
+  rule_limit_reached: 'This brand has reached the maximum number of rules.',
+  rule_order_mismatch: 'The order must list every rule of the brand exactly once.',
+  invalid_domain: 'Enter a valid domain name.',
+  domain_exists: 'This domain is already in the list.',
+  domain_limit_reached: 'This brand has reached the maximum number of own domains.',
   service_unavailable: 'Service temporarily unavailable. Try again shortly.',
 };
+
+export interface ErrorIssue {
+  path: string;
+  message: string;
+}
 
 export class ApiError extends Error {
   override name = 'ApiError';
@@ -82,8 +99,8 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: ErrorCode,
     message?: string,
-    /** Machine-readable specifics of this error (never request values), merged into the envelope. */
-    readonly details?: Readonly<Record<string, number>>,
+    /** Specifics merged into the envelope: schema problems or a limit, never request values. */
+    readonly details?: { readonly issues?: readonly ErrorIssue[]; readonly max?: number },
   ) {
     super(message ?? DEFAULT_MESSAGES[code]);
   }
@@ -92,7 +109,7 @@ export class ApiError extends Error {
 export const notFound = (): ApiError => new ApiError(404, 'not_found');
 
 export function errorBody(e: ApiError): {
-  error: { code: ErrorCode; message: string } & Record<string, unknown>;
+  error: { code: ErrorCode; message: string; issues?: readonly ErrorIssue[]; max?: number };
 } {
   return { error: { ...e.details, code: e.code, message: e.message } };
 }

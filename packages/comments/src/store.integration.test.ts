@@ -78,12 +78,122 @@ const foreignScope = (): ConnectionScope => ({
 });
 
 describe('PgCommentStore', () => {
+  it('applies only snapshots newer than the stored one', async () => {
+    const c = comment({ body: 'first' });
+    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    expect(a).toMatchObject({ created: true, applied: true });
+    const same = await store.upsertFromPlatform(scope(), c, own(2));
+    expect(same).toMatchObject({ created: false, applied: true });
+    const edited = await store.upsertFromPlatform(scope(), { ...c, body: 'second' }, own(3));
+    expect(edited).toMatchObject({ applied: true, hookBody: 'second' });
+    const stale = await store.upsertFromPlatform(scope(), { ...c, body: 'third' }, own(2));
+    expect(stale).toMatchObject({ applied: false });
+    expect((await store.load(t, a.commentId))?.body).toBe('second');
+  });
+
+  it('keeps a live body pending for the hook until it is marked delivered', async () => {
+    const c = comment({ body: 'pending one' });
+    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    expect(a).toMatchObject({ hookBody: 'pending one' });
+    const again = await store.upsertFromPlatform(scope(), c, own(2));
+    expect(again).toMatchObject({ hookBody: 'pending one' });
+    // Delivering an older version leaves a newer pending body alone.
+    await store.upsertFromPlatform(scope(), { ...c, body: 'pending two' }, own(3));
+    await store.markHookDelivered(scope(), a.commentId, 'pending one');
+    const still = await store.upsertFromPlatform(scope(), { ...c, body: 'pending two' }, own(4));
+    expect(still).toMatchObject({ hookBody: 'pending two' });
+    await store.markHookDelivered(scope(), a.commentId, 'pending two');
+    const done = await store.upsertFromPlatform(scope(), { ...c, body: 'pending two' }, own(5));
+    expect(done).toMatchObject({ hookBody: null });
+  });
+
+  it('a backfill snapshot with a new body is never evaluated: it replaces and clears the pending marker', async () => {
+    const c = comment({ body: 'live text' });
+    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    expect(a.hookBody).toBe('live text');
+    const r = await store.upsertFromPlatform(
+      scope(),
+      { ...c, body: 'backfilled text' },
+      {
+        ...own(2),
+        origin: 'backfill',
+      },
+    );
+    expect(r).toMatchObject({ applied: true, hookBody: null });
+    expect(await store.pendingHooks(scope(), 100)).not.toContainEqual(
+      expect.objectContaining({ commentId: a.commentId }),
+    );
+  });
+
+  it('pendingHooks lists only this connection, live, non-deleted rows', async () => {
+    const c = comment({ body: 'listed' });
+    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    expect(await store.pendingHooks(scope(), 1000)).toContainEqual({
+      commentId: a.commentId,
+      body: 'listed',
+      attempted: false,
+    });
+    expect(await store.pendingHooks(foreignScope(), 1000)).toEqual([]);
+  });
+
+  it('a new snapshot that arrives already deleted gets no pending marker', async () => {
+    const c = comment({ body: 'gone on arrival', platformState: 'deleted' });
+    const r = await store.upsertFromPlatform(scope(), c, own(1));
+    expect(r).toMatchObject({ created: true, hookBody: null });
+    const { rows } = await pool.query<{ hook_pending_sha256: Buffer | null }>(
+      'SELECT hook_pending_sha256 FROM comment WHERE id = $1',
+      [r.commentId],
+    );
+    expect(rows[0]?.hook_pending_sha256).toBeNull();
+  });
+
+  it('a late visible snapshot does not take a marker from a deleted row', async () => {
+    const c = comment({ body: 'late' });
+    await store.recordDeleted(
+      scope(),
+      { sourceExternalId: c.sourceExternalId, externalId: c.externalId },
+      { syncedAt: at(1), occurredAt: at(1) },
+    );
+    const r = await store.upsertFromPlatform(scope(), c, own(2));
+    expect(r).toMatchObject({ hookBody: null });
+    expect(await store.pendingHooks(scope(), 1000)).not.toContainEqual(
+      expect.objectContaining({ commentId: r.commentId }),
+    );
+  });
+
+  it('a delete clears the pending marker', async () => {
+    const c = comment({ body: 'to delete' });
+    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    await store.markDeleted(
+      scope(),
+      { sourceExternalId: c.sourceExternalId, externalId: c.externalId },
+      at(2),
+    );
+    const r = await pool.query('SELECT hook_pending_sha256 FROM comment WHERE id = $1', [
+      a.commentId,
+    ]);
+    expect(r.rows[0].hook_pending_sha256).toBeNull();
+  });
+
+  it('never marks backfilled comments pending', async () => {
+    const r = await store.upsertFromPlatform(scope(), comment({ body: 'old' }), {
+      ...own(1),
+      origin: 'backfill',
+    });
+    expect(r).toMatchObject({ hookBody: null });
+  });
+
   it('creates once and is idempotent for the same snapshot', async () => {
     const c = comment();
     const a = await store.upsertFromPlatform(scope(), c, own(1));
     const b = await store.upsertFromPlatform(scope(), c, own(1));
     expect(a).toMatchObject({ created: true, applied: true });
-    expect(b).toEqual({ commentId: a.commentId, created: false, applied: false });
+    expect(b).toEqual({
+      commentId: a.commentId,
+      created: false,
+      applied: false,
+      hookBody: 'hello',
+    });
     expect(
       (
         await pool.query('SELECT count(*)::int AS n FROM comment WHERE external_id = $1', [
@@ -130,7 +240,12 @@ describe('PgCommentStore', () => {
       { ...c, body: 'v3', platformState: 'hidden' },
       own(7),
     );
-    expect(newer).toEqual({ commentId: stale.commentId, created: false, applied: true });
+    expect(newer).toEqual({
+      commentId: stale.commentId,
+      created: false,
+      applied: true,
+      hookBody: 'v3',
+    });
     expect(await store.load(t, stale.commentId)).toMatchObject({
       body: 'v3',
       platformState: 'hidden',
@@ -423,7 +538,7 @@ describe('per-connection comment identity', () => {
       normalized({ sourceExternalId: 'admedia', externalId: 'k1' }),
       { ...opts(), adSourceId: adSrc },
     );
-    expect(again).toEqual({ commentId: r.commentId, outcome: 'updated' });
+    expect(again).toMatchObject({ commentId: r.commentId, outcome: 'updated' });
     expect((await rowOf(r.commentId)).ad_source_id).toBe(adSrc);
   });
   it('a stale read through an ad source still records the ad path', async () => {

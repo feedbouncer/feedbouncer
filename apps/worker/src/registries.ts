@@ -12,16 +12,27 @@ import {
   ingestCommentJob,
   connectionLifecycleJob,
   type IngestObserver,
+  ModerationActions,
   type PgCommentStore,
 } from '@feedbouncer/comments';
 import {
   ConnectorRegistry,
   type Clock,
   type ConnectionDirectory,
+  type ConnectorCapabilities,
   type ConnectorRuntime,
+  type Platform,
 } from '@feedbouncer/connectors';
 import type { createPool } from '@feedbouncer/db';
 import { JobRegistry, type JobProducer } from '@feedbouncer/jobs';
+import {
+  PgEvaluationStore,
+  PgRuleStore,
+  RuleActionFallback,
+  RuleSetCache,
+  RuleTrigger,
+  ruleEvaluateJob,
+} from '@feedbouncer/rules';
 import type { Logger } from '@feedbouncer/service-runtime';
 
 /** What the comment jobs need; built once in main.ts from the connector stack. */
@@ -35,6 +46,8 @@ export interface WorkerJobDeps {
   readonly ingestObserver: IngestObserver;
   /** Enqueues the resync ingest the execute job requests after platform-decided outcomes. */
   readonly producer: Pick<JobProducer, 'enqueue'>;
+  /** Capabilities of the registered connectors; rule-initiated actions are checked against them. */
+  readonly capabilities: (p: Platform) => ConnectorCapabilities | undefined;
   /** Set when the Meta Ads connector is enabled: registers ad discovery and ad polling. */
   readonly ads?: { readonly poll: PollSettings };
 }
@@ -55,6 +68,9 @@ export function buildConnectorRegistry(cfg: {
 /** Job types the worker executes. See docs/jobs/defining-a-job.md. */
 export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
   const registry = new JobRegistry();
+  // Live comments whose text is new are evaluated against the brand's rules.
+  const applied = new RuleTrigger(deps.producer);
+  const evaluations = new PgEvaluationStore(deps.pool);
   registry.register(
     ingestCommentJob({
       runtime: deps.runtime,
@@ -62,6 +78,23 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       store: deps.store,
       clock: deps.clock,
       observer: deps.ingestObserver,
+      applied,
+    }),
+  );
+  registry.register(
+    ruleEvaluateJob({
+      comments: deps.store,
+      evaluations,
+      cache: new RuleSetCache(new PgRuleStore(deps.pool)),
+      actions: new ModerationActions({
+        pool: deps.pool,
+        store: deps.store,
+        producer: deps.producer,
+        capabilities: deps.capabilities,
+        clock: deps.clock,
+        log: deps.log,
+      }),
+      log: deps.log,
     }),
   );
   registry.register(
@@ -71,6 +104,7 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       log: deps.log,
       producer: deps.producer,
       clock: deps.clock,
+      outcomes: new RuleActionFallback({ evaluations, log: deps.log }),
     }),
   );
   registry.register(connectionLifecycleJob({ runtime: deps.runtime, log: deps.log }));
@@ -104,6 +138,7 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
         clock: deps.clock,
         settings: deps.ads.poll,
         observer: deps.ingestObserver,
+        applied,
       }),
     );
   }

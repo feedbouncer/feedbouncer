@@ -10,6 +10,7 @@ export * from './action-kinds.js';
 export * from './actions.js';
 export * from './eligibility.js';
 export * from './jobs/execute.js';
+export * from './hooks.js';
 export * from './jobs/lifecycle.js';
 export * from './webhook-router.js';
 export * from './reconnect-notifier.js';

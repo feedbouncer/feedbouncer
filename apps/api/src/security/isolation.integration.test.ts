@@ -52,6 +52,16 @@ beforeAll(async () => {
      VALUES ($1, $2, $3, $4, '1_2_3', 'hi', now()) RETURNING id`,
     [B.orgId, B.brandId, bConnectionId, source.rows[0].id],
   );
+  const bRule = await api.pool.query(
+    `INSERT INTO rule (organization_id, brand_id, name, conditions, action, mode)
+     VALUES ($1, $2, 'b rule', '{"type":"keyword","terms":["x"]}'::jsonb, 'flag', 'enforce') RETURNING id`,
+    [B.orgId, B.brandId],
+  );
+  const bDomain = await api.pool.query(
+    `INSERT INTO brand_domain (organization_id, brand_id, domain) VALUES ($1, $2, 'b-own.example')
+     RETURNING id`,
+    [B.orgId, B.brandId],
+  );
   const igConnection = await api.pool.query(
     `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, display_name)
      VALUES ($1, $2, 'instagram', $3, 'ig acct') RETURNING id`,
@@ -87,6 +97,8 @@ beforeAll(async () => {
     bConnectionId,
     bCommentId: comment.rows[0].id,
     bGrantId,
+    bRuleId: bRule.rows[0].id,
+    bDomainId: bDomain.rows[0].id,
     bConnectionIds: { facebook: bConnectionId, instagram: igConnection.rows[0].id },
     bGrantIds,
   };
@@ -122,6 +134,11 @@ async function snapshot(orgId: string) {
     actions: await q(
       'SELECT id, status FROM moderation_action WHERE organization_id = $1 ORDER BY id',
     ),
+    rules: await q(
+      `SELECT id, name, conditions, action, mode, enabled, priority, archived_at FROM rule
+       WHERE organization_id = $1 ORDER BY id`,
+    ),
+    domains: await q('SELECT id, domain FROM brand_domain WHERE organization_id = $1 ORDER BY id'),
     grants: await q('SELECT id FROM oauth_grant WHERE organization_id = $1 ORDER BY id'),
     jobs: await q('SELECT id, state FROM job_ledger WHERE organization_id = $1 ORDER BY id'),
     audit: await q(

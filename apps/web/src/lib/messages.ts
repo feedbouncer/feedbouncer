@@ -31,6 +31,12 @@ const MESSAGES: Record<string, string> = {
   request_key_conflict: 'This request was already used for a different action. Try again.',
   service_unavailable: 'Service temporarily unavailable. Try again shortly.',
   text_too_long: 'Reply is too long for this platform.',
+  invalid_rule: 'This rule has problems. Fix the highlighted fields and try again.',
+  rule_limit_reached: 'This brand has reached the maximum number of rules.',
+  rule_order_mismatch: 'The rules changed since you opened this page. Reload and try again.',
+  invalid_domain: 'Enter a valid domain name.',
+  domain_exists: 'This domain is already in the list.',
+  domain_limit_reached: 'This brand has reached the maximum number of own domains.',
   // Where Facebook sends the browser back after sign-in.
   denied: 'Facebook access was not granted. Nothing was connected.',
   missing_permissions:

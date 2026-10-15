@@ -21,6 +21,9 @@ import type { PgCommentStore } from '../store.js';
 import type { DueSource, PgAdTracking } from '../ads/tracking.js';
 import { applyPlatformComment } from '../apply.js';
 import type { IngestObserver } from './ingest.js';
+import type { CommentAppliedHook } from '../hooks.js';
+import { deliverPendingHooks } from './pending-hooks.js';
+import type { Logger } from '@feedbouncer/service-runtime';
 import { POLL_JOB, type PollPayload } from './specs.js';
 
 export interface PollSettings {
@@ -42,6 +45,8 @@ interface PollDeps {
   clock: Clock;
   settings: PollSettings;
   observer?: IngestObserver;
+  /** Called for live comments that are new or whose text changed; a throw retries the job. */
+  applied?: CommentAppliedHook;
 }
 
 export async function pollSource(
@@ -51,7 +56,14 @@ export async function pollSource(
   ownAccountExternalId: string,
   s: DueSource,
   deadlineMs: number,
-): Promise<{ result: 'done' | 'resume'; created: number; updated: number }> {
+  log: Logger,
+): Promise<{
+  result: 'done' | 'resume';
+  created: number;
+  updated: number;
+  /** The first hook failure of the pass; the pass itself completed and its progress is saved. */
+  hookError?: unknown;
+}> {
   const at = new Date(d.clock.now());
   const deep =
     platform === 'instagram' &&
@@ -67,6 +79,7 @@ export async function pollSource(
   let newest = s.resumeNewestAt;
   let created = 0;
   let updated = 0;
+  let hookError: { error: unknown } | null = null;
   const saveResume = (c: string) =>
     d.tracking.savePollProgress(scope, s.sourceId, {
       kind: 'resume',
@@ -111,6 +124,29 @@ export async function pollSource(
           /* telemetry never fails a job */
         }
       } else if (r.outcome === 'updated') updated++;
+      if (d.applied && r.hookBody !== null) {
+        // One failing item must not starve the rest; its marker stays pending.
+        try {
+          await d.applied.onApplied({
+            scope,
+            platform,
+            commentId: r.commentId,
+            body: r.hookBody,
+            outcome: r.outcome === 'created' ? 'created' : 'updated',
+          });
+          await d.store.markHookDelivered(scope, r.commentId, r.hookBody);
+        } catch (err) {
+          hookError ??= { error: err };
+          await d.store
+            .markHookFailed(scope, r.commentId, r.hookBody, new Date(d.clock.now()))
+            .catch((markErr: unknown) =>
+              log.warn('ads.hook_mark_failed', {
+                commentId: r.commentId,
+                errorName: markErr instanceof Error ? markErr.name : 'unknown',
+              }),
+            );
+        }
+      }
       if (newest === null || c.postedAt > newest) newest = c.postedAt;
     }
     const reachedBoundary =
@@ -125,14 +161,24 @@ export async function pollSource(
         at,
         nextPollAt: new Date(at.getTime() + d.settings.intervalSec * 1000),
       });
-      return { result: 'done', created, updated };
+      return {
+        result: 'done',
+        created,
+        updated,
+        ...(hookError ? { hookError: hookError.error } : {}),
+      };
     }
     if (page.nextCursor === cursor) throw new ConnectorError('permanent', 'cursor_stalled');
     cursor = page.nextCursor;
     // Checked after a page: every job advances the pass, and a resume always has a cursor.
     if (d.clock.now() >= deadlineMs) {
       await saveResume(cursor);
-      return { result: 'resume', created, updated };
+      return {
+        result: 'resume',
+        created,
+        updated,
+        ...(hookError ? { hookError: hookError.error } : {}),
+      };
     }
   }
 }
@@ -156,11 +202,20 @@ export function adPollJob(
       if (!rec) throw new JobError('non_retryable', 'connection_not_found');
       const counts = { sources: 0, done: 0, resumed: 0, unavailable: 0, created: 0, updated: 0 };
       let inaccessible = 0;
+      let hookFailure: { error: unknown } | null = null;
       if (rec.status !== 'active') return counts;
       const platform = rec.platform;
       if (platform !== 'facebook' && platform !== 'instagram')
         throw new JobError('non_retryable', 'unsupported_platform');
 
+      // Pending markers of comments no pass will re-read are delivered here too.
+      if (d.applied)
+        hookFailure = await deliverPendingHooks(
+          { store: d.store, applied: d.applied, now: () => d.clock.now() },
+          ctx.scope,
+          platform,
+          ctx.log,
+        );
       const client = await d.runtime.connect(ctx.scope);
       const deadline = d.clock.now() + d.settings.softDeadlineMs;
       const due = await d.tracking.dueSources(ctx.scope, new Date(d.clock.now()), {
@@ -180,10 +235,12 @@ export function adPollJob(
             rec.externalAccountId,
             s,
             deadline,
+            ctx.log,
           );
           counts[r.result === 'done' ? 'done' : 'resumed']++;
           counts.created += r.created;
           counts.updated += r.updated;
+          if (r.hookError !== undefined) hookFailure ??= { error: r.hookError };
         } catch (err) {
           const ce = err instanceof ConnectorError ? err : null;
           if (ce && sourceFailure(ce)) {
@@ -230,6 +287,8 @@ export function adPollJob(
         await d.directory.markReauthRequired(ctx.scope, 'oauth_access_rejected');
         throw new JobError('non_retryable', 'permission_revoked');
       }
+      // After every source was served: the job fails (and retries) but nothing starved.
+      if (hookFailure) throw hookFailure.error;
       return counts;
     },
   };

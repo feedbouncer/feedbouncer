@@ -4,6 +4,7 @@
 //   when it is strictly newer than the stored one.
 // - `deleted` is terminal: no snapshot or action moves a comment out of it.
 // Every statement is filtered by organization_id + brand_id (+ connection_id).
+import { createHash } from 'node:crypto';
 import type pg from 'pg';
 import { withTransaction } from '@feedbouncer/db';
 import type {
@@ -60,6 +61,8 @@ export interface CommentCursor {
 
 /** Postgres text cannot hold NUL; same replacement as the connector boundary. */
 const noNul = (s: string): string => s.replaceAll('\u0000', '�');
+/** A comment body exactly as the store saves it (what `CommentRow.body` returns). Idempotent. */
+export const storedCommentBody = noNul;
 const outOfScope = () => new Error('comment store: connection is not in the given scope');
 
 /** Over `comment c`: true when the comment came through an ad. */
@@ -190,14 +193,63 @@ async function linkChildren(
   );
 }
 
+const bodySha = (body: string): Buffer => createHash('sha256').update(body, 'utf8').digest();
+
 export class PgCommentStore {
   constructor(private readonly pool: pg.Pool) {}
+
+  /** Live, non-deleted comments of one connection whose body the hook was not yet told about. */
+  async pendingHooks(
+    scope: ConnectionScope,
+    limit: number,
+  ): Promise<{ commentId: string; body: string; attempted: boolean }[]> {
+    const r = await this.pool.query<{ id: string; body: string; attempted: boolean }>(
+      `SELECT id, body, hook_attempted_at IS NOT NULL AS attempted FROM comment
+        WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3
+          AND hook_pending_sha256 IS NOT NULL AND platform_state <> 'deleted'
+        ORDER BY hook_attempted_at NULLS FIRST, platform_synced_at NULLS FIRST, id
+        LIMIT $4`,
+      [...ids(scope), limit],
+    );
+    return r.rows.map((x) => ({ commentId: x.id, body: x.body, attempted: x.attempted }));
+  }
+
+  /** Records a failed delivery so the row rotates behind rows not yet tried. */
+  async markHookFailed(
+    scope: ConnectionScope,
+    commentId: string,
+    body: string,
+    at: Date,
+  ): Promise<void> {
+    await this.pool.query(
+      `UPDATE comment SET hook_attempted_at = $6
+        WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND id = $4
+          AND hook_pending_sha256 = $5`,
+      [...ids(scope), commentId, bodySha(noNul(body)), at],
+    );
+  }
+
+  /** Clears the pending hook marker, only while it still names the delivered body version. */
+  async markHookDelivered(scope: ConnectionScope, commentId: string, body: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE comment SET hook_pending_sha256 = NULL, hook_attempted_at = NULL
+        WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND id = $4
+          AND hook_pending_sha256 = $5`,
+      [...ids(scope), commentId, bodySha(noNul(body))],
+    );
+  }
 
   async upsertFromPlatform(
     scope: ConnectionScope,
     c: NormalizedComment,
     o: { ownAccountExternalId: string; syncedAt: Date; origin?: IngestOrigin },
-  ): Promise<{ commentId: string; created: boolean; applied: boolean }> {
+  ): Promise<{
+    commentId: string;
+    created: boolean;
+    applied: boolean;
+    /** A live body the rule hook has not yet been told about (new, edited, or a failed delivery). */
+    hookBody: string | null;
+  }> {
     return withTransaction(this.pool, async (tx) => {
       const sourceId = await upsertSource(tx, scope, c.sourceExternalId);
       let authorId: string | null = null;
@@ -220,16 +272,33 @@ export class PgCommentStore {
         if (!a.rows[0]) throw outOfScope();
         authorId = a.rows[0].id;
       }
+      // Locks the row so the body compared below is the one this upsert replaces.
+      const prev = await tx.query<{ body: string; pending: boolean; state: string }>(
+        `SELECT body, hook_pending_sha256 IS NOT NULL AS pending, platform_state AS state FROM comment
+          WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND external_id = $4
+            FOR UPDATE`,
+        [...ids(scope), c.externalId],
+      );
+      const newBody = noNul(c.body);
+      const live = (o.origin ?? 'live') === 'live';
+      const newSha = live && c.platformState !== 'deleted' ? bodySha(newBody) : null;
       const up = await tx.query<{ id: string; created: boolean }>(
         `INSERT INTO comment (organization_id, brand_id, connection_id, source_id, external_id, author_id,
                               parent_external_id, parent_comment_id, body, platform_state, posted_at,
-                              permalink, is_own_account, platform_synced_at, ingest_origin)
+                              permalink, is_own_account, platform_synced_at, ingest_origin, hook_pending_sha256)
          VALUES ($1, $2, $3, $4, $5, $6, $7::text,
                  (SELECT p.id FROM comment p
                    WHERE p.organization_id = $1 AND p.brand_id = $2 AND p.connection_id = $3
                      AND p.external_id = $7::text),
-                 $8, $9, $10, $11, $12, $13, $14)
+                 $8, $9, $10, $11, $12, $13, $14, $15)
          ON CONFLICT (connection_id, external_id) DO UPDATE SET
+           hook_pending_sha256 = CASE
+             WHEN comment.platform_state = 'deleted' OR EXCLUDED.platform_state = 'deleted' THEN NULL
+             WHEN comment.body IS DISTINCT FROM EXCLUDED.body THEN EXCLUDED.hook_pending_sha256
+             ELSE comment.hook_pending_sha256 END,
+           hook_attempted_at = CASE
+             WHEN comment.platform_state = 'deleted' OR comment.body IS DISTINCT FROM EXCLUDED.body
+               THEN NULL ELSE comment.hook_attempted_at END,
            body = EXCLUDED.body,
            author_id = COALESCE(EXCLUDED.author_id, comment.author_id),
            parent_external_id = COALESCE(comment.parent_external_id, EXCLUDED.parent_external_id),
@@ -249,13 +318,14 @@ export class PgCommentStore {
           c.externalId,
           authorId,
           c.parentExternalId,
-          noNul(c.body),
+          newBody,
           c.platformState,
           c.postedAt,
           c.permalink,
           c.author !== null && c.author.externalId === o.ownAccountExternalId,
           o.syncedAt,
           o.origin ?? 'live',
+          newSha,
         ],
       );
       let commentId: string;
@@ -275,7 +345,18 @@ export class PgCommentStore {
         commentId = existing.rows[0].id;
       }
       await linkChildren(tx, scope, commentId, c.externalId);
-      return { commentId, created, applied };
+      const bodyChanged =
+        applied && (created || prev.rows[0] === undefined || prev.rows[0].body !== newBody);
+      // A new live body, or an earlier one whose delivery was never recorded.
+      const hookBody =
+        c.platformState === 'deleted' || prev.rows[0]?.state === 'deleted'
+          ? null
+          : applied && live && bodyChanged
+            ? newBody
+            : prev.rows[0]?.pending === true && !(applied && bodyChanged)
+              ? prev.rows[0].body
+              : null;
+      return { commentId, created, applied, hookBody };
     });
   }
 
@@ -315,7 +396,7 @@ export class PgCommentStore {
     syncedAt: Date,
   ): Promise<string | null> {
     const r = await this.pool.query<{ id: string }>(
-      `UPDATE comment c SET platform_state = 'deleted',
+      `UPDATE comment c SET platform_state = 'deleted', hook_pending_sha256 = NULL, hook_attempted_at = NULL,
               platform_synced_at = GREATEST(c.platform_synced_at, $5)
         WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3
           AND c.external_id = $4
@@ -344,6 +425,8 @@ export class PgCommentStore {
          VALUES ($1, $2, $3, $4, $5, '', 'deleted', $6, $7)
          ON CONFLICT (connection_id, external_id) DO UPDATE SET
            platform_state = 'deleted',
+           hook_pending_sha256 = NULL,
+           hook_attempted_at = NULL,
            platform_synced_at = GREATEST(comment.platform_synced_at, EXCLUDED.platform_synced_at)
          WHERE comment.organization_id = $1 AND comment.brand_id = $2
          RETURNING id`,

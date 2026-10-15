@@ -1,7 +1,7 @@
 // Runs the connection_backfill handler over the Pg stores and the real connector
 // runtime, with one FakeGraph as Facebook and Instagram.
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type pg from 'pg';
 import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
@@ -181,6 +181,30 @@ beforeEach(async () => {
 });
 
 describe('connection_backfill job', () => {
+  it('never triggers the applied hook: backfilled history is not evaluated', async () => {
+    const post = graph.addPost(pageId, { createdAtMs: t - 3 * DAY }).postId;
+    graph.addComment(pageId, { postId: post, createdAtMs: t - DAY });
+    const onApplied = vi.fn(async () => {});
+    const deps = {
+      runtime,
+      directory,
+      store,
+      backfill,
+      producer,
+      clock,
+      settings,
+    };
+    // Type-level guard: the backfill deps have no `applied` field.
+    // @ts-expect-error excess property
+    connectionBackfillJob({ ...deps, applied: { onApplied } });
+    const out = await connectionBackfillJob({
+      ...deps,
+      applied: { onApplied },
+    } as typeof deps).handle(ctxFor(scope), await start());
+    expect(out).toMatchObject({ result: 'completed', imported: 1 });
+    expect(onApplied).not.toHaveBeenCalled();
+  });
+
   it('imports in-window comments and replies newest first with platform timestamps', async () => {
     const post = graph.addPost(pageId, { createdAtMs: t - 3 * DAY }).postId;
     const old = graph.addPost(pageId, { createdAtMs: t - 45 * DAY }).postId;

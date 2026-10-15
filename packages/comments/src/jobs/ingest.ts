@@ -12,7 +12,9 @@ import type {
   Platform,
 } from '@feedbouncer/connectors';
 import type { IngestOrigin, PgCommentStore } from '../store.js';
+import type { CommentAppliedHook } from '../hooks.js';
 import { applyPlatformComment } from '../apply.js';
+import { deliverPendingHooks } from './pending-hooks.js';
 import { INGEST_JOB, type IngestPayload } from './specs.js';
 
 export type IngestOutcome = 'created' | 'updated' | 'stale' | 'deleted' | 'gone';
@@ -34,6 +36,8 @@ export function ingestCommentJob(d: {
   store: PgCommentStore;
   clock: Clock;
   observer?: IngestObserver;
+  /** Called for live comments that are new or whose text changed; a throw retries the job. */
+  applied?: CommentAppliedHook;
 }): JobDefinition<IngestPayload> {
   return {
     ...INGEST_JOB,
@@ -58,10 +62,44 @@ export function ingestCommentJob(d: {
           commentId = await d.store.markDeleted(ctx.scope, ref, syncedAt);
           outcome = 'gone';
         } else {
-          ({ commentId, outcome } = await applyPlatformComment(d.store, ctx.scope, c, {
+          const r = await applyPlatformComment(d.store, ctx.scope, c, {
             ownAccountExternalId: rec.externalAccountId,
             syncedAt,
-          }));
+          });
+          ({ commentId, outcome } = r);
+          // The row is committed: a throwing hook retries the job without losing the comment.
+          // Delivery is at least once: the pending marker survives a failed or lost hook call.
+          if (d.applied && r.hookBody !== null) {
+            await d.applied.onApplied({
+              scope: ctx.scope,
+              platform: rec.platform,
+              commentId: r.commentId,
+              body: r.hookBody,
+              outcome: r.outcome === 'created' ? 'created' : 'updated',
+            });
+            await d.store.markHookDelivered(ctx.scope, r.commentId, r.hookBody);
+          }
+        }
+      }
+      // Comments whose own ingest ran out of retries are delivered by the next event of
+      // their connection; a failure here must not fail this unrelated event.
+      if (d.applied) {
+        try {
+          const failure = await deliverPendingHooks(
+            { store: d.store, applied: d.applied, now: () => d.clock.now() },
+            ctx.scope,
+            rec.platform,
+            ctx.log,
+          );
+          if (failure) {
+            ctx.log.warn('comments.hook_sweep_failed', {
+              errorName: failure.error instanceof Error ? failure.error.name : 'unknown',
+            });
+          }
+        } catch (err) {
+          ctx.log.warn('comments.hook_sweep_failed', {
+            errorName: err instanceof Error ? err.name : 'unknown',
+          });
         }
       }
       const { lagMs } = clampLag(p.platformEventSec * 1000, d.clock.now());

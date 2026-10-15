@@ -1,0 +1,155 @@
+-- Rule engine: rule kind/archival, own domains, evaluations.
+BEGIN;
+
+SET LOCAL lock_timeout = '10s';
+
+ALTER TABLE rule
+  ADD COLUMN kind text GENERATED ALWAYS AS (conditions ->> 'type') STORED,
+  ADD COLUMN archived_at timestamptz(3),
+  ADD CONSTRAINT rule_kind_check CHECK (
+    kind IS NULL OR kind IN ('keyword', 'regex', 'link_domain', 'emoji', 'author', 'competitor'));
+CREATE INDEX rule_brand_id_priority_idx ON rule (brand_id, priority) WHERE archived_at IS NULL;
+
+-- Bumped on every change to a brand's rules or own domains so rule-set caches
+-- can validate with a single-row read. Writers lock the brand row first.
+ALTER TABLE brand ADD COLUMN rule_revision bigint NOT NULL DEFAULT 0;
+
+CREATE FUNCTION fb_bump_rule_revision() RETURNS trigger LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+  UPDATE public.brand SET rule_revision = rule_revision + 1
+   WHERE id = COALESCE(NEW.brand_id, OLD.brand_id);
+  RETURN NULL;
+END
+$$;
+CREATE TRIGGER rule_bump_revision_trg AFTER INSERT OR UPDATE OR DELETE ON rule
+  FOR EACH ROW EXECUTE FUNCTION fb_bump_rule_revision();
+
+CREATE TABLE brand_domain (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  brand_id uuid NOT NULL,
+  domain text NOT NULL,
+  created_at timestamptz(3) NOT NULL DEFAULT now(),
+  updated_at timestamptz(3) NOT NULL DEFAULT now(),
+  CONSTRAINT brand_domain_pkey PRIMARY KEY (id),
+  CONSTRAINT brand_domain_brand_id_domain_key UNIQUE (brand_id, domain),
+  CONSTRAINT brand_domain_domain_check CHECK (
+    char_length(domain) BETWEEN 3 AND 253
+    AND domain ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$'),
+  CONSTRAINT brand_domain_organization_id_brand_id_fkey FOREIGN KEY (organization_id, brand_id)
+    REFERENCES brand (organization_id, id) ON DELETE CASCADE
+);
+CREATE INDEX brand_domain_organization_id_brand_id_idx ON brand_domain (organization_id, brand_id);
+CREATE TRIGGER brand_domain_set_updated_at_trg BEFORE UPDATE ON brand_domain
+  FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
+CREATE TRIGGER brand_domain_bump_revision_trg AFTER INSERT OR UPDATE OR DELETE ON brand_domain
+  FOR EACH ROW EXECUTE FUNCTION fb_bump_rule_revision();
+
+-- One row per (comment, body version, trigger): the durable idempotency guard
+-- for rule evaluation.
+CREATE TABLE rule_evaluation (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  brand_id uuid NOT NULL,
+  connection_id uuid NOT NULL,
+  comment_id uuid NOT NULL,
+  body_sha256 bytea NOT NULL,
+  trigger_key text NOT NULL,
+  ruleset_version text NOT NULL,
+  status text NOT NULL,
+  skip_reason text,
+  matched_rule_id uuid,
+  outcome text,
+  trace jsonb NOT NULL DEFAULT '[]'::jsonb,
+  fallback_at timestamptz(3),
+  fallback_code text,
+  recovered_at timestamptz(3),
+  created_at timestamptz(3) NOT NULL DEFAULT now(),
+  updated_at timestamptz(3) NOT NULL DEFAULT now(),
+  CONSTRAINT rule_evaluation_pkey PRIMARY KEY (id),
+  CONSTRAINT rule_evaluation_brand_id_id_key UNIQUE (brand_id, id),
+  CONSTRAINT rule_evaluation_comment_id_body_sha256_trigger_key_key UNIQUE (comment_id, body_sha256, trigger_key),
+  CONSTRAINT rule_evaluation_body_sha256_check CHECK (octet_length(body_sha256) = 32),
+  CONSTRAINT rule_evaluation_trigger_key_check CHECK (char_length(trigger_key) BETWEEN 1 AND 64),
+  CONSTRAINT rule_evaluation_status_check CHECK (status IN ('no_match', 'decided', 'skipped')),
+  CONSTRAINT rule_evaluation_skip_reason_check CHECK (
+    (status = 'skipped') = (skip_reason IS NOT NULL)
+    AND (skip_reason IS NULL OR skip_reason IN ('own_account', 'deleted'))),
+  CONSTRAINT rule_evaluation_outcome_check CHECK (
+    (status = 'decided') = (outcome IS NOT NULL AND matched_rule_id IS NOT NULL)
+    AND (outcome IS NULL OR outcome IN ('approve', 'hide', 'remove', 'flag'))),
+  CONSTRAINT rule_evaluation_trace_check CHECK (jsonb_typeof(trace) = 'array'),
+  CONSTRAINT rule_evaluation_fallback_code_check CHECK (fallback_code IS NULL OR fallback_code ~ '^[a-z][a-z_]{0,63}$'),
+  CONSTRAINT rule_evaluation_organization_id_brand_id_connection_id_fkey FOREIGN KEY (organization_id, brand_id, connection_id)
+    REFERENCES connection (organization_id, brand_id, id) ON DELETE CASCADE,
+  CONSTRAINT rule_evaluation_brand_id_comment_id_fkey FOREIGN KEY (brand_id, comment_id)
+    REFERENCES comment (brand_id, id) ON DELETE CASCADE,
+  CONSTRAINT rule_evaluation_brand_id_matched_rule_id_fkey FOREIGN KEY (brand_id, matched_rule_id)
+    REFERENCES rule (brand_id, id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
+);
+CREATE INDEX rule_evaluation_connection_id_idx ON rule_evaluation (connection_id);
+CREATE INDEX rule_evaluation_brand_id_comment_id_idx ON rule_evaluation (brand_id, comment_id);
+CREATE INDEX rule_evaluation_matched_rule_id_idx ON rule_evaluation (matched_rule_id) WHERE matched_rule_id IS NOT NULL;
+CREATE TRIGGER rule_evaluation_set_updated_at_trg BEFORE UPDATE ON rule_evaluation
+  FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
+
+-- A rule_evaluation is a durable record of why a decision was made. Only the
+-- fallback bookkeeping columns may change, each once (NULL -> value; the code
+-- only with fallback_at, recovered_at only after it), and rows are removed only by FK
+-- cascade (comment deletion).
+CREATE FUNCTION fb_rule_evaluation_guard() RETURNS trigger LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+  IF NEW.id IS DISTINCT FROM OLD.id
+     OR NEW.organization_id IS DISTINCT FROM OLD.organization_id
+     OR NEW.brand_id IS DISTINCT FROM OLD.brand_id
+     OR NEW.connection_id IS DISTINCT FROM OLD.connection_id
+     OR NEW.comment_id IS DISTINCT FROM OLD.comment_id
+     OR NEW.body_sha256 IS DISTINCT FROM OLD.body_sha256
+     OR NEW.trigger_key IS DISTINCT FROM OLD.trigger_key
+     OR NEW.ruleset_version IS DISTINCT FROM OLD.ruleset_version
+     OR NEW.status IS DISTINCT FROM OLD.status
+     OR NEW.skip_reason IS DISTINCT FROM OLD.skip_reason
+     OR NEW.matched_rule_id IS DISTINCT FROM OLD.matched_rule_id
+     OR NEW.outcome IS DISTINCT FROM OLD.outcome
+     OR NEW.trace IS DISTINCT FROM OLD.trace
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at
+     OR (OLD.fallback_at IS NOT NULL
+         AND (NEW.fallback_at IS DISTINCT FROM OLD.fallback_at
+              OR NEW.fallback_code IS DISTINCT FROM OLD.fallback_code))
+     OR (NEW.fallback_code IS NOT NULL AND NEW.fallback_at IS NULL)
+     OR (OLD.recovered_at IS NOT NULL AND NEW.recovered_at IS DISTINCT FROM OLD.recovered_at)
+     OR (NEW.recovered_at IS NOT NULL AND NEW.fallback_at IS NULL)
+  THEN
+    RAISE EXCEPTION 'rule_evaluation is immutable except write-once fallback columns'
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+  RETURN NEW;
+END
+$$;
+CREATE TRIGGER rule_evaluation_immutable_trg BEFORE UPDATE ON rule_evaluation
+  FOR EACH ROW EXECUTE FUNCTION fb_rule_evaluation_guard();
+CREATE TRIGGER rule_evaluation_no_delete_trg BEFORE DELETE ON rule_evaluation
+  FOR EACH ROW EXECUTE FUNCTION fb_forbid_direct_mutation();
+CREATE TRIGGER rule_evaluation_no_truncate_trg BEFORE TRUNCATE ON rule_evaluation
+  FOR EACH STATEMENT EXECUTE FUNCTION fb_forbid_direct_mutation();
+
+ALTER TABLE decision
+  ADD COLUMN rule_evaluation_id uuid,
+  ADD CONSTRAINT decision_brand_id_rule_evaluation_id_fkey FOREIGN KEY (brand_id, rule_evaluation_id)
+    REFERENCES rule_evaluation (brand_id, id) ON DELETE CASCADE;
+CREATE INDEX decision_rule_evaluation_id_idx ON decision (rule_evaluation_id)
+  WHERE rule_evaluation_id IS NOT NULL;
+
+-- Durable delivery of the "text is new" signal to the rule engine: set in the
+-- same transaction that stores a new live body, cleared once the hook ran.
+ALTER TABLE comment
+  ADD COLUMN hook_pending_sha256 bytea,
+  ADD COLUMN hook_attempted_at timestamptz(3),
+  ADD CONSTRAINT comment_hook_pending_sha256_check
+    CHECK (hook_pending_sha256 IS NULL OR octet_length(hook_pending_sha256) = 32);
+CREATE INDEX comment_connection_id_hook_pending_idx
+  ON comment (organization_id, brand_id, connection_id) WHERE hook_pending_sha256 IS NOT NULL;
+
+COMMIT;
