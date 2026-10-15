@@ -9,7 +9,7 @@ import { ClassifierActionFallback } from './fallback.js';
 import { decide } from './policy.js';
 import { prepareInput } from './prepare.js';
 import { PgClassificationStore } from './store.js';
-import type { CategoryScores } from './types.js';
+import type { CategoryScores, ThresholdPolicy } from './types.js';
 
 let ctx: Awaited<ReturnType<typeof migratedDb>>;
 let pool: pg.Pool;
@@ -42,6 +42,7 @@ afterAll(async () => {
 async function seedClassified(
   t: Tenant,
   scores: Partial<CategoryScores>,
+  policy: ThresholdPolicy = DEFAULT_THRESHOLDS,
 ): Promise<{ id: string; commentId: string }> {
   const body = `fb body ${++n}`;
   const c = await ctx.c.query<{ id: string }>(
@@ -74,8 +75,8 @@ async function seedClassified(
     scoresReused: false,
     ruleEvaluationId: ev.rows[0]!.id,
     ruleDecided: false,
-    policy: DEFAULT_THRESHOLDS,
-    verdict: decide(full, DEFAULT_THRESHOLDS, {
+    policy,
+    verdict: decide(full, policy, {
       lowSignal: input.lowSignal,
       languageSupported: true,
     }),
@@ -146,6 +147,26 @@ describe('ClassifierActionFallback', () => {
         threshold: '0.8000',
         reason: "Flagged for review: the classifier couldn't hide this comment (rate_limited).",
       },
+    ]);
+  });
+
+  it('a failed classifier delete produces a fallback flag decision', async () => {
+    const policy = {
+      ...DEFAULT_THRESHOLDS,
+      spam: { category: 'spam', threshold: 0.5, action: 'remove', source: 'brand' },
+    } as unknown as ThresholdPolicy;
+    const { id, commentId } = await seedClassified(A, { spam: 0.9 }, policy);
+    await fb.onActionOutcome(
+      outcome(A, {
+        actorType: 'classifier',
+        kind: 'delete',
+        requestKey: `clf:${id}`,
+        status: 'failed',
+        code: 'permission_denied',
+      }),
+    );
+    expect(await flags(commentId)).toMatchObject([
+      { category: 'spam', confidence: '0.9000', threshold: '0.5000' },
     ]);
   });
 

@@ -1,4 +1,5 @@
 import type pg from 'pg';
+import { withTransaction } from '@feedbouncer/db';
 import type { BrandScope, RuleAction } from '@feedbouncer/rules';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { RawClassification } from './provider.js';
@@ -182,15 +183,10 @@ export class PgClassificationStore {
       JSON.stringify(classified?.verdict.triggers ?? []),
       classified?.verdict.downgraded ?? null,
     ];
-    const c = await this.pool.connect();
-    try {
-      await c.query('BEGIN');
+    return withTransaction(this.pool, async (c) => {
       const ins = await c.query<DbRow>(INSERT_CLASSIFICATION, values);
       const row = ins.rows[0];
-      if (!row) {
-        await c.query('ROLLBACK');
-        return null;
-      }
+      if (!row) return null;
       const primary = classified?.verdict.primary;
       if (classified && outcome !== null && primary) {
         await c.query(INSERT_DECISION, [
@@ -208,14 +204,8 @@ export class PgClassificationStore {
           false,
         ]);
       }
-      await c.query('COMMIT');
       return toRow(row);
-    } catch (e) {
-      await c.query('ROLLBACK').catch(() => undefined);
-      throw e;
-    } finally {
-      c.release();
-    }
+    });
   }
 
   async findReusableScores(
@@ -245,9 +235,7 @@ export class PgClassificationStore {
     reason: string,
     evidence?: FallbackEvidence,
   ): Promise<boolean> {
-    const c = await this.pool.connect();
-    try {
-      await c.query('BEGIN');
+    return withTransaction(this.pool, async (c) => {
       const u = await c.query<{
         comment_id: string;
         provider: string | null;
@@ -259,16 +247,13 @@ export class PgClassificationStore {
         [s.organizationId, s.brandId, classificationId, code],
       );
       const row = u.rows[0];
-      if (!row) {
-        await c.query('ROLLBACK');
-        return false;
-      }
+      if (!row) return false;
       let ev: FallbackEvidence | null = evidence ?? null;
       if (!ev) {
-        // The evidence is the decision that named the deciding trigger: the hide or delete, else the approve of a reversal.
+        // The evidence is the decision that named the deciding trigger: the hide or remove, else the approve of a reversal.
         const a = await c.query<{ category: Category; confidence: string; threshold: string }>(
           `SELECT category, confidence::text AS confidence, threshold::text AS threshold FROM decision
-           WHERE organization_id = $1 AND brand_id = $2 AND classification_id = $3 AND outcome IN ('hide', 'delete', 'approve')
+           WHERE organization_id = $1 AND brand_id = $2 AND classification_id = $3 AND outcome IN ('hide', 'remove', 'approve')
              AND category IS NOT NULL AND confidence IS NOT NULL AND threshold IS NOT NULL
            ORDER BY (outcome = 'approve'), sequence ASC LIMIT 1`,
           [s.organizationId, s.brandId, classificationId],
@@ -297,14 +282,8 @@ export class PgClassificationStore {
         reason,
         false,
       ]);
-      await c.query('COMMIT');
       return true;
-    } catch (e) {
-      await c.query('ROLLBACK').catch(() => undefined);
-      throw e;
-    } finally {
-      c.release();
-    }
+    });
   }
 
   async recordRecovered(s: BrandScope, classificationId: string): Promise<boolean> {
@@ -376,9 +355,7 @@ export class PgClassificationStore {
     threshold: number,
     reason: string,
   ): Promise<boolean> {
-    const c = await this.pool.connect();
-    try {
-      await c.query('BEGIN');
+    return withTransaction(this.pool, async (c) => {
       const u = await c.query<{
         comment_id: string;
         provider: string | null;
@@ -390,10 +367,7 @@ export class PgClassificationStore {
         [s.organizationId, s.brandId, classificationId],
       );
       const row = u.rows[0];
-      if (!row) {
-        await c.query('ROLLBACK');
-        return false;
-      }
+      if (!row) return false;
       if (!row.provider || !row.model) throw new Error('classification has no provider');
       await c.query(INSERT_DECISION, [
         s.organizationId,
@@ -409,14 +383,8 @@ export class PgClassificationStore {
         reason,
         true,
       ]);
-      await c.query('COMMIT');
       return true;
-    } catch (e) {
-      await c.query('ROLLBACK').catch(() => undefined);
-      throw e;
-    } finally {
-      c.release();
-    }
+    });
   }
 
   async previewRows(
