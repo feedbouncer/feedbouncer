@@ -28,6 +28,8 @@
     "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
     "pg": "8.23.1",
+    "re2": "1.27.0",
+    "tldts": "7.4.18",
     "zod": "4.6.5"
   },
   "devDependencies": {

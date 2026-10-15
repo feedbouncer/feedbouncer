@@ -47,7 +47,15 @@ describe('words', () => {
 
 describe('hasUnspacedScript', () => {
   it('detects Han, Kana, Thai, Lao, Khmer, Myanmar', () => {
-    for (const s of ['無料', 'かな', 'カナ', 'ฟร\u0E35', 'ຟຣ\u0EB5', 'ឥតគ\u17B7តថ\u17D2លៃ', 'အခမ\u1032\u1037'])
+    for (const s of [
+      '無料',
+      'かな',
+      'カナ',
+      'ฟร\u0E35',
+      'ຟຣ\u0EB5',
+      'ឥតគ\u17B7តថ\u17D2លៃ',
+      'အခမ\u1032\u1037',
+    ])
       expect(hasUnspacedScript(s)).toBe(true);
     for (const s of ['free', 'бесплатно', '무료', 'مجاني'])
       expect(hasUnspacedScript(s)).toBe(false);

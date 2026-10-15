@@ -6,6 +6,7 @@ allowBuilds:
   esbuild: false
   msgpackr-extract: false
   prisma: true
+  re2: true
 # Security floors for transitive dependencies of prisma (via better-auth's
 # optional peer and packages/db), whose own pins lag the fixes. Selectors only
 # match vulnerable versions, so these stop applying once upstream catches up.
