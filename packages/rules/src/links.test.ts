@@ -79,4 +79,49 @@ describe('extractLinks', () => {
       expect(extractLinksDetailed('a.com')).toMatchObject({ truncated: false });
     });
   });
+  describe('browser differential (round 2)', () => {
+    it('joins URLs that WHATWG parsing would de-tab', () => {
+      expect(hosts('https://exa\tmple.com')).toContain('example.com');
+      expect(hosts('https://exa\nmple.com/x')).toContain('example.com');
+      expect(hosts('https://a.com\t,b.com')).toEqual(expect.arrayContaining(['a.com', 'b.com']));
+      expect(hosts('see\nevil.io')).toEqual(['evil.io']);
+    });
+    it('ignores leading control characters', () => {
+      expect(hosts('\u0001evil.io')).toEqual(['evil.io']);
+      expect(hosts('https://evil.io\u0001')).toEqual(['evil.io']);
+    });
+    it('emits IPv6 literal URLs', () => {
+      expect(hosts('http://[::1]/x')).toEqual(['[::1]']);
+      expect(hosts('[https://evil.io]')).toEqual(['evil.io']);
+    });
+    it('emits the host-like userinfo of a schemeless user:port@host form too', () => {
+      expect(hosts('evil.io:80@good.com')).toEqual(expect.arrayContaining(['evil.io', 'good.com']));
+    });
+    it('strips any leading punctuation run', () => {
+      expect(hosts('=evil.io !bad.io -worse.io @x.io')).toEqual([
+        'evil.io',
+        'bad.io',
+        'worse.io',
+        'x.io',
+      ]);
+    });
+    it('flags truncation for over-length tokens', () => {
+      const r = extractLinksDetailed(`https://evil.io/${'a'.repeat(5000)}`);
+      expect(r.truncated).toBe(true);
+      expect(r.links.map((l) => l.host)).toEqual(['evil.io']);
+    });
+    it('does not treat scheme-relative single labels as links', () => {
+      expect(hosts('//todo')).toEqual([]);
+      expect(hosts('//evil.io')).toEqual(['evil.io']);
+    });
+    it('does not split numbers on a comma between digits', () => {
+      expect(hosts('costs 1,000.com today')).toEqual([]);
+    });
+    it('handles long punctuation runs in linear time', () => {
+      const t = Date.now();
+      extractLinks(`evil.io${'.'.repeat(50000)}x`);
+      extractLinks(`${'.,'.repeat(20000)}`);
+      expect(Date.now() - t).toBeLessThan(1000);
+    });
+  });
 });
