@@ -216,6 +216,22 @@ describe('PgClassificationStore', () => {
     });
   });
 
+  it('record() persists scores rounded to four decimals', async () => {
+    const { rec, commentId } = await classified(A, { scores: { spam: 0.1 } });
+    await store.record(connScope(A), { ...rec, scores: { ...rec.scores, spam: 0.80004 } });
+    expect((await classRows(commentId)).rows[0].scores.spam).toBe(0.8);
+  });
+
+  it('record() throws when an outcome has no primary trigger and writes nothing', async () => {
+    const { rec, commentId } = await classified(A, { scores: { spam: 0.1 } });
+    const bad = {
+      ...rec,
+      verdict: { outcome: 'hide' as const, primary: null, triggers: [], downgraded: null },
+    };
+    await expect(store.record(connScope(A), bad)).rejects.toThrow();
+    expect((await classRows(commentId)).rows).toHaveLength(0);
+  });
+
   it('record(unclassified) writes no decision', async () => {
     const c = await newComment(A);
     const row = await store.record(connScope(A), {

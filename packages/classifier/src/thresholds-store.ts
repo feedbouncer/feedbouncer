@@ -60,6 +60,11 @@ export class PgThresholdStore {
     items: readonly ThresholdItem[],
     userId: string,
   ): Promise<ThresholdChange[]> {
+    const lock = await c.query(
+      'SELECT 1 FROM brand WHERE organization_id = $1 AND id = $2 FOR UPDATE',
+      [s.organizationId, s.brandId],
+    );
+    if (lock.rowCount === 0) throw new Error('brand not found');
     const cur = await c.query<Row>(`${SELECT} FOR UPDATE`, [s.organizationId, s.brandId]);
     const before = new Map(
       cur.rows.map((x) => [x.category, { threshold: Number(x.threshold), action: x.action }]),

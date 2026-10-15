@@ -157,4 +157,19 @@ describe('PgThresholdStore', () => {
     }
     expect(await store.policy(scope(B))).toEqual(DEFAULT_THRESHOLDS);
   });
+
+  it('concurrent saves on a brand with no override serialise, so audit before-values are consistent', async () => {
+    const T = await seedTenant(ctx.c, 'thc');
+    const save = (threshold: number) =>
+      inTx((c) =>
+        store.apply(c, scope(T), [{ category: 'spam', threshold, action: 'hide' }], T.userId),
+      );
+    const [x, y] = await Promise.all([save(0.6), save(0.7)]);
+    const all = [...x, ...y];
+    expect(all).toHaveLength(2);
+    const first = all.find((ch) => ch.before === null)!;
+    const second = all.find((ch) => ch.before !== null)!;
+    expect(first).toBeDefined();
+    expect(second.before).toEqual(first.after);
+  });
 });

@@ -16,6 +16,7 @@ import {
   type UnclassifiedReason,
 } from './types.js';
 import type { PreviewRow } from './preview.js';
+import { roundScores } from './policy.js';
 
 interface Base {
   commentId: string;
@@ -152,6 +153,8 @@ export class PgClassificationStore {
     const classified = r.status === 'classified' ? r : null;
     const input = r.status === 'skipped' ? null : (r.input ?? null);
     const outcome = classified && !classified.ruleDecided ? classified.verdict.outcome : null;
+    if (outcome !== null && !classified?.verdict.primary)
+      throw new Error('classification outcome has no primary trigger');
     const values = [
       scope.organizationId,
       scope.brandId,
@@ -165,7 +168,7 @@ export class PgClassificationStore {
       classified?.provider ?? null,
       classified?.model ?? null,
       classified?.promptVersion ?? null,
-      classified ? JSON.stringify(classified.scores) : null,
+      classified ? JSON.stringify(roundScores(classified.scores)) : null,
       classified?.language ?? null,
       classified?.languageSupported ?? null,
       input?.lowSignal ?? false,
