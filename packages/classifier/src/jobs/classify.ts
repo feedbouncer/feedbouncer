@@ -15,9 +15,15 @@ import type { CommentRow, ModerationActions, PgCommentStore } from '@feedbouncer
 import { bodySha256, type BrandScope, type PgEvaluationStore } from '@feedbouncer/rules';
 import type { Logger } from '@feedbouncer/service-runtime';
 import { ZERO_SCORES } from '../defaults.js';
-import { describeClassification, describeFallback, describeReversal } from '../describe.js';
+import {
+  describeClassification,
+  describeFallback,
+  describeReversal,
+  MODERATOR_ACTED_NOTE,
+} from '../describe.js';
 import { mapProviderError, PROMPT_VERSION } from '../llm-provider.js';
 import { decide, roundScores } from '../policy.js';
+import type { Trigger } from '../types.js';
 import { prepareInput } from '../prepare.js';
 import type { ClassifierProvider, RawClassification } from '../provider.js';
 import type { BrandSlots } from '../slots.js';
@@ -108,6 +114,8 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
         raw = prior;
         scoresReused = true;
       } else {
+        if (d.provider.id === 'none')
+          return { ...base, status: 'unclassified', unclassifiedReason: 'disabled', input };
         if (now() - p.requestedAt > d.maxWaitMs)
           return { ...base, status: 'unclassified', unclassifiedReason: 'queue_timeout', input };
         const lease = await d.slots.acquire(brand.brandId);
@@ -135,7 +143,29 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
     const scores = roundScores(raw.scores);
     const languageSupported = input.empty || d.languages.includes(raw.language);
     const policy = await d.thresholds.policy(brand);
-    const verdict = decide(scores, policy, { lowSignal: input.lowSignal, languageSupported });
+    let verdict = decide(scores, policy, { lowSignal: input.lowSignal, languageSupported });
+    // A re-run must not undo a person's decision by hiding or deleting again.
+    let moderatorActed = false;
+    if (
+      p.trigger !== 'ingest' &&
+      (verdict.outcome === 'hide' || verdict.outcome === 'remove') &&
+      (await d.classifications.latestActionActor(brand, row.id)) === 'user'
+    ) {
+      const cap = (t: Trigger): Trigger =>
+        t.effectiveAction === 'hide' || t.effectiveAction === 'remove'
+          ? { ...t, effectiveAction: 'flag' }
+          : t;
+      const triggers = verdict.triggers.map(cap);
+      verdict = {
+        ...verdict,
+        outcome: 'flag',
+        primary: verdict.primary
+          ? (triggers[verdict.triggers.indexOf(verdict.primary)] ?? null)
+          : null,
+        triggers,
+      };
+      moderatorActed = true;
+    }
     return {
       ...base,
       status: 'classified',
@@ -152,7 +182,12 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
       ruleDecided: ruleEval.status !== 'no_match',
       policy,
       verdict,
-      reason: describeClassification(verdict, { truncated: input.truncated }),
+      reason: [
+        describeClassification(verdict, { truncated: input.truncated }),
+        ...(moderatorActed ? [MODERATOR_ACTED_NOTE] : []),
+      ]
+        .join(' ')
+        .slice(0, 2000),
     };
   }
 
@@ -188,15 +223,17 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
     if (row.platformState !== 'hidden') return result;
     const prev = await d.classifications.reversibleClassifierHide(brand, row.id);
     if (!prev || prev.classificationId === c.id || !c.scores) return result;
+    // The current verdict is already known to be non-destructive; the evidence is the
+    // category that hid the comment, scored against today's threshold for it.
     const score = c.scores[prev.category];
-    if (score >= prev.threshold) return result;
+    const threshold = (await d.thresholds.policy(brand))[prev.category].threshold;
     await d.classifications.recordReversal(
       brand,
       c.id,
       prev.category,
       score,
-      prev.threshold,
-      describeReversal(prev.category, score, prev.threshold),
+      threshold,
+      describeReversal(prev.category, score, threshold),
     );
     const r = await d.actions.request({
       scope: brand,
@@ -210,7 +247,7 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
       await d.classifications.recordFallback(brand, c.id, code, describeFallback('unhide', code), {
         category: prev.category,
         score,
-        threshold: prev.threshold,
+        threshold,
       });
       return { ...result, fallback: code };
     }

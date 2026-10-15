@@ -308,6 +308,25 @@ describe('comment_classify', () => {
     ).toBe(0);
   });
 
+  it('a disabled provider records unclassified/disabled without taking a brand slot', async () => {
+    const c = await seedComment('anything');
+    await evaluateRules(c, 'no_match');
+    const acquire = vi.fn();
+    const r = await job(new DisabledProvider(), { slots: { acquire } as never }).handle(
+      ctx(c, 1),
+      payload(c),
+    );
+    expect(r).toMatchObject({ result: 'unclassified' });
+    expect(acquire).not.toHaveBeenCalled();
+    expect(
+      (
+        await one(`SELECT unclassified_reason FROM comment_classification WHERE comment_id = $1`, [
+          c.id,
+        ])
+      ).unclassified_reason,
+    ).toBe('disabled');
+  });
+
   it('non-retryable failures (auth, disabled) mark unclassified on the first attempt', async () => {
     const c = await seedComment('no provider');
     await evaluateRules(c, 'no_match');
@@ -631,6 +650,85 @@ describe('comment_classify', () => {
     expect(
       await count(`SELECT 1 FROM decision WHERE comment_id = $1 AND outcome = 'approve'`, [c.id]),
     ).toBe(0);
+  });
+
+  const rerun = (c: Seeded, p: ClassifierProvider) =>
+    job(p).handle(ctx(c, 1), { ...payload(c), trigger: `rerun:${randomUUID()}` });
+  const moderatorAction = (c: Seeded, kind: 'hide' | 'unhide') =>
+    ctxDb.c.query(
+      `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind, actor_type,
+         actor_user_id, request_key, status, completed_at)
+       VALUES ($1, $2, $3, $4, $5, 'user', $6, $7, 'applied', now() + interval '1 second')`,
+      [
+        c.t.organizationId,
+        c.t.brandId,
+        c.t.connectionId,
+        c.id,
+        kind,
+        c.t.userId,
+        `user:${randomUUID()}`,
+      ],
+    );
+
+  it('a re-run unhides a classifier hide once the current thresholds no longer hide it', async () => {
+    const c = await hiddenByClassifier('hateful v5');
+    await setThreshold(c.t, 'hate_speech', 0.8, 'flag');
+    const p = new FakeProvider([S({ hate_speech: 0.95 })]);
+    actions.request.mockClear();
+    const r = await rerun(c, p);
+    expect(r).toMatchObject({ result: 'classified', outcome: 'flag', reversed: true });
+    expect(p.calls).toBe(0);
+    expect(actions.request).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'unhide', requestKey: `clf:${r.classificationId}:unhide` }),
+    );
+    const dec = await one(
+      `SELECT outcome, category, confidence::text, threshold::text, reason FROM decision
+       WHERE classification_id = $1 AND outcome = 'approve'`,
+      [r.classificationId],
+    );
+    expect(dec).toMatchObject({
+      category: 'hate_speech',
+      confidence: '0.9500',
+      threshold: '0.8000',
+    });
+    expect(dec.reason).toContain('Unhidden');
+  });
+
+  it('a re-run does not unhide when a moderator acted after the classifier', async () => {
+    const c = await hiddenByClassifier('hateful v6');
+    await moderatorAction(c, 'hide');
+    await setThreshold(c.t, 'hate_speech', 0.8, 'flag');
+    actions.request.mockClear();
+    const r = await rerun(c, new FakeProvider([S({ hate_speech: 0.95 })]));
+    expect(r.reversed).toBeUndefined();
+    expect(actions.request).not.toHaveBeenCalled();
+    expect(
+      await count(`SELECT 1 FROM decision WHERE comment_id = $1 AND outcome = 'approve'`, [c.id]),
+    ).toBe(0);
+  });
+
+  it('a re-run does not hide again a comment a moderator restored', async () => {
+    const c = await hiddenByClassifier('hateful v7');
+    await moderatorAction(c, 'unhide');
+    await ctxDb.c.query(`UPDATE comment SET platform_state = 'visible' WHERE id = $1`, [c.id]);
+    actions.request.mockClear();
+    const r = await rerun(c, new FakeProvider([S({ hate_speech: 0.95 })]));
+    expect(r).toMatchObject({ result: 'classified', outcome: 'flag' });
+    expect(actions.request).not.toHaveBeenCalled();
+    const dec = await one(`SELECT outcome, reason FROM decision WHERE classification_id = $1`, [
+      r.classificationId,
+    ]);
+    expect(dec.outcome).toBe('flag');
+    expect(dec.reason).toContain('moderator already acted');
+  });
+
+  it('ingest-triggered classification still hides after earlier moderator activity', async () => {
+    const c = await seedComment('hateful v8');
+    await evaluateRules(c, 'no_match');
+    await moderatorAction(c, 'unhide');
+    const r = await job(new FakeProvider([S({ hate_speech: 0.95 })])).handle(ctx(c, 1), payload(c));
+    expect(r.outcome).toBe('hide');
+    expect(actions.request).toHaveBeenCalledWith(expect.objectContaining({ kind: 'hide' }));
   });
 
   it('does not unhide a comment hidden by a rule', async () => {

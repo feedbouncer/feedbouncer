@@ -47,5 +47,10 @@ export function describeFallback(kind: 'hide' | 'delete' | 'unhide', code: strin
 }
 
 export function describeReversal(category: Category, score: number, threshold: number): string {
-  return `Unhidden: ${CATEGORY_TEXT[category]} now scores ${n(score)}, below ${n(threshold)}.`;
+  if (score < threshold)
+    return `Unhidden: ${CATEGORY_TEXT[category]} now scores ${n(score)}, below ${n(threshold)}.`;
+  return `Unhidden: ${CATEGORY_TEXT[category]} scores ${n(score)}, and the current settings (threshold ${n(threshold)}) no longer hide it.`;
 }
+
+export const MODERATOR_ACTED_NOTE =
+  'A moderator already acted on this comment, so it is flagged for review instead of being hidden or deleted again.';
