@@ -85,12 +85,17 @@ export function ingestCommentJob(d: {
       // their connection; a failure here must not fail this unrelated event.
       if (d.applied) {
         try {
-          await deliverPendingHooks(
+          const failure = await deliverPendingHooks(
             { store: d.store, applied: d.applied, now: () => d.clock.now() },
             ctx.scope,
             rec.platform,
             ctx.log,
           );
+          if (failure) {
+            ctx.log.warn('comments.hook_sweep_failed', {
+              errorName: failure.error instanceof Error ? failure.error.name : 'unknown',
+            });
+          }
         } catch (err) {
           ctx.log.warn('comments.hook_sweep_failed', {
             errorName: err instanceof Error ? err.name : 'unknown',

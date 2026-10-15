@@ -20,6 +20,8 @@ describe('normalizeDomainEntry', () => {
     'a'.repeat(254) + '.com',
     'xn--iñvalid.com',
     '../../etc/passwd',
+    'my_shop.example.com',
+    'a'.repeat(64) + '.example.com',
   ])('rejects %j', (input) => expect(normalizeDomainEntry(input)).toBeNull());
 });
 

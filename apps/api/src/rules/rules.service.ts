@@ -24,14 +24,8 @@ import { requireBrand, type BrandScope } from '../tenancy/brand-scope.js';
 import { lockedActor } from '../tenancy/org-lock.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { DEPS } from '../tokens.js';
-import {
-  listActivity,
-  toDomainDto,
-  type ActivityItem,
-  type ActivityQuery,
-  type DomainDto,
-  type RuleDto,
-} from './decisions.queries.js';
+import { listActivity, type ActivityItem, type ActivityQuery } from './decisions.queries.js';
+import { toDomainDto, type DomainDto, type RuleDto } from './rules.dto.js';
 
 const MAX_ISSUE_CHARS = 300;
 

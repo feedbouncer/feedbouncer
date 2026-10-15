@@ -49,11 +49,13 @@ export function asciiHost(input: string): string | null {
   return host;
 }
 
+const STORABLE_HOST = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
 export function normalizeDomainEntry(input: string): string | null {
   const trimmed = input.trim().replace(/^\*\./, '');
   if (trimmed.length === 0 || trimmed.length > 2048) return null;
   const host = asciiHost(trimmed);
-  if (host === null) return null;
+  if (host === null || !STORABLE_HOST.test(host)) return null;
   const r = parse(host, { extractHostname: false });
   if (r.isIp || r.domain === null || !(r.isIcann || r.isPrivate)) return null;
   return host.startsWith('www.') ? host.slice(4) : host;
