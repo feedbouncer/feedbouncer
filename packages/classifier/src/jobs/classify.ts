@@ -223,8 +223,10 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
     if (row.platformState !== 'hidden') return result;
     const prev = await d.classifications.reversibleClassifierHide(brand, row.id);
     if (!prev || prev.classificationId === c.id || !c.scores) return result;
-    // The current verdict is already known to be non-destructive; the evidence is the
-    // category that hid the comment, scored against today's threshold for it.
+    // A downgrade (low signal, unsupported language) is not evidence the comment is clean:
+    // keep the hide while any category still reaches a hiding or deleting threshold.
+    if (c.triggers.some((t) => t.action === 'hide' || t.action === 'remove')) return result;
+    // The evidence is the category that hid the comment, scored against today's threshold for it.
     const score = c.scores[prev.category];
     const threshold = (await d.thresholds.policy(brand))[prev.category].threshold;
     await d.classifications.recordReversal(

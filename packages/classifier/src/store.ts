@@ -129,6 +129,8 @@ INSERT INTO decision (organization_id, brand_id, comment_id, outcome, mode, acto
   classifier_model, category, confidence, threshold, classification_id, reason)
 VALUES ($1, $2, $3, $4, 'enforce', 'classifier', $5, $6, $7, $8, $9, $10, $11)`;
 
+const INSERT_REVERSAL = INSERT_DECISION.replace('reason)', 'reason, reversal)').replace('$11)', '$11, true)');
+
 const CLF_KEY = /^clf:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 export class PgClassificationStore {
@@ -397,7 +399,7 @@ export class PgClassificationStore {
         return false;
       }
       if (!row.provider || !row.model) throw new Error('classification has no provider');
-      await c.query(INSERT_DECISION, [
+      await c.query(INSERT_REVERSAL, [
         s.organizationId,
         s.brandId,
         row.comment_id,

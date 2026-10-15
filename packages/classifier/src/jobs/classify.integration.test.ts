@@ -636,6 +636,31 @@ describe('comment_classify', () => {
     expect(dec.reason).toBe('Unhidden: Hate speech now scores 0.10, below 0.80.');
   });
 
+  it('does not unhide when the edit is only downgraded and still scores above the hide threshold', async () => {
+    const c = await hiddenByClassifier('hateful v3');
+    const edited = await editComment(c, '🤬🤬');
+    await evaluateRules(edited, 'no_match');
+    actions.request.mockClear();
+    const r = await job(new FakeProvider([S({ hate_speech: 0.95 }, 'und')])).handle(
+      ctx(edited, 1),
+      payload(edited),
+    );
+    expect(r).toMatchObject({ outcome: 'flag' });
+    expect(r.reversed).toBeUndefined();
+    expect(actions.request).not.toHaveBeenCalled();
+  });
+
+  it('marks only the unhide decision as a reversal', async () => {
+    const c = await hiddenByClassifier('hateful v4');
+    const { r } = await editAndReclassify(c, 'sorry, edited again');
+    const rows = await ctxDb.c.query(
+      `SELECT outcome, reversal FROM decision WHERE comment_id = $1 ORDER BY sequence`,
+      [c.id],
+    );
+    expect(rows.rows.filter((d) => d.reversal)).toHaveLength(1);
+    expect(r.reversed).toBe(true);
+  });
+
   it('does not unhide when a moderator acted after the classifier', async () => {
     const c = await hiddenByClassifier('hateful v2');
     await ctxDb.c.query(

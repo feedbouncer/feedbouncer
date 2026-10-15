@@ -158,7 +158,8 @@ CREATE INDEX classifier_run_requested_by_user_id_idx ON classifier_run (requeste
 CREATE TRIGGER classifier_run_set_updated_at_trg BEFORE UPDATE ON classifier_run
   FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
 
-ALTER TABLE decision ADD COLUMN classification_id uuid, ADD COLUMN threshold numeric(5, 4);
+ALTER TABLE decision ADD COLUMN classification_id uuid, ADD COLUMN threshold numeric(5, 4),
+  ADD COLUMN reversal boolean NOT NULL DEFAULT false;
 ALTER TABLE decision ADD CONSTRAINT decision_classification_fkey FOREIGN KEY (brand_id, classification_id)
   REFERENCES comment_classification (brand_id, id) ON DELETE CASCADE;
 ALTER TABLE decision ADD CONSTRAINT decision_threshold_check
@@ -166,6 +167,8 @@ ALTER TABLE decision ADD CONSTRAINT decision_threshold_check
 ALTER TABLE decision ADD CONSTRAINT decision_classifier_evidence_check CHECK (
   classification_id IS NULL
   OR (actor_type = 'classifier' AND category IS NOT NULL AND confidence IS NOT NULL AND threshold IS NOT NULL));
+ALTER TABLE decision ADD CONSTRAINT decision_reversal_check
+  CHECK (NOT reversal OR (classification_id IS NOT NULL AND outcome = 'approve'));
 CREATE INDEX decision_classification_id_idx ON decision (classification_id) WHERE classification_id IS NOT NULL;
 
 COMMIT;

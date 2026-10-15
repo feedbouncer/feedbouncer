@@ -60,7 +60,7 @@ interface DecisionRow {
   classifier_model: string | null;
   triggers: Trigger[] | null;
   downgraded: Downgrade | null;
-  classification_reversed: boolean | null;
+  reversal: boolean;
 }
 
 // Rules, classifications and actions are joined on the decision's own organization
@@ -79,7 +79,7 @@ const DECISION_FROM = `
                                AND d.mode = 'enforce'
                                AND a.request_key = CASE
                                  WHEN d.actor_type = 'rule' THEN 'rule-eval:' || d.rule_evaluation_id
-                                 WHEN d.actor_type = 'classifier' AND d.outcome = 'approve'
+                                 WHEN d.actor_type = 'classifier' AND d.reversal
                                    THEN 'clf:' || d.classification_id || ':unhide'
                                  WHEN d.actor_type = 'classifier' THEN 'clf:' || d.classification_id
                                END`;
@@ -94,8 +94,7 @@ const DECISION_COLUMNS = `
               AND d.created_at >= cc.fallback_at, false) AS fallback,
   a.kind AS action_kind, a.status AS action_status, a.outcome_code AS action_outcome_code,
   d.classification_id, d.category, d.confidence::text AS confidence, d.threshold::text AS threshold,
-  d.classifier_provider, d.classifier_model, cc.triggers, cc.downgraded,
-  (cc.reversed_at IS NOT NULL) AS classification_reversed`;
+  d.classifier_provider, d.classifier_model, d.reversal, cc.triggers, cc.downgraded`;
 
 function toClassifier(r: DecisionRow): DecisionDto['classifier'] {
   if (r.actor_type !== 'classifier' || r.classification_id === null) return null;
@@ -110,7 +109,7 @@ function toClassifier(r: DecisionRow): DecisionDto['classifier'] {
     model: r.classifier_model,
     triggers: r.triggers ?? [],
     downgraded: r.downgraded,
-    reversal: r.outcome === 'approve' && r.classification_reversed === true,
+    reversal: r.reversal,
   };
 }
 
