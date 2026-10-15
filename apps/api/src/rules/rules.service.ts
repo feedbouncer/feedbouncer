@@ -31,21 +31,22 @@ import {
   type ActivityQuery,
   type DomainDto,
   type RuleDto,
-} from './dto.js';
+} from './decisions.queries.js';
 
 const MAX_ISSUE_CHARS = 300;
 
-/** Zod issues as {path, message}; values are never echoed (messages come from the schemas). */
 function invalidRule(issues: ErrorIssue[]): ApiError {
   return new ApiError(400, 'invalid_rule', undefined, { issues });
 }
 
-const ruleIssue = (path: string, message: string): ErrorIssue => ({ path, message });
-
 function parseRule<S extends z.ZodType>(schema: S, body: unknown): z.output<S> {
   const r = schema.safeParse(body ?? {});
-  if (!r.success) throw invalidRule(
-      r.error.issues.map((i) => ruleIssue(i.path.join('.'), i.message.slice(0, MAX_ISSUE_CHARS))),
+  if (!r.success)
+    throw invalidRule(
+      r.error.issues.map((i) => ({
+        path: i.path.join('.'),
+        message: i.message.slice(0, MAX_ISSUE_CHARS),
+      })),
     );
   return r.data;
 }
@@ -136,8 +137,7 @@ export class RulesService {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     const input = parseRule(ruleInputSchema, body);
     const problem = checkActionForConditions(input.conditions, input.action);
-    if (problem !== null)
-      throw invalidRule([ruleIssue('action', problem)]);
+    if (problem !== null) throw invalidRule([{ path: 'action', message: problem }]);
     try {
       const rule = await this.#write(org, 'rule.write', async (c) => {
         const created = await this.#store.create(c, scope, input);
@@ -173,9 +173,11 @@ export class RulesService {
     } catch (e) {
       // The store re-checks the merged rule: the stored conditions or the new action do not fit.
       if (e instanceof InvalidRuleActionError)
-        throw invalidRule([ruleIssue('action', 'This action is not allowed for this kind of rule.')]);
+        throw invalidRule([
+          { path: 'action', message: 'This action is not allowed for this kind of rule.' },
+        ]);
       if (e instanceof InvalidRuleConditionsError)
-        throw invalidRule([ruleIssue('conditions', 'The rule conditions are not valid.')]);
+        throw invalidRule([{ path: 'conditions', message: 'The rule conditions are not valid.' }]);
       throw e;
     }
     return this.#view(scope, ruleId);

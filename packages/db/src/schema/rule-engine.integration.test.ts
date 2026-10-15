@@ -297,10 +297,10 @@ describe('rule revision', () => {
     await changes('UPDATE rule SET priority = priority + 1 WHERE id = $1', [id]);
     await changes('UPDATE rule SET archived_at = now() WHERE id = $1', [id]);
     await changes('DELETE FROM rule WHERE id = $1', [id]);
-    await changes(`INSERT INTO brand_domain (organization_id, brand_id, domain) VALUES ($1, $2, 'rev.example')`, [
-      a.organizationId,
-      a.brandId,
-    ]);
+    await changes(
+      `INSERT INTO brand_domain (organization_id, brand_id, domain) VALUES ($1, $2, 'rev.example')`,
+      [a.organizationId, a.brandId],
+    );
     await changes(`DELETE FROM brand_domain WHERE brand_id = $1 AND domain = 'rev.example'`, [
       a.brandId,
     ]);

@@ -23,6 +23,7 @@ import { applyPlatformComment } from '../apply.js';
 import type { IngestObserver } from './ingest.js';
 import type { CommentAppliedHook } from '../hooks.js';
 import { deliverPendingHooks } from './pending-hooks.js';
+import type { Logger } from '@feedbouncer/service-runtime';
 import { POLL_JOB, type PollPayload } from './specs.js';
 
 export interface PollSettings {
@@ -55,6 +56,7 @@ export async function pollSource(
   ownAccountExternalId: string,
   s: DueSource,
   deadlineMs: number,
+  log: Logger,
 ): Promise<{
   result: 'done' | 'resume';
   created: number;
@@ -137,7 +139,12 @@ export async function pollSource(
           hookError ??= { error: err };
           await d.store
             .markHookFailed(scope, r.commentId, r.hookBody, new Date(d.clock.now()))
-            .catch(() => {});
+            .catch((markErr: unknown) =>
+              log.warn('ads.hook_mark_failed', {
+                commentId: r.commentId,
+                errorName: markErr instanceof Error ? markErr.name : 'unknown',
+              }),
+            );
         }
       }
       if (newest === null || c.postedAt > newest) newest = c.postedAt;
@@ -228,6 +235,7 @@ export function adPollJob(
             rec.externalAccountId,
             s,
             deadline,
+            ctx.log,
           );
           counts[r.result === 'done' ? 'done' : 'resumed']++;
           counts.created += r.created;

@@ -8,6 +8,7 @@
 // names or rule terms.
 import type { BrandScope, ModerationActions, PgCommentStore } from '@feedbouncer/comments';
 import type { JobDefinition, JobResult } from '@feedbouncer/jobs';
+import type { Platform } from '@feedbouncer/connectors';
 import type { Logger } from '@feedbouncer/service-runtime';
 import type { RuleSetCache } from '../cache.js';
 import { evaluate } from '../engine.js';
@@ -102,7 +103,7 @@ async function act(
   brand: BrandScope,
   ev: EvaluationRow,
   commentId: string,
-  platform: Parameters<typeof describeFallback>[3],
+  platform: Platform,
 ): Promise<JobResult> {
   const base = { result: ev.status, evaluationId: ev.id, outcome: ev.outcome };
   const outcome = ev.outcome;

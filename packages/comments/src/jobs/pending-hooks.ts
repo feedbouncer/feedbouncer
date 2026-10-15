@@ -32,7 +32,14 @@ export async function deliverPendingHooks(
       });
       await d.store.markHookDelivered(scope, p.commentId, p.body);
     } catch (err) {
-      await d.store.markHookFailed(scope, p.commentId, p.body, new Date(d.now())).catch(() => {});
+      await d.store
+        .markHookFailed(scope, p.commentId, p.body, new Date(d.now()))
+        .catch((markErr: unknown) =>
+          log.warn('comments.hook_mark_failed', {
+            commentId: p.commentId,
+            errorName: markErr instanceof Error ? markErr.name : 'unknown',
+          }),
+        );
       if (!p.attempted) failure ??= { error: err };
       else
         log.warn('comments.hook_redelivery_failed', {

@@ -1,6 +1,6 @@
 import type { LinkDomainConditions } from '../conditions.js';
 import { isUnder, SHORTENER_DOMAINS } from '../domains.js';
-import type { BrandContext, Evidence } from '../types.js';
+import type { BrandContext } from '../types.js';
 import type { Matcher } from './types.js';
 
 export function compileLinkRule(c: LinkDomainConditions, ctx: BrandContext): Matcher {
@@ -43,14 +43,8 @@ export function compileLinkRule(c: LinkDomainConditions, ctx: BrandContext): Mat
     if (v.linksTruncated && allowlist) {
       // Fail closed: later links were never examined, so none can be assumed allowed.
       // A blocklist rule only matches hosts it saw: guessing would act on harmless comments.
-      const first =
-        links.find((l) => !(isOwn(l.host) || (allowlist && under(l.host, c.domains)))) ?? links[0]!;
-      const evidence: Evidence = {
-        kind: 'link',
-        host: first.host,
-        reason: 'not_allowlisted',
-      };
-      return evidence;
+      const first = links.find((l) => !(isOwn(l.host) || under(l.host, c.domains))) ?? links[0]!;
+      return { kind: 'link', host: first.host, reason: 'not_allowlisted' };
     }
     return null;
   };

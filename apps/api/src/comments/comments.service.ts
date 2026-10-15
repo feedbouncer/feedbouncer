@@ -16,7 +16,11 @@ import type { AppDeps } from '../deps.js';
 import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
-import { listCommentDecisions, latestDecisions, type DecisionDto } from '../rules/dto.js';
+import {
+  listCommentDecisions,
+  latestDecisions,
+  type DecisionDto,
+} from '../rules/decisions.queries.js';
 import { COMMENTS, DEPS } from '../tokens.js';
 
 export interface CommentView {

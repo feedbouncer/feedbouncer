@@ -37,8 +37,8 @@ is empty) is flagged in the list.
   count once.
 - **Authors:** block, allow or trusted lists. An author ID is matched before a
   handle, so renames do not bypass the list.
-- **Competitors:** names, @handles and domains, each with its own action and
-  its own reporting in rule activity.
+- **Competitors:** names, @handles and domains, matched by one rule with a
+  single action. The evidence of a decision records which of the three matched.
 
 ## Own domains
 

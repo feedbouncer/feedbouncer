@@ -134,17 +134,7 @@ export function evaluate(
   const limitMs = opts.ruleBudgetMs ?? RULE_BUDGET_MS;
   const trace: TraceEntry[] = [];
   const suggestions: RuleHit[] = [];
-  let view: CommentView;
-  try {
-    view = new CommentView(facts);
-  } catch (err) {
-    // Never throw out of evaluate(): report against every rule and decide nothing.
-    for (const r of set.rules) {
-      safeReport(opts.onRuleError, r.id, err);
-      trace.push({ ruleId: r.id, mode: r.mode, result: 'skipped', skipReason: 'error' });
-    }
-    return { decided: null, suggestions, trace };
-  }
+  const view = new CommentView(facts);
   for (const r of set.rules) {
     let res: ReturnType<Matcher>;
     try {

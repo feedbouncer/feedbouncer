@@ -70,8 +70,8 @@ export const hideComment = (runtime: ConnectorRuntime): JobDefinition<z.infer<ty
 continues itself in a new segment before its timeout. See
 [backfill.md](../connectors/backfill.md).
 
-| Type            | Platforms | Payload                              | `externalRef`         | Timeout |
-| --------------- | --------- | ------------------------------------ | --------------------- | ------- |
+| Type            | Platforms | Payload                              | `externalRef`              | Timeout |
+| --------------- | --------- | ------------------------------------ | -------------------------- | ------- |
 | `rule_evaluate` | all       | `{ commentId, bodySha256, trigger }` | `<commentId>:<sha[0..32]>` | 30 s    |
 
 `rule_evaluate` applies a brand's moderation rules to one version of a comment's
