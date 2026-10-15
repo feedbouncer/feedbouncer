@@ -39,3 +39,39 @@ it('is per platform and ignores missing authors', () => {
   expect(m(view('178', null, 'facebook'), b)).toBeNull();
   expect(m(view(null, null), b)).toBeNull();
 });
+
+const trusted = compileAuthorRule(
+  authorConditions.parse({
+    type: 'author',
+    list: 'trusted',
+    platform: 'instagram',
+    entries: [{ externalId: '42', handle: 'the_owner' }],
+  }),
+);
+it('trusted/allow lists match only the stable id, never a display name', () => {
+  expect(trusted(view('42', 'anything'), b)).toEqual({
+    kind: 'author',
+    list: 'trusted',
+    matchedOn: 'id',
+  });
+  expect(trusted(view('999', 'the_owner'), b)).toBeNull();
+  expect(trusted(view('999', '@The_Owner'), b)).toBeNull();
+  expect(trusted(view('42', 'x', 'facebook'), b)).toBeNull();
+});
+it('a null or empty author id never matches', () => {
+  expect(trusted(view(null, 'the_owner'), b)).toBeNull();
+  expect(trusted(view('', 'the_owner'), b)).toBeNull();
+  expect(m(view('', null), b)).toBeNull();
+});
+it('allow/trusted entries without an id are rejected', () => {
+  for (const list of ['allow', 'trusted']) {
+    const r = authorConditions.safeParse({
+      type: 'author',
+      list,
+      platform: 'instagram',
+      entries: [{ externalId: '1' }, { handle: 'owner' }],
+    });
+    expect(r.success).toBe(false);
+    expect(JSON.stringify(r.error?.issues)).toMatch(/need the author's ID/);
+  }
+});

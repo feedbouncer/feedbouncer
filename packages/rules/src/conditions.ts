@@ -110,24 +110,38 @@ export const emojiConditions = z
   .refine((c) => c.emoji.length > 0 || c.maxCount !== null, {
     message: 'List at least one emoji or set a maximum count.',
   });
-export const authorConditions = z.strictObject({
-  type: z.literal('author'),
-  list: z.enum(['block', 'allow', 'trusted']),
-  platform: z.enum(PLATFORMS),
-  entries: z
-    .array(
-      z
-        .strictObject({
-          externalId: z.string().trim().min(1).max(L.idChars).optional(),
-          handle: handle.optional(),
-        })
-        .refine((e) => e.externalId !== undefined || e.handle !== undefined, {
-          message: 'Give an author ID or a handle.',
-        }),
-    )
-    .min(1)
-    .max(L.authorEntries),
-});
+export const authorConditions = z
+  .strictObject({
+    type: z.literal('author'),
+    list: z.enum(['block', 'allow', 'trusted']),
+    platform: z.enum(PLATFORMS),
+    entries: z
+      .array(
+        z
+          .strictObject({
+            externalId: z.string().trim().min(1).max(L.idChars).optional(),
+            handle: handle.optional(),
+          })
+          .refine((e) => e.externalId !== undefined || e.handle !== undefined, {
+            message: 'Give an author ID or a handle.',
+          }),
+      )
+      .min(1)
+      .max(L.authorEntries),
+  })
+  .superRefine((c, ctx) => {
+    // Display names are attacker-controlled: allow/trusted lists exempt a comment from
+    // later rules, so they may only be keyed on the stable platform ID.
+    if (c.list === 'block') return;
+    c.entries.forEach((e, i) => {
+      if (e.externalId === undefined)
+        ctx.addIssue({
+          code: 'custom',
+          path: ['entries', i],
+          message: "Allow and trusted lists need the author's ID; handles can be impersonated.",
+        });
+    });
+  });
 export const competitorConditions = z
   .strictObject({
     type: z.literal('competitor'),

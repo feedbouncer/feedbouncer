@@ -17,3 +17,22 @@ export { compileEmojiRule } from './matchers/emoji.js';
 export { compileAuthorRule } from './matchers/author.js';
 export { compileCompetitorRule } from './matchers/competitor.js';
 export { emojiGraphemes, emojiKey, isSingleEmoji } from './emoji.js';
+export {
+  CONDITION_LIMITS,
+  checkActionForConditions,
+  ruleConditionsSchema,
+  ruleInputSchema,
+  rulePatchSchema,
+  type RuleConditions,
+  type RuleInput,
+  type RulePatch,
+} from './conditions.js';
+export { normalizeDomainEntry } from './domains.js';
+export {
+  RULE_BUDGET_MS,
+  compileRuleSet,
+  evaluate,
+  type CompiledRule,
+  type CompiledRuleSet,
+} from './engine.js';
+export { describeDecision, describeFallback } from './reason.js';
