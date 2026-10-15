@@ -314,6 +314,17 @@ describe('PgRuleStore version and loadActive', () => {
     await step(() => tx((c) => store.archive(c, scope, a.id)));
   });
 
+  it('moves on edits that restore the previous content, even within one transaction', async () => {
+    const { scope } = await fresh();
+    const a = await tx((c) => store.create(c, scope, kw('same')));
+    const before = await store.version(scope);
+    await tx(async (c) => {
+      await store.update(c, scope, a.id, { name: 'other' });
+      await store.update(c, scope, a.id, { name: 'same' });
+    });
+    expect(await store.version(scope)).not.toBe(before);
+  });
+
   it('loads only enabled, non-archived rules plus own domains', async () => {
     const { scope } = await fresh();
     const on = await tx((c) => store.create(c, scope, kw('on')));

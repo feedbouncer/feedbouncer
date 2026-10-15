@@ -47,19 +47,9 @@ export class DomainLimitError extends Error {
 const COLS = `id, name, kind, conditions, action, mode, enabled, priority, created_at, updated_at`;
 const ORDER = `ORDER BY priority, created_at, id`;
 
-/**
- * Change token. The rule part hashes the full text of every non-archived row
- * (so any edit, enable/disable or reorder changes it regardless of timestamp
- * resolution) plus the count of archived rows (archiving removes a row from
- * the hash and adds to the count). Own domains are hashed by id set.
- */
-const VERSION_SQL = `SELECT
-    (SELECT count(*) FILTER (WHERE archived_at IS NOT NULL) || ':'
-         || COALESCE(md5(string_agg(r::text, '|' ORDER BY r.id) FILTER (WHERE archived_at IS NULL)), '-')
-       FROM rule r WHERE organization_id = $1 AND brand_id = $2)
-    || '|' ||
-    (SELECT count(*) || ':' || COALESCE(md5(string_agg(id::text, ',' ORDER BY id)), '-')
-       FROM brand_domain WHERE organization_id = $1 AND brand_id = $2) AS v`;
+/** Per-brand revision counter, bumped by database triggers on every rule and own-domain write. */
+const VERSION_SQL = `SELECT rule_revision::text AS v FROM brand WHERE organization_id = $1 AND id = $2`;
+const NO_BRAND_VERSION = '-';
 
 const isPinned = (conditions: unknown): boolean => {
   const c = conditions as { type?: unknown; list?: unknown } | null;
@@ -177,6 +167,8 @@ export class PgRuleStore {
     ruleId: string,
     patch: RulePatch,
   ): Promise<StoredRule | null> {
+    // Brand first, like every other writer, so concurrent writes cannot deadlock on the revision bump.
+    if (!(await this.#lockBrand(tx, scope))) return null;
     const { rows: cur } = await tx.query<RuleRow>(
       `SELECT ${COLS} FROM rule
         WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND archived_at IS NULL
@@ -216,6 +208,7 @@ export class PgRuleStore {
 
   /** Delete is archive: decisions keep citing the rule. */
   async archive(tx: pg.PoolClient, scope: BrandScope, ruleId: string): Promise<boolean> {
+    if (!(await this.#lockBrand(tx, scope))) return false;
     const { rowCount } = await tx.query(
       `UPDATE rule SET archived_at = now(), enabled = false
         WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND archived_at IS NULL`,
@@ -289,6 +282,7 @@ export class PgRuleStore {
   }
 
   async removeDomain(tx: pg.PoolClient, scope: BrandScope, domainId: string): Promise<boolean> {
+    if (!(await this.#lockBrand(tx, scope))) return false;
     const { rowCount } = await tx.query(
       `DELETE FROM brand_domain WHERE organization_id = $1 AND brand_id = $2 AND id = $3`,
       [scope.organizationId, scope.brandId, domainId],
@@ -296,13 +290,13 @@ export class PgRuleStore {
     return (rowCount ?? 0) > 0;
   }
 
-  /** Cheap change token; see VERSION_SQL. */
+  /** Changes whenever the brand's rules or own domains are written. */
   async version(scope: BrandScope): Promise<string> {
     const { rows } = await this.#pool.query<{ v: string }>(VERSION_SQL, [
       scope.organizationId,
       scope.brandId,
     ]);
-    return rows[0]!.v;
+    return rows[0]?.v ?? NO_BRAND_VERSION;
   }
 
   async loadActive(
@@ -324,7 +318,7 @@ export class PgRuleStore {
       );
       await c.query('COMMIT');
       return {
-        version: v.rows[0]!.v,
+        version: v.rows[0]?.v ?? NO_BRAND_VERSION,
         records: inEngineOrder(rules.rows).map((r) => ({
           id: r.id,
           name: r.name,

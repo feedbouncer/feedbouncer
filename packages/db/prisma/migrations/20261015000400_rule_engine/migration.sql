@@ -10,6 +10,21 @@ ALTER TABLE rule
     kind IS NULL OR kind IN ('keyword', 'regex', 'link_domain', 'emoji', 'author', 'competitor'));
 CREATE INDEX rule_brand_id_priority_idx ON rule (brand_id, priority) WHERE archived_at IS NULL;
 
+-- Bumped on every change to a brand's rules or own domains so rule-set caches
+-- can validate with a single-row read. Writers lock the brand row first.
+ALTER TABLE brand ADD COLUMN rule_revision bigint NOT NULL DEFAULT 0;
+
+CREATE FUNCTION fb_bump_rule_revision() RETURNS trigger LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+  UPDATE public.brand SET rule_revision = rule_revision + 1
+   WHERE id = COALESCE(NEW.brand_id, OLD.brand_id);
+  RETURN NULL;
+END
+$$;
+CREATE TRIGGER rule_bump_revision_trg AFTER INSERT OR UPDATE OR DELETE ON rule
+  FOR EACH ROW EXECUTE FUNCTION fb_bump_rule_revision();
+
 CREATE TABLE brand_domain (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL,
@@ -28,6 +43,8 @@ CREATE TABLE brand_domain (
 CREATE INDEX brand_domain_organization_id_brand_id_idx ON brand_domain (organization_id, brand_id);
 CREATE TRIGGER brand_domain_set_updated_at_trg BEFORE UPDATE ON brand_domain
   FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
+CREATE TRIGGER brand_domain_bump_revision_trg AFTER INSERT OR UPDATE OR DELETE ON brand_domain
+  FOR EACH ROW EXECUTE FUNCTION fb_bump_rule_revision();
 
 -- One row per (comment, body version, trigger): the durable idempotency guard
 -- for rule evaluation.

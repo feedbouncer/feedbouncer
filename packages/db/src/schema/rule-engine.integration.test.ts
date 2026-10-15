@@ -276,3 +276,33 @@ describe('decisions keep naming the rule', () => {
     await c.query('UPDATE rule SET archived_at = NULL WHERE id = $1', [a.ruleId]);
   });
 });
+
+describe('rule revision', () => {
+  const revision = async () =>
+    (
+      await c.query<{ r: string }>('SELECT rule_revision::text AS r FROM brand WHERE id = $1', [
+        a.brandId,
+      ])
+    ).rows[0]!.r;
+  const changes = async (sql: string, params: unknown[] = []) => {
+    const before = await revision();
+    await c.query(sql, params);
+    expect(await revision()).not.toBe(before);
+  };
+
+  it('moves on every rule and own-domain write', async () => {
+    const id = await rule(a, { type: 'keyword', terms: ['x'] });
+    await changes('UPDATE rule SET name = $2 WHERE id = $1', [id, 'edited']);
+    await changes('UPDATE rule SET enabled = false WHERE id = $1', [id]);
+    await changes('UPDATE rule SET priority = priority + 1 WHERE id = $1', [id]);
+    await changes('UPDATE rule SET archived_at = now() WHERE id = $1', [id]);
+    await changes('DELETE FROM rule WHERE id = $1', [id]);
+    await changes(`INSERT INTO brand_domain (organization_id, brand_id, domain) VALUES ($1, $2, 'rev.example')`, [
+      a.organizationId,
+      a.brandId,
+    ]);
+    await changes(`DELETE FROM brand_domain WHERE brand_id = $1 AND domain = 'rev.example'`, [
+      a.brandId,
+    ]);
+  });
+});

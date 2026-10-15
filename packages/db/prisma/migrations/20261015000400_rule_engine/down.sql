@@ -5,5 +5,8 @@ ALTER TABLE decision DROP CONSTRAINT decision_brand_id_rule_evaluation_id_fkey, 
 DROP TABLE rule_evaluation;
 DROP FUNCTION fb_rule_evaluation_guard();
 DROP TABLE brand_domain;
+DROP TRIGGER rule_bump_revision_trg ON rule;
+DROP FUNCTION fb_bump_rule_revision();
+ALTER TABLE brand DROP COLUMN rule_revision;
 DROP INDEX rule_brand_id_priority_idx;
 ALTER TABLE rule DROP CONSTRAINT rule_kind_check, DROP COLUMN archived_at, DROP COLUMN kind;

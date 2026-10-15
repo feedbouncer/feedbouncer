@@ -12,9 +12,8 @@ interface Entry {
 }
 
 /**
- * Per-brand cache of compiled rule sets, validated against the store's cheap
- * `version()` on every get. Entries also expire after 60 s so a (theoretical)
- * version collision cannot serve a stale set for long.
+ * Per-brand cache of compiled rule sets, validated against the store's
+ * revision counter on every get. Entries also expire after 60 s as a backstop.
  */
 export class RuleSetCache {
   readonly #store: Pick<PgRuleStore, 'version' | 'loadActive'>;
