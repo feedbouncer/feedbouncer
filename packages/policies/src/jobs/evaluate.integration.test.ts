@@ -24,7 +24,7 @@ import {
   scopeOf,
   seedCommentRow,
   type Seeded,
-} from '@feedbouncer/classifier/testing';
+} from '@feedbouncer/rules/testing';
 import { DisabledPolicyEvaluator, type PolicyEvaluator } from '../evaluator.js';
 import { PgPolicyEvaluationStore } from '../evaluations.js';
 import { PgPolicyStore, type StoredPolicy } from '../store.js';

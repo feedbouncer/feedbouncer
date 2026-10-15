@@ -4,7 +4,7 @@ import type pg from 'pg';
 import { createPool, withTransaction } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { PgEvaluationStore, bodySha256 } from '@feedbouncer/rules';
-import { evaluateRulesFor, scopeOf, seedCommentRow } from '@feedbouncer/classifier/testing';
+import { evaluateRulesFor, scopeOf, seedCommentRow } from '@feedbouncer/rules/testing';
 import { createLogger } from '@feedbouncer/service-runtime';
 import { decidePolicies } from './decide.js';
 import { PgPolicyEvaluationStore } from './evaluations.js';

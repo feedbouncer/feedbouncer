@@ -16,7 +16,7 @@ import {
   fakeJobContext,
   seedCommentRow,
   type Seeded,
-} from '../testing.js';
+} from '@feedbouncer/rules/testing';
 import { ZERO_SCORES } from '../defaults.js';
 import { DisabledProvider, type ClassifierProvider, type RawClassification } from '../provider.js';
 import { PgClassificationStore } from '../store.js';

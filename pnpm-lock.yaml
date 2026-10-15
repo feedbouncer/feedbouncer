@@ -693,9 +693,6 @@ importers:
       '@feedbouncer/ai':
         specifier: workspace:*
         version: link:../ai
-      '@feedbouncer/classifier':
-        specifier: workspace:*
-        version: link:../classifier
       '@feedbouncer/comments':
         specifier: workspace:*
         version: link:../comments
@@ -724,6 +721,9 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
+      '@feedbouncer/classifier':
+        specifier: workspace:*
+        version: link:../classifier
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6

@@ -1,9 +1,10 @@
-// Shared integration-test helpers for classifier-style jobs: comment and rule-evaluation seeding and a fake JobContext.
+// Integration-test helpers: comment and rule-evaluation seeding and a fake JobContext shared by the classifier and policies suites.
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import type { Tenant } from '@feedbouncer/db/testing';
 import type { JobContext } from '@feedbouncer/jobs';
-import { bodySha256, type PgEvaluationStore } from '@feedbouncer/rules';
+import { bodySha256 } from './jobs/specs.js';
+import type { PgEvaluationStore } from './evaluations.js';
 import type { Logger } from '@feedbouncer/service-runtime';
 
 export interface Seeded {

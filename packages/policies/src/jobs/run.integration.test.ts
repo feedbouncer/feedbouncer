@@ -12,7 +12,7 @@ import {
   fakeJobContext,
   seedCommentRow,
   type Seeded,
-} from '@feedbouncer/classifier/testing';
+} from '@feedbouncer/rules/testing';
 import { PgPolicyStore, type StoredPolicy } from '../store.js';
 import { RUN_MAX_COMMENTS_PER_CONNECTION } from '../types.js';
 import { recentUndecidedComments } from '../candidates.js';
