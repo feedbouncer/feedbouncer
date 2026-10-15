@@ -3,10 +3,13 @@ import { notFound } from 'next/navigation';
 import { CommentActions } from '../../../../../../components/comment-actions';
 import { CommentBody } from '../../../../../../components/comment-body';
 import { CommentLinks } from '../../../../../../components/comment-links';
+import { DecisionBadge } from '../../../../../../components/rules/decision-badge';
+import { DecisionHistory } from '../../../../../../components/rules/decision-history';
 import { adBadgeTitle } from '../../../../../../lib/ads';
 import { formatUtc } from '../../../../../../lib/format';
 import { isUuid } from '../../../../../../lib/ids';
 import type { Availability, ReplyLimits } from '../../../../../../lib/moderation';
+import type { DecisionView } from '../../../../../../lib/rules';
 import { dataOrThrow, requireMe, serverGet } from '../../../../../../lib/server-api';
 
 interface Comment {
@@ -25,6 +28,7 @@ interface Comment {
   /** Computed by the API with the same rules it applies to a request. */
   availability: Availability;
   replyLimits: ReplyLimits;
+  latestDecision: DecisionView | null;
 }
 
 const PAGE_SIZE = 50;
@@ -95,6 +99,12 @@ export default async function CommentsPage({
                   <span title={c.ads[0] ? adBadgeTitle(c.ads[0]) : undefined}>Ad</span>
                 </>
               ) : null}
+              {c.latestDecision ? (
+                <>
+                  {' · '}
+                  <DecisionBadge decision={c.latestDecision} />
+                </>
+              ) : null}
             </p>
             {c.parentCommentId ? <p>Reply to another comment</p> : null}
             <CommentBody body={c.body} />
@@ -103,6 +113,9 @@ export default async function CommentsPage({
               permalink={c.permalink}
               mediaExternalId={c.mediaExternalId}
             />
+            {c.latestDecision ? (
+              <DecisionHistory orgId={orgId} brandId={brandId} commentId={c.id} />
+            ) : null}
             <CommentActions
               orgId={orgId}
               brandId={brandId}

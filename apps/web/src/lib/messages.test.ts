@@ -23,6 +23,13 @@ describe('messageFor', () => {
     'denied',
     'missing_permissions',
     'oauth_rejected',
+    'invalid_rule',
+    'rule_limit_reached',
+    'rule_order_mismatch',
+    'invalid_domain',
+    'domain_exists',
+    'domain_limit_reached',
+    'invalid_cursor',
   ])('has a specific message for %s', (code) => {
     expect(messageFor(code)).not.toBe(FALLBACK);
   });
