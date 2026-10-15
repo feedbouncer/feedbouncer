@@ -61,3 +61,4 @@ export { RULE_EVALUATE_JOB, RuleEvaluatePayload, bodySha256 } from './jobs/specs
 export { ruleEvaluateJob } from './jobs/evaluate.js';
 export { RuleActionFallback } from './fallback.js';
 export { RuleTrigger } from './trigger.js';
+export type { RuleEvaluatedHook } from './hooks.js';

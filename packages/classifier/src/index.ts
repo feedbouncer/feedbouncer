@@ -10,3 +10,5 @@ export * from './llm-provider.js';
 export * from './thresholds-store.js';
 export * from './store.js';
 export * from './slots.js';
+export * from './jobs/specs.js';
+export * from './trigger.js';

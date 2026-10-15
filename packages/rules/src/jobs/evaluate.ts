@@ -13,6 +13,7 @@ import type { Logger } from '@feedbouncer/service-runtime';
 import type { RuleSetCache } from '../cache.js';
 import { evaluate } from '../engine.js';
 import type { EvaluationRow, PgEvaluationStore } from '../evaluations.js';
+import type { RuleEvaluatedHook } from '../hooks.js';
 import { describeFallback } from '../reason.js';
 import { RULE_EVALUATE_JOB, bodySha256, type RuleEvaluatePayload } from './specs.js';
 
@@ -28,6 +29,7 @@ export function ruleEvaluateJob(d: {
   actions: Pick<ModerationActions, 'request'>;
   log: Logger;
   clock?: { now(): number };
+  evaluated?: RuleEvaluatedHook;
 }): JobDefinition<RuleEvaluatePayload> {
   return {
     ...RULE_EVALUATE_JOB,
@@ -93,7 +95,19 @@ export function ruleEvaluateJob(d: {
           (await d.evaluations.find(brand, p.commentId, sha, p.trigger));
         if (!ev) throw new Error('rule evaluation was neither recorded nor found');
       }
-      return act(d, brand, ev, p.commentId, row.platform);
+      const res = await act(d, brand, ev, p.commentId, row.platform);
+      // After act(): a throw here retries the job; record and act are idempotent
+      // (unique evaluation, requestKey), so the rule action is never delayed.
+      if (d.evaluated && (ev.status === 'no_match' || ev.status === 'decided'))
+        await d.evaluated.onEvaluated({
+          scope: ctx.scope,
+          platform: row.platform,
+          commentId: p.commentId,
+          bodySha256: p.bodySha256,
+          evaluationId: ev.id,
+          status: ev.status,
+        });
+      return res;
     },
   };
 }
