@@ -13,6 +13,7 @@
     { "path": "packages/rules" },
     { "path": "packages/ai" },
     { "path": "packages/classifier" },
+    { "path": "packages/policies" },
     { "path": "packages/observability" },
     { "path": "apps/placeholder-app" },
     { "path": "apps/api" },
