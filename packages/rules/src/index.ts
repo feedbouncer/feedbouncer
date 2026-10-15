@@ -48,3 +48,13 @@ export {
   type StoredRule,
 } from './store.js';
 export { RuleSetCache } from './cache.js';
+export {
+  PgEvaluationStore,
+  safeFallbackCode,
+  type EvaluationRecord,
+  type EvaluationRow,
+  type EvaluationStatus,
+} from './evaluations.js';
+export { RULE_EVALUATE_JOB, RuleEvaluatePayload, bodySha256 } from './jobs/specs.js';
+export { ruleEvaluateJob } from './jobs/evaluate.js';
+export { RuleTrigger } from './trigger.js';

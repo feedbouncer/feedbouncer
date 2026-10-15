@@ -61,6 +61,8 @@ export interface CommentCursor {
 
 /** Postgres text cannot hold NUL; same replacement as the connector boundary. */
 const noNul = (s: string): string => s.replaceAll('\u0000', '�');
+/** A comment body exactly as the store saves it (what `CommentRow.body` returns). Idempotent. */
+export const storedCommentBody = noNul;
 const outOfScope = () => new Error('comment store: connection is not in the given scope');
 
 /** Over `comment c`: true when the comment came through an ad. */

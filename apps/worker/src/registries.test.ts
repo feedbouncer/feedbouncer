@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as comments from '@feedbouncer/comments';
+import { RuleTrigger } from '@feedbouncer/rules';
 import type { FacebookConfig } from '@feedbouncer/connector-facebook';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { buildConnectorRegistry, buildJobRegistry, type WorkerJobDeps } from './registries.js';
@@ -14,7 +15,12 @@ const cfg: FacebookConfig = {
 // Spy on executeActionJob while keeping the real implementation.
 vi.mock('@feedbouncer/comments', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@feedbouncer/comments')>();
-  return { ...actual, executeActionJob: vi.fn(actual.executeActionJob) };
+  return {
+    ...actual,
+    executeActionJob: vi.fn(actual.executeActionJob),
+    ingestCommentJob: vi.fn(actual.ingestCommentJob),
+    adPollJob: vi.fn(actual.adPollJob),
+  };
 });
 
 const producer = { enqueue: vi.fn() };
@@ -25,6 +31,7 @@ const fakeDeps = {
   store: {},
   pool: {},
   clock: { now: () => 0 },
+  capabilities: () => undefined,
   log: createLogger('test', 'error', () => {}),
   ingestObserver: { onIngested: () => {} },
 } as unknown as WorkerJobDeps;
@@ -97,5 +104,22 @@ describe('connection_backfill', () => {
     expect(jobs.supports('connection_backfill', 'facebook')).toBe(true);
     expect(jobs.supports('connection_backfill', 'instagram')).toBe(true);
     expect(jobs.supports('connection_backfill', 'meta_ads')).toBe(false);
+  });
+});
+
+describe('rule engine wiring', () => {
+  it('registers rule_evaluate for every platform', () => {
+    const jobs = buildJobRegistry(fakeDeps);
+    for (const p of ['facebook', 'instagram', 'meta_ads'] as const)
+      expect(jobs.supports('rule_evaluate', p)).toBe(true);
+  });
+  it('passes one RuleTrigger as the applied hook to ingest and ad polling', () => {
+    vi.mocked(comments.ingestCommentJob).mockClear();
+    vi.mocked(comments.adPollJob).mockClear();
+    buildJobRegistry({ ...fakeDeps, ads: { poll: { intervalSec: 300 } as comments.PollSettings } });
+    const ingest = vi.mocked(comments.ingestCommentJob).mock.calls[0]?.[0];
+    const poll = vi.mocked(comments.adPollJob).mock.calls[0]?.[0];
+    expect(ingest?.applied).toBeInstanceOf(RuleTrigger);
+    expect(poll?.applied).toBe(ingest?.applied);
   });
 });

@@ -248,6 +248,7 @@ services:
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
       - ./packages/observability/src:/repo/packages/observability/src:ro
+      - ./packages/rules/src:/repo/packages/rules/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro
       - ./packages/secrets/src:/repo/packages/secrets/src:ro

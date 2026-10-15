@@ -24,6 +24,7 @@
     "@feedbouncer/jobs": "workspace:*",
     "@feedbouncer/mailer": "workspace:*",
     "@feedbouncer/observability": "workspace:*",
+    "@feedbouncer/rules": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
     "bullmq": "6.3.12",

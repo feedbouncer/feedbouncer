@@ -137,6 +137,7 @@ try {
       ingestObserver: promIngestObserver(telemetry.metrics),
       // The producer needs the job registry built here, so it is reached lazily.
       producer: { enqueue: (input) => producer.enqueue(input) },
+      capabilities: (p) => connectors.get(p)?.capabilities,
       ...(env.adPolling ? { ads: { poll: env.adPolling.poll } } : {}),
     });
     if (env.adPolling) {
