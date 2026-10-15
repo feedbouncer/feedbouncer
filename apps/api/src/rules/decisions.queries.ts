@@ -1,4 +1,5 @@
 import type pg from 'pg';
+import type { Category, Downgrade, Trigger } from '@feedbouncer/classifier';
 import type { RuleAction, RuleKind, RuleMode } from '@feedbouncer/rules';
 import type { BrandScope } from '../tenancy/brand-scope.js';
 
@@ -13,6 +14,18 @@ export interface DecisionDto {
   /** True when this is the flag a rule's failed or deferred action fell back to. */
   fallback: boolean;
   action: { kind: string; status: string; outcomeCode: string | null } | null;
+  /** The classifier's evidence for a classifier decision; null for rules and people. */
+  classifier: {
+    category: Category;
+    score: number;
+    threshold: number;
+    provider: string | null;
+    model: string | null;
+    triggers: Trigger[];
+    downgraded: Downgrade | null;
+    /** An earlier hide lifted because a re-score fell below the threshold. */
+    reversal: boolean;
+  } | null;
 }
 
 export interface ActivityItem extends DecisionDto {
@@ -39,28 +52,65 @@ interface DecisionRow {
   action_kind: string | null;
   action_status: string | null;
   action_outcome_code: string | null;
+  classification_id: string | null;
+  category: Category | null;
+  confidence: string | null;
+  threshold: string | null;
+  classifier_provider: string | null;
+  classifier_model: string | null;
+  triggers: Trigger[] | null;
+  downgraded: Downgrade | null;
 }
 
-// Rules and actions are joined on the decision's own organization and brand. The
-// action is the platform call of the evaluation (request_key rule-eval:<id>); it
-// belongs to the enforced decisions only, not to dry-run suggestions.
+// Rules, classifications and actions are joined on the decision's own organization
+// and brand. The action is the platform call of the decision: a rule evaluation
+// (request_key rule-eval:<id>) or a classification (clf:<id>, clf:<id>:unhide for a
+// reversal); it belongs to the enforced decisions only, not to dry-run suggestions.
 const DECISION_FROM = `
   FROM decision d
   LEFT JOIN rule r ON r.organization_id = d.organization_id AND r.brand_id = d.brand_id
                   AND r.id = d.rule_id
   LEFT JOIN rule_evaluation e ON e.organization_id = d.organization_id AND e.brand_id = d.brand_id
                              AND e.id = d.rule_evaluation_id
+  LEFT JOIN comment_classification cc ON cc.organization_id = d.organization_id
+                                     AND cc.brand_id = d.brand_id AND cc.id = d.classification_id
   LEFT JOIN moderation_action a ON a.organization_id = d.organization_id AND a.brand_id = d.brand_id
                                AND d.mode = 'enforce'
-                               AND a.request_key = 'rule-eval:' || d.rule_evaluation_id`;
+                               AND a.request_key = CASE
+                                 WHEN d.actor_type = 'rule' THEN 'rule-eval:' || d.rule_evaluation_id
+                                 WHEN d.actor_type = 'classifier' AND d.outcome = 'approve'
+                                   THEN 'clf:' || d.classification_id || ':unhide'
+                                 WHEN d.actor_type = 'classifier' THEN 'clf:' || d.classification_id
+                               END`;
 
 const DECISION_COLUMNS = `
   d.id, d.sequence::text AS sequence, d.comment_id, d.outcome, d.mode, d.actor_type, d.reason,
   d.created_at, d.rule_id, r.name AS rule_name, r.kind AS rule_kind,
   (r.archived_at IS NOT NULL) AS rule_archived,
   COALESCE(d.mode = 'enforce' AND d.outcome = 'flag' AND d.rule_id = e.matched_rule_id
-           AND e.outcome <> 'flag', false) AS fallback,
-  a.kind AS action_kind, a.status AS action_status, a.outcome_code AS action_outcome_code`;
+           AND e.outcome <> 'flag', false)
+  OR COALESCE(d.actor_type = 'classifier' AND d.outcome = 'flag' AND cc.fallback_at IS NOT NULL
+              AND d.created_at >= cc.fallback_at, false) AS fallback,
+  a.kind AS action_kind, a.status AS action_status, a.outcome_code AS action_outcome_code,
+  d.classification_id, d.category, d.confidence::text AS confidence, d.threshold::text AS threshold,
+  d.classifier_provider, d.classifier_model, cc.triggers, cc.downgraded`;
+
+function toClassifier(r: DecisionRow): DecisionDto['classifier'] {
+  if (r.actor_type !== 'classifier' || r.classification_id === null) return null;
+  if (r.category === null || r.confidence === null || r.threshold === null) return null;
+  const score = Number(r.confidence);
+  const threshold = Number(r.threshold);
+  return {
+    category: r.category,
+    score,
+    threshold,
+    provider: r.classifier_provider,
+    model: r.classifier_model,
+    triggers: r.triggers ?? [],
+    downgraded: r.downgraded,
+    reversal: r.outcome === 'approve' && score < threshold,
+  };
+}
 
 const toDecision = (r: DecisionRow): DecisionDto => ({
   id: r.id,
@@ -78,6 +128,7 @@ const toDecision = (r: DecisionRow): DecisionDto => ({
     r.action_kind !== null && r.action_status !== null
       ? { kind: r.action_kind, status: r.action_status, outcomeCode: r.action_outcome_code }
       : null,
+  classifier: toClassifier(r),
 });
 
 /** All decisions on one comment, newest first. */
@@ -118,12 +169,15 @@ export interface ActivityQuery {
   kind?: RuleKind | undefined;
   outcome?: RuleAction | undefined;
   mode?: RuleMode | undefined;
+  /** Only decisions of this actor; both rules and the classifier when absent. */
+  source?: 'rule' | 'classifier' | undefined;
+  category?: Category | undefined;
   /** Decision sequence: only older decisions are returned. */
   before?: string | undefined;
   limit: number;
 }
 
-/** Rule decisions of a brand, newest first. Returns one row more than `limit` when there is a next page. */
+/** Rule and classifier decisions of a brand, newest first. Returns one row more than `limit` when there is a next page. */
 export async function listActivity(
   pool: pg.Pool,
   scope: BrandScope,
@@ -135,12 +189,13 @@ export async function listActivity(
                      AND c.id = d.comment_id
        JOIN connection cn ON cn.organization_id = c.organization_id AND cn.brand_id = c.brand_id
                          AND cn.id = c.connection_id
-      WHERE d.organization_id = $1 AND d.brand_id = $2 AND d.actor_type = 'rule'
+      WHERE d.organization_id = $1 AND d.brand_id = $2 AND d.actor_type = ANY($9::text[])
         AND ($3::uuid IS NULL OR d.rule_id = $3)
         AND ($4::text IS NULL OR r.kind = $4)
         AND ($5::text IS NULL OR d.outcome = $5)
         AND ($6::text IS NULL OR d.mode = $6)
         AND ($7::bigint IS NULL OR d.sequence < $7)
+        AND ($10::text IS NULL OR d.category = $10)
       ORDER BY d.sequence DESC LIMIT $8`,
     [
       scope.organizationId,
@@ -151,6 +206,8 @@ export async function listActivity(
       q.mode ?? null,
       q.before ?? null,
       q.limit + 1,
+      q.source ? [q.source] : ['rule', 'classifier'],
+      q.category ?? null,
     ],
   );
   return rows.map((r) => ({

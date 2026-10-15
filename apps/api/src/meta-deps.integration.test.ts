@@ -26,6 +26,23 @@ beforeAll(async () => {
 afterAll(() => api.close());
 
 describe('buildMetaDeps job registry', () => {
+  // First: the platform queue must still be untouched when this job is enqueued.
+  it('enqueues classifier_rerun on its lane queue, not the platform queue', async () => {
+    const { scope } = await seedLaneConnection();
+    const prefix = api.deps.env.jobs.prefix;
+    const r = await api.deps.producer!.enqueue({
+      scope,
+      platform: 'facebook',
+      type: 'classifier_rerun',
+      payload: { runId: randomUUID(), since: Date.now() - 86_400_000 },
+    });
+    expect(r.status).toBe('enqueued');
+    const redis = api.deps.redis;
+    const lane = await redis.keys(`${prefix}:lane-classify-facebook:*`);
+    expect(lane.length).toBeGreaterThan(0);
+    expect(await redis.keys(`${prefix}:platform-facebook:*`)).toEqual([]);
+  });
+
   it('can enqueue connection_backfill for facebook and instagram only', async () => {
     const producer = api.deps.producer!;
     const payload = { runId: randomUUID(), segment: 0 };
@@ -46,3 +63,7 @@ describe('buildMetaDeps job registry', () => {
     ).rejects.toMatchObject({ code: 'unknown_job_type' });
   });
 });
+
+async function seedLaneConnection() {
+  return api.seedConnection(org, { platform: 'facebook', externalAccountId: 'ext-lane' });
+}

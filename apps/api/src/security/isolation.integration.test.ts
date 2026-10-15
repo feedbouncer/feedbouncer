@@ -62,6 +62,16 @@ beforeAll(async () => {
      RETURNING id`,
     [B.orgId, B.brandId],
   );
+  const bRun = await api.pool.query(
+    `INSERT INTO classifier_run (organization_id, brand_id, requested_by_user_id, days, since)
+     VALUES ($1, $2, $3, 1, now() - interval '1 day') RETURNING id`,
+    [B.orgId, B.brandId, B.owner.userId],
+  );
+  await api.pool.query(
+    `INSERT INTO classifier_threshold (organization_id, brand_id, category, threshold, action, updated_by_user_id)
+     VALUES ($1, $2, 'spam', 0.9, 'flag', $3)`,
+    [B.orgId, B.brandId, B.owner.userId],
+  );
   const igConnection = await api.pool.query(
     `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, display_name)
      VALUES ($1, $2, 'instagram', $3, 'ig acct') RETURNING id`,
@@ -99,6 +109,7 @@ beforeAll(async () => {
     bGrantId,
     bRuleId: bRule.rows[0].id,
     bDomainId: bDomain.rows[0].id,
+    bClassifierRunId: bRun.rows[0].id,
     bConnectionIds: { facebook: bConnectionId, instagram: igConnection.rows[0].id },
     bGrantIds,
   };
@@ -140,6 +151,16 @@ async function snapshot(orgId: string) {
     ),
     domains: await q('SELECT id, domain FROM brand_domain WHERE organization_id = $1 ORDER BY id'),
     grants: await q('SELECT id FROM oauth_grant WHERE organization_id = $1 ORDER BY id'),
+    classifierRuns: await q(
+      'SELECT id, days, since FROM classifier_run WHERE organization_id = $1 ORDER BY id',
+    ),
+    thresholds: await q(
+      `SELECT brand_id, category, threshold::text, action, updated_by_user_id FROM classifier_threshold
+       WHERE organization_id = $1 ORDER BY brand_id, category`,
+    ),
+    classifications: await q(
+      'SELECT id, status FROM comment_classification WHERE organization_id = $1 ORDER BY id',
+    ),
     jobs: await q('SELECT id, state FROM job_ledger WHERE organization_id = $1 ORDER BY id'),
     audit: await q(
       `SELECT sequence, action, subject_type, subject_id, actor_user_id FROM audit_event

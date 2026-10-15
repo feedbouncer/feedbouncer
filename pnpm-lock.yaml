@@ -149,6 +149,9 @@ importers:
       '@feedbouncer/authz':
         specifier: workspace:*
         version: link:../../packages/authz
+      '@feedbouncer/classifier':
+        specifier: workspace:*
+        version: link:../../packages/classifier
       '@feedbouncer/comments':
         specifier: workspace:*
         version: link:../../packages/comments

@@ -1,5 +1,6 @@
 import { Controller, Get, Inject, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
+import { CATEGORIES } from '@feedbouncer/classifier';
 import { RULE_ACTIONS, RULE_KINDS, RULE_MODES } from '@feedbouncer/rules';
 import { SessionGuard } from '../auth/session.guard.js';
 import { parseBody, zUuid } from '../http/validation.js';
@@ -15,6 +16,8 @@ const ActivityQuery = z.strictObject({
   kind: z.enum(RULE_KINDS).optional(),
   outcome: z.enum(RULE_ACTIONS).optional(),
   mode: z.enum(RULE_MODES).optional(),
+  source: z.enum(['rule', 'classifier']).optional(),
+  category: z.enum(CATEGORIES).optional(),
   before: z.string().regex(CURSOR).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });

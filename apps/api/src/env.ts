@@ -25,6 +25,7 @@ import {
 } from '@feedbouncer/connector-facebook';
 import { parseMetaAdsEnv, type MetaAdsConfig } from '@feedbouncer/connector-meta-ads';
 import { parseInstagramEnv, type InstagramConfig } from '@feedbouncer/connector-instagram';
+import { describeClassifierProvider } from '@feedbouncer/classifier';
 import { loadJobsConfig, type JobsConfig } from '@feedbouncer/jobs';
 import {
   loadHealthPolicy,
@@ -73,6 +74,8 @@ export interface ApiEnv {
   readonly metaAds: MetaAdsConfig | null;
   /** Queue prefix and dedup window, shared with the worker so both sides use the same queues. */
   readonly jobs: JobsConfig;
+  /** The classifier's provider and model, for display only: the API holds no key. */
+  readonly classifier: { readonly id: string; readonly model: string; readonly enabled: boolean };
   readonly telemetry: TelemetryConfig;
   readonly health: HealthPolicy;
 }
@@ -119,6 +122,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     instagram: parseInstagramEnv(env, facebook),
     metaAds: parseMetaAdsEnv(env, facebook),
     jobs: loadJobsConfig(env),
+    classifier: describeClassifierProvider(env),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),
   };
@@ -132,6 +136,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     facebookEnabled: config.facebook !== null,
     instagramEnabled: config.instagram !== null,
     metaAdsEnabled: config.metaAds !== null,
+    classifierEnabled: config.classifier.enabled,
     jobQueuePrefix: config.jobs.prefix,
     activeKeyId: config.encryption.activeKeyId,
     metricsPort: config.telemetry.metrics.port,

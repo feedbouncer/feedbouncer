@@ -11,6 +11,7 @@ import {
   type ModerationActionView,
   type RefusalCode,
 } from '@feedbouncer/comments';
+import { PgClassificationStore, type ClassificationView } from '@feedbouncer/classifier';
 import { systemClock, type ConnectorCapabilities } from '@feedbouncer/connectors';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
@@ -156,6 +157,17 @@ export class CommentsService {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     if (!(await store.load(scope, commentId))) throw notFound();
     return listCommentDecisions(this.deps.pool, scope, commentId);
+  }
+
+  async classification(
+    org: OrgContext,
+    brandId: unknown,
+    commentId: string,
+  ): Promise<ClassificationView | null> {
+    const { store } = this.#configured();
+    const scope = await requireBrand(this.deps.pool, org, brandId);
+    if (!(await store.load(scope, commentId))) throw notFound();
+    return new PgClassificationStore(this.deps.pool).latestForComment(scope, commentId);
   }
 
   async actions(
