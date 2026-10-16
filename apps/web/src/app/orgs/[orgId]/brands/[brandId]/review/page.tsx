@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ReviewQueue } from '../../../../../../components/actions/review-queue';
+import { ReviewModeBanner } from '../../../../../../components/review-mode/review-mode-banner';
 import {
   stepAvailability,
   type ActionCapabilitiesDto,
@@ -8,7 +9,12 @@ import {
   type ReviewItemView,
 } from '../../../../../../lib/actions';
 import { isUuid } from '../../../../../../lib/ids';
-import { dataOrThrow, requireMe, serverGet } from '../../../../../../lib/server-api';
+import {
+  dataOrThrow,
+  loadReviewMode,
+  requireMe,
+  serverGet,
+} from '../../../../../../lib/server-api';
 
 export default async function ReviewQueuePage({
   params,
@@ -20,6 +26,7 @@ export default async function ReviewQueuePage({
   const { orgId, brandId } = await params;
   if (!isUuid(orgId) || !isUuid(brandId)) notFound();
   await requireMe(`/orgs/${orgId}/brands/${brandId}/review`);
+  const review = await loadReviewMode(orgId, brandId);
   const { before } = await searchParams;
   const query = new URLSearchParams({ status: 'open', limit: '50' });
   if (typeof before === 'string' && isUuid(before)) query.set('before', before);
@@ -39,6 +46,15 @@ export default async function ReviewQueuePage({
   return (
     <main>
       <h1>Review queue</h1>
+      {review.connections.map((s) => (
+        <ReviewModeBanner
+          key={s.connectionId}
+          status={s}
+          orgId={orgId}
+          brandId={brandId}
+          canManage={review.canManage}
+        />
+      ))}
       <ReviewQueue
         orgId={orgId}
         brandId={brandId}
@@ -47,6 +63,7 @@ export default async function ReviewQueuePage({
         canBan={stepAvailability(caps).ban.available}
       />
       <p>
+        <Link href={`${brand}/suggestions`}>{`Suggestions (${review.pendingTotal})`}</Link> ·{' '}
         <Link href={`${brand}/actions`}>Action log</Link> ·{' '}
         <Link href={`${brand}/rules`}>Back to rules</Link>
       </p>

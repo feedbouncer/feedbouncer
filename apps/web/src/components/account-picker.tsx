@@ -3,11 +3,13 @@ import Link from 'next/link';
 import { useId, useState, type FormEvent } from 'react';
 import {
   accountNotes,
+  canConnect,
   connectRequest,
   connectResultText,
   isSelectable,
   nothingEligible,
   type PickerAccount,
+  type ReviewModeChoiceState,
 } from '../lib/accounts';
 import { ApiRequestError, apiFetch } from '../lib/api-client';
 import { messageFor } from '../lib/messages';
@@ -19,6 +21,46 @@ export type { PickerAccount } from '../lib/accounts';
 interface ConnectResult {
   externalAccountId: string;
   status: string;
+}
+
+export function ReviewModeChoice(
+  props: ReviewModeChoiceState & { onChange: (next: ReviewModeChoiceState) => void },
+) {
+  const id = useId();
+  return (
+    <fieldset>
+      <label>
+        <input
+          type="checkbox"
+          name="reviewMode"
+          checked={props.on}
+          onChange={(e) => props.onChange({ on: e.currentTarget.checked, acknowledged: false })}
+        />{' '}
+        Start in review mode (recommended)
+      </label>
+      {props.on ? null : (
+        <>
+          <p id={`${id}-notice`} role="note">
+            Without review mode, your rules, the classifier and your policies start hiding,
+            deleting, banning and replying as soon as this account is connected. A mistake in a rule
+            can affect real people before you notice. We recommend keeping review mode on for the
+            first 7 days.
+          </p>
+          <label>
+            <input
+              type="checkbox"
+              name="acknowledgeRisk"
+              required
+              aria-describedby={`${id}-notice`}
+              checked={props.acknowledged}
+              onChange={(e) => props.onChange({ on: false, acknowledged: e.currentTarget.checked })}
+            />{' '}
+            I understand. Start automation now.
+          </label>
+        </>
+      )}
+    </fieldset>
+  );
 }
 
 const SUBMIT_LABEL: Record<ConnectablePlatform, string> = {
@@ -39,6 +81,10 @@ export function AccountPicker(props: {
   const [error, setError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const [results, setResults] = useState<ConnectResult[] | null>(null);
+  const [reviewMode, setReviewMode] = useState<ReviewModeChoiceState>({
+    on: true,
+    acknowledged: false,
+  });
   const copy = PLATFORM_COPY[props.platform];
   const connectionsHref = `/orgs/${props.orgId}/brands/${props.brandId}/connections`;
   const back = (
@@ -50,7 +96,7 @@ export function AccountPicker(props: {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const accountIds = new FormData(e.currentTarget).getAll('accountId').map(String);
-    if (accountIds.length === 0) return;
+    if (accountIds.length === 0 || !canConnect(reviewMode)) return;
     setBusy(true);
     setError(null);
     try {
@@ -60,6 +106,7 @@ export function AccountPicker(props: {
         props.platform,
         props.grantId,
         accountIds,
+        reviewMode,
       );
       const res = await apiFetch<{ results: ConnectResult[] }>(req.path, {
         method: 'POST',
@@ -151,7 +198,8 @@ export function AccountPicker(props: {
           );
         })}
       </ul>
-      <button type="submit" disabled={busy}>
+      <ReviewModeChoice {...reviewMode} onChange={setReviewMode} />
+      <button type="submit" disabled={busy || !canConnect(reviewMode)}>
         {SUBMIT_LABEL[props.platform]}
       </button>
       {error ? <p role="alert">{error}</p> : null}

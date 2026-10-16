@@ -220,6 +220,10 @@ const CONFLICT_REASON: Record<string, string> = {
   hide_redundant_with_delete: 'Delete already removes the comment.',
 };
 
+/** Why a step was left out of a plan because of another one. */
+export const conflictText = (code: string): string =>
+  Object.hasOwn(CONFLICT_REASON, code) ? CONFLICT_REASON[code]! : outcomeSentence(code);
+
 /** Why a step cannot be added next to the ones already chosen, or null. */
 export function conflictReason(type: StepType, value: readonly DraftStep[]): string | null {
   for (const [a, b, code] of CONFLICTS) {

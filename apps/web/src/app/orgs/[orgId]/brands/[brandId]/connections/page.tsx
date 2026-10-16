@@ -2,13 +2,20 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ApiForm } from '../../../../../../components/api-form';
 import { ConnectButton } from '../../../../../../components/connect-button';
+import { ReviewModeBanner } from '../../../../../../components/review-mode/review-mode-banner';
 import { backfillText, type BackfillViewDto } from '../../../../../../lib/backfill-text';
 import { formatUtc } from '../../../../../../lib/format';
 import { isUuid } from '../../../../../../lib/ids';
 import { messageFor, statusReasonText } from '../../../../../../lib/messages';
 import { missingPermissionText } from '../../../../../../lib/oauth';
 import { CONNECTABLE, PLATFORM_COPY, isConnectable } from '../../../../../../lib/platforms';
-import { dataOrThrow, requireMe, serverGet, type Role } from '../../../../../../lib/server-api';
+import {
+  dataOrThrow,
+  loadReviewMode,
+  requireMe,
+  serverGet,
+  type Role,
+} from '../../../../../../lib/server-api';
 
 interface Connection {
   id: string;
@@ -51,6 +58,7 @@ export default async function ConnectionsPage({
   const { orgId, brandId } = await params;
   if (!isUuid(orgId) || !isUuid(brandId)) notFound();
   await requireMe(`/orgs/${orgId}/brands/${brandId}/connections`);
+  const review = await loadReviewMode(orgId, brandId);
   const org = dataOrThrow(await serverGet<{ role: Role }>(`/api/v1/orgs/${orgId}`), 'organization');
   const sp = await searchParams;
   const errorParam = one(sp.error);
@@ -71,6 +79,15 @@ export default async function ConnectionsPage({
   return (
     <main>
       <h1>Connections</h1>
+      {review.connections.map((s) => (
+        <ReviewModeBanner
+          key={s.connectionId}
+          status={s}
+          orgId={orgId}
+          brandId={brandId}
+          canManage={review.canManage}
+        />
+      ))}
       {errorCode ? (
         <div role="alert">
           <p>{messageFor(errorCode)}</p>
@@ -156,7 +173,10 @@ export default async function ConnectionsPage({
       )}
       <p>
         <Link href={`/orgs/${orgId}/brands/${brandId}/comments`}>Comments</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/ads`}>Ads</Link> ·{' '}
+        <Link href={`/orgs/${orgId}/brands/${brandId}/suggestions`}>
+          {`Suggestions (${review.pendingTotal})`}
+        </Link>{' '}
+        · <Link href={`/orgs/${orgId}/brands/${brandId}/ads`}>Ads</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Rules</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/policies`}>Policies</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/classifier`}>Classifier</Link> ·{' '}

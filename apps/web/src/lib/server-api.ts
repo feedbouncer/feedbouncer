@@ -2,6 +2,7 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { apiInternalUrl } from './api-url';
+import type { ReviewModeStatusDto } from './review-mode';
 
 // Callers must pass every interpolated path segment through isUuid first.
 export async function serverGet<T>(
@@ -37,4 +38,19 @@ export function dataOrThrow<T>(r: { status: number; data: T | null }, what: stri
   if (r.data) return r.data;
   if (r.status === 404) notFound();
   throw new Error(`Could not load ${what} (status ${r.status})`);
+}
+
+/** The brand's review windows, the pending total, and whether the viewer may end a window. */
+export async function loadReviewMode(
+  orgId: string,
+  brandId: string,
+): Promise<{ connections: ReviewModeStatusDto[]; pendingTotal: number; canManage: boolean }> {
+  const org = dataOrThrow(await serverGet<{ role: Role }>(`/api/v1/orgs/${orgId}`), 'organization');
+  const status = dataOrThrow(
+    await serverGet<{ connections: ReviewModeStatusDto[]; pendingTotal: number }>(
+      `/api/v1/orgs/${orgId}/brands/${brandId}/review-mode`,
+    ),
+    'review mode',
+  );
+  return { ...status, canManage: org.role !== 'member' };
 }
