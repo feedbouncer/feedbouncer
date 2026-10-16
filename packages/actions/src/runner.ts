@@ -1,6 +1,7 @@
 // Executes the steps of an action run in order. Each platform step goes through
-// ModerationActions with the key `auto:<commentId>:<kind>`, so a comment is never
-// hidden, banned or replied to twice. Reply text, author names and comment bodies are
+// ModerationActions with the key `auto:<commentId>:<kind>` (`suggestion:<id>:<kind>` for
+// an approved suggestion, executed as the approving user), so a comment is never hidden,
+// banned or replied to twice. Reply text, author names and comment bodies are
 // never logged.
 import type pg from 'pg';
 import type { Clock, Platform } from '@feedbouncer/connectors';
@@ -29,8 +30,8 @@ export interface ActionStepObserver {
     scope: ConnectionScope;
     runId: string;
     stepId: string;
-    ruleId: string;
-    evaluationId: string;
+    ruleId: string | null;
+    evaluationId: string | null;
     commentId: string;
     type: StepType;
     status: StepStatus;
@@ -159,6 +160,15 @@ export class ActionRunner {
     }
   }
 
+  /** Queues the first advance of a run created elsewhere; the job's external ref makes it idempotent. */
+  async wakeRun(scope: ConnectionScope, runId: string): Promise<void> {
+    const run = await this.d.runs.getRun(scope, runId);
+    if (!run) throw new Error('run_not_found');
+    const comment = await this.d.comments.load(scope, run.commentId);
+    if (!comment) throw new Error('comment_not_found');
+    await wake(this.d.producer, scope, comment.platform, { runId, settled: 0 });
+  }
+
   /**
    * The advance job gave up: fail the steps that never ran so the run can finish and the
    * rule can fall back. Steps whose platform action is out are settled by its own outcome.
@@ -262,9 +272,15 @@ export class ActionRunner {
       // The step requested in the previous pass is linked whatever the precheck says now:
       // its action already went out, so skipping it would leave that action unrecorded.
       const justRequested = ld.requested?.stepId === step.id;
+      if (!justRequested && run.suggestionId && !run.approvedByUserId) {
+        await settle(step, { status: 'failed', reason: 'approver_removed' });
+        continue;
+      }
       const blocked = justRequested
         ? null
-        : await this.planner.precheck(scope, step.type, comment, conn, [...views.values()], tx);
+        : await this.planner.precheck(scope, step.type, comment, conn, [...views.values()], tx, {
+            approved: run.suggestionId !== null,
+          });
       if (blocked) {
         await settle(step, blocked);
         continue;
@@ -276,7 +292,9 @@ export class ActionRunner {
       const type = step.type as Exclude<StepType, 'flag_for_review'>;
       const kind = MODERATION_KIND[type];
       if (!justRequested) {
-        const requestKey = automatedRequestKey(run.commentId, kind, [...views.values()]);
+        const requestKey = run.suggestionId
+          ? `suggestion:${run.suggestionId}:${kind}`
+          : automatedRequestKey(run.commentId, kind, [...views.values()]);
         const text =
           'template' in step.config
             ? this.planner.render(step.config, comment!, brand, conn!)
@@ -322,8 +340,8 @@ export class ActionRunner {
       item = await this.d.review.open(tx, scope, {
         commentId: run.commentId,
         source: 'action_step',
-        ruleId: run.ruleId,
-        evaluationId: run.evaluationId,
+        ruleId: run.ruleId!,
+        ...(run.evaluationId && { evaluationId: run.evaluationId }),
       });
     } catch (err) {
       await tx.query('ROLLBACK TO SAVEPOINT flag_review');
@@ -348,7 +366,9 @@ export class ActionRunner {
       scope,
       commentId: run.commentId,
       kind: n.kind,
-      actor: { type: 'rule', ruleId: run.ruleId },
+      actor: run.suggestionId
+        ? { type: 'user', userId: run.approvedByUserId! }
+        : { type: 'rule', ruleId: run.ruleId! },
       requestKey: n.requestKey,
       ...(n.text !== undefined && { text: n.text }),
     });

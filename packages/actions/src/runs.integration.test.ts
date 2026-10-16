@@ -10,6 +10,7 @@ import {
   seedCommentRow,
   seedEvaluationRow,
   seedModerationActionRow,
+  seedSuggestionRow,
   type Seeded,
 } from './testing.js';
 
@@ -105,6 +106,51 @@ describe('createRun', () => {
     const f = await fresh();
     const run = await mkRun(f, [BAN, HIDE, FLAG]);
     expect(run.steps.map((s) => s.type)).toEqual(['flag_for_review', 'hide', 'ban']);
+  });
+});
+
+describe('createSuggestionRun', () => {
+  it('is idempotent per suggestion and stores steps in STEP_ORDER', async () => {
+    const f = await fresh();
+    const suggestionId = await seedSuggestionRow(ctx.c, f.comment);
+    const input = {
+      suggestionId,
+      commentId: f.comment.id,
+      userId: f.t.userId,
+      steps: [{ type: 'ban', confirmHardToReverse: true }, { type: 'hide' }] as const,
+    };
+    const a = await withTransaction(pool, (tx) => store.createSuggestionRun(tx, f.scope, input));
+    expect(a.steps.map((s) => [s.position, s.type, s.status])).toEqual([
+      [0, 'hide', 'pending'],
+      [1, 'ban', 'pending'],
+    ]);
+    expect(a).toMatchObject({
+      suggestionId,
+      approvedByUserId: f.t.userId,
+      ruleId: null,
+      evaluationId: null,
+      dryRun: false,
+    });
+    const b = await withTransaction(pool, (tx) =>
+      store.createSuggestionRun(tx, f.scope, { ...input, steps: [{ type: 'hide' }] }),
+    );
+    expect(b.id).toBe(a.id);
+    expect(b.steps).toHaveLength(2);
+  });
+});
+
+describe('hasActiveBan', () => {
+  it('is true for a pending or applied ban of the author until a later applied unban', async () => {
+    const f = await fresh();
+    const other = await seedCommentRow(ctx.c, f.t, 'again', { authorId: f.t.authorId });
+    const mine = await seedCommentRow(ctx.c, f.t, 'mine', { authorId: f.t.authorId });
+    expect(await store.hasActiveBan(f.scope, mine.id)).toBe(false);
+    await seedModerationActionRow(ctx.c, other, { kind: 'ban_author', status: 'pending' });
+    expect(await store.hasActiveBan(f.scope, mine.id)).toBe(true);
+    await seedModerationActionRow(ctx.c, other, { kind: 'unban_author', status: 'applied' });
+    expect(await store.hasActiveBan(f.scope, mine.id)).toBe(false);
+    await seedModerationActionRow(ctx.c, mine, { kind: 'ban_author', status: 'applied' });
+    expect(await store.hasActiveBan(f.scope, mine.id)).toBe(true);
   });
 });
 
@@ -433,5 +479,25 @@ describe('cross-brand isolation', () => {
     expect(
       (await store.withRunLocked(a.scope, run.id, async (_t, r) => r))!.completedAt,
     ).toBeNull();
+  });
+});
+
+describe('listLog for approval runs', () => {
+  it('shows approval-run steps with a null rule and the suggestion id', async () => {
+    const f = await fresh();
+    const suggestionId = await seedSuggestionRow(ctx.c, f.comment);
+    await withTransaction(pool, (tx) =>
+      store.createSuggestionRun(tx, f.scope, {
+        suggestionId,
+        commentId: f.comment.id,
+        userId: f.t.userId,
+        steps: [{ type: 'hide' }],
+      }),
+    );
+    await mkRun(f, [HIDE]);
+    const all = await store.listLog(f.scope, { limit: 50 });
+    const approval = all.find((e) => e.suggestionId === suggestionId)!;
+    expect(approval).toMatchObject({ ruleId: null, ruleName: null, type: 'hide' });
+    expect(all.find((e) => e.suggestionId === null)).toMatchObject({ ruleName: 'Scam links' });
   });
 });

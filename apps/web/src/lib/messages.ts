@@ -88,6 +88,8 @@ const OUTCOMES: Record<string, string> = {
   reply_thread_limit: 'this thread already has an automatic reply',
   duplicate: 'the same step already ran for this comment',
   would_run: 'this step would run',
+  already_banned: 'this author was already banned',
+  approver_removed: 'the person who approved this is no longer on the team',
   review_mode_active: 'review mode is on, so this is suggested for approval instead',
   internal_error: 'something went wrong on our side',
   duplicate_step: 'each step can be used once',

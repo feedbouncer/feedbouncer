@@ -114,6 +114,7 @@ shows the wording from the second column.
 | `reply_thread_limit`         | this thread already has an automatic reply                  |
 | `duplicate`                  | the same step already ran for this comment                  |
 | `already_flagged`            | already in the review queue                                 |
+| `already_banned`             | this author was already banned                              |
 
 ### Not applicable
 
@@ -136,20 +137,21 @@ shows the wording from the second column.
 
 ### Failed
 
-| Code                              | Shown as                                             |
-| --------------------------------- | ---------------------------------------------------- |
-| `missing_permission`              | FeedBouncer lacks the permission for this action     |
-| `author_not_bannable`             | Facebook does not allow banning this author          |
-| `ban_limit_reached`               | the Page has reached its ban limit                   |
-| `reblock_too_soon`                | this author was unbanned too recently to ban again   |
-| `text_too_long`, `reply_too_long` | Reply is too long for this platform                  |
-| `rate_limit_exhausted`            | the platform kept refusing because of rate limits    |
-| `retries_exhausted`               | it kept failing after several tries                  |
-| `connection_needs_reconnect`      | this connection needs to be reconnected first        |
-| `connection_inactive`             | this connection is not active                        |
-| `request_key_conflict`            | this request was already used for a different action |
-| `failed`                          | the platform did not accept it                       |
-| `internal_error`                  | something went wrong on our side                     |
+| Code                              | Shown as                                              |
+| --------------------------------- | ----------------------------------------------------- |
+| `missing_permission`              | FeedBouncer lacks the permission for this action      |
+| `author_not_bannable`             | Facebook does not allow banning this author           |
+| `ban_limit_reached`               | the Page has reached its ban limit                    |
+| `reblock_too_soon`                | this author was unbanned too recently to ban again    |
+| `text_too_long`, `reply_too_long` | Reply is too long for this platform                   |
+| `rate_limit_exhausted`            | the platform kept refusing because of rate limits     |
+| `retries_exhausted`               | it kept failing after several tries                   |
+| `connection_needs_reconnect`      | this connection needs to be reconnected first         |
+| `connection_inactive`             | this connection is not active                         |
+| `approver_removed`                | the person who approved this is no longer on the team |
+| `request_key_conflict`            | this request was already used for a different action  |
+| `failed`                          | the platform did not accept it                        |
+| `internal_error`                  | something went wrong on our side                      |
 
 A refusal from Instagram that FeedBouncer does not recognise shows as
 `instagram_error_<code>_<subcode>`; see [instagram.md](../connectors/instagram.md).

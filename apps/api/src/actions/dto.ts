@@ -23,8 +23,9 @@ export interface LogEntryDto {
   id: string;
   runId: string;
   commentId: string;
-  ruleId: string;
-  ruleName: string;
+  ruleId: string | null;
+  ruleName: string | null;
+  suggestionId: string | null;
   type: StepType;
   status: LogEntry['status'];
   reasonCode: string | null;
@@ -45,6 +46,7 @@ export const toLogEntryDto = (e: LogEntry): LogEntryDto => ({
   commentId: e.commentId,
   ruleId: e.ruleId,
   ruleName: e.ruleName,
+  suggestionId: e.suggestionId,
   type: e.type,
   status: e.status,
   reasonCode: e.reasonCode,

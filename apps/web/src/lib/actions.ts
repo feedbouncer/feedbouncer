@@ -269,7 +269,7 @@ export function outcomeText(status: StepStatus, reason: string | null): string {
 export interface LogEntryView {
   id: string;
   commentId: string;
-  ruleName: string;
+  ruleName: string | null;
   type: StepType;
   status: StepStatus;
   reasonCode: string | null;

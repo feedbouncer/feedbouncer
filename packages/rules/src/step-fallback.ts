@@ -18,6 +18,7 @@ export class RuleStepFallback implements ActionStepObserver {
   }
 
   async onStepSettled(e: Parameters<ActionStepObserver['onStepSettled']>[0]): Promise<void> {
+    if (e.ruleId === null || e.evaluationId === null) return;
     if (e.type !== 'hide' && e.type !== 'delete') return;
     if (e.status !== 'failed' && e.status !== 'not_supported') return;
     const info = await this.#evaluations.loadForFallback(e.scope, e.evaluationId);
