@@ -4,7 +4,7 @@
 
 Please report vulnerabilities privately. Do not open a public issue, pull request or discussion for a security problem.
 
-Use GitHub's private vulnerability reporting: [report a vulnerability](https://github.com/feed-bouncer-hq/feed-bouncer/security/advisories/new).
+Use GitHub's private vulnerability reporting: [report a vulnerability](https://github.com/feedbouncer/feedbouncer/security/advisories/new).
 
 Include what you found, the steps or request needed to reproduce it, the version or commit you tested, and the impact you expect. Never include real platform tokens or other people's personal data; a description of where a secret leaks is enough.
 
