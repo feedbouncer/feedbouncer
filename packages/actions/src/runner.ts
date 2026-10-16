@@ -7,6 +7,7 @@ import type { Clock, Platform } from '@feedbouncer/connectors';
 import {
   eligibilityComment,
   evaluateEligibility,
+  type ActionKind,
   type ActionOutcomeObserver,
   type ModerationActionView,
   type BrandScope,
@@ -19,7 +20,7 @@ import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
 import { ACTION_RUN_ADVANCE_JOB, type ActionRunAdvancePayload } from './jobs/specs.js';
 import type { PgReviewQueue } from './review.js';
-import type { PgActionRunStore, RunRow, StepRow } from './runs.js';
+import type { PgActionRunStore, Queryable, RunRow, StepRow } from './runs.js';
 import { MODERATION_KIND, sortSteps, type ActionStep, type StepType } from './steps.js';
 import {
   stepOutcomeFor,
@@ -52,6 +53,16 @@ export interface SimulatedStep {
   previewText: string | null;
 }
 
+interface Requested {
+  stepId: string;
+  result: Awaited<ReturnType<ModerationActions['request']>>;
+}
+interface PendingRequest {
+  step: StepRow;
+  kind: ActionKind;
+  requestKey: string;
+  text: string | undefined;
+}
 type Producer = Pick<JobProducer, 'enqueue'>;
 type Settled = Parameters<ActionStepObserver['onStepSettled']>[0];
 
@@ -115,13 +126,33 @@ export class ActionRunner {
     scope: ConnectionScope,
     runId: string,
   ): Promise<{ settled: number; completed: boolean }> {
-    const done = await this.d.runs.withRunLocked(scope, runId, (tx, run) =>
-      this.#advanceLocked(tx, scope, run),
-    );
-    if (!done) return { settled: 0, completed: false };
-    for (const e of done.events) await this.#notify(e);
-    await this.#wakeIfAlreadyFinal(scope, done);
-    return { settled: done.final, completed: done.completed };
+    // The run lock holds a pool client, so nothing under it may take another one: loads
+    // happen before each locked pass and platform requests between passes.
+    const first = await this.d.runs.getRun(scope, runId);
+    if (!first) return { settled: 0, completed: false };
+    const comment = await this.d.comments.load(scope, first.commentId);
+    const conn = await this.d.connection(scope);
+    const brand = await this.d.brandName(scope);
+    let requested: Requested | undefined;
+    for (;;) {
+      const views = new Map(
+        (await this.d.actions.list(scope, first.commentId)).map((v) => [v.id, v] as const),
+      );
+      const done = await this.d.runs.withRunLocked(scope, runId, (tx, run) =>
+        this.#advanceLocked(tx, scope, run, { comment, conn, brand, views, requested }),
+      );
+      if (!done) return { settled: 0, completed: false };
+      for (const e of done.events) await this.#notify(e);
+      if (done.next) {
+        requested = {
+          stepId: done.next.step.id,
+          result: await this.#request(scope, done.run, done.next),
+        };
+        continue;
+      }
+      await this.#wakeIfAlreadyFinal(scope, done);
+      return { settled: done.final, completed: done.completed };
+    }
   }
 
   async simulate(
@@ -197,6 +228,7 @@ export class ActionRunner {
     comment: CommentRow | null,
     conn: BrandConnectionInfo | null,
     views: readonly ModerationActionView[],
+    db?: Queryable,
   ): Promise<StepOutcome | null> {
     if (!comment) return { status: 'not_applicable', reason: 'comment_gone' };
     if (comment.isOwnAccount) return { status: 'skipped', reason: 'own_account_comment' };
@@ -206,10 +238,10 @@ export class ActionRunner {
     if (support.missingScopes.length > 0) return { status: 'failed', reason: 'missing_permission' };
     if (type === 'hide' || type === 'ban') {
       const kind = type === 'hide' ? 'hide' : 'ban_author';
-      if (await this.d.runs.hasUserReversal(scope, comment.id, kind))
+      if (await this.d.runs.hasUserReversal(scope, comment.id, kind, db))
         return { status: 'skipped', reason: 'moderator_override' };
     }
-    if (type === 'auto_reply' && (await this.#threadLimited(scope, comment.id, views)))
+    if (type === 'auto_reply' && (await this.#threadLimited(scope, comment.id, views, db)))
       return { status: 'skipped', reason: 'reply_thread_limit' };
     const ownAction = views.some(
       (v) =>
@@ -232,6 +264,7 @@ export class ActionRunner {
     scope: ConnectionScope,
     commentId: string,
     views: readonly ModerationActionView[],
+    db?: Queryable,
   ): Promise<boolean> {
     const hasOwnReply = views.some(
       (v) =>
@@ -239,17 +272,26 @@ export class ActionRunner {
         v.actorType !== 'user' &&
         (v.status === 'pending' || v.status === 'applied'),
     );
-    return !hasOwnReply && (await this.d.runs.hasAutomatedThreadReply(scope, commentId));
+    return !hasOwnReply && (await this.d.runs.hasAutomatedThreadReply(scope, commentId, db));
   }
 
-  async #advanceLocked(tx: pg.PoolClient, scope: ConnectionScope, run: RunRow) {
+  async #advanceLocked(
+    tx: pg.PoolClient,
+    scope: ConnectionScope,
+    run: RunRow,
+    ld: {
+      comment: CommentRow | null;
+      conn: BrandConnectionInfo | null;
+      brand: string;
+      views: Map<string, ModerationActionView>;
+      requested: Requested | undefined;
+    },
+  ) {
     const { runs } = this.d;
-    const comment = await this.d.comments.load(scope, run.commentId);
-    const conn = await this.d.connection(scope);
-    const brand = await this.d.brandName(scope);
-    const views = new Map((await this.d.actions.list(scope, run.commentId)).map((v) => [v.id, v]));
+    const { comment, conn, brand, views } = ld;
     const events: Settled[] = [];
     const waiting: { step: StepRow; actionId: string }[] = [];
+    let next: PendingRequest | null = null;
     let open = run.steps.filter((s) => s.status === 'pending').length;
 
     const settle = async (step: StepRow, o: StepOutcome, extra: { reviewItemId?: string } = {}) => {
@@ -283,7 +325,14 @@ export class ActionRunner {
         await settleAction(step, step.moderationActionId);
         continue;
       }
-      const blocked = await this.#precheck(scope, step.type, comment, conn, [...views.values()]);
+      const blocked = await this.#precheck(
+        scope,
+        step.type,
+        comment,
+        conn,
+        [...views.values()],
+        tx,
+      );
       if (blocked) {
         await settle(step, blocked);
         continue;
@@ -292,16 +341,32 @@ export class ActionRunner {
         await this.#flag(tx, scope, run, step, settle);
         continue;
       }
-      await this.#requestPlatformStep(tx, scope, run, step, comment!, conn!, brand, {
-        settle,
-        settleAction,
-        views,
-      });
+      const type = step.type as Exclude<StepType, 'flag_for_review'>;
+      const kind = MODERATION_KIND[type];
+      const requestKey = `auto:${run.commentId}:${kind}`;
+      if (ld.requested?.stepId !== step.id) {
+        const text =
+          'template' in step.config ? this.#render(step.config, comment!, brand, conn!) : undefined;
+        next = { step, kind, requestKey, text };
+        break;
+      }
+      const r = ld.requested.result;
+      if (r.status === 'refused') {
+        await settle(step, stepOutcomeFor({ kind: 'refused', code: r.code }));
+        continue;
+      }
+      const linked = await runs.linkAction(tx, scope, step.id, r.action.id, requestKey);
+      if (linked === 'owned_by_other_step') {
+        await settle(step, { status: 'skipped', reason: 'duplicate' });
+        continue;
+      }
+      views.set(r.action.id, r.action);
+      await settleAction(step, r.action.id);
     }
 
-    const completed = open === 0;
+    const completed = !next && open === 0;
     if (completed) await runs.markRunCompleted(tx, scope, run.id);
-    return { events, waiting, completed, final: run.steps.length - open, run };
+    return { events, waiting, completed, final: run.steps.length - open, run, next };
   }
 
   async #flag(
@@ -311,63 +376,41 @@ export class ActionRunner {
     step: StepRow,
     settle: (s: StepRow, o: StepOutcome, x?: { reviewItemId?: string }) => Promise<void>,
   ): Promise<void> {
+    await tx.query('SAVEPOINT flag_review');
+    let item: { id: string; created: boolean };
     try {
-      const item = await this.d.review.open(tx, scope, {
+      item = await this.d.review.open(tx, scope, {
         commentId: run.commentId,
         source: 'action_step',
         ruleId: run.ruleId,
       });
-      if (item.created)
-        await settle(step, { status: 'succeeded', reason: null }, { reviewItemId: item.id });
-      else await settle(step, { status: 'skipped', reason: 'already_flagged' });
     } catch (err) {
+      await tx.query('ROLLBACK TO SAVEPOINT flag_review');
+      await tx.query('RELEASE SAVEPOINT flag_review');
       this.d.log.warn('action_step.flag_failed', {
         runId: run.id,
         stepId: step.id,
         error: errorName(err),
       });
       await settle(step, { status: 'failed', reason: 'internal_error' });
+      return;
     }
+    await tx.query('RELEASE SAVEPOINT flag_review');
+    if (item.created)
+      await settle(step, { status: 'succeeded', reason: null }, { reviewItemId: item.id });
+    else await settle(step, { status: 'skipped', reason: 'already_flagged' });
   }
 
-  async #requestPlatformStep(
-    tx: pg.PoolClient,
-    scope: ConnectionScope,
-    run: RunRow,
-    step: StepRow,
-    comment: CommentRow,
-    conn: BrandConnectionInfo,
-    brand: string,
-    h: {
-      settle: (s: StepRow, o: StepOutcome) => Promise<void>;
-      settleAction: (s: StepRow, actionId: string) => Promise<void>;
-      views: Map<string, ModerationActionView>;
-    },
-  ): Promise<void> {
-    const type = step.type as Exclude<StepType, 'flag_for_review'>;
-    const kind = MODERATION_KIND[type];
-    const requestKey = `auto:${run.commentId}:${kind}`;
-    const text =
-      'template' in step.config ? this.#render(step.config, comment, brand, conn) : undefined;
-    const r = await this.d.actions.request({
+  /** Idempotent on the request key, so it runs outside the run lock. */
+  #request(scope: ConnectionScope, run: RunRow, n: PendingRequest): Promise<Requested['result']> {
+    return this.d.actions.request({
       scope,
       commentId: run.commentId,
-      kind,
+      kind: n.kind,
       actor: { type: 'rule', ruleId: run.ruleId },
-      requestKey,
-      ...(text !== undefined && { text }),
+      requestKey: n.requestKey,
+      ...(n.text !== undefined && { text: n.text }),
     });
-    if (r.status === 'refused') {
-      await h.settle(step, stepOutcomeFor({ kind: 'refused', code: r.code }));
-      return;
-    }
-    const linked = await this.d.runs.linkAction(tx, scope, step.id, r.action.id, requestKey);
-    if (linked === 'owned_by_other_step') {
-      await h.settle(step, { status: 'skipped', reason: 'duplicate' });
-      return;
-    }
-    h.views.set(r.action.id, r.action);
-    await h.settleAction(step, r.action.id);
   }
 
   async #notify(e: Settled): Promise<void> {

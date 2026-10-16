@@ -97,6 +97,8 @@ let settledEvents: Parameters<ActionStepObserver['onStepSettled']>[0][];
 let grantedOverride: Map<string, string[]>;
 /** Makes the next review.open throw. */
 let failNextReviewOpen: boolean;
+/** Makes the next review.open run a SQL statement that errors inside the transaction. */
+let failNextReviewSql: boolean;
 /** The comment seeded by beforeEach: a stored Facebook comment by someone else. */
 let seeded: { postId: string; commentId: string; id: string };
 
@@ -198,6 +200,10 @@ class FlakyReview extends PgReviewQueue {
     if (failNextReviewOpen) {
       failNextReviewOpen = false;
       throw new Error('review store down');
+    }
+    if (failNextReviewSql) {
+      failNextReviewSql = false;
+      await a[0].query('SELECT 1 / 0');
     }
     return super.open(...a);
   }
@@ -312,6 +318,7 @@ beforeEach(async () => {
   scope = { organizationId: t.organizationId, brandId: t.brandId, connectionId: t.connectionId };
   grantedOverride = new Map();
   failNextReviewOpen = false;
+  failNextReviewSql = false;
   settledEvents = [];
   logLines = [];
 
@@ -930,4 +937,68 @@ describe('ACTION_RUN_ADVANCE_JOB', () => {
       ACTION_RUN_ADVANCE_JOB.payload.safeParse({ runId, settled: 1, cause: 'a b' }).success,
     ).toBe(false);
   });
+});
+
+describe('failures that need the transaction to stay usable', () => {
+  it('a SQL error while flagging fails the step, and the run still completes', async () => {
+    failNextReviewSql = true;
+    const run = await start([FLAG, HIDE]);
+    await expect(runner.advance(scope, run.id)).resolves.toBeDefined();
+    await queue.drain();
+    expect(await outcome(run.id, 'flag_for_review')).toEqual(['failed', 'internal_error']);
+    expect(await outcome(run.id, 'hide')).toEqual(['succeeded', null]);
+    expect(await runCompleted(run.id)).toBe(true);
+  });
+
+  it('concurrent advances finish on a pool no larger than the number of locks held', async () => {
+    const small = createPool(ctx.db.url, {
+      applicationName: 'actions-runner-small',
+      max: 2,
+      onIdleError: () => {},
+    });
+    try {
+      const smallStore = new PgCommentStore(small);
+      const smallRunner = new ActionRunner({
+        pool: small,
+        runs: new PgActionRunStore(small),
+        review,
+        comments: smallStore,
+        actions: new ModerationActions({
+          pool: small,
+          store: smallStore,
+          producer: queue,
+          capabilities: (p) => registry.get(p)?.capabilities,
+          clock,
+          log: quiet,
+        }),
+        connection: async (s) => {
+          const caps = registry.get('facebook')!.capabilities;
+          return {
+            connectionId: s.connectionId,
+            platform: 'facebook',
+            caps,
+            grantedScopes: caps.defaultScopes,
+          };
+        },
+        brandName: async () => 'Shop',
+        producer: queue,
+        clock,
+        log: quiet,
+      });
+      const started: RunRow[] = [];
+      for (let i = 0; i < 4; i++) {
+        const c = await addFbComment();
+        started.push(await start([HIDE, REPLY], { commentId: c.id }));
+      }
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('advance deadlocked')), 20_000).unref(),
+      );
+      await Promise.race([
+        Promise.all(started.map((r) => smallRunner.advance(scope, r.id))),
+        timeout,
+      ]);
+    } finally {
+      await small.end();
+    }
+  }, 30_000);
 });

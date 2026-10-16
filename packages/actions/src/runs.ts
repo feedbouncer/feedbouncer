@@ -107,7 +107,8 @@ const RUN_COLS = `r.id, r.connection_id, r.comment_id, r.rule_id, r.rule_evaluat
 const UNDOABLE_SQL = `(s.status = 'succeeded' AND s.undone_at IS NULL AND NOT r.dry_run
   AND s.step_type IN ('hide', 'ban', 'flag_for_review'))`;
 
-type Queryable = Pick<pg.ClientBase, 'query'>;
+/** The pool, or a client already held (e.g. under the run lock). */
+export type Queryable = Pick<pg.ClientBase, 'query'>;
 
 async function loadRun(
   q: Queryable,
@@ -214,6 +215,10 @@ export class PgActionRunStore {
       if (!run) throw new Error('evaluation_not_found');
       return run;
     });
+  }
+
+  async getRun(scope: ConnectionScope, runId: string): Promise<RunRow | null> {
+    return loadRun(this.pool, scope, { id: runId }, false);
   }
 
   /** Runs fn inside a transaction holding the run row lock; null when the run is not in scope. */
@@ -330,9 +335,10 @@ export class PgActionRunStore {
     scope: BrandScope,
     commentId: string,
     kind: 'hide' | 'ban_author',
+    db: Queryable = this.pool,
   ): Promise<boolean> {
     const k = REVERSAL[kind];
-    const r = await this.pool.query<{ reversed: boolean }>(
+    const r = await db.query<{ reversed: boolean }>(
       `WITH me AS (
          SELECT id, author_id, connection_id FROM comment
           WHERE organization_id = $1 AND brand_id = $2 AND id = $3
@@ -365,8 +371,12 @@ export class PgActionRunStore {
   }
 
   /** True when a non-user public reply is live on any comment in this comment's thread. */
-  async hasAutomatedThreadReply(scope: BrandScope, commentId: string): Promise<boolean> {
-    const r = await this.pool.query<{ found: boolean }>(
+  async hasAutomatedThreadReply(
+    scope: BrandScope,
+    commentId: string,
+    db: Queryable = this.pool,
+  ): Promise<boolean> {
+    const r = await db.query<{ found: boolean }>(
       `WITH me AS (
          SELECT coalesce(parent_comment_id, id) AS root FROM comment
           WHERE organization_id = $1 AND brand_id = $2 AND id = $3
