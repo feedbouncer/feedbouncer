@@ -83,6 +83,15 @@ beforeAll(async () => {
      RETURNING id`,
     [B.orgId, B.brandId, bRun.rows[0].id],
   );
+  const bHide = await api.pool.query(
+    `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind,
+                                    actor_type, actor_user_id, request_key, status, completed_at)
+     VALUES ($1, $2, $3, $4, 'hide', 'user', $5, 'iso-hide', 'applied', now()) RETURNING id`,
+    [B.orgId, B.brandId, bConnectionId, comment.rows[0].id, B.owner.userId],
+  );
+  await api.pool.query("UPDATE comment SET platform_state = 'hidden' WHERE id = $1", [
+    comment.rows[0].id,
+  ]);
   const bReviewItem = await api.pool.query(
     `INSERT INTO review_item (organization_id, brand_id, connection_id, comment_id, source, rule_id)
      VALUES ($1, $2, $3, $4, 'action_step', $5) RETURNING id`,
@@ -180,6 +189,7 @@ beforeAll(async () => {
     bDomainId: bDomain.rows[0].id,
     bClassifierRunId: bClassifierRun.rows[0].id,
     bStepId: bStep.rows[0].id,
+    bHideActionId: bHide.rows[0].id,
     bReviewItemId: bReviewItem.rows[0].id,
     bSuggestionId: bSuggestion.rows[0].id,
     bPolicyId: bPolicy.rows[0].id,

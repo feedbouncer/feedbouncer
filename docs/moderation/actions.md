@@ -53,6 +53,15 @@ as an override. Each retry is a new request; clicking twice sends one. A step
 that was already undone, or one with no undo, reports "This step cannot be
 undone" or "This step was already undone".
 
+Hides can also be undone from the [Hidden today](undo-log.md) page, which lists
+everything hidden since local midnight. A hide made by a rule step is undone
+through the same request as the log, so both show one result. Any other hide
+(classifier, policy, a person) is unhidden with a request keyed `unhide:` plus
+the hide, so repeated clicks send one request. Before an unhide is sent,
+FeedBouncer reads the comment from the platform: if it is already visible the
+step is skipped as `already_visible`, and if it is gone, as `comment_gone`,
+instead of reporting a restore that never happened.
+
 ## Execution order
 
 Steps always run in this order, whatever order they were added in:
@@ -327,7 +336,13 @@ Automation is built not to answer itself or fight a moderator:
   its Auto-reply with `reply_thread_limit`.
 - A team member's own action wins. If someone unhides a comment, or unbans an
   author, after the last automated hide or ban, or undoes a step from the log,
-  automation does not apply that step again (`moderator_override`).
+  automation does not apply that step again (`moderator_override`). The check
+  runs when a hide is requested: a hide from a rule, the classifier or a policy
+  is refused as `moderator_override` when the comment's latest hide or unhide
+  is a person's unhide, including one recorded as already visible. The comment
+  is flagged for review instead, with the reason "A moderator restored this
+  comment, so it was flagged for review instead of hidden." See
+  [undo-log.md](undo-log.md#moderator-override).
 - Team members commenting from **personal accounts** are not recognised as the
   brand's own account. Add them to an **author rule with the Trusted list**
   (matched by author ID, not by name) so rules and automatic replies leave them

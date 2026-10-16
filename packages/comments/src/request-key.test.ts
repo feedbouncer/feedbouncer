@@ -11,6 +11,7 @@ describe('isClientRequestKey', () => {
     'rule-eval:',
     'suggestion:',
     'review_end:',
+    'unhide:',
   ])('refuses the server-derived prefix %s', (prefix) => {
     expect(isClientRequestKey(`${prefix}abc`)).toBe(false);
   });

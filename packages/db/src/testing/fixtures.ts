@@ -53,7 +53,7 @@ const columnExists = async (c: pg.ClientBase, table: string, column: string) =>
 export async function seedTenant(
   c: pg.ClientBase,
   label: string,
-  opts: { reviewMode?: 'on' | 'opted_out' } = {},
+  opts: { reviewMode?: 'on' | 'opted_out'; timezone?: string } = {},
 ): Promise<Tenant> {
   const has = async (t: string) =>
     (await c.query('SELECT to_regclass($1) AS t', [t])).rows[0].t !== null;
@@ -72,6 +72,11 @@ export async function seedTenant(
     'INSERT INTO brand (organization_id, name) VALUES ($1, $2) RETURNING id',
     [organizationId, `Brand ${label}`],
   );
+  if (opts.timezone !== undefined)
+    await c.query('UPDATE brand SET timezone = $2, timezone_set_at = now() WHERE id = $1', [
+      brandId,
+      opts.timezone,
+    ]);
   // Existing suites expect automation, so the connection is 'legacy' unless a mode is asked for.
   const cols = ['organization_id', 'brand_id', 'platform', 'external_account_id'];
   const vals = ['$1', '$2', "'facebook'", '$3'];

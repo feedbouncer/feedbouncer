@@ -157,6 +157,7 @@ export function stepOutcomeFor(
     if (r.code === 'not_found') return { status: 'not_applicable', reason: 'comment_gone' };
     if (r.code === 'unsupported') return { status: 'not_supported', reason: 'unsupported' };
     if (r.code === 'review_mode_active') return { status: 'skipped', reason: 'review_mode_active' };
+    if (r.code === 'moderator_override') return { status: 'skipped', reason: 'moderator_override' };
     return { status: 'failed', reason: safeOutcomeCode(r.code, 'failed') };
   }
   const { status, code } = r;

@@ -54,7 +54,13 @@ export type RefusalCode =
   | 'unsupported'
   | 'request_key_conflict'
   /** Automation may only suggest this kind while the connection's review window is active. */
-  | 'review_mode_active';
+  | 'review_mode_active'
+  /** Automation may not hide a comment a moderator unhid. */
+  | 'moderator_override';
+
+/** The reason shown when automation's hide became a flag because a moderator restored the comment. */
+export const MODERATOR_OVERRIDE_REASON =
+  'A moderator restored this comment, so it was flagged for review instead of hidden.';
 
 export type RequestActionResult =
   /** `recorded`: the outcome was known up front (noop / not_eligible); nothing was sent. */
@@ -94,6 +100,7 @@ const RESERVED_KEY_PREFIXES = [
   'rule-eval:',
   'suggestion:',
   'review_end:',
+  'unhide:',
 ];
 
 /** A request key a client may supply: well-formed and outside the server-generated key space. */
@@ -247,6 +254,12 @@ export class ModerationActions {
       reviewModeState(comment.reviewMode, now) === 'active'
     )
       return refused('review_mode_active');
+    if (
+      i.kind === 'hide' &&
+      i.actor.type !== 'user' &&
+      (await this.d.store.userUnhidLast(i.scope, comment.id))
+    )
+      return refused('moderator_override');
 
     const caps = this.d.capabilities(comment.platform);
     if (!caps) return refused('unsupported');

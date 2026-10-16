@@ -226,6 +226,20 @@ approval run per suggestion, and its `comment_id` must equal the suggestion's.
 
 Rolling back this migration deletes all suggestions and approval runs.
 
+### Hidden today
+
+`brand.timezone` is an IANA zone name (`text`, default `UTC`). `brand_timezone_check`
+allows 1 to 64 characters shaped like `UTC` or `Area/Name`; Postgres still has to accept
+the name in `date_trunc`, so the API also checks `pg_timezone_names`.
+`brand.timezone_set_at` is NULL until someone chooses a zone, which means the brand is
+still on the default.
+
+"Today" for a brand starts at `date_trunc('day', now, brand.timezone)`.
+
+`moderation_action_applied_hide_idx` on `(organization_id, brand_id, completed_at DESC, id DESC)`
+covers only `kind = 'hide' AND status = 'applied'` rows, so the list of hidden comments of a
+brand reads newest first without scanning other actions.
+
 ### Latest decision per comment
 
 Decisions are never updated. "Restore" is a new `approve` decision. The current

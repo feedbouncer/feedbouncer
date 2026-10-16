@@ -13,12 +13,15 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { SessionGuard } from '../auth/session.guard.js';
-import { parseBody, parseUuidOr404, zName } from '../http/validation.js';
+import { parseBody, parseUuidOr404, zName, zTimeZone } from '../http/validation.js';
 import { RequireCapability } from '../tenancy/capability.decorator.js';
 import { OrgAccessGuard, type OrgRequest } from '../tenancy/org-access.guard.js';
 import { BrandsService } from './brands.service.js';
 
-const BrandBody = z.strictObject({ name: zName });
+const CreateBody = z.strictObject({ name: zName, timezone: zTimeZone.optional().catch(undefined) });
+const PatchBody = z
+  .strictObject({ name: zName.optional(), timezone: zTimeZone.optional() })
+  .refine((b) => b.name !== undefined || b.timezone !== undefined);
 const ListQuery = z.strictObject({ includeArchived: z.enum(['true', 'false']).optional() });
 
 @Controller('api/v1/orgs/:orgId/brands')
@@ -37,7 +40,8 @@ export class BrandsController {
   @HttpCode(201)
   @RequireCapability('brand.write')
   async create(@Req() req: OrgRequest, @Body() body: unknown) {
-    return { brand: await this.brands.create(req.org, parseBody(BrandBody, body).name) };
+    const { name, timezone } = parseBody(CreateBody, body);
+    return { brand: await this.brands.create(req.org, name, timezone) };
   }
 
   @Get(':brandId')
@@ -48,9 +52,9 @@ export class BrandsController {
 
   @Patch(':brandId')
   @RequireCapability('brand.write')
-  async rename(@Req() req: OrgRequest, @Param('brandId') brandId: string, @Body() body: unknown) {
-    const name = parseBody(BrandBody, body).name;
-    return { brand: await this.brands.rename(req.org, parseUuidOr404(brandId), name) };
+  async update(@Req() req: OrgRequest, @Param('brandId') brandId: string, @Body() body: unknown) {
+    const patch = parseBody(PatchBody, body);
+    return { brand: await this.brands.update(req.org, parseUuidOr404(brandId), patch) };
   }
 
   @Post(':brandId/archive')

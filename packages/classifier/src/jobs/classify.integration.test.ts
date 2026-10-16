@@ -7,7 +7,7 @@ import { ProviderError, type PreparedInput } from '@feedbouncer/ai';
 import { BrandSlots, createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { PgSuggestionStore } from '@feedbouncer/actions';
-import { PgCommentStore, PgReviewModeReader } from '@feedbouncer/comments';
+import { ModerationActions, PgCommentStore, PgReviewModeReader } from '@feedbouncer/comments';
 import { JobDeferral, type JobContext } from '@feedbouncer/jobs';
 import { PgEvaluationStore, bodySha256, type RuleAction } from '@feedbouncer/rules';
 import { createLogger } from '@feedbouncer/service-runtime';
@@ -567,6 +567,51 @@ describe('comment_classify', () => {
       payload(c),
     );
     expect(r.fallback).toBe('too_old');
+  });
+
+  it('classifier hide after a user unhide on an ingest re-run is refused moderator_override and falls back to flag', async () => {
+    const c = await seedComment('scam link after a moderator restored it');
+    await evaluateRules(c, 'no_match');
+    await ctxDb.c.query(
+      `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind, actor_type,
+         actor_user_id, request_key, status, completed_at)
+       VALUES ($1, $2, $3, $4, 'unhide', 'user', $5, $6, 'applied', now())`,
+      [c.t.organizationId, c.t.brandId, c.t.connectionId, c.id, c.t.userId, `rk-${randomUUID()}`],
+    );
+    const real = new ModerationActions({
+      pool,
+      store: comments,
+      producer: { enqueue: vi.fn() },
+      // Never reached: the override is decided first.
+      capabilities: () => undefined,
+      clock: { now: () => Date.now() },
+      log: quiet,
+    });
+    const r = await job(new FakeProvider([S({ scam_phishing: 0.9 })]), {
+      actions: real,
+    }).handle(ctx(c, 1), payload(c));
+    expect(r).toMatchObject({
+      result: 'classified',
+      outcome: 'hide',
+      fallback: 'moderator_override',
+    });
+    expect(
+      await one(`SELECT fallback_code FROM comment_classification WHERE id = $1`, [
+        r.classificationId,
+      ]),
+    ).toEqual({ fallback_code: 'moderator_override' });
+    expect(
+      await one(`SELECT reason FROM decision WHERE classification_id = $1 AND outcome = 'flag'`, [
+        r.classificationId,
+      ]),
+    ).toEqual({
+      reason: 'A moderator restored this comment, so it was flagged for review instead of hidden.',
+    });
+    expect(
+      await count(`SELECT 1 FROM moderation_action WHERE comment_id = $1 AND kind = 'hide'`, [
+        c.id,
+      ]),
+    ).toBe(0);
   });
 
   it('an earlier classifier hide is undone when an edit no longer meets the threshold', async () => {

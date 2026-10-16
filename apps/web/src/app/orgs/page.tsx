@@ -51,7 +51,7 @@ export default async function OrgsPage({
         refresh
       />
       <p>
-        <Link href="/account">Account</Link>
+        <Link href="/hidden-today">Hidden today</Link> · <Link href="/account">Account</Link>
       </p>
     </main>
   );

@@ -695,6 +695,102 @@ describe('moderation execute job', () => {
     expect(await actionRow(actionId)).toMatchObject({ status: 'pending' });
   });
 
+  describe('unhide reads the comment first', () => {
+    /** An unhide requested while our copy says hidden; the platform's state is whatever the test sets. */
+    let mark = 0;
+    const requestUnhide = async () => {
+      await pool.query(`UPDATE comment SET platform_state = 'hidden' WHERE id = $1`, [seeded.id]);
+      mark = graph.calls().length;
+      return requestAction(seeded.id, 'unhide');
+    };
+    /** Graph calls on the comment since the unhide was requested. */
+    const commentCalls = () =>
+      graph
+        .calls()
+        .slice(mark)
+        .filter((c) => c.path === seeded.commentId);
+    const commentState = async () =>
+      (await pool.query(`SELECT platform_state FROM comment WHERE id = $1`, [seeded.id])).rows[0]
+        .platform_state;
+
+    it('unhide of a comment already visible on the platform records noop already_visible', async () => {
+      const actionId = await requestUnhide();
+      expect(await run(actionId)).toEqual({
+        status: 'noop',
+        outcomeCode: 'already_visible',
+        undo: null,
+      });
+      expect(commentCalls().filter((c) => c.method === 'POST')).toEqual([]);
+      expect(await actionRow(actionId)).toMatchObject({
+        status: 'noop',
+        outcome_code: 'already_visible',
+      });
+      expect(await commentState()).toBe('visible');
+      expect(resync).not.toHaveBeenCalled();
+      expect(await store.userUnhidLast(t, seeded.id)).toBe(true);
+    });
+
+    it('unhide of a comment removed on the platform records noop comment_gone and marks deleted', async () => {
+      const actionId = await requestUnhide();
+      graph.removeComment(seeded.commentId);
+      expect(await run(actionId)).toEqual({
+        status: 'noop',
+        outcomeCode: 'comment_gone',
+        undo: null,
+      });
+      expect(commentCalls().filter((c) => c.method === 'POST')).toEqual([]);
+      expect(await commentState()).toBe('deleted');
+      expect(resync).toHaveBeenCalledTimes(1);
+    });
+
+    it('unhide when the pre-read is throttled defers and keeps the action pending', async () => {
+      const actionId = await requestUnhide();
+      graph.hideComment(seeded.commentId);
+      graph.throttleNext(80001);
+      await expect(run(actionId)).rejects.toMatchObject({ kind: 'rate_limited' });
+      expect(commentCalls().filter((c) => c.method === 'POST')).toEqual([]);
+      expect(await actionRow(actionId)).toMatchObject({ status: 'pending', completed_at: null });
+      expect(graph.state(seeded.commentId)).toBe('hidden');
+    });
+
+    it('unhide happy path applies and sets visible', async () => {
+      const actionId = await requestUnhide();
+      graph.hideComment(seeded.commentId);
+      expect(await run(actionId)).toEqual({ status: 'applied', outcomeCode: null, undo: 'hide' });
+      expect(commentCalls().map((c) => c.method)).toEqual(['GET', 'POST']);
+      expect(graph.state(seeded.commentId)).toBe('visible');
+      expect(await commentState()).toBe('visible');
+    });
+
+    it('unhide with a revoked page token (190/463) stays pending awaiting reconnect', async () => {
+      const actionId = await requestUnhide();
+      graph.hideComment(seeded.commentId);
+      graph.revokePageToken(pageId, 463);
+      const err = await run(actionId).catch((e: unknown) => e);
+      expect(err).toMatchObject({ kind: 'auth_expired', reauthorize: true });
+      expect(await actionRow(actionId)).toMatchObject({ status: 'pending' });
+      const conn = await pool.query('SELECT status FROM connection WHERE id = $1', [
+        t.connectionId,
+      ]);
+      expect(conn.rows[0].status).toBe('reconnect_required');
+    });
+
+    it('unhide with permission error (200) fails permission_denied', async () => {
+      const actionId = await requestUnhide();
+      graph.hideComment(seeded.commentId);
+      // The pre-read's permission error is not decisive; the unhide itself then fails.
+      graph.failNext(200);
+      graph.failNext(200);
+      expect(await run(actionId)).toEqual({
+        status: 'failed',
+        outcomeCode: 'permission_denied',
+        undo: null,
+      });
+      expect(commentCalls().map((c) => c.method)).toEqual(['GET', 'POST']);
+      expect(graph.state(seeded.commentId)).toBe('hidden');
+    });
+  });
+
   it('audit details never contain reply text', async () => {
     const text = 'unique reply text 7f3a';
     const actionId = await requestAction(seeded.id, 'public_reply', text);

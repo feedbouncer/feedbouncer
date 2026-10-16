@@ -72,3 +72,11 @@ describe('apiFetch error details', () => {
     expect(err.max).toBeUndefined();
   });
 });
+
+describe('apiFetch permission detail', () => {
+  it('carries the permission named by a missing_permission error', async () => {
+    stubFetch(json({ error: { code: 'missing_permission', message: 'm', permission: 'p1' } }, 409));
+    const err = await apiFetch('/api/v1/x', { method: 'POST' }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'missing_permission', permission: 'p1' });
+  });
+});

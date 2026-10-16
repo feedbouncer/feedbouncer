@@ -27,6 +27,9 @@ import {
   OAuthConnectController,
 } from './connections/oauth-connect.controller.js';
 import { OAuthConnectService } from './connections/oauth-connect.service.js';
+import { HiddenTodayController } from './hidden-today/hidden-today.controller.js';
+import { HiddenTodayService } from './hidden-today/hidden-today.service.js';
+import { MeHiddenTodayController } from './hidden-today/me-hidden-today.controller.js';
 import { HealthController } from './http/health.controller.js';
 import {
   InvitationsController,
@@ -75,6 +78,7 @@ export class AppModule {
         SignUpController,
         AuthProxyController,
         MeController,
+        MeHiddenTodayController,
         OrgsListController,
         OrgController,
         BrandsController,
@@ -87,6 +91,7 @@ export class AppModule {
         RulesController,
         ActionsController,
         ReviewController,
+        HiddenTodayController,
         ReviewModeController,
         SuggestionsController,
         DomainsController,
@@ -111,6 +116,7 @@ export class AppModule {
         AdsService,
         RulesService,
         ActionsService,
+        HiddenTodayService,
         ReviewModeService,
         ClassifierService,
         PoliciesService,

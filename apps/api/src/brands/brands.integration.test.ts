@@ -137,8 +137,86 @@ describe('brands', () => {
       orgId,
       admin.userId,
     ]);
-    await expect(svc.rename(ctx, brandId, 'Late')).rejects.toMatchObject({ status: 404 });
+    await expect(svc.update(ctx, brandId, { name: 'Late' })).rejects.toMatchObject({ status: 404 });
     await expect(svc.create(ctx, 'Late')).rejects.toMatchObject({ status: 404 });
     await expect(svc.archive(ctx, brandId)).rejects.toMatchObject({ status: 404 });
+  });
+
+  describe('timezone', () => {
+    it('GET brand returns timezone UTC, not yet set', async () => {
+      const { orgId, owner, brandId } = await orgWithRoles(api, 'tz0', shared);
+      const r = await api.req('GET', `${brandsUrl(orgId)}/${brandId}`, { cookie: owner.cookie });
+      expect(r.body.brand).toMatchObject({ timezone: 'UTC', timezoneSet: false });
+    });
+
+    it('POST brand with timezone stores it; an unknown zone falls back to UTC', async () => {
+      const { orgId, owner } = await orgWithRoles(api, 'tz1', shared);
+      const created = await api.req('POST', brandsUrl(orgId), {
+        cookie: owner.cookie,
+        body: { name: 'Berlin', timezone: 'Europe/Berlin' },
+      });
+      expect(created.status).toBe(201);
+      expect(created.body.brand).toMatchObject({ timezone: 'Europe/Berlin', timezoneSet: true });
+      const plain = await api.req('POST', brandsUrl(orgId), {
+        cookie: owner.cookie,
+        body: { name: 'Plain' },
+      });
+      expect(plain.body.brand).toMatchObject({ timezone: 'UTC', timezoneSet: false });
+      const bad = await api.req('POST', brandsUrl(orgId), {
+        cookie: owner.cookie,
+        body: { name: 'Mars', timezone: 'Mars/Phobos' },
+      });
+      expect(bad.status).toBe(201);
+      expect(bad.body.brand).toMatchObject({ timezone: 'UTC', timezoneSet: false });
+    });
+
+    it("PATCH brand timezone 'America/Los_Angeles' -> timezoneSet true; 'Mars/Phobos' -> 400; member role -> 403", async () => {
+      const { orgId, owner, member, brandId } = await orgWithRoles(api, 'tz2', shared);
+      const one = `${brandsUrl(orgId)}/${brandId}`;
+      const ok = await api.req('PATCH', one, {
+        cookie: owner.cookie,
+        body: { timezone: 'America/Los_Angeles' },
+      });
+      expect(ok.status).toBe(200);
+      expect(ok.body.brand).toMatchObject({
+        name: 'tz2 Brand',
+        timezone: 'America/Los_Angeles',
+        timezoneSet: true,
+      });
+      // Intl matches names case-insensitively, Postgres does not: still a 400, and nothing changes.
+      for (const timezone of ['Mars/Phobos', 'america/los_angeles']) {
+        const bad = await api.req('PATCH', one, { cookie: owner.cookie, body: { timezone } });
+        expect(bad.status).toBe(400);
+        expect(bad.body.error.code).toBe('invalid_request');
+      }
+      expect((await api.req('GET', one, { cookie: owner.cookie })).body.brand.timezone).toBe(
+        'America/Los_Angeles',
+      );
+      const denied = await api.req('PATCH', one, {
+        cookie: member.cookie,
+        body: { timezone: 'Asia/Tokyo' },
+      });
+      expect(denied.status).toBe(403);
+      for (const body of [{}, { name: 'x', extra: 1 }]) {
+        expect((await api.req('PATCH', one, { cookie: owner.cookie, body })).status).toBe(400);
+      }
+      const audit = await api.pool.query(
+        "SELECT action, details FROM audit_event WHERE brand_id = $1 AND action <> 'brand.created'",
+        [brandId],
+      );
+      expect(audit.rows).toEqual([{ action: 'brand.updated', details: { timezoneChanged: true } }]);
+    });
+
+    it('a name-only PATCH leaves the timezone alone', async () => {
+      const { orgId, owner, brandId } = await orgWithRoles(api, 'tz3', shared);
+      const one = `${brandsUrl(orgId)}/${brandId}`;
+      await api.req('PATCH', one, { cookie: owner.cookie, body: { timezone: 'Asia/Tokyo' } });
+      const r = await api.req('PATCH', one, { cookie: owner.cookie, body: { name: 'Renamed' } });
+      expect(r.body.brand).toMatchObject({
+        name: 'Renamed',
+        timezone: 'Asia/Tokyo',
+        timezoneSet: true,
+      });
+    });
   });
 });

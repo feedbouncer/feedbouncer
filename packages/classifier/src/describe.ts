@@ -1,5 +1,6 @@
 import type { RuleAction } from '@feedbouncer/rules';
 import { MAX_INPUT_CHARS } from '@feedbouncer/ai';
+import { MODERATOR_OVERRIDE_REASON } from '@feedbouncer/comments';
 import type { Category, ClassifierVerdict, Trigger } from './types.js';
 
 export const CATEGORY_TEXT: Readonly<Record<Category, string>> = {
@@ -43,6 +44,7 @@ export function describeClassification(v: ClassifierVerdict, o: { truncated: boo
 }
 
 export function describeFallback(kind: 'hide' | 'delete' | 'unhide', code: string): string {
+  if (code === 'moderator_override') return MODERATOR_OVERRIDE_REASON;
   return `Flagged for review: the classifier couldn't ${kind} this comment (${code}).`;
 }
 

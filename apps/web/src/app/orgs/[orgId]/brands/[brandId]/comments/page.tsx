@@ -159,6 +159,7 @@ export default async function CommentsPage({
         <Link href={`/orgs/${orgId}/brands/${brandId}/policies`}>Policies</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/classifier`}>Classifier</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/domains`}>Own domains</Link> ·{' '}
+        <Link href="/hidden-today">Hidden today</Link> ·{' '}
         <Link href={`/orgs/${orgId}`}>Back to organization</Link>
       </p>
     </main>
