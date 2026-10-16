@@ -72,9 +72,10 @@ export async function evaluateRulesFor(
               evidence: { kind: 'keyword', term: 'x' },
             },
             suggestions: [],
+            alsoMatched: [],
             trace: [],
           }
-        : { decided: null, suggestions: [], trace: [] },
+        : { decided: null, suggestions: [], alsoMatched: [], trace: [] },
   });
   if (!row) throw new Error('evaluation not recorded');
 }

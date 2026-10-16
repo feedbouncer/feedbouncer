@@ -3,9 +3,12 @@ import {
   ActionStepOutcomeObserver,
   PgActionRunStore,
   PgReviewQueue,
+  PgSuggestionStore,
   actionRunAdvanceJob,
   loadBrandName,
   loadConnectionInfo,
+  suggestionBulkJob,
+  type Audit,
 } from '@feedbouncer/actions';
 import {
   ClassifierActionFallback,
@@ -33,6 +36,7 @@ import {
   connectionLifecycleJob,
   type IngestObserver,
   ModerationActions,
+  PgReviewModeReader,
   type PgCommentStore,
 } from '@feedbouncer/comments';
 import {
@@ -92,6 +96,23 @@ export interface WorkerJobDeps {
   readonly ads?: { readonly poll: PollSettings };
 }
 
+/** Writes inside the caller's transaction, so the event commits or rolls back with the change. */
+const recordAudit: Audit = async (tx, e) => {
+  await tx.query(
+    `INSERT INTO audit_event (organization_id, brand_id, actor_type, actor_user_id, action, subject_type, subject_id, details)
+     VALUES ($1, $2, 'user', $3, $4, $5, $6, $7::jsonb)`,
+    [
+      e.organizationId,
+      e.brandId,
+      e.actorUserId,
+      e.action,
+      e.subjectType,
+      e.subjectId,
+      JSON.stringify(e.details),
+    ],
+  );
+};
+
 /** Platform connectors this deployment runs. Each registered platform gets its own queue. */
 export function buildConnectorRegistry(cfg: {
   facebook: FacebookConfig | null;
@@ -147,12 +168,28 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
     observer: new RuleStepFallback({ evaluations, log: deps.log }),
   });
   registry.register(actionRunAdvanceJob(runner));
+  const suggestions = new PgSuggestionStore(deps.pool);
+  const reviewMode = new PgReviewModeReader(deps.pool, deps.clock);
+  registry.register(
+    suggestionBulkJob({
+      pool: deps.pool,
+      suggestions,
+      runs,
+      runner,
+      producer: deps.producer,
+      audit: recordAudit,
+      clock: deps.clock,
+      log: deps.log,
+    }),
+  );
   registry.register(
     ruleEvaluateJob({
       comments: deps.store,
       evaluations,
       cache: new RuleSetCache(rules),
       runner,
+      suggestions,
+      reviewMode,
       log: deps.log,
       evaluated: new CompositeRuleEvaluatedHook([
         new ClassifierTrigger(deps.producer),
@@ -169,6 +206,8 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       provider: createClassifierProvider(deps.classifier),
       slots: new BrandSlots(deps.slotsPool, deps.classifier.perBrandInFlight),
       actions,
+      suggestions,
+      reviewMode,
       languages: deps.classifier.languages,
       maxWaitMs: deps.classifier.maxWaitMs,
       log: deps.log,
@@ -191,6 +230,8 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       evaluator: policyEvaluator,
       slots: policySlots,
       actions,
+      suggestions,
+      reviewMode,
       monthlyCallsPerBrand: deps.policy.monthlyCallsPerBrand,
       maxWaitMs: deps.policy.maxWaitMs,
       log: deps.log,

@@ -9,6 +9,7 @@ import type { Platform } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { describeDecision } from './reason.js';
 import type { ActionStep } from '@feedbouncer/actions';
+import { splitGated } from '@feedbouncer/actions';
 import type { RuleAction, RuleHit, Verdict } from './types.js';
 
 export type EvaluationStatus = 'no_match' | 'decided' | 'skipped';
@@ -21,6 +22,9 @@ export interface EvaluationRow {
   fallbackAt: Date | null;
   /** The matched rule's steps when it matched; empty unless decided. */
   matchedActions: ActionStep[];
+  /** Whether the connection's review window was active when this was evaluated. */
+  reviewMode: boolean;
+  alsoMatchedRuleIds: string[];
 }
 
 export interface EvaluationRecord {
@@ -32,6 +36,7 @@ export interface EvaluationRecord {
   status: EvaluationStatus;
   skipReason?: 'own_account' | 'deleted';
   verdict?: Verdict;
+  reviewMode?: boolean;
 }
 
 /** Fallback codes must fit rule_evaluation_fallback_code_check; anything else is recorded as 'failed'. */
@@ -39,7 +44,8 @@ const FALLBACK_CODE = /^[a-z][a-z_]{0,63}$/;
 export const safeFallbackCode = (code: string): string =>
   FALLBACK_CODE.test(code) ? code : 'failed';
 
-const COLS = 'id, status, matched_rule_id, outcome, fallback_at, matched_actions';
+const COLS =
+  'id, status, matched_rule_id, outcome, fallback_at, matched_actions, review_mode, also_matched_rule_ids';
 interface Row {
   id: string;
   status: EvaluationStatus;
@@ -47,6 +53,8 @@ interface Row {
   outcome: RuleAction | null;
   fallback_at: Date | null;
   matched_actions: ActionStep[] | null;
+  review_mode: boolean;
+  also_matched_rule_ids: string[];
 }
 const toRow = (r: Row): EvaluationRow => ({
   id: r.id,
@@ -55,7 +63,12 @@ const toRow = (r: Row): EvaluationRow => ({
   outcome: r.outcome,
   fallbackAt: r.fallback_at,
   matchedActions: r.matched_actions ?? [],
+  reviewMode: r.review_mode,
+  alsoMatchedRuleIds: r.also_matched_rule_ids,
 });
+
+/** At most the column's limit; the order is evaluation order. */
+const MAX_ALSO_MATCHED = 50;
 
 const INSERT_DECISION = `
   INSERT INTO decision (organization_id, brand_id, comment_id, outcome, mode, actor_type, rule_id,
@@ -96,9 +109,11 @@ export class PgEvaluationStore {
       const { rows } = await tx.query<Row>(
         `INSERT INTO rule_evaluation (organization_id, brand_id, connection_id, comment_id, body_sha256,
                                       trigger_key, ruleset_version, status, skip_reason,
-                                      matched_rule_id, outcome, trace, matched_actions)
+                                      matched_rule_id, outcome, trace, matched_actions,
+                                      review_mode, also_matched_rule_ids)
          SELECT c.organization_id, c.brand_id, c.connection_id, c.id, $5::bytea, $6::text,
-                $7::text, $8::text, $9::text, $10::uuid, $11::text, $12::jsonb, $13::jsonb
+                $7::text, $8::text, $9::text, $10::uuid, $11::text, $12::jsonb, $13::jsonb,
+                $14::boolean, $15::uuid[]
            FROM comment c
           WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3 AND c.id = $4
          ON CONFLICT (comment_id, body_sha256, trigger_key) DO NOTHING
@@ -117,6 +132,10 @@ export class PgEvaluationStore {
           decided?.action ?? null,
           JSON.stringify(e.verdict?.trace ?? []),
           decided ? JSON.stringify(decided.actions) : null,
+          e.reviewMode ?? false,
+          e.status === 'decided'
+            ? (e.verdict?.alsoMatched ?? []).slice(0, MAX_ALSO_MATCHED).map((h) => h.ruleId)
+            : [],
         ],
       );
       const row = rows[0];
@@ -135,10 +154,28 @@ export class PgEvaluationStore {
       // Suggestions first: they were seen before the decision point.
       if (e.status !== 'skipped') {
         for (const s of e.verdict?.suggestions ?? []) await write(s, 'suggest');
-        if (decided) await write(decided, 'enforce');
+        if (decided)
+          await write(
+            decided,
+            e.reviewMode && splitGated(decided.actions).gated.length > 0 ? 'suggest' : 'enforce',
+          );
       }
       return toRow(row);
     });
+  }
+
+  /** The reason written with the deciding rule's decision, for a suggestion made from it. */
+  async decisionReason(scope: BrandScope, evaluationId: string): Promise<string | null> {
+    const { rows } = await this.#pool.query<{ reason: string }>(
+      `SELECT d.reason FROM decision d
+         JOIN rule_evaluation e ON e.id = d.rule_evaluation_id
+                               AND e.organization_id = d.organization_id AND e.brand_id = d.brand_id
+        WHERE e.organization_id = $1 AND e.brand_id = $2 AND e.id = $3
+          AND d.rule_id = e.matched_rule_id AND d.outcome = e.outcome
+        ORDER BY d.sequence LIMIT 1`,
+      [scope.organizationId, scope.brandId, evaluationId],
+    );
+    return rows[0]?.reason ?? null;
   }
 
   /** Exactly-once: sets fallback_at/fallback_code and appends a 'flag' decision. False if already fell back. */

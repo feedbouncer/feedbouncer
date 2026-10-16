@@ -78,6 +78,7 @@ async function seed(): Promise<Seeded> {
     status: 'decided',
     verdict: {
       suggestions: [],
+      alsoMatched: [],
       decided: {
         ruleId,
         ruleName: 'No spam',

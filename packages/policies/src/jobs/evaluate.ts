@@ -11,11 +11,13 @@ import {
   type JobDefinition,
   type JobResult,
 } from '@feedbouncer/jobs';
+import { stepsForOutcome, type PgSuggestionStore } from '@feedbouncer/actions';
 import {
   actionFallbackCode,
   type CommentRow,
   type ModerationActions,
   type PgCommentStore,
+  type PgReviewModeReader,
 } from '@feedbouncer/comments';
 import { bodySha256, type BrandScope, type PgEvaluationStore } from '@feedbouncer/rules';
 import { mapProviderError, prepareInput } from '@feedbouncer/ai';
@@ -44,6 +46,8 @@ export interface PolicyEvaluateDeps {
   evaluator: PolicyEvaluator;
   slots: Pick<BrandSlots, 'acquire'>;
   actions: Pick<ModerationActions, 'request'>;
+  suggestions: Pick<PgSuggestionStore, 'propose'>;
+  reviewMode: Pick<PgReviewModeReader, 'isActive'>;
   monthlyCallsPerBrand: number;
   maxWaitMs: number;
   log: Logger;
@@ -199,6 +203,17 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
     if (ev.status !== 'evaluated') return result;
     if (ev.outcome !== 'hide' && ev.outcome !== 'remove') return result;
     if (ev.fallbackAt) return { ...result, fallback: 'recorded' };
+    if (ev.reviewMode) {
+      const reason = await d.evaluations.decisionReason(brand, ev.id);
+      if (reason === null) throw new Error('policy evaluation has no decision');
+      await d.suggestions.propose(ctx.scope, {
+        commentId: row.id,
+        source: { type: 'policy', ref: ev.id },
+        steps: stepsForOutcome(ev.outcome),
+        reason,
+      });
+      return { ...result, suggested: true };
+    }
     const kind = ev.outcome === 'hide' ? 'hide' : 'delete';
     const r = await d.actions.request({
       scope: brand,
@@ -228,8 +243,9 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
       if (!ev) {
         const rec = await evaluateOnce(ctx, p, row, sha, brand);
         if (rec === 'no_policies') return { result: 'no_policies' };
+        const reviewMode = await d.reviewMode.isActive(ctx.scope);
         ev =
-          (await d.evaluations.record(ctx.scope, rec)) ??
+          (await d.evaluations.record(ctx.scope, { ...rec, reviewMode })) ??
           (await d.evaluations.find(brand, row.id, sha, p.trigger));
         if (!ev) throw new JobError('retryable', 'policy_evaluation_not_visible');
       }

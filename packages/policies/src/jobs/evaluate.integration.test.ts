@@ -7,7 +7,12 @@ import type pg from 'pg';
 import { ProviderError, type PreparedInput } from '@feedbouncer/ai';
 import { BrandSlots, createPool, withTransaction } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
-import { PgCommentStore, type RequestActionResult } from '@feedbouncer/comments';
+import { PgSuggestionStore } from '@feedbouncer/actions';
+import {
+  PgCommentStore,
+  PgReviewModeReader,
+  type RequestActionResult,
+} from '@feedbouncer/comments';
 import { JobDeferral, type JobContext } from '@feedbouncer/jobs';
 import { PgEvaluationStore, bodySha256, type RuleAction } from '@feedbouncer/rules';
 import { createLogger } from '@feedbouncer/service-runtime';
@@ -103,6 +108,8 @@ function makeJob(o: Partial<PolicyEvaluateDeps> = {}) {
     evaluator,
     slots,
     actions,
+    suggestions: new PgSuggestionStore(pool),
+    reviewMode: new PgReviewModeReader(pool, { now: () => Date.now() }),
     monthlyCallsPerBrand: 1_000,
     maxWaitMs: MAX_WAIT_MS,
     log: quiet,
@@ -145,8 +152,11 @@ const updatePolicy = (t: Tenant, p: StoredPolicy, patch: Parameters<PgPolicyStor
   );
 
 /** A tenant with the given policies, enabled and created in order. */
-async function brand(specs: Parameters<typeof addPolicy>[1][] = [{}]) {
-  const t = await seedTenant(db.c, `pej${++n}`);
+async function brand(
+  specs: Parameters<typeof addPolicy>[1][] = [{}],
+  o: { reviewMode?: 'on' } = {},
+) {
+  const t = await seedTenant(db.c, `pej${++n}`, o);
   const P: StoredPolicy[] = [];
   for (const s of specs) P.push(await addPolicy(t, s));
   return { t, P };
@@ -175,6 +185,7 @@ async function writeRuleEvaluation(
         evidence: { kind: 'keyword', term: 'x' },
       },
       suggestions: [],
+      alsoMatched: [],
       trace: [],
     },
   });
@@ -401,6 +412,50 @@ describe('policy_evaluate', () => {
     await job.handle(ctx(c2, 1), payload(c2));
     expect(actions.calls).toEqual([]);
     expect((await decisionsFor(c2, 'policy'))[0]).toMatchObject({ outcome: 'flag' });
+  });
+
+  it('remove verdict in window: suggestion with delete step, decision mode suggest, no pol: action, no fallback', async () => {
+    const { t } = await brand([{ action: 'remove' }], { reviewMode: 'on' });
+    evaluator.evaluate.mockResolvedValue({ p1: 'clear_match' });
+    const c = await seed(t, { ruleStatus: 'no_match' });
+    const r = await job.handle(ctx(c, 1), payload(c));
+    expect(r).toMatchObject({ result: 'evaluated', outcome: 'remove', suggested: true });
+    expect(actions.calls).toEqual([]);
+    const retried = await job.handle(ctx(c, 2), payload(c));
+    expect(retried).toMatchObject({ suggested: true });
+    const decisions = await db.c.query(
+      `SELECT outcome, mode FROM decision WHERE comment_id = $1 AND actor_type = 'policy'`,
+      [c.id],
+    );
+    expect(decisions.rows).toEqual([{ outcome: 'remove', mode: 'suggest' }]);
+    const s = await db.c.query(
+      `SELECT src.source_type, src.source_ref, src.steps, src.reason, s.status
+         FROM action_suggestion s JOIN action_suggestion_source src ON src.suggestion_id = s.id
+        WHERE s.comment_id = $1`,
+      [c.id],
+    );
+    expect(s.rows).toHaveLength(1);
+    expect(s.rows[0]).toMatchObject({
+      source_type: 'policy',
+      source_ref: r.evaluationId,
+      status: 'pending',
+      steps: [{ type: 'delete', confirmIrreversible: true }],
+    });
+    expect(s.rows[0].reason).toBe((await decisionsFor(c, 'policy'))[0]!.reason);
+    expect((await evaluationFor(c))!.review_mode).toBe(true);
+  });
+
+  it('flag verdict in window is unchanged', async () => {
+    const { t } = await brand([{ action: 'flag' }], { reviewMode: 'on' });
+    evaluator.evaluate.mockResolvedValue({ p1: 'clear_match' });
+    const c = await seed(t, { ruleStatus: 'no_match' });
+    const r = await job.handle(ctx(c, 1), payload(c));
+    expect(r).toMatchObject({ outcome: 'flag' });
+    expect(r.suggested).toBeUndefined();
+    expect(actions.calls).toEqual([]);
+    expect((await decisionsFor(c, 'policy'))[0]).toMatchObject({ outcome: 'flag' });
+    const n2 = await db.c.query(`SELECT 1 FROM action_suggestion WHERE comment_id = $1`, [c.id]);
+    expect(n2.rowCount).toBe(0);
   });
 
   it('no match: evaluated, no decision and no action', async () => {
@@ -829,6 +884,8 @@ describe('policy_evaluate', () => {
       },
       slots: new BrandSlots(slotPool, 2),
       actions: classifierActions as never,
+      suggestions: new PgSuggestionStore(pool),
+      reviewMode: new PgReviewModeReader(pool, { now: () => Date.now() }),
       languages: ['en'],
       maxWaitMs: MAX_WAIT_MS,
       log: quiet,

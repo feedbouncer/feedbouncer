@@ -11,11 +11,13 @@ import {
   type JobDefinition,
   type JobResult,
 } from '@feedbouncer/jobs';
+import { stepsForOutcome, type PgSuggestionStore } from '@feedbouncer/actions';
 import {
   actionFallbackCode,
   type CommentRow,
   type ModerationActions,
   type PgCommentStore,
+  type PgReviewModeReader,
 } from '@feedbouncer/comments';
 import { mapProviderError, prepareInput } from '@feedbouncer/ai';
 import type { BrandSlots } from '@feedbouncer/db';
@@ -49,6 +51,8 @@ export interface ClassifyDeps {
   provider: ClassifierProvider;
   slots: Pick<BrandSlots, 'acquire'>;
   actions: Pick<ModerationActions, 'request'>;
+  suggestions: Pick<PgSuggestionStore, 'propose'>;
+  reviewMode: Pick<PgReviewModeReader, 'isActive'>;
   languages: readonly string[];
   maxWaitMs: number;
   log: Logger;
@@ -193,6 +197,17 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
     if (c.fallbackAt) return { ...result, fallback: 'recorded' };
 
     if (c.outcome === 'hide' || c.outcome === 'remove') {
+      if (c.reviewMode) {
+        const reason = await d.classifications.decisionReason(brand, c.id);
+        if (reason === null) throw new Error('classification has no decision');
+        await d.suggestions.propose(ctx.scope, {
+          commentId: row.id,
+          source: { type: 'classifier', ref: c.id },
+          steps: stepsForOutcome(c.outcome),
+          reason,
+        });
+        return { ...result, suggested: true };
+      }
       const kind = c.outcome === 'hide' ? 'hide' : 'delete';
       const r = await d.actions.request({
         scope: brand,
@@ -258,8 +273,9 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
       let c = await d.classifications.find(brand, row.id, sha, p.trigger);
       if (!c) {
         const rec = await classifyOnce(ctx, p, row, sha, brand);
+        const reviewMode = await d.reviewMode.isActive(ctx.scope);
         c =
-          (await d.classifications.record(ctx.scope, rec)) ??
+          (await d.classifications.record(ctx.scope, { ...rec, reviewMode })) ??
           (await d.classifications.find(brand, row.id, sha, p.trigger));
         if (!c) throw new JobError('retryable', 'classification_not_visible');
       }

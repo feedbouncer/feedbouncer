@@ -33,6 +33,38 @@ const facts = (body: string, over = {}) => ({
 const ctx = { ownDomains: ['example.com'] };
 
 describe('evaluate', () => {
+  it('collectAlsoMatched lists later enforce matches without changing decided', () => {
+    const a = rec({ type: 'keyword', terms: ['spam'] }, { priority: 10 });
+    const b = rec({ type: 'keyword', terms: ['spam'] }, { priority: 20, action: 'remove' });
+    const c = rec({ type: 'keyword', terms: ['spam'] }, { priority: 30, mode: 'suggest' });
+    const d = rec({ type: 'keyword', terms: ['other'] }, { priority: 40 });
+    const set = compileRuleSet([a, b, c, d], ctx, 'v');
+    const plain = evaluate(set, facts('spam'));
+    const v = evaluate(set, facts('spam'), { collectAlsoMatched: true });
+    expect(v.decided).toEqual(plain.decided);
+    expect(v.alsoMatched.map((h) => h.ruleId)).toEqual([b.id]);
+    expect(v.suggestions).toEqual([]);
+  });
+  it('off by default: alsoMatched is empty and later rules are not evaluated', () => {
+    const a = rec({ type: 'keyword', terms: ['spam'] }, { priority: 10 });
+    const b = rec({ type: 'keyword', terms: ['spam'] }, { priority: 20 });
+    const set = compileRuleSet([a, b], ctx, 'v');
+    const calls: string[] = [];
+    const spied = {
+      ...set,
+      rules: set.rules.map((r) => ({
+        ...r,
+        matcher: ((...args: Parameters<typeof r.matcher>) => {
+          calls.push(r.id);
+          return r.matcher(...args);
+        }) as typeof r.matcher,
+      })),
+    };
+    const v = evaluate(spied, facts('spam'));
+    expect(v.alsoMatched).toEqual([]);
+    expect(calls).toEqual([a.id]);
+  });
+
   it('first enforcing match wins, in priority order', () => {
     const a = rec({ type: 'keyword', terms: ['spam'] }, { action: 'flag', priority: 20 });
     const b = rec({ type: 'keyword', terms: ['spam'] }, { action: 'remove', priority: 10 });
