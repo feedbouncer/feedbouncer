@@ -53,10 +53,11 @@ export interface Page<T> {
   next: string | null;
 }
 
-const page = <T extends { id: string }>(items: T[], limit: number): Page<T> => ({
-  items,
-  next: items.length === limit ? items[items.length - 1]!.id : null,
-});
+/** `rows` holds up to one more row than the page; that extra row only says there is a next page. */
+const page = <T extends { id: string }>(rows: T[], limit: number): Page<T> => {
+  const items = rows.slice(0, limit);
+  return { items, next: rows.length > limit ? items[items.length - 1]!.id : null };
+};
 
 @Injectable()
 export class ActionsService {
@@ -109,8 +110,8 @@ export class ActionsService {
     ruleId: string,
     commentId: string,
   ): Promise<{ steps: SimulatedStep[] }> {
-    const { store, actions, producer } = this.#configured();
     const scope = await requireBrand(this.deps.pool, org, brandId);
+    const { store, actions, producer } = this.#configured();
     const rule = await this.#rules.get(scope, ruleId);
     const comment = await store.load(scope, commentId);
     if (!rule || !comment) throw notFound();
@@ -159,7 +160,7 @@ export class ActionsService {
   ): Promise<Page<LogEntryDto>> {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     const rows = await this.#runs.listLog(scope, {
-      limit: q.limit,
+      limit: q.limit + 1,
       ...(q.ruleId && { ruleId: q.ruleId }),
       ...(q.commentId && { commentId: q.commentId }),
       ...(q.status && { status: q.status }),
@@ -174,8 +175,8 @@ export class ActionsService {
     brandId: unknown,
     stepId: string,
   ): Promise<{ status: 'accepted' | 'done'; undoActionId: string | null }> {
-    const { actions } = this.#configured();
     const scope = await requireBrand(this.deps.pool, org, brandId);
+    const { actions } = this.#configured();
     const r = await undoStep(
       { pool: this.deps.pool, runs: this.#runs, review: this.#review, actions },
       scope,
@@ -194,7 +195,7 @@ export class ActionsService {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     const rows = await this.#review.list(scope, {
       status: q.status,
-      limit: q.limit,
+      limit: q.limit + 1,
       ...(q.before && { before: q.before }),
     });
     return page(rows.map(toReviewItemDto), q.limit);
@@ -206,8 +207,8 @@ export class ActionsService {
     itemId: string,
     body: { resolution: Resolution; requestKey: string; confirm?: true | undefined },
   ): Promise<{ resolution: Resolution; actionId: string | null }> {
-    const { store, actions } = this.#configured();
     const scope = await requireBrand(this.deps.pool, org, brandId);
+    const { store, actions } = this.#configured();
     const r = await resolveReviewItem(
       { pool: this.deps.pool, review: this.#review, comments: store, actions },
       scope,

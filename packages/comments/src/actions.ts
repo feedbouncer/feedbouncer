@@ -81,7 +81,7 @@ export function actionFallbackCode(r: RequestActionResult): string | null {
 
 export const REQUEST_KEY = /^[A-Za-z0-9._:-]{1,128}$/;
 /** Prefixes of request keys the server derives itself; clients cannot claim them. */
-const RESERVED_KEY_PREFIXES = ['auto:', 'undo:', 'review:'];
+const RESERVED_KEY_PREFIXES = ['auto:', 'undo:', 'review:', 'clf:', 'pol:', 'rule-eval:'];
 
 /** A request key a client may supply: well-formed and outside the server-generated key space. */
 export const isClientRequestKey = (key: unknown): key is string =>

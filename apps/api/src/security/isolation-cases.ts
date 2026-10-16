@@ -10,6 +10,8 @@ export interface IsolationFixture {
   bConnectionId: string;
   bCommentId: string;
   bGrantId: string;
+  /** A's own rule. */
+  aRuleId: string;
   /** B's rule and own domain. */
   bRuleId: string;
   bDomainId: string;
@@ -362,6 +364,12 @@ export const CASES: IsolationCase[] = [
     route: 'POST /api/v1/orgs/:orgId/brands/:brandId/rules/:ruleId/simulate',
     name: "simulate B's rule id under A's own brand",
     url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/rules/${f.bRuleId}/simulate`,
+    body: (f) => ({ commentId: f.bCommentId }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/rules/:ruleId/simulate',
+    name: "simulate A's own rule on B's comment id",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/rules/${f.aRuleId}/simulate`,
     body: (f) => ({ commentId: f.bCommentId }),
   },
   {

@@ -363,6 +363,10 @@ describe('action log and undo', () => {
     );
     expect(next.body.items).toHaveLength(1);
     expect(next.body.items[0].id).not.toBe(page.body.items[0].id);
+    expect(next.body.next).toBeNull();
+    const all = await call(fb, 'GET', `/action-log?limit=2&commentId=${s.commentId}`);
+    expect(all.body.items).toHaveLength(2);
+    expect(all.body.next).toBeNull();
   });
 });
 
@@ -426,7 +430,15 @@ describe('review queue', () => {
     const s = await seedBase(fb);
     const id = await openItem(fb, s);
     const path = `/review-items/${id}/resolve`;
-    for (const requestKey of ['auto:x', 'undo:x', 'review:x', 'bad key'])
+    for (const requestKey of [
+      'auto:x',
+      'undo:x',
+      'review:x',
+      'clf:x',
+      'pol:x',
+      'rule-eval:x',
+      'bad key',
+    ])
       expect((await call(fb, 'POST', path, { resolution: 'hide', requestKey })).status).toBe(400);
     expect((await call(fb, 'POST', path, { resolution: 'hide' })).status).toBe(400);
     expect(

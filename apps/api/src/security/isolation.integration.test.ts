@@ -88,6 +88,11 @@ beforeAll(async () => {
      VALUES ($1, $2, $3, $4, 'action_step', $5) RETURNING id`,
     [B.orgId, B.brandId, bConnectionId, comment.rows[0].id, bRule.rows[0].id],
   );
+  const aRule = await api.pool.query(
+    `INSERT INTO rule (organization_id, brand_id, name, conditions, action, mode)
+     VALUES ($1, $2, 'a rule', '{"type":"keyword","terms":["x"]}'::jsonb, 'flag', 'enforce') RETURNING id`,
+    [A.orgId, A.brandId],
+  );
   const bDomain = await api.pool.query(
     `INSERT INTO brand_domain (organization_id, brand_id, domain) VALUES ($1, $2, 'b-own.example')
      RETURNING id`,
@@ -154,6 +159,7 @@ beforeAll(async () => {
     bConnectionId,
     bCommentId: comment.rows[0].id,
     bGrantId,
+    aRuleId: aRule.rows[0].id,
     bRuleId: bRule.rows[0].id,
     bDomainId: bDomain.rows[0].id,
     bClassifierRunId: bClassifierRun.rows[0].id,

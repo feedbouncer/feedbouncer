@@ -244,8 +244,9 @@ export const REASON_CODES: readonly string[] = [
   'template_too_long',
 ];
 
-const MAX_PAGE_SIZE = 100;
+/** A page of 100 plus the one extra row callers fetch to know whether another page follows. */
+const MAX_PAGE_SIZE = 101;
 
-/** A page size within 1..100; anything non-numeric becomes 1. */
+/** A row count within 1..101; anything non-numeric becomes 1. */
 export const clampLimit = (n: number): number =>
   Math.min(Math.max(Math.trunc(n) || 1, 1), MAX_PAGE_SIZE);
