@@ -447,6 +447,17 @@ export class PgCommentStore {
     return r.rows[0] ? toRow(r.rows[0]) : null;
   }
 
+  /** Actor type of the newest pending or applied action on the comment, or null when there is none. */
+  async latestActionActor(scope: BrandScope, commentId: string): Promise<string | null> {
+    const r = await this.pool.query<{ actor_type: string }>(
+      `SELECT actor_type FROM moderation_action
+       WHERE organization_id = $1 AND brand_id = $2 AND comment_id = $3 AND status IN ('pending', 'applied')
+       ORDER BY created_at DESC, id DESC LIMIT 1`,
+      [scope.organizationId, scope.brandId, commentId],
+    );
+    return r.rows[0]?.actor_type ?? null;
+  }
+
   async list(
     scope: BrandScope,
     q: {

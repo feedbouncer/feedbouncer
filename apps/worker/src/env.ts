@@ -24,6 +24,13 @@ import {
   type ClassifierConfig,
 } from '@feedbouncer/classifier';
 import {
+  POLICY_FILE_VARS,
+  POLICY_JOB_SPECS,
+  POLICY_LANE,
+  loadPolicyConfig,
+  type PolicyConfig,
+} from '@feedbouncer/policies';
+import {
   FACEBOOK_FILE_VARS,
   parseFacebookEnv,
   type FacebookConfig,
@@ -51,12 +58,17 @@ export const WORKER_FILE_VARS = [
   ...ENCRYPTION_FILE_VARS,
   ...FACEBOOK_FILE_VARS,
   ...CLASSIFIER_FILE_VARS,
+  ...POLICY_FILE_VARS,
 ] as const;
 
 /** Queue lanes the registered jobs run on; each gets JOB_CONCURRENCY_LANE_<LANE> consumers. */
-const JOB_LANES = [...new Set(CLASSIFIER_JOB_SPECS.map((s) => s.lane))].sort();
+const JOB_LANES = [
+  ...new Set(
+    [...CLASSIFIER_JOB_SPECS, ...POLICY_JOB_SPECS].flatMap((s) => ('lane' in s ? [s.lane] : [])),
+  ),
+].sort();
 /** Wider than the per-brand cap (default 2), so one brand's backlog cannot hold every slot. */
-const LANE_DEFAULTS = { [CLASSIFIER_LANE]: 4 } as const;
+const LANE_DEFAULTS = { [CLASSIFIER_LANE]: 4, [POLICY_LANE]: 4 } as const;
 
 export interface WorkerEnv {
   readonly appEnv: AppEnv;
@@ -68,6 +80,7 @@ export interface WorkerEnv {
   readonly encryption: Keyring;
   readonly jobs: JobsConfig;
   readonly classifier: ClassifierConfig;
+  readonly policy: PolicyConfig;
   readonly telemetry: TelemetryConfig;
   readonly health: HealthPolicy;
   /** Null when FACEBOOK_APP_ID is unset: the connector is not enabled. */
@@ -180,6 +193,13 @@ export function loadWorkerEnv(
       `JOB_CONCURRENCY_LANE_CLASSIFY (${classifyLane}) should exceed CLASSIFIER_BRAND_MAX_IN_FLIGHT (${classifier.perBrandInFlight}); otherwise one brand's backlog can hold every classification slot`,
     );
   }
+  const policy = loadPolicyConfig(env);
+  const policyLane = jobs.laneConcurrency[POLICY_LANE] ?? 0;
+  if (policyLane > 0 && policyLane <= policy.perBrandInFlight) {
+    opts.warn(
+      `JOB_CONCURRENCY_LANE_POLICY (${policyLane}) should exceed POLICY_BRAND_MAX_IN_FLIGHT (${policy.perBrandInFlight}); otherwise one brand's backlog can hold every policy slot`,
+    );
+  }
   const config: WorkerEnv = {
     appEnv,
     databaseUrl,
@@ -190,6 +210,7 @@ export function loadWorkerEnv(
     encryption: loadEncryptionKeyring(env, appEnv, opts.warn),
     jobs,
     classifier,
+    policy,
     telemetry: loadTelemetryConfig(env, 'worker'),
     health: loadHealthPolicy(env),
     facebook,
@@ -211,6 +232,7 @@ export function loadWorkerEnv(
     activeKeyId: config.encryption.activeKeyId,
     jobQueuePrefix: config.jobs.prefix,
     classifierEnabled: config.classifier.model !== null,
+    policyEnabled: config.policy.model !== null,
     jobDlqRetentionDays: config.jobs.dlqRetentionMs / 86_400_000,
     metricsPort: config.telemetry.metrics.port,
     metricsHost: config.telemetry.metrics.host,

@@ -146,6 +146,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@feedbouncer/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@feedbouncer/authz':
         specifier: workspace:*
         version: link:../../packages/authz
@@ -179,6 +182,9 @@ importers:
       '@feedbouncer/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@feedbouncer/policies':
+        specifier: workspace:*
+        version: link:../../packages/policies
       '@feedbouncer/rules':
         specifier: workspace:*
         version: link:../../packages/rules
@@ -314,6 +320,9 @@ importers:
       '@feedbouncer/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@feedbouncer/policies':
+        specifier: workspace:*
+        version: link:../../packages/policies
       '@feedbouncer/rules':
         specifier: workspace:*
         version: link:../../packages/rules
@@ -678,6 +687,49 @@ importers:
         version: 4.6.5
 
   packages/placeholder: {}
+
+  packages/policies:
+    dependencies:
+      '@feedbouncer/ai':
+        specifier: workspace:*
+        version: link:../ai
+      '@feedbouncer/comments':
+        specifier: workspace:*
+        version: link:../comments
+      '@feedbouncer/db':
+        specifier: workspace:*
+        version: link:../db
+      '@feedbouncer/jobs':
+        specifier: workspace:*
+        version: link:../jobs
+      '@feedbouncer/rules':
+        specifier: workspace:*
+        version: link:../rules
+      '@feedbouncer/secrets':
+        specifier: workspace:*
+        version: link:../secrets
+      '@feedbouncer/service-runtime':
+        specifier: workspace:*
+        version: link:../service-runtime
+      ai:
+        specifier: 7.0.140
+        version: 7.0.140(zod@4.6.5)
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@feedbouncer/classifier':
+        specifier: workspace:*
+        version: link:../classifier
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
 
   packages/rules:
     dependencies:

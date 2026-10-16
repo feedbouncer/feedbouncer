@@ -1,6 +1,5 @@
-import type { RuleAction } from '@feedbouncer/rules';
+import { ACTION_SEVERITY, type RuleAction } from '@feedbouncer/rules';
 import {
-  ACTION_SEVERITY,
   CATEGORIES,
   CATEGORY_PRIORITY,
   type Category,

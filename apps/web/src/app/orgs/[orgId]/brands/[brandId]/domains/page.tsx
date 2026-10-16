@@ -44,7 +44,8 @@ export default async function OwnDomainsPage({
         refresh
       />
       <p>
-        <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Back to rules</Link>
+        <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Back to rules</Link> ·{' '}
+        <Link href={`/orgs/${orgId}/brands/${brandId}/policies`}>Policies</Link>
       </p>
     </main>
   );

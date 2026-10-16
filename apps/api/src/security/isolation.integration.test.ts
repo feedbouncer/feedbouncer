@@ -67,6 +67,22 @@ beforeAll(async () => {
      VALUES ($1, $2, $3, 1, now() - interval '1 day') RETURNING id`,
     [B.orgId, B.brandId, B.owner.userId],
   );
+  const bPolicy = await api.pool.query(
+    `INSERT INTO custom_policy (organization_id, brand_id, name, created_by_user_id)
+     VALUES ($1, $2, 'b policy', $3) RETURNING id`,
+    [B.orgId, B.brandId, B.owner.userId],
+  );
+  await api.pool.query(
+    `INSERT INTO custom_policy_revision (organization_id, brand_id, policy_id, revision, text, action, vague)
+     VALUES ($1, $2, $3, 1, 'Flag comments asking for money', 'flag', false)`,
+    [B.orgId, B.brandId, bPolicy.rows[0].id],
+  );
+  const bPreview = await api.pool.query(
+    `INSERT INTO policy_preview (organization_id, brand_id, text, action, days, since, total, capped)
+     VALUES ($1, $2, 'Flag comments asking for money', 'flag', 1, now() - interval '1 day', 0, false)
+     RETURNING id`,
+    [B.orgId, B.brandId],
+  );
   await api.pool.query(
     `INSERT INTO classifier_threshold (organization_id, brand_id, category, threshold, action, updated_by_user_id)
      VALUES ($1, $2, 'spam', 0.9, 'flag', $3)`,
@@ -110,6 +126,8 @@ beforeAll(async () => {
     bRuleId: bRule.rows[0].id,
     bDomainId: bDomain.rows[0].id,
     bClassifierRunId: bRun.rows[0].id,
+    bPolicyId: bPolicy.rows[0].id,
+    bPreviewId: bPreview.rows[0].id,
     bConnectionIds: { facebook: bConnectionId, instagram: igConnection.rows[0].id },
     bGrantIds,
   };

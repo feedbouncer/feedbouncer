@@ -14,6 +14,7 @@ const base: DecisionView = {
   fallback: false,
   action: null,
   classifier: null,
+  policy: null,
 };
 
 const render = (d: DecisionView | null) => renderToStaticMarkup(<DecisionBadge decision={d} />);
@@ -106,6 +107,56 @@ describe('DecisionBadge', () => {
       expect(html).toContain(
         'Flagged for review: classifier couldn&#x27;t hide (Not available on this platform.)',
       );
+    });
+  });
+
+  describe('policy decisions', () => {
+    const policyDecision = (over: Partial<DecisionView> = {}): DecisionView => ({
+      ...base,
+      actorType: 'policy',
+      rule: null,
+      policy: {
+        evaluationId: 'e1',
+        policyId: 'p1',
+        name: 'No DM solicitations',
+        archived: false,
+        revision: 3,
+        text: 'Hide comments asking readers to message another account',
+        matches: [],
+      },
+      ...over,
+    });
+
+    it('names the policy and its revision', () => {
+      expect(render(policyDecision())).toContain(
+        'Hidden by policy “No DM solicitations” (revision 3)',
+      );
+    });
+
+    it('labels a deleted policy', () => {
+      const d = policyDecision();
+      const html = render({ ...d, policy: { ...d.policy!, archived: true } });
+      expect(html).toContain('(revision 3, deleted policy)');
+    });
+
+    it('reads a fallback as flagged', () => {
+      const html = render(
+        policyDecision({
+          outcome: 'flag',
+          fallback: true,
+          action: { kind: 'hide', status: 'failed', outcomeCode: 'unsupported' },
+        }),
+      );
+      expect(html).toContain(
+        'Flagged for review: a policy&#x27;s hide was not allowed by the platform',
+      );
+    });
+
+    it('renders a hostile policy name as inert text', () => {
+      const d = policyDecision();
+      const html = render({ ...d, policy: { ...d.policy!, name: '<img src=x onerror=alert(1)>' } });
+      expect(html).not.toContain('<img');
+      expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
     });
   });
 });

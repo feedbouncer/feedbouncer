@@ -6,19 +6,23 @@ export interface SlotLease {
   destroy(): Promise<void>;
 }
 
+const NAMESPACE = /^[a-z][a-z.]{0,31}$/;
+
 /** Per-brand in-flight cap on provider calls, across all workers. Session advisory locks die with the connection. */
 export class BrandSlots {
   constructor(
     private readonly pool: pg.Pool,
     private readonly perBrand: number,
+    private readonly namespace = 'fb.classify',
   ) {
     if (!Number.isInteger(perBrand) || perBrand < 1 || perBrand > 64)
       throw new RangeError('perBrand');
+    if (!NAMESPACE.test(namespace)) throw new RangeError('namespace');
   }
 
   async acquire(brandId: string): Promise<SlotLease | null> {
     const c = await this.pool.connect();
-    const key = `fb.classify:${brandId}`;
+    const key = `${this.namespace}:${brandId}`;
     try {
       for (let slot = 0; slot < this.perBrand; slot++) {
         const r = await c.query<{ ok: boolean }>(

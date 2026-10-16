@@ -35,6 +35,8 @@ import { MembersService } from './members/members.service.js';
 import { MeController } from './me/me.controller.js';
 import { ClassifierController } from './classifier/classifier.controller.js';
 import { ClassifierService } from './classifier/classifier.service.js';
+import { PoliciesController } from './policies/policies.controller.js';
+import { PoliciesService } from './policies/policies.service.js';
 import { ActivityController } from './rules/activity.controller.js';
 import { DomainsController } from './rules/domains.controller.js';
 import { RulesController } from './rules/rules.controller.js';
@@ -80,6 +82,7 @@ export class AppModule {
         DomainsController,
         ActivityController,
         ClassifierController,
+        PoliciesController,
         MembersController,
         OrgInvitationsController,
         InvitationsController,
@@ -98,6 +101,7 @@ export class AppModule {
         AdsService,
         RulesService,
         ClassifierService,
+        PoliciesService,
         MembersService,
         InvitationsService,
         { provide: DEPS, useValue: deps },

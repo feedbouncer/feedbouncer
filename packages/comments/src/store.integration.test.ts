@@ -578,4 +578,21 @@ describe('per-connection comment identity', () => {
     );
     expect(r.rows[0].ingest_origin).toBe('live');
   });
+  it('latestActionActor is the actor of the newest pending or applied action', async () => {
+    const { commentId } = await store.upsertFromPlatform(scope(), comment(), own(1));
+    expect(await store.latestActionActor(t, commentId)).toBeNull();
+    const act = (actor: string, status: string, createdAt: string) =>
+      pool.query(
+        `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind, actor_type,
+           request_key, status, completed_at, created_at)
+         VALUES ($1, $2, $3, $4, 'hide', $5, $6, $7::text,
+           CASE WHEN $7::text = 'pending' THEN NULL ELSE now() END, $8::timestamptz)`,
+        [t.organizationId, t.brandId, t.connectionId, commentId, actor, `k:${++n}`, status, createdAt],
+      );
+    await act('user', 'applied', '2026-10-01T00:00:00Z');
+    await act('policy', 'applied', '2026-10-02T00:00:00Z');
+    await act('rule', 'failed', '2026-10-03T00:00:00Z');
+    expect(await store.latestActionActor(t, commentId)).toBe('policy');
+    expect(await store.latestActionActor(foreign, commentId)).toBeNull();
+  });
 });

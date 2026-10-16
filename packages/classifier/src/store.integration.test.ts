@@ -5,7 +5,7 @@ import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { DEFAULT_THRESHOLDS, ZERO_SCORES } from './defaults.js';
 import { decide } from './policy.js';
-import { prepareInput } from './prepare.js';
+import { prepareInput } from '@feedbouncer/ai';
 import { PgClassificationStore, type ClassificationRecord } from './store.js';
 import type { Category, CategoryScores } from './types.js';
 

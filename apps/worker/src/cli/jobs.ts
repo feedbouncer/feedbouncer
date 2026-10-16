@@ -1,4 +1,5 @@
 import { CLASSIFIER_JOB_SPECS } from '@feedbouncer/classifier';
+import { POLICY_JOB_SPECS } from '@feedbouncer/policies';
 import { ConnectorRegistry } from '@feedbouncer/connectors';
 import { createPool } from '@feedbouncer/db';
 import {
@@ -41,7 +42,7 @@ async function main(argv: readonly string[]): Promise<number> {
   const queues = new QueueSet({
     connection: redis,
     prefix: config.prefix,
-    laneOf: laneMap(CLASSIFIER_JOB_SPECS),
+    laneOf: laneMap([...CLASSIFIER_JOB_SPECS, ...POLICY_JOB_SPECS]),
   });
   const ledger = new PgJobLedger(pool);
   // Replay only moves ledger rows back to the queue; it consults neither registry.

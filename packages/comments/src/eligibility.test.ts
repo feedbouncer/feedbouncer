@@ -155,6 +155,14 @@ describe('evaluateEligibility', () => {
       { verdict: 'not_eligible', code: 'own_account_comment' },
     ],
     [
+      'policy on own comment',
+      IG,
+      'hide',
+      'policy',
+      c({ isOwnAccount: true }),
+      { verdict: 'not_eligible', code: 'own_account_comment' },
+    ],
+    [
       'deleted wins',
       IG,
       'private_reply',

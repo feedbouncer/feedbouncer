@@ -39,6 +39,7 @@ export default async function ClassifierPage({
       />
       <p>
         <Link href={`${brand}/rules`}>Rules</Link> ·{' '}
+        <Link href={`${brand}/policies`}>Policies</Link> ·{' '}
         <Link href={`${brand}/rules/activity`}>Rule activity</Link> ·{' '}
         <Link href={`/orgs/${orgId}`}>Back to organization</Link>
       </p>

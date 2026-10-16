@@ -36,6 +36,14 @@ const MESSAGES: Record<string, string> = {
   rule_order_mismatch: 'The rules changed since you opened this page. Reload and try again.',
   invalid_classifier_settings: 'Check the thresholds and try again.',
   classifier_rerun_too_soon: 'A re-run was started recently. Try again in a few minutes.',
+  invalid_policy: 'This policy has problems. Fix the highlighted fields and try again.',
+  policy_limit_reached: 'This brand already has the maximum number of policies.',
+  policy_name_taken: 'Another policy already has this name.',
+  policy_quota_exhausted: 'This brand has used its monthly policy checks.',
+  policy_preview_in_progress: 'A preview is already running for this brand.',
+  policy_run_too_soon: 'Policies were applied to recent comments less than 15 minutes ago.',
+  policy_not_enabled: 'Enable the policy before applying it to recent comments.',
+  policy_evaluation_unavailable: 'Policy checks are turned off in this deployment.',
   invalid_domain: 'Enter a valid domain name.',
   domain_exists: 'This domain is already in the list.',
   domain_limit_reached: 'This brand has reached the maximum number of own domains.',
@@ -115,6 +123,7 @@ const ACTOR_TYPES: Record<string, string> = {
   user: 'a team member',
   rule: 'a rule',
   classifier: 'classifier',
+  policy: 'a custom policy',
   system: 'the system',
 };
 

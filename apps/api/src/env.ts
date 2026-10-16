@@ -26,6 +26,7 @@ import {
 import { parseMetaAdsEnv, type MetaAdsConfig } from '@feedbouncer/connector-meta-ads';
 import { parseInstagramEnv, type InstagramConfig } from '@feedbouncer/connector-instagram';
 import { describeClassifierProvider } from '@feedbouncer/classifier';
+import { loadPolicyLimits } from '@feedbouncer/policies';
 import { loadJobsConfig, type JobsConfig } from '@feedbouncer/jobs';
 import {
   loadHealthPolicy,
@@ -76,6 +77,8 @@ export interface ApiEnv {
   readonly jobs: JobsConfig;
   /** The classifier's provider and model, for display only: the API holds no key. */
   readonly classifier: { readonly id: string; readonly model: string; readonly enabled: boolean };
+  /** Policy checks: the monthly call budget and whether the deployment has an evaluation model. */
+  readonly policy: ReturnType<typeof loadPolicyLimits>;
   readonly telemetry: TelemetryConfig;
   readonly health: HealthPolicy;
 }
@@ -123,6 +126,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     metaAds: parseMetaAdsEnv(env, facebook),
     jobs: loadJobsConfig(env),
     classifier: describeClassifierProvider(env),
+    policy: loadPolicyLimits(env),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),
   };
@@ -137,6 +141,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     instagramEnabled: config.instagram !== null,
     metaAdsEnabled: config.metaAds !== null,
     classifierEnabled: config.classifier.enabled,
+    policyEvaluationEnabled: config.policy.evaluatorConfigured,
     jobQueuePrefix: config.jobs.prefix,
     activeKeyId: config.encryption.activeKeyId,
     metricsPort: config.telemetry.metrics.port,

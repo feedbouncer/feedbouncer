@@ -113,7 +113,7 @@ describe('loadWorkerEnv', () => {
     it('is disabled by default and gives the classify lane 4 consumers, above the per-brand cap', () => {
       const env = load(base);
       expect(env.classifier.model).toBeNull();
-      expect(env.jobs.laneConcurrency).toEqual({ classify: 4 });
+      expect(env.jobs.laneConcurrency).toEqual({ classify: 4, policy: 4 });
       expect(env.classifier.perBrandInFlight).toBe(2);
     });
     it('warns when the classify lane is not wider than the per-brand cap', () => {
@@ -146,10 +146,65 @@ describe('loadWorkerEnv', () => {
           fs: { size: () => 40, read: () => 'file-sentinel-key-0123456789abcdef\n' },
         },
       );
-      expect(env.jobs.laneConcurrency).toEqual({ classify: 5 });
+      expect(env.jobs.laneConcurrency).toEqual({ classify: 5, policy: 4 });
       expect(env.classifier.model?.provider).toBe('google');
       for (const out of [JSON.stringify(env), inspect(env, { depth: 10, showHidden: true })])
         expect(out).not.toContain('file-sentinel-key');
+    });
+  });
+
+  describe('policy', () => {
+    it('reuses the classifier model by default and gives the policy lane 4 consumers', () => {
+      const env = load({
+        ...base,
+        CLASSIFIER_PROVIDER: 'openai',
+        CLASSIFIER_MODEL: 'gpt-x',
+        CLASSIFIER_API_KEY: 'k'.repeat(40),
+      });
+      expect(env.policy.model).toMatchObject({ provider: 'openai', model: 'gpt-x' });
+      expect(env.jobs.laneConcurrency).toEqual({ classify: 4, policy: 4 });
+      expect(load(base).policy.model).toBeNull();
+    });
+    it('uses its own provider when POLICY_PROVIDER is set', () => {
+      const env = load({
+        ...base,
+        CLASSIFIER_PROVIDER: 'openai',
+        CLASSIFIER_MODEL: 'gpt-x',
+        CLASSIFIER_API_KEY: 'k'.repeat(40),
+        POLICY_PROVIDER: 'none',
+      });
+      expect(env.policy.model).toBeNull();
+      expect(env.classifier.model).not.toBeNull();
+    });
+    it('warns when the policy lane is not wider than the per-brand cap', () => {
+      const warnings: string[] = [];
+      loadWorkerEnv(
+        { ...base, JOB_CONCURRENCY_LANE_POLICY: '2' },
+        { warn: (m) => warnings.push(m) },
+      );
+      expect(warnings.join('\n')).toMatch(
+        /JOB_CONCURRENCY_LANE_POLICY.*POLICY_BRAND_MAX_IN_FLIGHT/,
+      );
+      const quiet: string[] = [];
+      loadWorkerEnv(base, { warn: (m) => quiet.push(m) });
+      expect(quiet.join('\n')).not.toMatch(/POLICY_BRAND_MAX_IN_FLIGHT/);
+    });
+    it('reads POLICY_API_KEY_FILE without leaking the key', () => {
+      const env = loadWorkerEnv(
+        {
+          ...base,
+          POLICY_PROVIDER: 'google',
+          POLICY_MODEL: 'gemini-2.5-flash',
+          POLICY_API_KEY_FILE: '/run/secrets/pol',
+        },
+        {
+          warn: () => {},
+          fs: { size: () => 40, read: () => 'policy-sentinel-key-0123456789abcdef\n' },
+        },
+      );
+      expect(env.policy.model?.provider).toBe('google');
+      for (const out of [JSON.stringify(env), inspect(env, { depth: 10, showHidden: true })])
+        expect(out).not.toContain('policy-sentinel-key');
     });
   });
 

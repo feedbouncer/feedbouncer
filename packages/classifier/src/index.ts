@@ -1,7 +1,6 @@
 export * from './types.js';
 export * from './defaults.js';
 export * from './settings.js';
-export * from './prepare.js';
 export * from './policy.js';
 export * from './preview.js';
 export * from './describe.js';
@@ -9,7 +8,6 @@ export * from './provider.js';
 export * from './llm-provider.js';
 export * from './thresholds-store.js';
 export * from './store.js';
-export * from './slots.js';
 export * from './jobs/specs.js';
 export * from './trigger.js';
 export * from './jobs/classify.js';

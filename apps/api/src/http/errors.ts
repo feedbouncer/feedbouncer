@@ -46,6 +46,14 @@ export type ErrorCode =
   | 'domain_limit_reached'
   | 'invalid_classifier_settings'
   | 'classifier_rerun_too_soon'
+  | 'invalid_policy'
+  | 'policy_limit_reached'
+  | 'policy_name_taken'
+  | 'policy_quota_exhausted'
+  | 'policy_preview_in_progress'
+  | 'policy_run_too_soon'
+  | 'policy_not_enabled'
+  | 'policy_evaluation_unavailable'
   | 'service_unavailable';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
@@ -89,6 +97,14 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   domain_limit_reached: 'This brand has reached the maximum number of own domains.',
   invalid_classifier_settings: 'The classifier settings are not valid.',
   classifier_rerun_too_soon: 'A re-run was requested recently. Try again in a few minutes.',
+  invalid_policy: 'The policy is not valid.',
+  policy_limit_reached: 'This brand already has the maximum number of policies.',
+  policy_name_taken: 'Another policy already has this name.',
+  policy_quota_exhausted: 'This brand has used its monthly policy checks.',
+  policy_preview_in_progress: 'A preview is already running for this brand.',
+  policy_run_too_soon: 'Policies were applied to recent comments less than 15 minutes ago.',
+  policy_not_enabled: 'Enable the policy before applying it to recent comments.',
+  policy_evaluation_unavailable: 'Policy checks are turned off in this deployment.',
   service_unavailable: 'Service temporarily unavailable. Try again shortly.',
 };
 

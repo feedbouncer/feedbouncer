@@ -1,12 +1,11 @@
-import { APICallError, generateText, NoObjectGeneratedError, Output, type LanguageModel } from 'ai';
+import { generateText, Output, type LanguageModel } from 'ai';
 import { z } from 'zod';
+import { mapProviderError, ProviderError, type PreparedInput } from '@feedbouncer/ai';
 import {
-  ClassifierProviderError,
   rawClassificationSchema,
   type ClassifierProvider,
   type RawClassification,
 } from './provider.js';
-import type { PreparedInput } from './types.js';
 
 /** Bump when SYSTEM_PROMPT or the output schema changes; stored scores are reused only for the same version. */
 export const PROMPT_VERSION = 'clf-v1';
@@ -45,25 +44,6 @@ const generationSchema = z.strictObject({
 /** The comment travels only as a JSON-quoted value in the user message, never in the instructions. */
 export const commentMessage = (text: string): string => JSON.stringify({ comment: text });
 
-export function mapProviderError(e: unknown): ClassifierProviderError {
-  if (e instanceof ClassifierProviderError) return e;
-  if (NoObjectGeneratedError.isInstance(e))
-    return new ClassifierProviderError('invalid_output', true);
-  if (APICallError.isInstance(e)) {
-    const s = e.statusCode;
-    if (s === 401 || s === 403) return new ClassifierProviderError('auth', false);
-    if (s === 429) return new ClassifierProviderError('rate_limited', true);
-    if (s !== undefined && s >= 400 && s < 500 && s !== 408) {
-      return new ClassifierProviderError('bad_request', false);
-    }
-    return new ClassifierProviderError('unavailable', true);
-  }
-  if (e instanceof Error && (e.name === 'AbortError' || e.name === 'TimeoutError')) {
-    return new ClassifierProviderError('timeout', true);
-  }
-  return new ClassifierProviderError('unavailable', true);
-}
-
 export class LlmClassifierProvider implements ClassifierProvider {
   readonly id: string;
   readonly model: string;
@@ -98,7 +78,7 @@ export class LlmClassifierProvider implements ClassifierProvider {
       throw mapProviderError(e);
     }
     const parsed = rawClassificationSchema.safeParse(output);
-    if (!parsed.success) throw new ClassifierProviderError('invalid_output', true);
+    if (!parsed.success) throw new ProviderError('invalid_output', true);
     return parsed.data;
   }
 }

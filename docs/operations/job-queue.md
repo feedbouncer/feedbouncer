@@ -28,6 +28,15 @@ For how to write a job, see [docs/jobs/defining-a-job.md](../jobs/defining-a-job
   default 10000), `CLASSIFIER_LANGUAGES` (default `en,es,pt,fr,de,it,nl`),
   `CLASSIFIER_BRAND_MAX_IN_FLIGHT` (1..16, default 2) and `CLASSIFIER_MAX_WAIT_MINUTES`
   (1..90, default 30); see `.env.example`. DLQ replay routes lane jobs to their lane queue.
+- The `policy` lane (custom policy checks and previews) has
+  `JOB_CONCURRENCY_LANE_POLICY` consumers per platform (default 4, `0` off; keep it above
+  `POLICY_BRAND_MAX_IN_FLIGHT`, the worker warns at startup otherwise). Policies use the
+  classifier's model and key unless `POLICY_PROVIDER` is set, in which case
+  `POLICY_PROVIDER`, `POLICY_MODEL`, `POLICY_API_KEY` (or `_FILE`), `POLICY_BASE_URL` and
+  `POLICY_ALLOW_HTTP` configure their own; `POLICY_PROVIDER=none` turns policy checks off.
+  Also `POLICY_TIMEOUT_MS` (1000..25000, default 15000), `POLICY_BRAND_MAX_IN_FLIGHT`
+  (1..16, default 2), `POLICY_MAX_WAIT_MINUTES` (1..240, default 60) and
+  `POLICY_MONTHLY_CALLS_PER_BRAND` (default 20000, `0` stops checks); see `.env.example`.
 
 ## Retry policy
 

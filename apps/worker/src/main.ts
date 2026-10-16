@@ -15,6 +15,7 @@ import {
   type ConnectionDirectory,
 } from '@feedbouncer/connectors';
 import { CLASSIFIER_LANE } from '@feedbouncer/classifier';
+import { POLICY_LANE, PgPolicyPreviewStore } from '@feedbouncer/policies';
 import { createPool, runJobOnce } from '@feedbouncer/db';
 import {
   JobMetrics,
@@ -59,10 +60,17 @@ try {
   process.exit(1);
 }
 
+const PREVIEW_PRUNE_INTERVAL_MS = 3_600_000;
+
 const log = createLogger('worker', env.logLevel);
 installCrashHandlers(log);
 for (const w of configWarnings) log.warn(w, { appEnv: env.appEnv });
 logConfigurationLoaded(log, env);
+log.info('policy.config', {
+  provider: env.policy.model?.provider ?? 'none',
+  model: env.policy.model?.model ?? 'none',
+  baseUrlHost: env.policy.model?.baseUrl?.host ?? null,
+});
 log.info('classifier.config', {
   provider: env.classifier.model?.provider ?? 'none',
   model: env.classifier.model?.model ?? 'none',
@@ -92,12 +100,14 @@ try {
     max: 4,
     onIdleError: (err) => log.warn('postgres lock pool idle client error', errorFields(err)),
   });
-  // Each in-flight classification holds one session for its whole provider call.
+  // Each in-flight classification or policy check holds one session for its whole provider call.
   const slotsPool = createPool(env.databaseUrl, {
     applicationName: 'feedbouncer-worker-classifier-slots',
     max: Math.max(
       2,
-      (env.jobs.laneConcurrency[CLASSIFIER_LANE] ?? 0) * connectors.platforms().length,
+      ((env.jobs.laneConcurrency[CLASSIFIER_LANE] ?? 0) +
+        (env.jobs.laneConcurrency[POLICY_LANE] ?? 0)) *
+        connectors.platforms().length,
     ),
     onIdleError: (err) => log.warn('postgres slots pool idle client error', errorFields(err)),
   });
@@ -154,6 +164,7 @@ try {
       pool,
       slotsPool,
       classifier: env.classifier,
+      policy: env.policy,
       clock: systemClock,
       log,
       ingestObserver: promIngestObserver(telemetry.metrics),
@@ -268,6 +279,13 @@ try {
   await jobWorkers.start();
   log.info('job consumers ready', { platforms: jobWorkers.platforms().join(',') || 'none' });
   scheduler?.start();
+  const previewStore = new PgPolicyPreviewStore(pool);
+  const previewPruner = setInterval(() => {
+    previewStore
+      .pruneExpired()
+      .catch((err: unknown) => log.warn('policy preview prune failed', errorFields(err)));
+  }, PREVIEW_PRUNE_INTERVAL_MS);
+  previewPruner.unref();
 
   worker.run().catch((err: unknown) => {
     log.error('worker stopped', errorFields(err));

@@ -115,7 +115,10 @@ export function evaluateEligibility({
     return { verdict: 'noop', code: 'already_hidden' };
   if (kind === 'unhide' && c.platformState === 'visible')
     return { verdict: 'noop', code: 'already_visible' };
-  if ((actorType === 'rule' || actorType === 'classifier') && c.isOwnAccount)
+  if (
+    (actorType === 'rule' || actorType === 'classifier' || actorType === 'policy') &&
+    c.isOwnAccount
+  )
     return no('own_account_comment');
   if ((kind === 'hide' || kind === 'unhide') && c.isOwnAccount && !k.hideOwnAccountComments)
     return no('own_comment_always_visible');

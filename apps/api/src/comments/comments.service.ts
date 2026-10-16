@@ -12,6 +12,7 @@ import {
   type RefusalCode,
 } from '@feedbouncer/comments';
 import type { ClassificationView } from '@feedbouncer/classifier';
+import { PgPolicyEvaluationStore, type EvaluationView } from '@feedbouncer/policies';
 import { systemClock, type ConnectorCapabilities } from '@feedbouncer/connectors';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
@@ -119,11 +120,15 @@ const toView = (
 
 @Injectable()
 export class CommentsService {
+  readonly #policyEvaluations: PgPolicyEvaluationStore;
+
   constructor(
     @Inject(DEPS) private readonly deps: AppDeps,
     @Inject(COMMENTS) private readonly comments: AppDeps['comments'],
     @Inject(ClassifierService) private readonly classifier: ClassifierService,
-  ) {}
+  ) {
+    this.#policyEvaluations = new PgPolicyEvaluationStore(deps.pool);
+  }
 
   #configured(): NonNullable<AppDeps['comments']> {
     if (!this.comments) throw new ApiError(404, 'platform_not_configured');
@@ -170,6 +175,17 @@ export class CommentsService {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     if (!(await store.load(scope, commentId))) throw notFound();
     return this.classifier.latestForComment(scope, commentId);
+  }
+
+  async policyEvaluation(
+    org: OrgContext,
+    brandId: unknown,
+    commentId: string,
+  ): Promise<{ evaluation: EvaluationView | null }> {
+    const { store } = this.#configured();
+    const scope = await requireBrand(this.deps.pool, org, brandId);
+    if (!(await store.load(scope, commentId))) throw notFound();
+    return { evaluation: await this.#policyEvaluations.latestForComment(scope, commentId) };
   }
 
   async actions(
