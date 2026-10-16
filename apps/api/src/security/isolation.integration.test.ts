@@ -88,6 +88,22 @@ beforeAll(async () => {
      VALUES ($1, $2, $3, $4, 'action_step', $5) RETURNING id`,
     [B.orgId, B.brandId, bConnectionId, comment.rows[0].id, bRule.rows[0].id],
   );
+  await api.pool.query(
+    `UPDATE connection SET review_mode_started_at = now(), review_mode_ends_at = now() + interval '168 hours'
+      WHERE id = $1`,
+    [bConnectionId],
+  );
+  const bSuggestion = await api.pool.query(
+    `INSERT INTO action_suggestion (organization_id, brand_id, connection_id, comment_id, body_sha256)
+     VALUES ($1, $2, $3, $4, sha256(convert_to('hi', 'UTF8'))) RETURNING id`,
+    [B.orgId, B.brandId, bConnectionId, comment.rows[0].id],
+  );
+  await api.pool.query(
+    `INSERT INTO action_suggestion_source (organization_id, brand_id, suggestion_id, source_type, source_ref,
+                                           steps, reason)
+     VALUES ($1, $2, $3, 'classifier', gen_random_uuid(), '[{"type":"hide"}]'::jsonb, 'spam')`,
+    [B.orgId, B.brandId, bSuggestion.rows[0].id],
+  );
   const aRule = await api.pool.query(
     `INSERT INTO rule (organization_id, brand_id, name, conditions, action, mode)
      VALUES ($1, $2, 'a rule', '{"type":"keyword","terms":["x"]}'::jsonb, 'flag', 'enforce') RETURNING id`,
@@ -165,6 +181,7 @@ beforeAll(async () => {
     bClassifierRunId: bClassifierRun.rows[0].id,
     bStepId: bStep.rows[0].id,
     bReviewItemId: bReviewItem.rows[0].id,
+    bSuggestionId: bSuggestion.rows[0].id,
     bPolicyId: bPolicy.rows[0].id,
     bPreviewId: bPreview.rows[0].id,
     bConnectionIds: { facebook: bConnectionId, instagram: igConnection.rows[0].id },
@@ -194,7 +211,8 @@ async function snapshot(orgId: string) {
        WHERE organization_id = $1 ORDER BY connection_id`,
     ),
     connections: await q(
-      'SELECT id, status, status_reason FROM connection WHERE organization_id = $1 ORDER BY id',
+      `SELECT id, status, status_reason, review_mode, review_mode_ended_at FROM connection
+       WHERE organization_id = $1 ORDER BY id`,
     ),
     comments: await q(
       'SELECT id, platform_state FROM comment WHERE organization_id = $1 ORDER BY id',
@@ -207,6 +225,9 @@ async function snapshot(orgId: string) {
     ),
     reviewItems: await q(
       'SELECT id, status, resolution FROM review_item WHERE organization_id = $1 ORDER BY id',
+    ),
+    suggestions: await q(
+      'SELECT id, status, decided_at FROM action_suggestion WHERE organization_id = $1 ORDER BY id',
     ),
     rules: await q(
       `SELECT id, name, conditions, action, mode, enabled, priority, archived_at FROM rule

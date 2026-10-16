@@ -45,6 +45,9 @@ import { DomainsController } from './rules/domains.controller.js';
 import { RulesController } from './rules/rules.controller.js';
 import { RulesService } from './rules/rules.service.js';
 import { OrgController, OrgsListController } from './orgs/orgs.controller.js';
+import { ReviewModeController } from './review-mode/review-mode.controller.js';
+import { ReviewModeService } from './review-mode/review-mode.service.js';
+import { SuggestionsController } from './review-mode/suggestions.controller.js';
 import { OrgsService } from './orgs/orgs.service.js';
 import { OrgAccessGuard } from './tenancy/org-access.guard.js';
 import {
@@ -84,6 +87,8 @@ export class AppModule {
         RulesController,
         ActionsController,
         ReviewController,
+        ReviewModeController,
+        SuggestionsController,
         DomainsController,
         ActivityController,
         ClassifierController,
@@ -106,6 +111,7 @@ export class AppModule {
         AdsService,
         RulesService,
         ActionsService,
+        ReviewModeService,
         ClassifierService,
         PoliciesService,
         MembersService,

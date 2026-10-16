@@ -35,6 +35,7 @@ export type AuditAction =
   | 'policy.archived'
   | 'policy.preview_requested'
   | 'policy.run_requested'
+  | 'review_mode.opted_out'
   | 'review_mode.ended_early'
   | 'suggestion.approved'
   | 'suggestion.dismissed'

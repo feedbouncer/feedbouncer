@@ -129,12 +129,13 @@ export class OAuthConnectService {
     brandId: unknown,
     grantId: string,
     accountIds: readonly string[],
+    opts: { reviewMode: 'on' | 'opted_out' },
   ): Promise<readonly ConnectAccountResult[]> {
     const { stack, producer } = this.#configured();
     const actor = await this.#actor(org, brandId);
     let r: Awaited<ReturnType<typeof stack.oauth.connectAccounts>>;
     try {
-      r = await stack.oauth.connectAccounts(actor, platform, grantId, accountIds);
+      r = await stack.oauth.connectAccounts(actor, platform, grantId, accountIds, opts);
     } catch (err) {
       // A storage failure part-way through: report it by name only.
       this.deps.log.error('oauth connect failed', {

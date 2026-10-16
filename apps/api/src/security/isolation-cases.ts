@@ -18,6 +18,8 @@ export interface IsolationFixture {
   /** B's succeeded action step and open review item. */
   bStepId: string;
   bReviewItemId: string;
+  /** B's pending review-mode suggestion. */
+  bSuggestionId: string;
   /** B's classifier re-run. */
   bClassifierRunId: string;
   /** B's custom policy and a dry-run preview of it. */
@@ -407,6 +409,80 @@ export const CASES: IsolationCase[] = [
     url: (f) =>
       `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/review-items/${f.bReviewItemId}/resolve`,
     body: () => ({ resolution: 'approve', requestKey: 'iso-2' }),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/review-mode',
+    name: "B's review mode via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/review-mode`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/connections/:connectionId/review-mode/end',
+    name: "end review mode on B's connection under A's own brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections/${f.bConnectionId}/review-mode/end`,
+    body: () => ({ pending: 'dismiss' }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/connections/:connectionId/review-mode/end',
+    name: "end review mode on B's connection via A org",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/connections/${f.bConnectionId}/review-mode/end`,
+    body: () => ({ pending: 'dismiss' }),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/suggestions',
+    name: "B's suggestions via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/suggestions`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/suggestions',
+    name: "suggestions filtered by B's connection under A's own brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/suggestions?connectionId=${f.bConnectionId}`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/suggestions/authors',
+    name: "authors of B's connection under A's own brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/suggestions/authors?connectionId=${f.bConnectionId}`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/suggestions/:suggestionId/approve',
+    name: "approve B's suggestion id under A's own brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/suggestions/${f.bSuggestionId}/approve`,
+    body: () => ({ requestKey: 'iso-3', confirm: true }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/suggestions/:suggestionId/approve',
+    name: "approve B's suggestion via A org",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/suggestions/${f.bSuggestionId}/approve`,
+    body: () => ({ requestKey: 'iso-3', confirm: true }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/suggestions/:suggestionId/dismiss',
+    name: "dismiss B's suggestion id under A's own brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/suggestions/${f.bSuggestionId}/dismiss`,
+    body: () => ({ requestKey: 'iso-4' }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/suggestions/bulk',
+    name: "bulk by filter on B's connection under A's own brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/suggestions/bulk`,
+    body: (f) => ({
+      action: 'dismiss',
+      connectionId: f.bConnectionId,
+      filter: {},
+      requestKey: 'iso-5',
+    }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/suggestions/bulk',
+    name: "bulk on B's suggestion ids via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/suggestions/bulk`,
+    body: (f) => ({ action: 'dismiss', ids: [f.bSuggestionId], requestKey: 'iso-6' }),
   },
   {
     route: 'GET /api/v1/orgs/:orgId/members',
