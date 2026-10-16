@@ -383,6 +383,7 @@ export class ActionRunner {
         commentId: run.commentId,
         source: 'action_step',
         ruleId: run.ruleId,
+        evaluationId: run.evaluationId,
       });
     } catch (err) {
       await tx.query('ROLLBACK TO SAVEPOINT flag_review');

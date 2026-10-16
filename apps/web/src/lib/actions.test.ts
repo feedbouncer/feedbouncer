@@ -11,6 +11,7 @@ import {
   openConfirm,
   outcomeText,
   resolveReviewItem,
+  sourceText,
   stepAvailability,
   stepIssues,
   templateCount,
@@ -216,5 +217,15 @@ describe('requests', () => {
 
   it('opens a new key for each dialog', () => {
     expect(openConfirm('i', 'ban').requestKey).not.toBe(openConfirm('i', 'ban').requestKey);
+  });
+});
+
+describe('sourceText', () => {
+  it('names who flagged the comment, with the rule name when there is one', () => {
+    expect(sourceText('rule', 'No spam')).toBe('Rule: No spam');
+    expect(sourceText('action_step', 'No spam')).toBe('Rule: No spam');
+    expect(sourceText('classifier', null)).toBe('Classifier');
+    expect(sourceText('user', null)).toBe('Flagged by a person');
+    expect(sourceText('something_else', null)).toBe('Flagged');
   });
 });

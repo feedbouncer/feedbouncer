@@ -304,8 +304,11 @@ export const resolveReviewItem = (
     body: { resolution, requestKey, ...(needsConfirm(resolution) && { confirm: true }) },
   });
 
+// A rule's "flag" decision opens the item (source rule); its flag step then owns it.
 const SOURCE_LABEL: Record<string, string> = {
+  rule: 'Rule',
   action_step: 'Rule',
+  user: 'Flagged by a person',
   classifier: 'Classifier',
   policy: 'Policy',
 };

@@ -71,11 +71,16 @@ const toView = (r: ItemDb): ReviewItemView => ({
 export class PgReviewQueue {
   constructor(private readonly pool: pg.Pool) {}
 
-  /** Returns the comment's open item, creating one if there is none. */
+  /**
+   * Returns the comment's open item, creating one if there is none. `created` is also true
+   * when the open item is the one this evaluation's own decision opened for this rule (the
+   * "flag" decision trigger runs before the step does) and no other step holds it yet: the
+   * step then owns that item.
+   */
   async open(
     tx: pg.PoolClient,
     scope: ConnectionScope,
-    i: { commentId: string; source: 'action_step'; ruleId: string },
+    i: { commentId: string; source: 'action_step'; ruleId: string; evaluationId?: string },
   ): Promise<{ id: string; created: boolean }> {
     const ins = await tx.query<{ id: string }>(
       `INSERT INTO review_item (organization_id, brand_id, connection_id, comment_id, source, rule_id)
@@ -87,14 +92,29 @@ export class PgReviewQueue {
       [scope.organizationId, scope.brandId, scope.connectionId, i.commentId, i.source, i.ruleId],
     );
     if (ins.rows[0]) return { id: ins.rows[0].id, created: true };
-    const existing = await tx.query<{ id: string }>(
-      `SELECT id FROM review_item
-        WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND comment_id = $4
-          AND status = 'open'`,
-      [scope.organizationId, scope.brandId, scope.connectionId, i.commentId],
+    const existing = await tx.query<{ id: string; own: boolean }>(
+      `SELECT i.id,
+              (i.source = 'rule' AND i.rule_id = $5 AND $6::uuid IS NOT NULL
+               AND EXISTS (SELECT 1 FROM decision d
+                            WHERE d.organization_id = $1 AND d.brand_id = $2 AND d.id = i.decision_id
+                              AND d.rule_evaluation_id = $6)
+               AND NOT EXISTS (SELECT 1 FROM action_run_step s
+                                WHERE s.organization_id = $1 AND s.brand_id = $2
+                                  AND s.review_item_id = i.id)) AS own
+         FROM review_item i
+        WHERE i.organization_id = $1 AND i.brand_id = $2 AND i.connection_id = $3
+          AND i.comment_id = $4 AND i.status = 'open'`,
+      [
+        scope.organizationId,
+        scope.brandId,
+        scope.connectionId,
+        i.commentId,
+        i.ruleId,
+        i.evaluationId ?? null,
+      ],
     );
     if (!existing.rows[0]) throw new Error('comment_not_found');
-    return { id: existing.rows[0].id, created: false };
+    return { id: existing.rows[0].id, created: existing.rows[0].own };
   }
 
   /** Newest first; `before` is the id of the last item of the previous page. */

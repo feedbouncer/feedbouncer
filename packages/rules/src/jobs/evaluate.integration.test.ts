@@ -10,6 +10,7 @@ import {
   PgActionRunStore,
   PgReviewQueue,
   deriveOutcome,
+  undoStep,
   type ActionStep,
 } from '@feedbouncer/actions';
 import { ModerationActions, PgCommentStore } from '@feedbouncer/comments';
@@ -358,6 +359,65 @@ describe('rule_evaluate', () => {
       ['flag', 'enforce', flag],
     ]);
     expect(await actionRows(c.id)).toEqual([]);
+  });
+
+  it('a flag rule: the decision opens the item, the flag step owns it, and undo dismisses it', async () => {
+    const e = await env();
+    const ruleId = await addRule(e, kw('spam'), { actions: FLAG, priority: 10 });
+    const c = await comment(e, 'spam');
+    await run(e.scope, c.id, 'spam');
+    const items = async () =>
+      (
+        await pool.query<{ id: string; source: string; rule_id: string; status: string }>(
+          `SELECT id, source, rule_id, status, resolution FROM review_item WHERE comment_id = $1`,
+          [c.id],
+        )
+      ).rows;
+    const [item] = await items();
+    expect(item).toMatchObject({ source: 'rule', rule_id: ruleId, status: 'open' });
+
+    await advanceRuns(e.scope, c.id);
+    const [r] = await runRows(c.id);
+    const step = (
+      await pool.query<{ id: string; status: string; review_item_id: string | null }>(
+        'SELECT id, status, review_item_id FROM action_run_step WHERE run_id = $1',
+        [r!.id],
+      )
+    ).rows[0]!;
+    expect(step).toMatchObject({ status: 'succeeded', review_item_id: item!.id });
+
+    const runs = new PgActionRunStore(pool);
+    const review = new PgReviewQueue(pool);
+    expect(await undoStep({ pool, runs, review, actions }, e.scope, step.id, e.t.userId)).toEqual({
+      status: 'done',
+      undoActionId: null,
+    });
+    expect(await items()).toEqual([
+      expect.objectContaining({ id: item!.id, status: 'resolved', resolution: 'dismissed' }),
+    ]);
+  });
+
+  it('a later evaluation of the same rule does not take over the open item', async () => {
+    const e = await env();
+    await addRule(e, kw('spam'), { actions: FLAG, priority: 10 });
+    const c = await comment(e, 'spam');
+    await run(e.scope, c.id, 'spam');
+    await advanceRuns(e.scope, c.id);
+    // An edit is a new evaluation; its decision finds the item already open.
+    await pool.query('UPDATE comment SET body = $1 WHERE id = $2', ['more spam', c.id]);
+    await run(e.scope, c.id, 'more spam');
+    await advanceRuns(e.scope, c.id);
+    const steps = (
+      await pool.query<{ status: string; reason_code: string | null }>(
+        `SELECT s.status, s.reason_code FROM action_run_step s JOIN action_run r ON r.id = s.run_id
+          WHERE r.comment_id = $1 ORDER BY r.created_at, r.id`,
+        [c.id],
+      )
+    ).rows;
+    expect(steps).toEqual([
+      { status: 'succeeded', reason_code: null },
+      { status: 'skipped', reason_code: 'already_flagged' },
+    ]);
   });
 
   it('suggest-mode match produces a simulated run and no moderation_action', async () => {
