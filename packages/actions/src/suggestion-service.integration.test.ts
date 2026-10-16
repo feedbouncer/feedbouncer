@@ -674,6 +674,29 @@ describe('endReviewModeEarly', () => {
     ]);
   });
 
+  it('end early with dismiss closes suggestions of deleted or edited comments as not applicable', async () => {
+    const kept = (await seedPending()).sid;
+    const gone = await seedPending();
+    const edited = await seedPending();
+    await pool.query("UPDATE comment SET platform_state = 'deleted' WHERE id = $1", [gone.id]);
+    await pool.query("UPDATE comment SET body = 'changed' WHERE id = $1", [edited.id]);
+    expect(await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'dismiss' })).toEqual({
+      status: 'ended',
+      pendingCount: 1,
+    });
+    expect(await statusOf(kept)).toMatchObject({ status: 'dismissed' });
+    expect(await statusOf(gone.sid)).toMatchObject({
+      status: 'not_applicable',
+      status_reason: 'comment_gone',
+      decided_by_user_id: null,
+    });
+    expect(await statusOf(edited.sid)).toMatchObject({
+      status: 'not_applicable',
+      status_reason: 'comment_edited',
+      decided_by_user_id: null,
+    });
+  });
+
   it('end early with leave keeps them pending and grace runs from ended_at', async () => {
     const { sid } = await seedPending();
     await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'leave' });

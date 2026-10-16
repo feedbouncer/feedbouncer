@@ -396,6 +396,19 @@ export async function endReviewModeEarly(
     );
     if (ended.rowCount !== 1) return null;
     const scopeArgs = [scope.organizationId, scope.brandId, scope.connectionId];
+    if (i.pending === 'dismiss')
+      await tx.query(
+        `UPDATE action_suggestion s
+            SET status = 'not_applicable', decided_at = now(),
+                status_reason = CASE WHEN c.platform_state = 'deleted' THEN 'comment_gone'
+                                     ELSE 'comment_edited' END
+           FROM comment c
+          WHERE s.organization_id = $1 AND s.brand_id = $2 AND s.connection_id = $3
+            AND s.status = 'pending'
+            AND c.organization_id = s.organization_id AND c.brand_id = s.brand_id AND c.id = s.comment_id
+            AND (c.platform_state = 'deleted' OR sha256(convert_to(c.body, 'UTF8')) <> s.body_sha256)`,
+        scopeArgs,
+      );
     const count =
       i.pending === 'dismiss'
         ? ((
