@@ -315,6 +315,15 @@ services:
       - '${FB_BIND_ADDRESS:-127.0.0.1}:${WEB_HOST_PORT:-3000}:3000'
     volumes:
       - ./apps/web/src:/repo/apps/web/src:ro
+      - ./packages/actions/src:/repo/packages/actions/src:ro
+      - ./packages/comments/src:/repo/packages/comments/src:ro
+      - ./packages/connectors/src:/repo/packages/connectors/src:ro
+      - ./packages/authz/src:/repo/packages/authz/src:ro
+      - ./packages/db/src:/repo/packages/db/src:ro
+      - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
+      - ./packages/secrets/src:/repo/packages/secrets/src:ro
+      - ./packages/jobs/src:/repo/packages/jobs/src:ro
+      - ./packages/mailer/src:/repo/packages/mailer/src:ro
     depends_on:
       api:
         condition: service_healthy
