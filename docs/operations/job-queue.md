@@ -162,11 +162,12 @@ Structured log events, each with `platform`, `jobType` and `ledgerId`:
 `job.dead_lettered` (adds `reason`, `code`), `job.replayed`, `job.duplicate_delivery`,
 `job.requeued`.
 
-Lines written while a job is in scope also carry the snake*case correlation keys
+Lines written while a job is in scope also carry the snake_case correlation keys
 `connector_type`, `job_id`, `tenant_id` and `brand_id` and, when tracing is active,
 `trace_id` and `span_id`. The
 worker's periodic sweep logs `job.stats` with the requeued and purged counts and a
-counter per platform and event, named `<platform>*<event>`(for example`facebook_dead_lettered`).
+counter per platform and event, named `<platform>_<event>` (for example
+`facebook_dead_lettered`).
 
 The same events are exported as `feedbouncer_jobs_total{queue,job_type,outcome}` on the
 worker's `/metrics`, together with `feedbouncer_queue_wait_seconds`,
