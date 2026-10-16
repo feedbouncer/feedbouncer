@@ -99,7 +99,8 @@ export function ruleEvaluateJob(d: {
       }
       const res = await act(d, ctx.scope, ev, p.commentId, verdict);
       // After act(): a throw here retries the job; record and act are idempotent
-      // (unique evaluation, requestKey), so the rule action is never delayed.
+      // (a run is unique per evaluation and rule, and the runner's auto: keys
+      // deduplicate platform calls), so the rule action is never delayed.
       if (d.evaluated && (ev.status === 'no_match' || ev.status === 'decided'))
         await d.evaluated.onEvaluated({
           scope: ctx.scope,
