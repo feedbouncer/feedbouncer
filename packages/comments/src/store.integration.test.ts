@@ -223,6 +223,7 @@ describe('PgCommentStore', () => {
       permalink: 'https://www.facebook.com/x',
       isOwnAccount: false,
       connectionStatus: 'active',
+      reviewMode: { mode: 'legacy', startedAt: null, endsAt: null, endedAt: null },
       privateReplied: false,
       origin: 'organic',
       ads: [],

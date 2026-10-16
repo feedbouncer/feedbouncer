@@ -36,6 +36,8 @@ let ctx: Awaited<ReturnType<typeof migratedDb>>;
 let pool: pg.Pool;
 let t: Tenant;
 let other: Tenant;
+/** A tenant whose connection is in review mode. */
+let rv: Tenant;
 let scope: ConnectionScope;
 /** An Instagram connection in tenant t's brand. */
 let igScope: ConnectionScope;
@@ -145,6 +147,7 @@ beforeAll(async () => {
   });
   t = await seedTenant(ctx.c, 'act');
   other = await seedTenant(ctx.c, 'oth');
+  rv = await seedTenant(ctx.c, 'rvw', { reviewMode: 'on' });
   scope = { organizationId: t.organizationId, brandId: t.brandId, connectionId: t.connectionId };
   await ctx.c.query('UPDATE connection SET external_account_id = $1 WHERE id = $2', [
     PAGE,
@@ -770,5 +773,119 @@ describe('ModerationActions.request', () => {
       status: 'accepted',
     });
     expect(enqueue).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('ModerationActions.request in review mode', () => {
+  const HOUR = 3_600_000;
+  /** Sets rv's window to start `startedAgoMs` before the test clock. */
+  const setWindow = async (
+    o: { mode?: 'legacy' | 'on' | 'opted_out'; startedAgoMs?: number | null; endedAgoMs?: number } = {},
+  ) => {
+    const mode = o.mode ?? 'on';
+    const started =
+      mode === 'on' && o.startedAgoMs !== null ? new Date(nowMs - (o.startedAgoMs ?? HOUR)) : null;
+    await ctx.c.query(
+      `UPDATE connection SET review_mode = $2, review_mode_started_at = $3,
+              review_mode_ends_at = $3::timestamptz + interval '168 hours', review_mode_ended_at = $4
+        WHERE id = $1`,
+      [
+        rv.connectionId,
+        mode,
+        started,
+        o.endedAgoMs === undefined ? null : new Date(nowMs - o.endedAgoMs),
+      ],
+    );
+  };
+  const rvRequest = (
+    commentId: string,
+    kind: ActionKind,
+    actor: ActionActor,
+    o: { requestKey?: string; text?: string } = {},
+  ) =>
+    actions.request({
+      scope: rv,
+      commentId,
+      kind,
+      actor,
+      requestKey: o.requestKey ?? key(),
+      ...(o.text !== undefined ? { text: o.text } : {}),
+    });
+  const automated = (): ActionActor[] => [
+    { type: 'rule', ruleId: rv.ruleId },
+    { type: 'classifier' },
+    { type: 'policy' },
+    { type: 'system' },
+  ];
+
+  beforeEach(() => setWindow());
+
+  it('rule/classifier/policy/system actor hide on an active-window comment is refused review_mode_active and nothing is enqueued', async () => {
+    for (const actor of automated()) {
+      const commentId = await seedComment({ tenant: rv });
+      expect(await rvRequest(commentId, 'hide', actor)).toEqual({
+        status: 'refused',
+        code: 'review_mode_active',
+      });
+      expect(await rowsFor(commentId)).toHaveLength(0);
+    }
+    // Every gated kind, including on a window that has not been stamped yet.
+    await setWindow({ startedAgoMs: null });
+    const commentId = await seedComment({ tenant: rv });
+    for (const kind of ['delete', 'ban_author', 'public_reply', 'private_reply'] as const) {
+      const text = kind === 'public_reply' || kind === 'private_reply' ? 'hi' : undefined;
+      expect(
+        await rvRequest(commentId, kind, { type: 'system' }, text ? { text } : {}),
+      ).toEqual({ status: 'refused', code: 'review_mode_active' });
+    }
+    expect(await rowsFor(commentId)).toHaveLength(0);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('user actor is not gated', async () => {
+    const commentId = await seedComment({ tenant: rv });
+    const r = await rvRequest(commentId, 'hide', { type: 'user', userId: rv.userId });
+    expect(r).toMatchObject({ status: 'accepted', action: { status: 'pending' } });
+    expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('unhide is not gated', async () => {
+    const commentId = await seedComment({ tenant: rv, state: 'hidden' });
+    const r = await rvRequest(commentId, 'unhide', { type: 'system' });
+    expect(r).toMatchObject({ status: 'accepted', action: { kind: 'unhide', status: 'pending' } });
+    expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('legacy and ended windows are not gated', async () => {
+    const windows = [
+      { mode: 'legacy' as const },
+      { mode: 'opted_out' as const },
+      // The window ends exactly now: ended.
+      { startedAgoMs: 168 * HOUR },
+      { startedAgoMs: 200 * HOUR },
+      { startedAgoMs: 2 * HOUR, endedAgoMs: HOUR },
+    ];
+    for (const w of windows) {
+      await setWindow(w);
+      const commentId = await seedComment({ tenant: rv });
+      expect(await rvRequest(commentId, 'hide', { type: 'rule', ruleId: rv.ruleId })).toMatchObject(
+        { status: 'accepted', action: { status: 'pending' } },
+      );
+    }
+    expect(enqueue).toHaveBeenCalledTimes(windows.length);
+  });
+
+  it('a replay of an action stored before the window began still returns it', async () => {
+    await setWindow({ mode: 'legacy' });
+    const commentId = await seedComment({ tenant: rv });
+    const requestKey = key();
+    const first = await rvRequest(commentId, 'hide', { type: 'system' }, { requestKey });
+    expect(first.status).toBe('accepted');
+    await setWindow();
+    expect(await rvRequest(commentId, 'hide', { type: 'system' }, { requestKey })).toEqual(first);
+    expect(await rvRequest(commentId, 'hide', { type: 'system' })).toEqual({
+      status: 'refused',
+      code: 'review_mode_active',
+    });
   });
 });

@@ -104,10 +104,10 @@ describe('tenant isolation (every adapter)', () => {
   it('PgConnectionDirectory.activate cannot touch another tenant', async () => {
     const t = await seedTenant(h.c, 'activate-iso');
     await h.c.query("UPDATE connection SET status = 'error' WHERE id = $1", [t.connectionId]);
-    expect(await dir.activate({ ...scopeOf(t), organizationId: b.organizationId }, b.userId)).toBe(
+    expect((await dir.activate({ ...scopeOf(t), organizationId: b.organizationId }, b.userId)).activated).toBe(
       false,
     );
-    expect(await dir.activate({ ...scopeOf(t), brandId: b.brandId }, b.userId)).toBe(false);
+    expect((await dir.activate({ ...scopeOf(t), brandId: b.brandId }, b.userId)).activated).toBe(false);
     expect(await statusOf(t.connectionId)).toBe('error');
   });
 
@@ -315,7 +315,7 @@ describe('PgConnectionDirectory', () => {
       ])
     ).rows[0];
     expect(row).toMatchObject({ status_reason: 'oauth_pending', granted_scopes: ['read'] });
-    expect(await dir.activate(r.scope, a.userId)).toBe(true);
+    expect((await dir.activate(r.scope, a.userId)).activated).toBe(true);
     expect((await dir.load(r.scope))?.status).toBe('active');
     const audit = await h.c.query(
       `SELECT actor_user_id, details FROM audit_event
@@ -359,7 +359,7 @@ describe('PgConnectionDirectory', () => {
     await h.c.query("UPDATE connection SET status = 'paused' WHERE id = $1", [
       r.scope.connectionId,
     ]);
-    expect(await dir.activate(r.scope, a.userId)).toBe(false);
+    expect((await dir.activate(r.scope, a.userId)).activated).toBe(false);
     expect(await statusOf(r.scope.connectionId)).toBe('paused');
   });
 
@@ -368,7 +368,7 @@ describe('PgConnectionDirectory', () => {
     await h.c.query("UPDATE connection SET status = 'revoked' WHERE id = $1", [
       r.scope.connectionId,
     ]);
-    expect(await dir.activate(r.scope, a.userId)).toBe(false);
+    expect((await dir.activate(r.scope, a.userId)).activated).toBe(false);
     expect(await statusOf(r.scope.connectionId)).toBe('revoked');
     const audit = await h.c.query(
       "SELECT 1 FROM audit_event WHERE subject_id = $1 AND action = 'connection.authorized'",
@@ -380,7 +380,7 @@ describe('PgConnectionDirectory', () => {
   it('activate recovers connections that are in error', async () => {
     const r = await upsert(a, 'page-error');
     await h.c.query("UPDATE connection SET status = 'error' WHERE id = $1", [r.scope.connectionId]);
-    expect(await dir.activate(r.scope, a.userId)).toBe(true);
+    expect((await dir.activate(r.scope, a.userId)).activated).toBe(true);
     expect(await statusOf(r.scope.connectionId)).toBe('active');
   });
 

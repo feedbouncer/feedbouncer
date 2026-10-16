@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { isClientRequestKey } from './actions.js';
 
 describe('isClientRequestKey', () => {
-  it.each(['auto:', 'undo:', 'review:', 'clf:', 'pol:', 'rule-eval:'])(
+  it.each(['auto:', 'undo:', 'review:', 'clf:', 'pol:', 'rule-eval:', 'suggestion:'])(
     'refuses the server-derived prefix %s',
     (prefix) => {
       expect(isClientRequestKey(`${prefix}abc`)).toBe(false);

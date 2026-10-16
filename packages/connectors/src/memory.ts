@@ -7,6 +7,8 @@ import type { ErrorClass, Secret } from '@feedbouncer/service-runtime';
 import { systemClock, type Clock } from './clock.js';
 import {
   ConnectionTakenError,
+  type ActivateOptions,
+  type ActivateResult,
   type ConnectionDirectory,
   type ConnectionRecord,
   type CredentialVault,
@@ -23,6 +25,7 @@ import {
   type TokenRecord,
   type WebhookSecretSource,
 } from './ports.js';
+import { REVIEW_WINDOW_MS, reviewModeState, type ReviewModeColumns } from './review-mode.js';
 import { scopeKey } from './scope.js';
 import type { Platform } from './types.js';
 
@@ -31,11 +34,21 @@ const sameScope = (a: ConnectionScope, b: ConnectionScope) =>
   a.brandId === b.brandId &&
   a.connectionId === b.connectionId;
 
-export class MemoryConnectionDirectory implements ConnectionDirectory {
-  readonly #rows = new Map<string, { rec: ConnectionRecord; reason: string | null }>();
+interface DirectoryRow {
+  rec: ConnectionRecord;
+  reason: string | null;
+  review: ReviewModeColumns;
+}
+const LEGACY: ReviewModeColumns = { mode: 'legacy', startedAt: null, endsAt: null, endedAt: null };
 
-  seed(rec: ConnectionRecord): void {
-    this.#rows.set(rec.scope.connectionId, { rec, reason: null });
+export class MemoryConnectionDirectory implements ConnectionDirectory {
+  readonly #rows = new Map<string, DirectoryRow>();
+
+  constructor(private readonly clock: Clock = systemClock) {}
+
+  /** Seeded rows predate review mode ('legacy') unless review columns are given. */
+  seed(rec: ConnectionRecord, review: ReviewModeColumns = LEGACY): void {
+    this.#rows.set(rec.scope.connectionId, { rec, reason: null, review });
   }
   statusReason(connectionId: string): string | null {
     return this.#rows.get(connectionId)?.reason ?? null;
@@ -53,6 +66,7 @@ export class MemoryConnectionDirectory implements ConnectionDirectory {
     )
       return false;
     this.#rows.set(scope.connectionId, {
+      ...row,
       rec: { ...row.rec, status: 'reconnect_required' },
       reason,
     });
@@ -77,6 +91,7 @@ export class MemoryConnectionDirectory implements ConnectionDirectory {
           throw new Error('brand belongs to another organization');
         if (rec.status === 'revoked' && row.reason === 'user_disconnected') {
           this.#rows.set(rec.scope.connectionId, {
+            ...row,
             rec: { ...rec, status: 'reconnect_required' },
             reason: 'oauth_pending',
           });
@@ -106,21 +121,48 @@ export class MemoryConnectionDirectory implements ConnectionDirectory {
         status: 'reconnect_required',
       },
       reason: 'oauth_pending',
+      review: { mode: 'on', startedAt: null, endsAt: null, endedAt: null },
     });
     return { scope, created: true };
   }
-  async activate(scope: ConnectionScope, actorUserId: string): Promise<boolean> {
+  async activate(
+    scope: ConnectionScope,
+    actorUserId: string,
+    opts: ActivateOptions = {},
+  ): Promise<ActivateResult> {
     void actorUserId; // the Pg adapter records the actor; memory keeps no audit trail
+    const now = new Date(this.clock.now());
     const row = this.#rows.get(scope.connectionId);
+    const inScope = row && sameScope(row.rec.scope, scope) ? row : undefined;
+    const view = (review: ReviewModeColumns, changed: boolean) => ({
+      state: reviewModeState(review, now),
+      endsAt: review.endsAt,
+      changed,
+    });
     // Same transitions as the Pg adapter: paused and revoked connections never activate.
-    if (
-      !row ||
-      !sameScope(row.rec.scope, scope) ||
-      !['active', 'reconnect_required', 'error'].includes(row.rec.status)
-    )
-      return false;
-    this.#rows.set(scope.connectionId, { rec: { ...row.rec, status: 'active' }, reason: null });
-    return true;
+    if (!inScope || !['active', 'reconnect_required', 'error'].includes(inScope.rec.status))
+      return {
+        activated: false,
+        reviewMode: inScope
+          ? view(inScope.review, false)
+          : { state: 'off', endsAt: null, changed: false },
+      };
+    const first = inScope.review.mode === 'on' && inScope.review.startedAt === null;
+    const review: ReviewModeColumns = !first
+      ? inScope.review
+      : opts.reviewMode === 'opted_out'
+        ? { ...inScope.review, mode: 'opted_out' }
+        : {
+            ...inScope.review,
+            startedAt: now,
+            endsAt: new Date(now.getTime() + REVIEW_WINDOW_MS),
+          };
+    this.#rows.set(scope.connectionId, {
+      rec: { ...inScope.rec, status: 'active' },
+      reason: null,
+      review,
+    });
+    return { activated: true, reviewMode: view(review, first) };
   }
   async findLiveByAccount(
     platform: Platform,
@@ -155,6 +197,7 @@ export class MemoryConnectionDirectory implements ConnectionDirectory {
     )
       return false;
     this.#rows.set(scope.connectionId, {
+      ...row,
       rec: { ...row.rec, status: 'revoked' },
       reason: 'user_disconnected',
     });

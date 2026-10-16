@@ -13,6 +13,7 @@ import type {
   NormalizedComment,
   Platform,
   PlatformState,
+  ReviewModeColumns,
 } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { UUID } from '@feedbouncer/service-runtime';
@@ -43,6 +44,8 @@ export interface CommentRow {
   readonly permalink: string | null;
   readonly isOwnAccount: boolean;
   readonly connectionStatus: ConnectionStatus;
+  /** The connection's review-mode columns, read with the comment. */
+  readonly reviewMode: ReviewModeColumns;
   /** A private reply to this comment is pending or applied (the platform allows one). */
   readonly privateReplied: boolean;
   /** 'ad' when its source is linked to an ad, or it was also seen through an ad's source. */
@@ -77,6 +80,7 @@ const ROW_SQL = `
          a.display_name AS author_name, c.body, c.platform_state,
          p.platform_state AS parent_platform_state, c.posted_at, c.permalink,
          c.is_own_account, cn.status AS connection_status,
+         cn.review_mode, cn.review_mode_started_at, cn.review_mode_ends_at, cn.review_mode_ended_at,
          EXISTS (SELECT 1 FROM moderation_action ma
                   WHERE ma.comment_id = c.id AND ma.organization_id = c.organization_id
                     AND ma.brand_id = c.brand_id
@@ -117,6 +121,12 @@ const toRow = (r: Record<string, unknown>): CommentRow => ({
   permalink: (r.permalink as string | null) ?? null,
   isOwnAccount: r.is_own_account as boolean,
   connectionStatus: r.connection_status as ConnectionStatus,
+  reviewMode: {
+    mode: r.review_mode as ReviewModeColumns['mode'],
+    startedAt: (r.review_mode_started_at as Date | null) ?? null,
+    endsAt: (r.review_mode_ends_at as Date | null) ?? null,
+    endedAt: (r.review_mode_ended_at as Date | null) ?? null,
+  },
   privateReplied: r.private_replied as boolean,
   origin: r.origin as CommentOrigin,
   ads: r.ads as { adId: string; adAccountId: string }[],

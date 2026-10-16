@@ -62,8 +62,47 @@ describe('memory adapters', () => {
     expect(a.created).toBe(true);
     expect(b).toEqual({ scope: a.scope, created: false });
     expect((await d.load(a.scope))?.status).toBe('reconnect_required');
-    expect(await d.activate(a.scope, 'u1')).toBe(true);
+    expect((await d.activate(a.scope, 'u1')).activated).toBe(true);
     expect((await d.load(a.scope))?.status).toBe('active');
+  });
+
+  it('activate stamps the review window once, like the Pg adapter', async () => {
+    let now = Date.UTC(2026, 9, 16, 12, 0, 0);
+    const d = new MemoryConnectionDirectory({ now: () => now });
+    const input = {
+      organizationId: 'o1',
+      brandId: 'b1',
+      platform: 'facebook' as const,
+      externalAccountId: 'p-rm',
+      displayName: null,
+      grantedScopes: [],
+    };
+    const a = await d.upsertPending(input);
+    const endsAt = new Date(now + 168 * 3_600_000);
+    expect(await d.activate(a.scope, 'u1')).toEqual({
+      activated: true,
+      reviewMode: { state: 'active', endsAt, changed: true },
+    });
+    // Reconnect after a user disconnect: same window, opt-out ignored.
+    now += 3_600_000;
+    expect(await d.disconnect(a.scope, 'u1')).toBe(true);
+    await d.upsertPending(input);
+    expect(await d.activate(a.scope, 'u1', { reviewMode: 'opted_out' })).toEqual({
+      activated: true,
+      reviewMode: { state: 'active', endsAt, changed: false },
+    });
+    // Opt-out on a first activation.
+    const b = await d.upsertPending({ ...input, externalAccountId: 'p-opt' });
+    expect(await d.activate(b.scope, 'u1', { reviewMode: 'opted_out' })).toEqual({
+      activated: true,
+      reviewMode: { state: 'opted_out', endsAt: null, changed: true },
+    });
+    // Seeded rows predate review mode.
+    d.seed({ scope, platform: 'facebook', externalAccountId: 'p1', status: 'active' });
+    expect(await d.activate(scope, 'u1')).toEqual({
+      activated: true,
+      reviewMode: { state: 'off', endsAt: null, changed: false },
+    });
   });
 
   it('activate never resurrects a paused or revoked connection', async () => {
@@ -71,7 +110,7 @@ describe('memory adapters', () => {
     for (const status of ['paused', 'revoked'] as const) {
       const sc = { organizationId: 'o1', brandId: 'b1', connectionId: `c-${status}` };
       d.seed({ scope: sc, platform: 'facebook', externalAccountId: status, status });
-      expect(await d.activate(sc, 'u1')).toBe(false);
+      expect((await d.activate(sc, 'u1')).activated).toBe(false);
       expect((await d.load(sc))?.status).toBe(status);
     }
   });

@@ -20,6 +20,8 @@ import { ConnectorError, toConnectorError } from './errors.js';
 import { assertAllowedUrl, type SafeHttp } from './http.js';
 import {
   ConnectionTakenError,
+  type ActivateOptions,
+  type ActivateResult,
   type ConnectionDirectory,
   type CredentialVault,
   type MembershipReader,
@@ -28,6 +30,7 @@ import {
   type StateBinding,
 } from './ports.js';
 import type { ConnectorRegistry } from './registry.js';
+import type { ReviewModeState } from './review-mode.js';
 import { externalIdSchema, grantableAccountSchema } from './schemas.js';
 import { normalizeTokenSet } from './tokens.js';
 import type { Platform } from './types.js';
@@ -104,6 +107,8 @@ export interface ConnectAccountResult {
   readonly status: ConnectAccountStatus;
   readonly connectionId: string | null;
   readonly wasReconnectRequired: boolean;
+  /** Review mode of the connection after this connect; null when it was not activated. */
+  readonly reviewMode: { readonly state: ReviewModeState; readonly endsAt: string | null } | null;
 }
 export type GrantFailure = { readonly ok: false; readonly reason: 'rejected' | 'platform_error' };
 
@@ -137,7 +142,14 @@ const result = (
   status: ConnectAccountStatus,
   connectionId: string | null = null,
   wasReconnectRequired = false,
-): ConnectAccountResult => ({ externalAccountId, status, connectionId, wasReconnectRequired });
+  reviewMode: ConnectAccountResult['reviewMode'] = null,
+): ConnectAccountResult => ({
+  externalAccountId,
+  status,
+  connectionId,
+  wasReconnectRequired,
+  reviewMode,
+});
 
 export class OAuthFlow {
   constructor(private readonly d: OAuthFlowDeps) {}
@@ -308,7 +320,7 @@ export class OAuthFlow {
       value: tokens.accessToken,
       expiresAt: tokens.accessTokenExpiresAt,
     });
-    if (!(await this.d.directory.activate(scope, actor.userId)))
+    if (!(await this.d.directory.activate(scope, actor.userId)).activated)
       return this.#inactive(ids, scope.connectionId);
     this.d.log.info('connection authorized', { ...ids, connectionId: scope.connectionId, created });
     return { ok: true, kind: 'connected', connectionId: scope.connectionId, created };
@@ -417,6 +429,7 @@ export class OAuthFlow {
     platform: Platform,
     grantId: string,
     externalAccountIds: readonly string[],
+    opts: ActivateOptions = {},
   ): Promise<{ ok: true; results: readonly ConnectAccountResult[] } | GrantFailure> {
     if (!this.d.grants || !(await this.#canManage(actor))) return GRANT_REJECTED;
     if (
@@ -452,7 +465,7 @@ export class OAuthFlow {
           continue;
         }
       }
-      results.push(await this.#connectOne(actor, platform, grant.grantedScopes, a));
+      results.push(await this.#connectOne(actor, platform, grant.grantedScopes, a, opts));
     }
     this.d.log.info('oauth accounts connected', {
       platform,
@@ -469,6 +482,7 @@ export class OAuthFlow {
     platform: Platform,
     grantedScopes: readonly string[],
     a: GrantableAccount,
+    opts: ActivateOptions,
   ): Promise<ConnectAccountResult> {
     const id = a.externalAccountId;
     // Whether a live row existed before: if not, the row upsertPending leaves
@@ -493,17 +507,21 @@ export class OAuthFlow {
     if (before?.status === 'revoked' || before?.status === 'paused')
       return result(id, 'connection_inactive', scope.connectionId);
     const freshlyLive = created || prior === null;
-    let activated = false;
+    let activation: ActivateResult | null = null;
     try {
       await this.d.vault.writeAccessToken(scope, { value: a.accessToken, expiresAt: null });
-      activated = await this.d.directory.activate(scope, actor.userId);
+      activation = await this.d.directory.activate(scope, actor.userId, opts);
     } finally {
       // A pending row that never became active must not keep holding the
       // account against other workspaces (or route its webhooks).
-      if (!activated && freshlyLive) await this.#release(scope, actor, platform);
+      if (!activation?.activated && freshlyLive) await this.#release(scope, actor, platform);
     }
-    if (!activated) return result(id, 'connection_inactive', scope.connectionId);
-    return result(id, created ? 'connected' : 'reconnected', scope.connectionId, !created);
+    if (!activation.activated) return result(id, 'connection_inactive', scope.connectionId);
+    const { state, endsAt } = activation.reviewMode;
+    return result(id, created ? 'connected' : 'reconnected', scope.connectionId, !created, {
+      state,
+      endsAt: endsAt?.toISOString() ?? null,
+    });
   }
 
   async #release(scope: ConnectionScope, actor: OAuthActor, platform: Platform): Promise<void> {

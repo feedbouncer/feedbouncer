@@ -178,7 +178,7 @@ export async function createMemoryStack(
   return assembleStack(
     connector,
     {
-      directory: new MemoryConnectionDirectory(),
+      directory: new MemoryConnectionDirectory(clock),
       vault,
       lock: new MemoryRefreshLock(),
       states: new MemoryOAuthStateStore(clock),
