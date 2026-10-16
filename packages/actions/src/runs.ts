@@ -53,6 +53,8 @@ export type StepWithRun = StepRow & {
   connectionId: string;
   ruleId: string;
   dryRun: boolean;
+  /** Status of the latest undo attempt's action, if there was one. */
+  undoStatus: ActionStatus | null;
 };
 
 interface StepDb {
@@ -104,8 +106,13 @@ interface RunDb {
 
 const RUN_COLS = `r.id, r.connection_id, r.comment_id, r.rule_id, r.rule_evaluation_id, r.dry_run, r.completed_at`;
 
-const UNDOABLE_SQL = `(s.status = 'succeeded' AND s.undone_at IS NULL AND NOT r.dry_run
-  AND s.step_type IN ('hide', 'ban', 'flag_for_review'))`;
+/** Undo statuses after which the step can be undone again. */
+const RETRY_UNDO = `('failed', 'not_eligible')`;
+
+/** Needs the step as s, its run as r and its undo action as u. */
+const UNDOABLE_SQL = `(s.status = 'succeeded' AND NOT r.dry_run
+  AND s.step_type IN ('hide', 'ban', 'flag_for_review')
+  AND (s.undone_at IS NULL OR u.status IN ${RETRY_UNDO}))`;
 
 /** The pool, or a client already held (e.g. under the run lock). */
 export type Queryable = Pick<pg.ClientBase, 'query'>;
@@ -329,7 +336,7 @@ export class PgActionRunStore {
   /**
    * True when a person has overruled an automated hide or ban: the latest live hide/unhide
    * (ban/unban across the author's comments on this connection) is a user's reversal, or a
-   * step of that kind was undone from the log.
+   * step of that kind was undone from the log (an undo whose action failed does not count).
    */
   async hasUserReversal(
     scope: BrandScope,
@@ -363,6 +370,9 @@ export class PgActionRunStore {
             WHERE s.organization_id = $1 AND s.brand_id = $2 AND r.organization_id = $1
               AND r.comment_id IN (SELECT id FROM cs)
               AND s.step_type = $6 AND s.undone_at IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM moderation_action u
+                               WHERE u.organization_id = $1 AND u.brand_id = $2
+                                 AND u.id = s.undo_action_id AND u.status IN ${RETRY_UNDO})
          )
        ) AS reversed`,
       [scope.organizationId, scope.brandId, commentId, k.apply, k.reverse, k.step, k.perAuthor],
@@ -463,11 +473,19 @@ export class PgActionRunStore {
 
   async loadStep(scope: BrandScope, stepId: string): Promise<StepWithRun | null> {
     const r = await this.pool.query<
-      StepDb & { comment_id: string; connection_id: string; rule_id: string; dry_run: boolean }
+      StepDb & {
+        comment_id: string;
+        connection_id: string;
+        rule_id: string;
+        dry_run: boolean;
+        undo_status: ActionStatus | null;
+      }
     >(
-      `SELECT ${STEP_COLS}, r.comment_id, r.connection_id, r.rule_id, r.dry_run
+      `SELECT ${STEP_COLS}, r.comment_id, r.connection_id, r.rule_id, r.dry_run, u.status AS undo_status
          FROM action_run_step s
          JOIN action_run r ON r.brand_id = s.brand_id AND r.id = s.run_id
+         LEFT JOIN moderation_action u ON u.organization_id = s.organization_id AND u.brand_id = s.brand_id
+                                      AND u.id = s.undo_action_id
         WHERE s.organization_id = $1 AND s.brand_id = $2 AND s.id = $3 AND r.organization_id = $1`,
       [scope.organizationId, scope.brandId, stepId],
     );
@@ -479,13 +497,18 @@ export class PgActionRunStore {
           connectionId: row.connection_id,
           ruleId: row.rule_id,
           dryRun: row.dry_run,
+          undoStatus: row.undo_status,
         }
       : null;
   }
 
   /**
-   * False when the step was already undone, is not in scope, or is not a succeeded, live
-   * hide, ban or flag step (a user reversal marks a moderator override).
+   * Records an undo attempt: its action becomes the step's undo action, and the step is
+   * marked undone when `applied` (the action was accepted), or left not undone when the
+   * action was refused at once. Compare-and-set on `previous`, the undo action the caller
+   * saw: false when another attempt got there first, the step is not in scope, or it is not
+   * a succeeded, live hide, ban or flag step. A step already undone can only be undone again
+   * through a new attempt after its undo action failed.
    */
   async markUndone(
     tx: pg.PoolClient,
@@ -493,16 +516,30 @@ export class PgActionRunStore {
     stepId: string,
     userId: string,
     undoActionId: string | null,
+    o: { previous?: string | null; applied?: boolean } = {},
   ): Promise<boolean> {
+    const applied = o.applied ?? true;
     const r = await tx.query(
       `UPDATE action_run_step s
-          SET undone_at = now(), undone_by_user_id = $4, undo_action_id = $5
-        WHERE s.organization_id = $1 AND s.brand_id = $2 AND s.id = $3 AND s.undone_at IS NULL
+          SET undo_action_id = $5,
+              undone_at = CASE WHEN $7 THEN now() END,
+              undone_by_user_id = CASE WHEN $7 THEN $4::uuid END
+        WHERE s.organization_id = $1 AND s.brand_id = $2 AND s.id = $3
+          AND s.undo_action_id IS NOT DISTINCT FROM $6::uuid
+          AND (s.undone_at IS NULL OR s.undo_action_id IS NOT NULL)
           AND s.status = 'succeeded' AND s.step_type IN ('hide', 'ban', 'flag_for_review')
           AND EXISTS (SELECT 1 FROM action_run r
                        WHERE r.organization_id = $1 AND r.brand_id = $2 AND r.id = s.run_id
                          AND NOT r.dry_run)`,
-      [scope.organizationId, scope.brandId, stepId, userId, undoActionId],
+      [
+        scope.organizationId,
+        scope.brandId,
+        stepId,
+        userId,
+        undoActionId,
+        o.previous ?? null,
+        applied,
+      ],
     );
     return r.rowCount === 1;
   }

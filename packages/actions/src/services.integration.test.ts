@@ -205,6 +205,105 @@ describe('undoStep', () => {
     expect((await actionRows(f.comment.id)).filter((a) => a.kind === 'unhide')).toHaveLength(1);
   });
 
+  it('an undo that later fails on the platform shows in the log and can be retried', async () => {
+    const f = await fresh('hidden');
+    const { stepId } = await seedStep(f, { type: 'hide' });
+    const first = await undoStep(deps(), f.scope, stepId, f.t.userId);
+    if (first.status === 'refused') throw new Error('undo refused');
+    expect(await runs.hasUserReversal(f.scope, f.comment.id, 'hide')).toBe(true);
+    // A second click while the unhide is pending stays one request.
+    expect(await undoStep(deps(), f.scope, stepId, f.t.userId)).toEqual({
+      status: 'refused',
+      code: 'already_undone',
+    });
+
+    await ctx.c.query(
+      `UPDATE moderation_action SET status = 'failed', outcome_code = 'platform_error',
+              completed_at = now() WHERE id = $1`,
+      [first.undoActionId],
+    );
+    const [entry] = await runs.listLog(f.scope, { commentId: f.comment.id, limit: 10 });
+    expect(entry).toMatchObject({ id: stepId, undoStatus: 'failed', undoable: true });
+    // The failed unhide is no moderator override: automation may still hide the comment.
+    expect(await runs.hasUserReversal(f.scope, f.comment.id, 'hide')).toBe(false);
+
+    const retry = await undoStep(deps(), f.scope, stepId, f.t.userId);
+    expect(retry).toMatchObject({ status: 'accepted' });
+    if (retry.status === 'refused') throw new Error('retry refused');
+    expect(retry.undoActionId).not.toBe(first.undoActionId);
+    const unhides = (await actionRows(f.comment.id)).filter((a) => a.kind === 'unhide');
+    expect(unhides.map((a) => a.request_key)).toEqual([
+      `undo:${stepId}`,
+      `undo:${stepId}:${first.undoActionId}`,
+    ]);
+    const step = await runs.loadStep(f.scope, stepId);
+    expect(step).toMatchObject({ undoActionId: retry.undoActionId, undoStatus: 'pending' });
+    expect(step!.undoneAt).toBeInstanceOf(Date);
+    expect(await runs.hasUserReversal(f.scope, f.comment.id, 'hide')).toBe(true);
+    expect(await undoStep(deps(), f.scope, stepId, f.t.userId)).toEqual({
+      status: 'refused',
+      code: 'already_undone',
+    });
+  });
+
+  it('concurrent retries of a failed undo make one new request and both succeed', async () => {
+    const f = await fresh('hidden');
+    const { stepId } = await seedStep(f, { type: 'hide' });
+    const first = await undoStep(deps(), f.scope, stepId, f.t.userId);
+    if (first.status === 'refused') throw new Error('undo refused');
+    await ctx.c.query(
+      `UPDATE moderation_action SET status = 'failed', completed_at = now() WHERE id = $1`,
+      [first.undoActionId],
+    );
+    const [a, b] = await Promise.all([
+      undoStep(deps(), f.scope, stepId, f.t.userId),
+      undoStep(deps(), f.scope, stepId, f.t.userId),
+    ]);
+    const ok = [a, b].filter((r) => r.status === 'accepted');
+    expect(ok.length).toBeGreaterThanOrEqual(1);
+    for (const r of [a, b])
+      if (r.status !== 'refused') expect(r).toEqual(ok[0]);
+      else expect(r.code).toBe('already_undone');
+    expect((await actionRows(f.comment.id)).filter((x) => x.kind === 'unhide')).toHaveLength(2);
+  });
+
+  it('an undo the platform refuses at once is recorded, not marked, and can be retried', async () => {
+    const f = await fresh('hidden');
+    const { stepId } = await seedStep(f, { type: 'hide' });
+    const refusedId = await seedModerationActionRow(ctx.c, f.comment, {
+      kind: 'unhide',
+      actorType: 'user',
+      status: 'not_eligible',
+    });
+    const once = {
+      request: vi
+        .fn()
+        .mockResolvedValueOnce({
+          status: 'recorded',
+          action: { id: refusedId, status: 'not_eligible' },
+        })
+        .mockImplementation((i) => actions.request(i)),
+    };
+    const d = { ...deps(), actions: once };
+    expect(await undoStep(d, f.scope, stepId, f.t.userId)).toEqual({
+      status: 'refused',
+      code: 'undo_not_available',
+    });
+    const step = await runs.loadStep(f.scope, stepId);
+    expect(step).toMatchObject({ undoneAt: null, undoActionId: refusedId });
+    expect(await runs.hasUserReversal(f.scope, f.comment.id, 'hide')).toBe(false);
+    expect((await runs.listLog(f.scope, { commentId: f.comment.id, limit: 10 }))[0]).toMatchObject({
+      undoStatus: 'not_eligible',
+      undoable: true,
+    });
+
+    expect(await undoStep(d, f.scope, stepId, f.t.userId)).toMatchObject({ status: 'accepted' });
+    expect(once.request).toHaveBeenLastCalledWith(
+      expect.objectContaining({ requestKey: `undo:${stepId}:${refusedId}` }),
+    );
+    expect((await runs.loadStep(f.scope, stepId))!.undoneAt).toBeInstanceOf(Date);
+  });
+
   it.each([
     ['delete', { type: 'delete', confirmIrreversible: true }],
     ['auto_reply', { type: 'auto_reply', template: 'Thanks' }],

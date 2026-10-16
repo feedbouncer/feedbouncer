@@ -11,6 +11,7 @@ import {
   hasPending,
   outcomeText,
   undoLogStep,
+  undoText,
   type BrandApiBase,
   type LogEntryView,
 } from '../../lib/actions';
@@ -131,33 +132,40 @@ export function ActionLog(props: {
             </tr>
           </thead>
           <tbody>
-            {props.entries.map((e) => (
-              <tr key={e.id}>
-                <td>{formatUtc(e.createdAt)}</td>
-                <td>
-                  <Link
-                    href={`/orgs/${props.orgId}/brands/${props.brandId}/comments#comment-${e.commentId}`}
-                  >
-                    View comment
-                  </Link>
-                </td>
-                <td>{e.ruleName}</td>
-                <td>{STEP_LABEL[e.type]}</td>
-                <td>{outcomeText(e.status, e.reasonCode)}</td>
-                <td>
-                  {e.undoable ? (
-                    <button
-                      type="button"
-                      disabled={busy !== null}
-                      aria-label={`Undo ${STEP_LABEL[e.type]}`}
-                      onClick={() => void undo(e.id)}
+            {props.entries.map((e) => {
+              const undone = undoText(e);
+              const undoLabel = undone ? 'Retry undo' : 'Undo';
+              return (
+                <tr key={e.id}>
+                  <td>{formatUtc(e.createdAt)}</td>
+                  <td>
+                    <Link
+                      href={`/orgs/${props.orgId}/brands/${props.brandId}/comments#comment-${e.commentId}`}
                     >
-                      Undo
-                    </button>
-                  ) : null}
-                </td>
-              </tr>
-            ))}
+                      View comment
+                    </Link>
+                  </td>
+                  <td>{e.ruleName}</td>
+                  <td>{STEP_LABEL[e.type]}</td>
+                  <td>
+                    {outcomeText(e.status, e.reasonCode)}
+                    {undone ? <small>{` (${undone})`}</small> : null}
+                  </td>
+                  <td>
+                    {e.undoable ? (
+                      <button
+                        type="button"
+                        disabled={busy !== null}
+                        aria-label={`${undoLabel} ${STEP_LABEL[e.type]}`}
+                        onClick={() => void undo(e.id)}
+                      >
+                        {undoLabel}
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       ) : null}

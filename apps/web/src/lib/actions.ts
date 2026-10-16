@@ -244,7 +244,20 @@ export interface LogEntryView {
   status: StepStatus;
   reasonCode: string | null;
   undoable: boolean;
+  /** When the step was last undone; null if never, or if the latest undo was refused at once. */
+  undoneAt: string | null;
+  /** Status of the latest undo's platform action (null for a dismissed flag). */
+  undoStatus: string | null;
   createdAt: string;
+}
+
+const UNDO_FAILED = new Set(['failed', 'not_eligible']);
+
+/** How the latest undo of a step went, or null when it was never undone. */
+export function undoText(e: Pick<LogEntryView, 'undoneAt' | 'undoStatus'>): string | null {
+  if (e.undoStatus !== null && UNDO_FAILED.has(e.undoStatus)) return 'Undo failed. Try again.';
+  if (e.undoneAt === null) return null;
+  return e.undoStatus === 'pending' ? 'Undo in progress' : 'Undone';
 }
 
 export interface Page<T> {
@@ -266,8 +279,11 @@ export interface ReviewItemView {
 export const POLL_MS = 5000;
 export const POLL_LIMIT = 60;
 
-export const hasPending = (entries: readonly { status: StepStatus }[]): boolean =>
-  entries.some((e) => e.status === 'pending');
+/** A step still running, or an undo still on its way to the platform. */
+export const hasPending = (
+  entries: readonly { status: StepStatus; undoneAt?: string | null; undoStatus?: string | null }[],
+): boolean =>
+  entries.some((e) => e.status === 'pending' || (e.undoneAt != null && e.undoStatus === 'pending'));
 
 export type BrandApiBase = `/api/v1/orgs/${string}/brands/${string}`;
 

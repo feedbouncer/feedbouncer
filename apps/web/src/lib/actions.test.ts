@@ -17,6 +17,7 @@ import {
   templateCount,
   toggleStep,
   undoLogStep,
+  undoText,
   worstCaseLength,
   type ActionCapabilitiesDto,
 } from './actions';
@@ -176,6 +177,15 @@ describe('polling', () => {
     expect(hasPending([{ status: 'succeeded' }, { status: 'pending' }])).toBe(true);
     expect(hasPending([{ status: 'failed' }])).toBe(false);
   });
+
+  it('keeps polling while an undo is in progress', () => {
+    expect(hasPending([{ status: 'succeeded', undoneAt: 'now', undoStatus: 'pending' }])).toBe(
+      true,
+    );
+    expect(hasPending([{ status: 'succeeded', undoneAt: 'now', undoStatus: 'applied' }])).toBe(
+      false,
+    );
+  });
 });
 
 describe('requests', () => {
@@ -227,5 +237,19 @@ describe('sourceText', () => {
     expect(sourceText('classifier', null)).toBe('Classifier');
     expect(sourceText('user', null)).toBe('Flagged by a person');
     expect(sourceText('something_else', null)).toBe('Flagged');
+  });
+});
+
+describe('undoText', () => {
+  it('says how the undo went', () => {
+    expect(undoText({ undoneAt: null, undoStatus: null })).toBeNull();
+    expect(undoText({ undoneAt: 't', undoStatus: null })).toBe('Undone');
+    expect(undoText({ undoneAt: 't', undoStatus: 'applied' })).toBe('Undone');
+    expect(undoText({ undoneAt: 't', undoStatus: 'noop' })).toBe('Undone');
+    expect(undoText({ undoneAt: 't', undoStatus: 'pending' })).toBe('Undo in progress');
+    expect(undoText({ undoneAt: 't', undoStatus: 'failed' })).toBe('Undo failed. Try again.');
+    expect(undoText({ undoneAt: null, undoStatus: 'not_eligible' })).toBe(
+      'Undo failed. Try again.',
+    );
   });
 });

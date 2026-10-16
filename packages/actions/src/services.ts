@@ -109,7 +109,9 @@ export async function undoStep(
   if (!UUID.test(stepId)) return refused('not_found');
   const step = await d.runs.loadStep(scope, stepId);
   if (!step) return refused('not_found');
-  if (step.undoneAt) return refused('already_undone');
+  // An undo whose action failed or was refused can be tried again; any other is final.
+  const retry = step.undoStatus === 'failed' || step.undoStatus === 'not_eligible';
+  if (step.undoneAt && !retry) return refused('already_undone');
   if (
     step.status !== 'succeeded' ||
     step.dryRun ||
@@ -117,6 +119,7 @@ export async function undoStep(
   )
     return refused('undo_not_available');
 
+  const previous = step.undoActionId;
   let undoActionId: string | null = null;
   let status: 'accepted' | 'done' = 'done';
   if (step.type !== 'flag_for_review') {
@@ -126,18 +129,26 @@ export async function undoStep(
       commentId: step.commentId,
       kind: UNDO_KIND[step.type],
       actor: { type: 'user', userId },
-      requestKey: `undo:${stepId}`,
+      // One key per attempt: a retry after a failed undo is a new request, while a
+      // double click repeats the same one.
+      requestKey: previous ? `undo:${stepId}:${previous}` : `undo:${stepId}`,
       reverses: step.moderationActionId,
     });
     if (r.status === 'refused') return refused(forward(r.code) ?? 'unsupported');
-    if (r.action.status === 'not_eligible' || r.action.status === 'failed')
-      return refused('undo_not_available');
     undoActionId = r.action.id;
+    if (r.action.status === 'not_eligible' || r.action.status === 'failed') {
+      // Kept as the latest attempt, so the next one gets a new key.
+      await withTransaction(d.pool, (tx) =>
+        d.runs.markUndone(tx, scope, stepId, userId, undoActionId, { previous, applied: false }),
+      );
+      return refused('undo_not_available');
+    }
     status = r.status === 'accepted' ? 'accepted' : 'done';
   }
 
   const marked = await withTransaction(d.pool, async (tx) => {
-    if (!(await d.runs.markUndone(tx, scope, stepId, userId, undoActionId))) return false;
+    if (!(await d.runs.markUndone(tx, scope, stepId, userId, undoActionId, { previous })))
+      return false;
     if (step.type === 'flag_for_review' && step.reviewItemId)
       await d.review.resolve(tx, scope, step.reviewItemId, {
         resolution: 'dismissed',
@@ -152,7 +163,12 @@ export async function undoStep(
     });
     return true;
   });
-  return marked ? { status, undoActionId } : refused('already_undone');
+  if (marked) return { status, undoActionId };
+  // A concurrent click with the same key got there first: same request, same answer.
+  const now = undoActionId ? await d.runs.loadStep(scope, stepId) : null;
+  return now?.undoneAt && now.undoActionId === undoActionId
+    ? { status, undoActionId }
+    : refused('already_undone');
 }
 
 export async function resolveReviewItem(

@@ -13,6 +13,8 @@ const entry = (over: Partial<LogEntryView>): LogEntryView => ({
   status: 'succeeded',
   reasonCode: null,
   undoable: false,
+  undoneAt: null,
+  undoStatus: null,
   createdAt: '2026-10-16T10:00:00.000Z',
   ...over,
 });
@@ -37,6 +39,23 @@ describe('ActionLog', () => {
     ]);
     expect(html.match(/>Undo</g)).toHaveLength(1);
     expect(html).toContain('aria-label="Undo Hide"');
+  });
+
+  it('shows an undo in progress, a finished one, and a failed one with a retry', () => {
+    const html = render([
+      entry({ id: 'a', undoneAt: '2026-10-16T10:01:00.000Z', undoStatus: 'pending' }),
+      entry({ id: 'b', undoneAt: '2026-10-16T10:01:00.000Z', undoStatus: 'applied' }),
+      entry({
+        id: 'c',
+        undoneAt: '2026-10-16T10:01:00.000Z',
+        undoStatus: 'failed',
+        undoable: true,
+      }),
+    ]);
+    expect(html).toContain('Undo in progress');
+    expect(html).toContain('Undone');
+    expect(html).toContain('Undo failed. Try again.');
+    expect(html.match(/>Retry undo</g)).toHaveLength(1);
   });
 
   it('shows the step, outcome and reason as text', () => {
