@@ -106,6 +106,9 @@ missing. No partial connection is created.
 | `pages_manage_metadata`   | Subscribing the Page to the app's `feed` webhook (and removing the subscription). |
 | `pages_messaging`         | Private replies to comments.                                                      |
 
+Which rule steps need which permission, and what happens when one is missing,
+is in [actions.md](../moderation/actions.md#platform-support).
+
 The person connecting must also hold Page tasks that allow it. A Page is
 offered as connectable only when its tasks include `MODERATE` (required for
 everything), and private replies additionally need `MESSAGING`. A Page that
