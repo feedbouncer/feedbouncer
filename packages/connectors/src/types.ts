@@ -198,6 +198,10 @@ export interface ConnectorCapabilities {
   readonly responses?: readonly ResponseKind[];
   /** Per-platform action limits; see `ActionConstraints`. Default: none. */
   readonly constraints?: ActionConstraints;
+  /** Platform permissions each action or response needs. Absent or empty means none are checked. */
+  readonly actionScopes?: Readonly<
+    Partial<Record<ModerationAction | ResponseKind, readonly string[]>>
+  >;
   /** 1..500 */
   readonly maxPageSize: number;
 }
