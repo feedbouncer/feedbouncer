@@ -174,6 +174,26 @@ describe('undoStep', () => {
     });
   });
 
+  it('undo of a flag whose item was already resolved is refused and not offered', async () => {
+    const f = await fresh();
+    const { stepId, reviewItemId } = await seedStep(f, { type: 'flag_for_review' });
+    expect((await runs.listLog(f.scope, { limit: 10 }))[0]).toMatchObject({ undoable: true });
+    await withTransaction(pool, (tx) =>
+      review.resolve(tx, f.scope, reviewItemId!, {
+        resolution: 'deleted',
+        userId: f.t.userId,
+        actionId: null,
+      }),
+    );
+    expect((await runs.listLog(f.scope, { limit: 10 }))[0]).toMatchObject({ undoable: false });
+    expect(await undoStep(deps(), f.scope, stepId, f.t.userId)).toEqual({
+      status: 'refused',
+      code: 'undo_not_available',
+    });
+    expect((await runs.loadStep(f.scope, stepId))!.undoneAt).toBeNull();
+    expect(await auditRows('action_step.undone', f)).toEqual([]);
+  });
+
   it('undo twice -> already_undone, with one unhide', async () => {
     const f = await fresh('hidden');
     const { stepId } = await seedStep(f, { type: 'hide' });
@@ -527,6 +547,20 @@ describe('resolveReviewItem', () => {
       status: 'refused',
       code: 'review_item_resolved',
     });
+  });
+
+  it('concurrent resolutions with different keys run one action and refuse the other', async () => {
+    const f = await fresh();
+    const itemId = await openItem(f);
+    const results = await Promise.all([
+      resolve(f, itemId, 'hide'),
+      resolve(f, itemId, 'delete', { confirm: true }),
+    ]);
+    expect(results.filter((r) => r.status === 'resolved')).toHaveLength(1);
+    expect(results.filter((r) => r.status === 'refused')).toEqual([
+      { status: 'refused', code: 'review_item_resolved' },
+    ]);
+    expect(await actionRows(f.comment.id)).toHaveLength(1);
   });
 
   it('another brand or a malformed id -> not_found', async () => {

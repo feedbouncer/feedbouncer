@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { createPool, withTransaction } from '@feedbouncer/db';
 import { migratedDb, seedTenant } from '@feedbouncer/db/testing';
+import { PgReviewQueue } from './review.js';
 import { PgActionRunStore } from './runs.js';
 import type { ActionStep } from './steps.js';
 import {
@@ -56,12 +57,21 @@ const settle = (
   stepId: string,
   status: 'succeeded' | 'failed' = 'succeeded',
 ) =>
-  withTransaction(pool, (tx) =>
-    store.settleStep(tx, f.scope, stepId, {
+  withTransaction(pool, async (tx) => {
+    const flag = (await store.loadStep(f.scope, stepId))?.type === 'flag_for_review';
+    const item = flag
+      ? await new PgReviewQueue(pool).open(tx, f.scope, {
+          commentId: f.comment.id,
+          source: 'action_step',
+          ruleId: f.t.ruleId,
+        })
+      : null;
+    await store.settleStep(tx, f.scope, stepId, {
       status,
       reason: status === 'failed' ? 'x_failed' : null,
-    }),
-  );
+      ...(item && { reviewItemId: item.id }),
+    });
+  });
 const undo = (f: Awaited<ReturnType<typeof fresh>>, stepId: string) =>
   withTransaction(pool, (tx) => store.markUndone(tx, f.scope, stepId, f.t.userId, null));
 

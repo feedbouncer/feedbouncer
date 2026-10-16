@@ -144,6 +144,17 @@ export class PgReviewQueue {
     return r.rows[0] ? toView(r.rows[0]) : null;
   }
 
+  /** Claims an open item until the transaction ends; false when it is resolved or not in scope. */
+  async lockOpen(tx: pg.PoolClient, scope: BrandScope, id: string): Promise<boolean> {
+    const res = await tx.query(
+      `SELECT 1 FROM review_item
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND status = 'open'
+          FOR UPDATE`,
+      [scope.organizationId, scope.brandId, id],
+    );
+    return res.rowCount === 1;
+  }
+
   /** Only while open; false when already resolved or not in scope. */
   async resolve(
     tx: pg.PoolClient,

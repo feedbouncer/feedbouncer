@@ -903,7 +903,7 @@ describe('action runner', () => {
       'private_reply_window_closed',
     ]);
     expect(await outcome(run.id, 'hide')).toEqual(['simulated', 'would_run']);
-    expect(await runner.simulate(scope, old.id, [HIDE, DM])).toEqual([
+    expect(await runner.planner.simulate(scope, old.id, [HIDE, DM])).toEqual([
       {
         type: 'private_reply',
         status: 'not_applicable',

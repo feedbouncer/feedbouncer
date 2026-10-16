@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PgActionRunStore, PgReviewQueue, type ActionStep } from '@feedbouncer/actions';
 import { withTransaction } from '@feedbouncer/db';
 import { Secret } from '@feedbouncer/service-runtime';
+import { ActionsService } from './actions.service.js';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
 
 const FACEBOOK = {
@@ -280,6 +281,19 @@ describe('simulate', () => {
     expect(r.body.steps[0].previewText).toMatch(/^hello /);
     expect(r.body.steps[1]).toMatchObject({ type: 'hide', previewText: null });
     expect(await Promise.all(tables.map(count))).toEqual(before);
+  });
+
+  it('needs no job producer', async () => {
+    const s = await seedBase(fb);
+    const created = await call(fb, 'POST', '/rules', rule([{ type: 'hide' }]));
+    const service = new ActionsService({ ...api.deps, producer: null });
+    const org = {
+      organizationId: fb.orgId,
+      actorUserId: fb.member.userId,
+      role: 'member',
+    } as const;
+    const r = await service.simulate(org, fb.brandId, created.body.id, s.commentId);
+    expect(r.steps.map((x) => x.type)).toEqual(['hide']);
   });
 
   it('is a 404 for an unknown rule or comment and a 400 for a bad body', async () => {

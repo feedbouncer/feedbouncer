@@ -5,8 +5,6 @@
 import type pg from 'pg';
 import type { Clock, Platform } from '@feedbouncer/connectors';
 import {
-  eligibilityComment,
-  evaluateEligibility,
   type ActionKind,
   type ActionOutcomeObserver,
   type ModerationActionView,
@@ -20,21 +18,10 @@ import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
 import { ACTION_RUN_ADVANCE_JOB, type ActionRunAdvancePayload } from './jobs/specs.js';
 import type { PgReviewQueue } from './review.js';
-import type { PgActionRunStore, Queryable, RunRow, StepRow } from './runs.js';
-import {
-  MODERATION_KIND,
-  sortSteps,
-  type ActionStep,
-  type StepStatus,
-  type StepType,
-} from './steps.js';
-import {
-  stepOutcomeFor,
-  stepSupport,
-  type BrandConnectionInfo,
-  type StepOutcome,
-} from './support.js';
-import { renderTemplate } from './templates.js';
+import type { PgActionRunStore, RunRow, StepRow } from './runs.js';
+import { MODERATION_KIND, type ActionStep, type StepStatus, type StepType } from './steps.js';
+import { stepOutcomeFor, type BrandConnectionInfo, type StepOutcome } from './support.js';
+import { StepPlanner } from './planner.js';
 
 export interface ActionStepObserver {
   /** Told when a step settles. Delivery is at least once: must be idempotent. */
@@ -51,13 +38,6 @@ export interface ActionStepObserver {
   }): Promise<void>;
 }
 
-export interface SimulatedStep {
-  type: StepType;
-  status: StepOutcome['status'];
-  reason: string | null;
-  previewText: string | null;
-}
-
 interface Requested {
   stepId: string;
   requestKey: string;
@@ -72,12 +52,7 @@ interface PendingRequest {
 type Producer = Pick<JobProducer, 'enqueue'>;
 type Settled = Parameters<ActionStepObserver['onStepSettled']>[0];
 
-const PLATFORM_NAME: Partial<Record<Platform, string>> = {
-  facebook: 'Facebook',
-  instagram: 'Instagram',
-};
 const errorName = (err: unknown): string => (err instanceof Error ? err.name : 'NonError');
-const WOULD_RUN: StepOutcome = { status: 'succeeded', reason: 'would_run' };
 
 /**
  * One key per comment and kind, so automation never repeats an action. An attempt that
@@ -107,6 +82,8 @@ function wake(
 }
 
 export class ActionRunner {
+  readonly planner: StepPlanner;
+
   constructor(
     private readonly d: {
       pool: pg.Pool;
@@ -121,7 +98,9 @@ export class ActionRunner {
       log: Logger;
       observer?: ActionStepObserver;
     },
-  ) {}
+  ) {
+    this.planner = new StepPlanner(d);
+  }
 
   /** Creates the run (idempotent). A dry run is simulated and completed here; otherwise advance is queued. */
   async start(
@@ -180,27 +159,8 @@ export class ActionRunner {
     }
   }
 
-  async simulate(
-    scope: ConnectionScope,
-    commentId: string,
-    steps: readonly ActionStep[],
-  ): Promise<SimulatedStep[]> {
-    const comment = await this.d.comments.load(scope, commentId);
-    const conn = await this.d.connection(scope);
-    const brand = await this.d.brandName(scope);
-    const views = await this.d.actions.list(scope, commentId);
-    const out: SimulatedStep[] = [];
-    for (const step of sortSteps(steps)) {
-      const previewText =
-        'template' in step && comment && conn ? this.#render(step, comment, brand, conn) : null;
-      const o = await this.#precheck(scope, step.type, comment, conn, views);
-      out.push({ type: step.type, ...(o ?? this.#predict(step, comment!, conn!)), previewText });
-    }
-    return out;
-  }
-
   async #completeDryRun(scope: ConnectionScope, run: RunRow): Promise<void> {
-    const sim = await this.simulate(
+    const sim = await this.planner.simulate(
       scope,
       run.commentId,
       run.steps.map((s) => s.config),
@@ -216,81 +176,6 @@ export class ActionRunner {
       }
       await this.d.runs.markRunCompleted(tx, scope, run.id);
     });
-  }
-
-  #render(
-    step: ActionStep & { template: string },
-    comment: CommentRow,
-    brand: string,
-    conn: BrandConnectionInfo,
-  ): string {
-    return renderTemplate(step.template, {
-      author_name: comment.authorName,
-      brand_name: brand,
-      platform: PLATFORM_NAME[conn.platform] ?? null,
-    });
-  }
-
-  /** What the platform would answer, judged from the stored comment. */
-  #predict(step: ActionStep, comment: CommentRow, conn: BrandConnectionInfo): StepOutcome {
-    if (step.type === 'flag_for_review') return WOULD_RUN;
-    const e = evaluateEligibility({
-      kind: MODERATION_KIND[step.type],
-      actorType: 'rule',
-      comment: eligibilityComment(comment),
-      caps: conn.caps,
-      now: new Date(this.d.clock.now()),
-    });
-    if (e.verdict === 'ok') return WOULD_RUN;
-    if (e.verdict === 'unsupported') return { status: 'not_supported', reason: 'unsupported' };
-    return stepOutcomeFor({ kind: 'action', status: e.verdict, code: e.code });
-  }
-
-  /** Reasons a step cannot run at all, checked in a fixed order; null when it can. */
-  async #precheck(
-    scope: ConnectionScope,
-    type: StepType,
-    comment: CommentRow | null,
-    conn: BrandConnectionInfo | null,
-    views: readonly ModerationActionView[],
-    db?: Queryable,
-  ): Promise<StepOutcome | null> {
-    if (!comment) return { status: 'not_applicable', reason: 'comment_gone' };
-    if (comment.isOwnAccount) return { status: 'skipped', reason: 'own_account_comment' };
-    if (!conn) return { status: 'failed', reason: 'connection_inactive' };
-    const support = stepSupport(type, conn);
-    if (!support.supported) return { status: 'not_supported', reason: 'unsupported' };
-    if (support.missingScopes.length > 0) return { status: 'failed', reason: 'missing_permission' };
-    if (type === 'hide' || type === 'ban') {
-      const kind = type === 'hide' ? 'hide' : 'ban_author';
-      if (await this.d.runs.hasUserReversal(scope, comment.id, kind, db))
-        return { status: 'skipped', reason: 'moderator_override' };
-    }
-    if (type === 'auto_reply' && (await this.#threadLimited(scope, comment.id, views, db)))
-      return { status: 'skipped', reason: 'reply_thread_limit' };
-    if (type === 'flag_for_review') return null;
-    const ownAction = views.some(
-      (v) => v.kind === MODERATION_KIND[type] && v.actorType !== 'user' && v.status !== 'failed',
-    );
-    if (comment.platformState === 'deleted' && type !== 'ban' && !ownAction)
-      return { status: 'not_applicable', reason: 'comment_gone' };
-    return null;
-  }
-
-  /** Another comment of the thread has an automated reply. This comment's own one is the duplicate case. */
-  async #threadLimited(
-    scope: ConnectionScope,
-    commentId: string,
-    views: readonly ModerationActionView[],
-    db?: Queryable,
-  ): Promise<boolean> {
-    const hasOwnReply = views.some(
-      (v) =>
-        v.kind === 'public_reply' &&
-        v.actorType !== 'user' &&
-        (v.status === 'pending' || v.status === 'applied'),
-    );
-    return !hasOwnReply && (await this.d.runs.hasAutomatedThreadReply(scope, commentId, db));
   }
 
   async #advanceLocked(
@@ -348,7 +233,7 @@ export class ActionRunner {
       const justRequested = ld.requested?.stepId === step.id;
       const blocked = justRequested
         ? null
-        : await this.#precheck(scope, step.type, comment, conn, [...views.values()], tx);
+        : await this.planner.precheck(scope, step.type, comment, conn, [...views.values()], tx);
       if (blocked) {
         await settle(step, blocked);
         continue;
@@ -362,7 +247,9 @@ export class ActionRunner {
       if (!justRequested) {
         const requestKey = automatedRequestKey(run.commentId, kind, [...views.values()]);
         const text =
-          'template' in step.config ? this.#render(step.config, comment!, brand, conn!) : undefined;
+          'template' in step.config
+            ? this.planner.render(step.config, comment!, brand, conn!)
+            : undefined;
         next = { step, kind, requestKey, text };
         break;
       }

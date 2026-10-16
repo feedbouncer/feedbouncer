@@ -112,6 +112,10 @@ const RETRY_UNDO = `('failed', 'not_eligible')`;
 /** Needs the step as s, its run as r and its undo action as u. */
 const UNDOABLE_SQL = `(s.status = 'succeeded' AND NOT r.dry_run
   AND s.step_type IN ('hide', 'ban', 'flag_for_review')
+  AND (s.step_type <> 'flag_for_review' OR EXISTS (
+        SELECT 1 FROM review_item ri
+         WHERE ri.organization_id = s.organization_id AND ri.brand_id = s.brand_id
+           AND ri.id = s.review_item_id AND ri.status = 'open'))
   AND (s.undone_at IS NULL OR COALESCE(u.status IN ${RETRY_UNDO}, false)))`;
 
 /** The pool, or a client already held (e.g. under the run lock). */

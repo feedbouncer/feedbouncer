@@ -1,10 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
-  ActionRunner,
   PgActionRunStore,
   PgReviewQueue,
   STEP_META,
   STEP_TYPES,
+  StepPlanner,
   loadBrandName,
   loadConnectionInfo,
   loadBrandConnections,
@@ -112,23 +112,20 @@ export class ActionsService {
     commentId: string,
   ): Promise<{ steps: SimulatedStep[] }> {
     const scope = await requireBrand(this.deps.pool, org, brandId);
-    const { store, actions, producer } = this.#configured();
+    const { comments } = this.deps;
+    if (!comments) throw new ApiError(404, 'platform_not_configured');
     const rule = await this.#rules.get(scope, ruleId);
-    const comment = await store.load(scope, commentId);
+    const comment = await comments.store.load(scope, commentId);
     if (!rule || !comment) throw notFound();
-    const runner = new ActionRunner({
-      pool: this.deps.pool,
+    const planner = new StepPlanner({
       runs: this.#runs,
-      review: this.#review,
-      comments: store,
-      actions,
+      comments: comments.store,
+      actions: comments.actions,
       connection: (s) => loadConnectionInfo(this.deps.pool, s, this.#capabilities),
       brandName: (s) => loadBrandName(this.deps.pool, s),
-      producer,
       clock: systemClock,
-      log: this.deps.log,
     });
-    const steps = await runner.simulate(
+    const steps = await planner.simulate(
       { ...scope, connectionId: comment.connectionId },
       commentId,
       rule.actions,

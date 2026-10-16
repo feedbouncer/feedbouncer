@@ -147,14 +147,21 @@ export async function undoStep(
   }
 
   const marked = await withTransaction(d.pool, async (tx) => {
+    // Nothing is written before the flag's item is known to be still open.
+    if (
+      step.type === 'flag_for_review' &&
+      !(
+        step.reviewItemId &&
+        (await d.review.resolve(tx, scope, step.reviewItemId, {
+          resolution: 'dismissed',
+          userId,
+          actionId: null,
+        }))
+      )
+    )
+      return 'item_resolved';
     if (!(await d.runs.markUndone(tx, scope, stepId, userId, undoActionId, { previous })))
       return false;
-    if (step.type === 'flag_for_review' && step.reviewItemId)
-      await d.review.resolve(tx, scope, step.reviewItemId, {
-        resolution: 'dismissed',
-        userId,
-        actionId: null,
-      });
     await audit(tx, scope, userId, {
       action: 'action_step.undone',
       subjectType: 'action_run_step',
@@ -163,6 +170,10 @@ export async function undoStep(
     });
     return true;
   });
+  if (marked === 'item_resolved') {
+    const now = await d.runs.loadStep(scope, stepId);
+    return refused(now?.undoneAt ? 'already_undone' : 'undo_not_available');
+  }
   if (marked) return { status, undoActionId };
   // A concurrent click with the same key got there first: same request, same answer.
   const now = undoActionId ? await d.runs.loadStep(scope, stepId) : null;
@@ -207,34 +218,35 @@ export async function resolveReviewItem(
   if (i.resolution === 'approve' && (await autoHidden(d, scope, item.commentId)))
     request = { kind: 'unhide', requestKey: `review:${itemId}:unhide` };
 
-  let actionId: string | null = null;
-  if (request) {
-    const r = await d.actions.request({ scope, commentId: item.commentId, actor, ...request });
-    if (r.status === 'refused') {
-      const code = forward(r.code) ?? (r.code === 'request_key_conflict' ? r.code : 'unsupported');
-      return refused(code);
+  // The item stays claimed from the platform request to its resolution, so two moderators
+  // choosing different actions cannot both reach the platform.
+  return withTransaction(d.pool, async (tx): Promise<ResolveResult> => {
+    if (!(await d.review.lockOpen(tx, scope, itemId))) return refused('review_item_resolved');
+    let actionId: string | null = null;
+    if (request) {
+      const r = await d.actions.request({ scope, commentId: item.commentId, actor, ...request });
+      if (r.status === 'refused') {
+        const code =
+          forward(r.code) ?? (r.code === 'request_key_conflict' ? r.code : 'unsupported');
+        return refused(code);
+      }
+      if (r.action.status === 'not_eligible' || r.action.status === 'failed')
+        return refused('unsupported');
+      actionId = r.action.id;
     }
-    if (r.action.status === 'not_eligible' || r.action.status === 'failed')
-      return refused('unsupported');
-    actionId = r.action.id;
-  }
-
-  const done = await withTransaction(d.pool, async (tx) => {
-    const ok = await d.review.resolve(tx, scope, itemId, {
+    await d.review.resolve(tx, scope, itemId, {
       resolution: plan.outcome,
       userId: i.userId,
       actionId,
     });
-    if (ok)
-      await audit(tx, scope, i.userId, {
-        action: 'review_item.resolved',
-        subjectType: 'review_item',
-        subjectId: itemId,
-        details: { itemId, resolution: plan.outcome, actionId },
-      });
-    return ok;
+    await audit(tx, scope, i.userId, {
+      action: 'review_item.resolved',
+      subjectType: 'review_item',
+      subjectId: itemId,
+      details: { itemId, resolution: plan.outcome, actionId },
+    });
+    return { status: 'resolved', actionId };
   });
-  return done ? { status: 'resolved', actionId } : refused('review_item_resolved');
 }
 
 /** True when the comment is hidden and the latest applied hide was not made by a person. */
