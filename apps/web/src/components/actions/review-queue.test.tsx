@@ -36,6 +36,21 @@ describe('ReviewQueue', () => {
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
   });
 
+  it('hides Ban when the brand cannot ban', () => {
+    const html = renderToStaticMarkup(
+      <ReviewQueue orgId="o" brandId="b" items={[item()]} next={null} canBan={false} />,
+    );
+    expect(html).not.toContain('>Ban author<');
+    expect(html).toContain('>Delete<');
+  });
+
+  it('encodes the next-page cursor', () => {
+    const html = renderToStaticMarkup(
+      <ReviewQueue orgId="o" brandId="b" items={[item()]} next="a&b" />,
+    );
+    expect(html).toContain('before=a%26b');
+  });
+
   it('says when the queue is empty', () => {
     expect(render([])).toContain('Nothing to review.');
   });

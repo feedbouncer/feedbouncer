@@ -51,6 +51,16 @@ describe('StepEditor', () => {
     expect(box(html, 'hide')).toBeDefined();
   });
 
+  it('keeps a selected step that is no longer supported, so it can be unticked', () => {
+    const html = render([{ type: 'ban', confirmHardToReverse: true }], IG_ONLY, {
+      issues: [{ path: 'actions.0', message: 'not_supported_anywhere' }],
+    });
+    expect(box(html, 'ban')).toContain('checked');
+    expect(box(html, 'ban')).not.toContain('disabled');
+    expect(html).toContain('Not available on Instagram');
+    expect(html).toContain('None of the connected accounts support this.');
+  });
+
   it('says where a partly supported step is not available', () => {
     expect(render([], BOTH)).toContain('Not available on Instagram');
   });

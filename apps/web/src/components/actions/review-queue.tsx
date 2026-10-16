@@ -55,6 +55,8 @@ export function ReviewQueue(props: {
   brandId: string;
   items: ReviewItemView[];
   next: string | null;
+  /** False when no connected account can ban authors. */
+  canBan?: boolean;
 }) {
   const router = useRouter();
   const [resolved, setResolved] = useState<ReadonlySet<string>>(new Set());
@@ -104,7 +106,7 @@ export function ReviewQueue(props: {
               {sourceText(i.source, i.ruleName)}
             </small>
             <div>
-              {BUTTONS.map((b) => (
+              {BUTTONS.filter((b) => b.resolution !== 'ban' || props.canBan !== false).map((b) => (
                 <button
                   key={b.resolution}
                   type="button"
@@ -128,7 +130,9 @@ export function ReviewQueue(props: {
       </ul>
       {props.next ? (
         <p>
-          <Link href={`/orgs/${props.orgId}/brands/${props.brandId}/review?before=${props.next}`}>
+          <Link
+            href={`/orgs/${props.orgId}/brands/${props.brandId}/review?before=${encodeURIComponent(props.next)}`}
+          >
             Load more
           </Link>
         </p>

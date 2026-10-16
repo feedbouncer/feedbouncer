@@ -56,7 +56,10 @@ export function StepEditor(props: {
 }) {
   const id = useId();
   const availability = stepAvailability(props.capabilities, props.onlyPlatform);
-  const shown = STEP_ORDER.filter((t) => availability[t].available);
+  // A chosen step stays listed even when it is no longer supported, so it can be unticked.
+  const shown = STEP_ORDER.filter(
+    (t) => availability[t].available || props.value.some((s) => s.type === t),
+  );
   const hasReply = props.value.some((s) => s.type === 'auto_reply' || s.type === 'private_reply');
   return (
     <fieldset>
