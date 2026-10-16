@@ -336,13 +336,14 @@ export class PgSuggestionStore {
     return this.toViews(scope, rows);
   }
 
-  /** Oldest first; `total` counts every match, not just the returned ids. */
+  /** Oldest first, after the `after` suggestion when given; `total` counts every such match, not just the returned ids. */
   async matchPending(
     scope: ConnectionScope,
     f: { [K in 'ruleId' | 'authorId' | 'stepType']?: SuggestionFilter[K] | undefined },
     cutoff: Date,
     now: Date,
     limit: number,
+    after?: string,
   ): Promise<{ ids: string[]; total: number }> {
     const { rows } = await this.pool.query<{ id: string; total: number }>(
       `WITH eff AS (${EFFECTIVE_SQL})
@@ -358,6 +359,9 @@ export class PgSuggestionStore {
                 SELECT 1 FROM action_suggestion_source ss
                  WHERE ss.organization_id = $1 AND ss.brand_id = $2 AND ss.suggestion_id = e.id
                    AND ss.steps @> jsonb_build_array(jsonb_build_object('type', $8::text))))
+          AND ($10::uuid IS NULL OR (e.created_at, e.id) > (
+                SELECT b.created_at, b.id FROM action_suggestion b
+                 WHERE b.organization_id = $1 AND b.brand_id = $2 AND b.id = $10))
         ORDER BY e.created_at, e.id
         LIMIT $9`,
       [
@@ -370,6 +374,7 @@ export class PgSuggestionStore {
         f.ruleId ?? null,
         f.stepType ?? null,
         limit,
+        after ?? null,
       ],
     );
     return { ids: rows.map((r) => r.id), total: rows[0]?.total ?? 0 };

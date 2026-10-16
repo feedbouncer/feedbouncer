@@ -266,6 +266,7 @@ export const SUGGESTION_BULK_JOB = {
     confirm: z.boolean(),
     cutoff: z.iso.datetime(),
     batch: z.number().int().min(0).max(100_000),
+    after: z.string().regex(UUID).optional(),
   }),
   externalRef: (p: { requestKey: string; batch: number }): string =>
     `sbulk:${p.requestKey}:${p.batch}`,
@@ -336,6 +337,7 @@ export function suggestionBulkJob(d: Deps): JobDefinition<SuggestionBulkPayload>
         new Date(p.cutoff),
         now,
         BULK_BATCH,
+        p.after,
       );
       let decided = 0;
       let stopped = false;
@@ -361,12 +363,12 @@ export function suggestionBulkJob(d: Deps): JobDefinition<SuggestionBulkPayload>
         decided,
         stopped,
       });
-      if (!stopped && decided > 0 && ids.length === BULK_BATCH)
+      if (!stopped && ids.length === BULK_BATCH)
         await d.producer.enqueue({
           scope: ctx.scope,
           platform: ctx.platform,
           type: SUGGESTION_BULK_JOB.type,
-          payload: { ...p, batch: p.batch + 1 },
+          payload: { ...p, batch: p.batch + 1, after: ids[ids.length - 1]! },
         });
       return { processed: ids.length, decided };
     },

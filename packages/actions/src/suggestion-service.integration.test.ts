@@ -595,6 +595,46 @@ describe('bulk', () => {
     ]);
   });
 
+  it('bulk approve examines suggestions behind 100 or more that stay pending', async () => {
+    await setRuleActions(DELETE);
+    const hideRule = await pool.query<{ id: string }>(
+      `INSERT INTO rule (organization_id, brand_id, name, conditions, action, actions, enabled, mode)
+       SELECT organization_id, brand_id, 'Hide rule', conditions, 'hide', $2::jsonb, enabled, mode
+         FROM rule WHERE id = $1 RETURNING id`,
+      [t.ruleId, JSON.stringify(HIDE)],
+    );
+    const stuck: string[] = [];
+    for (let i = 0; i < 105; i++)
+      stuck.push(await propose((await seedCommentRow(ctx.c, t, `del ${i}`)).id, DELETE));
+    const ok: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const r = await suggestions.propose(scope, {
+        commentId: (await seedCommentRow(ctx.c, t, `fine ${i}`)).id,
+        source: {
+          type: 'rule',
+          ref: randomUUID(),
+          ruleId: hideRule.rows[0]!.id,
+          alsoMatchedRuleIds: [],
+        },
+        steps: HIDE,
+        reason: 'matched',
+      });
+      if (!('suggestionId' in r)) throw new Error(`skipped: ${r.skipped}`);
+      ok.push(r.suggestionId);
+    }
+    nowMs = Date.now();
+    const res = await requestBulkByFilter(d, scope, { action: 'approve', filter: {}, ...user() });
+    expect(res).toEqual({ matched: 108 });
+    await queue.drain();
+    expect(queue.count(SUGGESTION_BULK_JOB.type)).toBe(2);
+    for (const sid of ok) expect(await statusOf(sid)).toMatchObject({ status: 'approved' });
+    const pending = await pool.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM action_suggestion WHERE brand_id = $1 AND status = 'pending'",
+      [t.brandId],
+    );
+    expect(pending.rows[0]!.n).toBe(stuck.length);
+  });
+
   it('bulk by filter with nothing matching enqueues nothing', async () => {
     expect(
       await requestBulkByFilter(d, scope, { action: 'dismiss', filter: {}, ...user() }),
