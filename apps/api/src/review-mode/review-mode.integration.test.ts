@@ -438,6 +438,18 @@ describe('bulk', () => {
     expect(audit.rows).toHaveLength(1);
   });
 
+  it('bulk filter cannot claim the early-exit request key', async () => {
+    const connectionId = await reviewConnection(org);
+    await suggest(org, connectionId);
+    const r = await call('POST', `${base(org)}/suggestions/bulk`, org.owner, {
+      action: 'dismiss',
+      connectionId,
+      filter: {},
+      requestKey: `review_end:${connectionId}`,
+    });
+    expect(r.status).toBe(400);
+  });
+
   it("bulk filter with another brand's connectionId -> 404", async () => {
     const foreign = await reviewConnection(other);
     await suggest(other, foreign);

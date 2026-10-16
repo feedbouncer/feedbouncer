@@ -93,6 +93,7 @@ const RESERVED_KEY_PREFIXES = [
   'pol:',
   'rule-eval:',
   'suggestion:',
+  'review_end:',
 ];
 
 /** A request key a client may supply: well-formed and outside the server-generated key space. */
