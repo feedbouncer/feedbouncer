@@ -170,6 +170,7 @@ services:
       - ./packages/db/src:/repo/packages/db/src:ro
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
       - ./packages/secrets/src:/repo/packages/secrets/src:ro
+      - ./packages/actions/src:/repo/packages/actions/src:ro
       - ./packages/ai/src:/repo/packages/ai/src:ro
       - ./packages/classifier/src:/repo/packages/classifier/src:ro
       - ./packages/comments/src:/repo/packages/comments/src:ro
@@ -257,6 +258,7 @@ services:
     # No ports: the worker is internal. Scale with --scale worker=N.
     volumes:
       - ./apps/worker/src:/repo/apps/worker/src:ro
+      - ./packages/actions/src:/repo/packages/actions/src:ro
       - ./packages/authz/src:/repo/packages/authz/src:ro
       - ./packages/ai/src:/repo/packages/ai/src:ro
       - ./packages/classifier/src:/repo/packages/classifier/src:ro
