@@ -368,6 +368,18 @@ describe('moderation execute job: outcome observer', () => {
     expect(events[2]).toMatchObject({ status: 'failed', code: 'rate_limit_exhausted' });
   });
 
+  it('held for reconnection: action stays pending so the replay can run it', async () => {
+    const actionId = await requestAction(seeded.id, 'hide');
+    const handler = observed();
+    await handler.onDeadLetter?.(
+      { scope, platform: 'facebook', reason: 'needs_reconnection', errorCode: 'token_expired' },
+      EXECUTE_JOB.payload.parse({ actionId }),
+    );
+    expect(await actionRow(actionId)).toMatchObject({ status: 'pending' });
+    expect(events).toEqual([]);
+    expect(await runObserved(actionId)).toMatchObject({ status: 'applied' });
+  });
+
   it('an observer that throws does not change the job result', async () => {
     throwing = true;
     const actionId = await requestAction(seeded.id, 'hide');

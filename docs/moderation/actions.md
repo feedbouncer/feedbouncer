@@ -297,7 +297,7 @@ FeedBouncer to slow down, or fails temporarily, the step stays _pending_ and is
 retried with backoff. It ends as `rate_limit_exhausted` if the rate-limit
 budget runs out, and as `retries_exhausted` if it keeps failing. If the
 connection needs to be reconnected, the step waits (`awaiting_reconnect`) and
-then fails as `connection_needs_reconnect` if that does not happen.
+is carried out once the connection is reconnected.
 
 A comment that is processed twice does not repeat a step: each automated
 request has a fixed key built from the comment and the kind of action, and the

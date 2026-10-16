@@ -424,16 +424,13 @@ export function executeActionJob(d: {
       return result;
     },
     // The job gave up while the action was still pending (rate limit budget
-    // spent, connection needs reconnecting, retries used up): settle it.
+    // spent, retries used up): settle it. A job held for reconnection is only
+    // paused: reconnecting replays it, so the action stays pending.
     onDeadLetter: async (e, { actionId }) => {
+      if (e.reason === 'needs_reconnection') return;
       const a = await loadForExecution(d.pool, e.scope, actionId);
       if (!a || a.status !== 'pending') return;
-      const code =
-        e.reason === 'rate_limit_exhausted'
-          ? 'rate_limit_exhausted'
-          : e.reason === 'needs_reconnection'
-            ? 'connection_needs_reconnect'
-            : 'retries_exhausted';
+      const code = e.reason === 'rate_limit_exhausted' ? 'rate_limit_exhausted' : 'retries_exhausted';
       const { recorded } = await finish(d.pool, e.scope, a, done('failed', code));
       d.log.info('moderation action dead-lettered', {
         actionId: a.id,
