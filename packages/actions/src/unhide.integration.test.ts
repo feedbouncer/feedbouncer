@@ -307,6 +307,16 @@ describe('unhideHidden', () => {
     expect(ok(await unhideBy(h.hideId)).state).toBe('restored');
   });
 
+  it('a rule step whose own status disagrees with the hide is reported as an error, not a silent no-op', async () => {
+    const h = await hiddenComment({ type: 'rule', ruleId: t.ruleId });
+    const stepId = await seedRuleStep(h.id, h.hideId);
+    // The step itself disagrees with the still-hidden moderation_action (e.g. a later re-run
+    // marked the step failed without touching the hide). undoStep refuses undo_not_available.
+    await pool.query("UPDATE action_run_step SET status = 'failed' WHERE id = $1", [stepId]);
+    expect(await unhideBy(h.hideId)).toEqual({ status: 'refused', code: 'unsupported_action' });
+    expect(await unhides(h.id)).toHaveLength(0);
+  });
+
   it('after a failed attempt the next call creates a second attempt keyed on the first', async () => {
     const h = await hiddenComment();
     await unhideBy(h.hideId);

@@ -13,7 +13,8 @@ type Forwarded = 'not_found' | 'connection_needs_reconnect' | 'connection_inacti
 export type UnhideResult =
   | { status: 'ok'; item: HiddenItem }
   | { status: 'refused'; code: Forwarded }
-  | { status: 'refused'; code: 'missing_permission'; permission: string };
+  | { status: 'refused'; code: 'missing_permission'; permission: string }
+  | { status: 'refused'; code: 'unsupported_action' };
 
 const FORWARDED: readonly string[] = [
   'not_found',
@@ -63,7 +64,9 @@ export async function unhideHidden(
   const permission = await missingPermission(d.pool, scope, item, d.caps(item.platform));
   if (permission) return { status: 'refused', code: 'missing_permission', permission };
 
-  // Any other refusal, or losing a race to another click, leaves the row to say what happened.
+  // A race lost to another click still wrote an attempt, so the row says what happened. Any
+  // other refusal wrote nothing, so it must be reported as an error, not left to look like a
+  // no-op success.
   const refusal = item.ruleStepId
     ? await undoStep(d, scope, item.ruleStepId, userId)
     : await d.actions.request({
@@ -81,5 +84,10 @@ export async function unhideHidden(
     return { status: 'refused', code: refusal.code };
 
   const current = await d.hidden.load(scope, hideActionId, now());
-  return current ? { status: 'ok', item: current } : { status: 'refused', code: 'not_found' };
+  if (!current) return { status: 'refused', code: 'not_found' };
+  const wroteNothing =
+    (current.lastAttempt?.actionId ?? null) === (item.lastAttempt?.actionId ?? null);
+  if (refusal.status === 'refused' && wroteNothing)
+    return { status: 'refused', code: 'unsupported_action' };
+  return { status: 'ok', item: current };
 }

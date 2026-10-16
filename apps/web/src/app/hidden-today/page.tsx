@@ -1,3 +1,4 @@
+import { can } from '@feedbouncer/authz';
 import Link from 'next/link';
 import { HiddenList } from '../../components/hidden-today/hidden-list';
 import type { HiddenTodayPage } from '../../lib/hidden-today';
@@ -29,7 +30,7 @@ export default async function HiddenTodayPage({
     'hidden comments',
   );
   const canManage = Object.fromEntries(
-    me.memberships.map((m) => [m.organizationId, m.role === 'owner' || m.role === 'admin']),
+    me.memberships.map((m) => [m.organizationId, can(m.role, 'brand.write')]),
   );
   return (
     <main>
