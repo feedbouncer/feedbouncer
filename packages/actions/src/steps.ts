@@ -54,6 +54,10 @@ export const CONFLICTS: readonly (readonly [StepType, StepType, string])[] = [
   ['hide', 'delete', 'hide_redundant_with_delete'],
 ];
 
+/** The steps in execution order. */
+export const sortSteps = (steps: readonly ActionStep[]): ActionStep[] =>
+  [...steps].sort((a, b) => STEP_TYPES.indexOf(a.type) - STEP_TYPES.indexOf(b.type));
+
 const templateSchema = z
   .string()
   .superRefine((t, ctx) => {
@@ -88,9 +92,7 @@ export const actionStepsSchema: z.ZodType<ActionStep[], unknown> = z
       ctx.addIssue({ code: 'custom', path: [i], message: code });
     }
   })
-  .transform((steps) =>
-    [...steps].sort((x, y) => STEP_TYPES.indexOf(x.type) - STEP_TYPES.indexOf(y.type)),
-  );
+  .transform(sortSteps);
 
 export function deriveOutcome(
   steps: readonly ActionStep[],

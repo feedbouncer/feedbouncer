@@ -7,7 +7,7 @@ import { isUniqueViolation, withTransaction } from '@feedbouncer/db';
 import type { ActionStatus, BrandScope } from '@feedbouncer/comments';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { StepStatus } from './support.js';
-import { STEP_TYPES, type ActionStep, type StepType } from './steps.js';
+import { sortSteps, type ActionStep, type StepType } from './steps.js';
 
 export interface StepRow {
   id: string;
@@ -147,9 +147,6 @@ async function loadRun(
     steps: steps.rows.map(toStep),
   };
 }
-
-const sortSteps = (steps: readonly ActionStep[]): ActionStep[] =>
-  [...steps].sort((a, b) => STEP_TYPES.indexOf(a.type) - STEP_TYPES.indexOf(b.type));
 
 /** Moderation kinds a user reversal is looked up for. */
 const REVERSAL = {

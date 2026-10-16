@@ -5,7 +5,7 @@
 // order, and keeps throttled execute jobs aside until the test retries or
 // dead-letters them.
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type pg from 'pg';
 import { createPool, withTransaction } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
@@ -52,6 +52,7 @@ import {
   type ActionStepObserver,
 } from './runner.js';
 import type { ActionStep, StepType } from './steps.js';
+import { seedEvaluationRow } from './testing.js';
 import type { BrandConnectionInfo } from './support.js';
 
 const APP_SECRET = 'fb-app-secret-SENTINEL-0123456789';
@@ -154,6 +155,8 @@ class FakeQueue {
   }
 
   async retryDeferred(): Promise<void> {
+    // The rate limiter reads the real clock: let it see the time the test moved to.
+    vi.setSystemTime(nowMs);
     this.pending.push(...this.deferred.splice(0));
     await this.drain();
   }
@@ -228,15 +231,8 @@ async function addFbComment(
   return { ...c, id };
 }
 
-async function newEvaluation(s: ConnectionScope, commentId: string): Promise<string> {
-  const r = await ctx.c.query<{ id: string }>(
-    `INSERT INTO rule_evaluation (organization_id, brand_id, connection_id, comment_id, body_sha256,
-       trigger_key, ruleset_version, status)
-     VALUES ($1, $2, $3, $4, decode(repeat('ab', 32), 'hex'), $5, 'v1', 'decided') RETURNING id`,
-    [s.organizationId, s.brandId, s.connectionId, commentId, `t-${randomUUID().slice(0, 12)}`],
-  );
-  return r.rows[0]!.id;
-}
+const newEvaluation = (s: ConnectionScope, commentId: string): Promise<string> =>
+  seedEvaluationRow(ctx.c, { id: commentId, body: '', t: { ...t, connectionId: s.connectionId } });
 
 async function start(
   steps: readonly ActionStep[],
@@ -305,7 +301,12 @@ afterAll(async () => {
   await ctx.close();
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
   nowMs = Date.now();
   t = await seedTenant(ctx.c, `run${++n}`);
   scope = { organizationId: t.organizationId, brandId: t.brandId, connectionId: t.connectionId };
@@ -515,9 +516,7 @@ describe.each(Object.keys(MATRIX) as StepType[])('%s step', (type) => {
     const run = await start(m.failureRun);
     await queue.drain();
     expect(await outcome(run.id, type)).toEqual(
-      type === 'flag_for_review'
-        ? ['failed', 'internal_error']
-        : ['failed', 'missing_permission'],
+      type === 'flag_for_review' ? ['failed', 'internal_error'] : ['failed', 'missing_permission'],
     );
     expect(await outcome(run.id, m.companion)).toEqual(['succeeded', null]);
     expect(await runCompleted(run.id)).toBe(true);
@@ -587,7 +586,8 @@ describe.each(Object.keys(MATRIX) as StepType[])('%s step', (type) => {
     } else {
       expect(await outcome(run.id, type)).toEqual(['not_applicable', 'comment_gone']);
     }
-    if (type === 'ban') expect((await actionsOf(seeded.id)).map((a) => a.kind)).toEqual(['ban_author']);
+    if (type === 'ban')
+      expect((await actionsOf(seeded.id)).map((a) => a.kind)).toEqual(['ban_author']);
   });
 });
 
@@ -611,11 +611,17 @@ describe('action runner', () => {
     expect(settledEvents.map((e) => e.type)).toEqual(['flag_for_review', 'ban', 'delete']);
   });
 
-  it('a deferred step blocks only delete; other later steps go ahead', async () => {
+  it('a deferred step blocks only delete; other later steps are still requested', async () => {
     graph.throttleNext();
     const run = await start([DM, REPLY]);
     await queue.drain();
     expect(await outcome(run.id, 'private_reply')).toEqual(['pending', 'rate_limited']);
+    // The platform now throttles the whole connection, so the reply waits too, but it was asked for.
+    expect((await stepOf(run.id, 'auto_reply')).moderation_action_id).not.toBeNull();
+
+    nowMs += 5 * 60_000;
+    await queue.retryDeferred();
+    expect(await outcome(run.id, 'private_reply')).toEqual(['succeeded', null]);
     expect(await outcome(run.id, 'auto_reply')).toEqual(['succeeded', null]);
     expect(ourReplies(seeded)).toHaveLength(1);
   });
@@ -806,14 +812,24 @@ describe('action runner', () => {
     const author = (await store.load(t, seeded.id))!.authorName!;
     const run = await start([FLAG, DM, REPLY], { dryRun: true });
     const steps = (
-      await pool.query<{ step_type: string; status: string; reason_code: string; preview_text: string | null }>(
+      await pool.query<{
+        step_type: string;
+        status: string;
+        reason_code: string;
+        preview_text: string | null;
+      }>(
         `SELECT step_type, status, reason_code, preview_text FROM action_run_step
           WHERE run_id = $1 ORDER BY position`,
         [run.id],
       )
     ).rows;
     expect(steps).toEqual([
-      { step_type: 'flag_for_review', status: 'simulated', reason_code: 'would_run', preview_text: null },
+      {
+        step_type: 'flag_for_review',
+        status: 'simulated',
+        reason_code: 'would_run',
+        preview_text: null,
+      },
       {
         step_type: 'private_reply',
         status: 'simulated',
@@ -879,10 +895,12 @@ describe('action runner', () => {
     );
     const foreign: ConnectionScope = { ...scope, connectionId: other.rows[0]!.id };
     expect(await runner.advance(foreign, run.id)).toEqual({ settled: 0, completed: false });
-    expect(await advanceJob.handle(jobCtx(foreign, 'facebook', ACTION_RUN_ADVANCE_JOB.type), {
-      runId: run.id,
-      settled: 0,
-    })).toMatchObject({ settled: 0, completed: false });
+    expect(
+      await advanceJob.handle(jobCtx(foreign, 'facebook', ACTION_RUN_ADVANCE_JOB.type), {
+        runId: run.id,
+        settled: 0,
+      }),
+    ).toMatchObject({ settled: 0, completed: false });
     expect(await outcome(run.id, 'hide')).toEqual(['pending', null]);
     expect(await actionsOf(seeded.id)).toEqual([]);
   });
