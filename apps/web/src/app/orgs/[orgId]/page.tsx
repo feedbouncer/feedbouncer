@@ -1,12 +1,15 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ApiForm } from '../../../components/api-form';
+import { CreateBrandForm } from '../../../components/create-brand-form';
 import { isUuid } from '../../../lib/ids';
 import { dataOrThrow, requireMe, serverGet, type Role } from '../../../lib/server-api';
 
 interface Brand {
   id: string;
   name: string;
+  timezone: string;
+  timezoneSet: boolean;
 }
 
 export default async function OrgPage({ params }: { params: Promise<{ orgId: string }> }) {
@@ -48,6 +51,20 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
                   refresh
                 />
                 <ApiForm
+                  action={`/api/v1/orgs/${orgId}/brands/${b.id}`}
+                  method="PATCH"
+                  fields={[
+                    {
+                      name: 'timezone',
+                      label: `Timezone${b.timezoneSet ? '' : ' (not set, using UTC)'}`,
+                      type: 'text',
+                      defaultValue: b.timezone,
+                    },
+                  ]}
+                  submitLabel="Set timezone"
+                  refresh
+                />
+                <ApiForm
                   action={`/api/v1/orgs/${orgId}/brands/${b.id}/archive`}
                   fields={[]}
                   submitLabel="Archive"
@@ -61,16 +78,12 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
       {canEdit ? (
         <>
           <h3>Add a brand</h3>
-          <ApiForm
-            action={`/api/v1/orgs/${orgId}/brands`}
-            fields={[{ name: 'name', label: 'Brand name', type: 'text' }]}
-            submitLabel="Create brand"
-            refresh
-          />
+          <CreateBrandForm orgId={orgId} />
         </>
       ) : null}
       <p>
-        <Link href={`/orgs/${orgId}/members`}>Members</Link> · <Link href="/account">Account</Link>
+        <Link href={`/orgs/${orgId}/members`}>Members</Link> ·{' '}
+        <Link href="/hidden-today">Hidden today</Link> · <Link href="/account">Account</Link>
       </p>
     </main>
   );

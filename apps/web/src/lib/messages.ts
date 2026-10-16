@@ -27,6 +27,8 @@ const MESSAGES: Record<string, string> = {
   platform_error: 'The platform could not be reached. Try again.',
   connection_needs_reconnect: 'This connection needs to be reconnected first.',
   connection_inactive: 'This connection is not active. Reconnect it and try again.',
+  missing_permission:
+    "FeedBouncer doesn't have the permission it needs for this account. Reconnect and allow it.",
   unsupported_action: 'This action is not supported for this platform.',
   request_key_conflict: 'This request was already used for a different action. Try again.',
   service_unavailable: 'Service temporarily unavailable. Try again shortly.',

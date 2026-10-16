@@ -20,7 +20,8 @@ export function ApiForm(props: {
   method?: 'POST' | 'PATCH' | 'DELETE';
   fields: Field[];
   submitLabel: string;
-  extraBody?: Record<string, unknown>;
+  /** Values sent with the fields; a function is called on submit (for browser-only values). */
+  extraBody?: Record<string, unknown> | (() => Record<string, unknown>);
   successMessage?: string | ((body: unknown) => string);
   redirectTo?: string;
   refresh?: boolean;
@@ -32,7 +33,8 @@ export function ApiForm(props: {
     e.preventDefault();
     setStatus({ kind: 'busy' });
     const form = new FormData(e.currentTarget);
-    const body: Record<string, unknown> = { ...props.extraBody };
+    const extra = props.extraBody;
+    const body: Record<string, unknown> = { ...(typeof extra === 'function' ? extra() : extra) };
     for (const f of props.fields) body[f.name] = String(form.get(f.name) ?? '');
     try {
       const res = await apiFetch<unknown>(props.action, { method: props.method ?? 'POST', body });

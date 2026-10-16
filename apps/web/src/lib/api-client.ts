@@ -15,6 +15,8 @@ export class ApiRequestError extends Error {
     readonly issues: { path: string; message: string }[] = [],
     /** Who already decided a suggestion, on suggestion_already_handled. */
     readonly handled?: HandledDetails | undefined,
+    /** The platform permission a connection lacks, on missing_permission. */
+    readonly permission?: string | undefined,
   ) {
     super(message);
   }
@@ -50,7 +52,14 @@ export async function apiFetch<T>(
   });
   if (res.status === 204) return undefined as T;
   const data = (await res.json().catch(() => null)) as {
-    error?: { code: string; message: string; max?: unknown; issues?: unknown; handled?: unknown };
+    error?: {
+      code: string;
+      message: string;
+      max?: unknown;
+      issues?: unknown;
+      handled?: unknown;
+      permission?: unknown;
+    };
   } | null;
   if (!res.ok) {
     const max = data?.error?.max;
@@ -61,6 +70,7 @@ export async function apiFetch<T>(
       typeof max === 'number' && Number.isSafeInteger(max) ? max : undefined,
       issuesOf(data?.error?.issues),
       handledOf(data?.error?.handled),
+      typeof data?.error?.permission === 'string' ? data.error.permission : undefined,
     );
   }
   return data as T;

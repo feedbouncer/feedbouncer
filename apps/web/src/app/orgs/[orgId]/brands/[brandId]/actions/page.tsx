@@ -58,6 +58,7 @@ export default async function ActionLogPage({
       />
       <p>
         <Link href={`${brand}/review`}>Review queue</Link> ·{' '}
+        <Link href="/hidden-today">Hidden today</Link> ·{' '}
         <Link href={`${brand}/rules`}>Back to rules</Link>
       </p>
     </main>
