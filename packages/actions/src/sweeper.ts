@@ -10,7 +10,7 @@ const BATCH = 500;
 // not_applicable wins over expired, as in the effective status.
 const NOT_APPLICABLE_SQL = `
   WITH due AS (
-    SELECT s.ctid AS tid,
+    SELECT s.id AS sid,
            CASE WHEN c.platform_state = 'deleted' THEN 'comment_gone' ELSE 'comment_edited' END AS reason
       FROM action_suggestion s
       JOIN comment c ON c.organization_id = s.organization_id AND c.brand_id = s.brand_id AND c.id = s.comment_id
@@ -20,13 +20,13 @@ const NOT_APPLICABLE_SQL = `
   UPDATE action_suggestion s
      SET status = 'not_applicable', status_reason = due.reason, decided_at = now()
     FROM due
-   WHERE s.ctid = due.tid`;
+   WHERE s.id = due.sid`;
 
 const EXPIRED_SQL = `
   UPDATE action_suggestion
      SET status = 'expired', status_reason = 'grace_period_ended', decided_at = now()
-   WHERE ctid IN (
-     SELECT s.ctid
+   WHERE id IN (
+     SELECT s.id
        FROM action_suggestion s
        JOIN connection cn ON cn.organization_id = s.organization_id AND cn.brand_id = s.brand_id AND cn.id = s.connection_id
       WHERE s.status = 'pending' AND ${GRACE_SQL} <= $1
