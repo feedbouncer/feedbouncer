@@ -127,7 +127,7 @@ export const GRACE_SQL = `CASE WHEN cn.review_mode = 'on' AND cn.review_mode_sta
 export const BODY_CHANGED_SQL = `(c.id IS NOT NULL AND sha256(convert_to(c.body, 'UTF8')) <> s.body_sha256)`;
 
 /** Every suggestion of the brand with its effective status; $1 organization, $2 brand, $3 now. */
-const EFFECTIVE_SQL = `
+const effectiveSql = (onlyStored = '') => `
   SELECT s.id, s.connection_id, cn.platform, s.comment_id, c.body, s.author_id, au.display_name AS author_name,
          s.created_at, s.decided_at, u.display_name AS decided_by_name, s.status AS stored_status,
          CASE WHEN s.status <> 'pending' THEN s.status
@@ -145,11 +145,15 @@ const EFFECTIVE_SQL = `
     LEFT JOIN author au ON au.organization_id = s.organization_id AND au.brand_id = s.brand_id
                        AND au.connection_id = s.connection_id AND au.id = s.author_id
     LEFT JOIN app_user u ON u.id = s.decided_by_user_id
-   WHERE s.organization_id = $1 AND s.brand_id = $2`;
+   WHERE s.organization_id = $1 AND s.brand_id = $2${onlyStored}`;
+
+const EFFECTIVE_SQL = effectiveSql();
+/** Only suggestions still stored as pending, so history never gets scanned. */
+const PENDING_EFFECTIVE_SQL = effectiveSql(" AND s.status = 'pending'");
 
 const PENDING_CTES = `
   eff AS (${EFFECTIVE_SQL}),
-  pend AS (SELECT connection_id, author_id, count(*)::int AS n FROM eff
+  pend AS (SELECT connection_id, author_id, count(*)::int AS n FROM (${PENDING_EFFECTIVE_SQL}) pe
             WHERE eff_status = 'pending' AND author_id IS NOT NULL GROUP BY connection_id, author_id)`;
 
 const SOURCES_SQL = `SELECT ss.suggestion_id, ss.source_type, ss.rule_id, ru.name AS rule_name,
@@ -178,11 +182,11 @@ const toSource = (
   ruleCurrentGated: r.rule_live && r.rule_actions ? splitGated(r.rule_actions).gated : null,
 });
 
-function stripGated(source: ReturnType<typeof toSource>): SuggestionSourceView {
-  const view: Partial<ReturnType<typeof toSource>> = { ...source };
-  delete view.ruleCurrentGated;
-  return view as SuggestionSourceView;
-}
+const stripGated = ({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  ruleCurrentGated: _,
+  ...view
+}: ReturnType<typeof toSource>): SuggestionSourceView => view;
 
 async function loadSources(
   db: pg.Pool | pg.PoolClient,
@@ -410,6 +414,7 @@ export class PgSuggestionStore {
     scope: BrandScope,
     connectionId: string,
     limit: number,
+    now: Date,
   ): Promise<{ authorId: string; authorName: string | null; pendingCount: number }[]> {
     const { rows } = await this.pool.query<{
       author_id: string;
@@ -424,7 +429,7 @@ export class PgSuggestionStore {
         WHERE p.connection_id = $4 AND p.n >= 2
         ORDER BY p.n DESC, p.author_id
         LIMIT $5`,
-      [scope.organizationId, scope.brandId, new Date(), connectionId, clampLimit(limit)],
+      [scope.organizationId, scope.brandId, now, connectionId, clampLimit(limit)],
     );
     return rows.map((r) => ({
       authorId: r.author_id,
@@ -433,14 +438,15 @@ export class PgSuggestionStore {
     }));
   }
 
-  async pendingCount(scope: BrandScope, connectionId?: string): Promise<number> {
-    const { rows } = await this.pool.query<{ n: number }>(
-      `WITH eff AS (${EFFECTIVE_SQL})
-       SELECT count(*)::int AS n FROM eff
-        WHERE eff_status = 'pending' AND ($4::uuid IS NULL OR connection_id = $4)`,
-      [scope.organizationId, scope.brandId, new Date(), connectionId ?? null],
+  /** Pending suggestions per connection of the brand; connections with none are absent. */
+  async pendingCounts(scope: BrandScope, now: Date): Promise<Map<string, number>> {
+    const { rows } = await this.pool.query<{ connection_id: string; n: number }>(
+      `WITH eff AS (${PENDING_EFFECTIVE_SQL})
+       SELECT connection_id, count(*)::int AS n FROM eff
+        WHERE eff_status = 'pending' GROUP BY connection_id`,
+      [scope.organizationId, scope.brandId, now],
     );
-    return rows[0]!.n;
+    return new Map(rows.map((r) => [r.connection_id, r.n]));
   }
 
   async lockForDecision(
@@ -581,7 +587,7 @@ export class PgSuggestionStore {
       for (const r of res.rows) runs.set(r.suggestion_id, r);
     }
     return rows.map((r) => {
-      const list = (sources.get(r.id) ?? []).map((source) => stripGated(source));
+      const list = (sources.get(r.id) ?? []).map(stripGated);
       const run = runs.get(r.id);
       return {
         id: r.id,

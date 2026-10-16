@@ -145,7 +145,7 @@ export class ReviewModeService {
     org: OrgContext,
     brandId: unknown,
   ): Promise<{ connections: ReviewModeStatusDto[]; pendingTotal: number }> {
-    const connections = (await this.connections.list(org, brandId)).map((c) => c.reviewMode);
+    const connections = await this.connections.reviewModes(org, brandId);
     return {
       connections,
       pendingTotal: connections.reduce((n, c) => n + c.pendingCount, 0),
@@ -202,7 +202,14 @@ export class ReviewModeService {
   ): Promise<{ items: { authorId: string; authorName: string | null; pendingCount: number }[] }> {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     await this.#connection(scope, q.connectionId);
-    return { items: await this.#suggestions.pendingAuthors(scope, q.connectionId, q.limit) };
+    return {
+      items: await this.#suggestions.pendingAuthors(
+        scope,
+        q.connectionId,
+        q.limit,
+        new Date(systemClock.now()),
+      ),
+    };
   }
 
   async approve(

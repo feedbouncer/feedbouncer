@@ -12,7 +12,7 @@ import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
 import { parseUuidOr404 } from '../http/validation.js';
-import { requireBrand } from '../tenancy/brand-scope.js';
+import { requireBrand, type BrandScope } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { BACKFILL_STORE, CONNECTOR_STACK, DEPS, JOB_PRODUCER } from '../tokens.js';
 import { toReviewModeStatusDto, type ReviewModeStatusDto } from '../review-mode/dto.js';
@@ -84,6 +84,50 @@ export class ConnectionsService {
 
   async list(org: OrgContext, brandId: unknown): Promise<ConnectionView[]> {
     const brand = await requireBrand(this.deps.pool, org, brandId);
+    const now = new Date(systemClock.now());
+    const [rows, bf, pending] = await Promise.all([
+      this.#rows(brand),
+      this.backfill.views(brand, now),
+      this.#suggestions.pendingCounts(brand, now),
+    ]);
+    return rows.map((row) => {
+      const v = bf.get(row.id);
+      return {
+        id: row.id,
+        platform: row.platform,
+        displayName: row.display_name,
+        externalAccountId: row.external_account_id,
+        status: row.view_status,
+        statusReason: row.view_status === 'connected' ? null : row.status_reason,
+        backfill: v
+          ? {
+              status: v.status,
+              importedCount: v.importedCount,
+              completedAt: v.completedAt?.toISOString() ?? null,
+              limitedTo: v.limitedTo,
+              nothingToImport: v.status === 'completed' && v.importedCount === 0,
+              failureReason: v.failureReason,
+              skippedSources: v.skippedCount,
+            }
+          : null,
+        reviewMode: toReviewModeStatusDto(row.connection, pending.get(row.id) ?? 0, now),
+      };
+    });
+  }
+
+  /** Review-mode status of the brand's visible connections, without backfill details. */
+  async reviewModes(org: OrgContext, brandId: unknown): Promise<ReviewModeStatusDto[]> {
+    const brand = await requireBrand(this.deps.pool, org, brandId);
+    const now = new Date(systemClock.now());
+    const [rows, pending] = await Promise.all([
+      this.#rows(brand),
+      this.#suggestions.pendingCounts(brand, now),
+    ]);
+    return rows.map((row) => toReviewModeStatusDto(row.connection, pending.get(row.id) ?? 0, now));
+  }
+
+  /** The brand's connections that are visible to users, oldest first. */
+  async #rows(brand: BrandScope) {
     const r = await this.deps.pool.query<{
       id: string;
       platform: Platform;
@@ -102,46 +146,27 @@ export class ConnectionsService {
         ORDER BY created_at, id`,
       [brand.organizationId, brand.brandId],
     );
-    const now = new Date(systemClock.now());
-    const bf = await this.backfill.views(brand, now);
-    const views: ConnectionView[] = [];
-    for (const row of r.rows) {
-      const status = viewStatus(row.status, row.status_reason);
-      if (status === null) continue;
-      const v = bf.get(row.id);
-      const review = {
-        mode: row.review_mode,
-        startedAt: row.review_mode_started_at,
-        endsAt: row.review_mode_ends_at,
-        endedAt: row.review_mode_ended_at,
-      };
-      const pending = await this.#suggestions.pendingCount(brand, row.id);
-      views.push({
-        id: row.id,
-        platform: row.platform,
-        displayName: row.display_name,
-        externalAccountId: row.external_account_id,
-        status,
-        statusReason: status === 'connected' ? null : row.status_reason,
-        backfill: v
-          ? {
-              status: v.status,
-              importedCount: v.importedCount,
-              completedAt: v.completedAt?.toISOString() ?? null,
-              limitedTo: v.limitedTo,
-              nothingToImport: v.status === 'completed' && v.importedCount === 0,
-              failureReason: v.failureReason,
-              skippedSources: v.skippedCount,
-            }
-          : null,
-        reviewMode: toReviewModeStatusDto(
-          { id: row.id, platform: row.platform, displayName: row.display_name, review },
-          pending,
-          now,
-        ),
-      });
-    }
-    return views;
+    return r.rows.flatMap((row) => {
+      const viewStat = viewStatus(row.status, row.status_reason);
+      if (viewStat === null) return [];
+      return [
+        {
+          ...row,
+          view_status: viewStat,
+          connection: {
+            id: row.id,
+            platform: row.platform,
+            displayName: row.display_name,
+            review: {
+              mode: row.review_mode,
+              startedAt: row.review_mode_started_at,
+              endsAt: row.review_mode_ends_at,
+              endedAt: row.review_mode_ended_at,
+            },
+          },
+        },
+      ];
+    });
   }
 
   /**

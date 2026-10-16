@@ -67,6 +67,4 @@ export interface AuditInput {
   details?: Readonly<Record<string, string | number | boolean | null>>;
 }
 
-export function recordAudit(c: pg.PoolClient, e: AuditInput): Promise<void> {
-  return writeAudit(c, e);
-}
+export const recordAudit: (c: pg.PoolClient, e: AuditInput) => Promise<void> = writeAudit;

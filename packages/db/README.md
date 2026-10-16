@@ -198,6 +198,8 @@ what it would have done and waits for a person.
 168 hours`.
 - `review_mode_ended_at`, `review_mode_ended_by_user_id`: set when a person ends
   the window early. Requires `review_mode = 'on'` and a started window.
+- `review_mode_ended_pending`: what the person chose for pending suggestions
+  (`leave`, `dismiss` or `approve`); only set together with `review_mode_ended_at`.
 
 `rule_evaluation`, `comment_classification` and `policy_evaluation` each have
 `review_mode boolean` (default `false`): whether review mode applied when the

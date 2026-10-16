@@ -388,11 +388,12 @@ export async function endReviewModeEarly(
   const now = new Date(d.clock.now());
   const pendingCount = await withTransaction(d.pool, async (tx) => {
     const ended = await tx.query(
-      `UPDATE connection SET review_mode_ended_at = GREATEST($4, review_mode_started_at), review_mode_ended_by_user_id = $5
+      `UPDATE connection SET review_mode_ended_at = GREATEST($4, review_mode_started_at), review_mode_ended_by_user_id = $5,
+              review_mode_ended_pending = $6
         WHERE organization_id = $1 AND brand_id = $2 AND id = $3
           AND review_mode = 'on' AND review_mode_started_at IS NOT NULL
           AND review_mode_ended_at IS NULL AND (review_mode_ends_at IS NULL OR review_mode_ends_at > $4)`,
-      [scope.organizationId, scope.brandId, scope.connectionId, now, i.userId],
+      [scope.organizationId, scope.brandId, scope.connectionId, now, i.userId, i.pending],
     );
     if (ended.rowCount !== 1) return null;
     const scopeArgs = [scope.organizationId, scope.brandId, scope.connectionId];
@@ -458,16 +459,10 @@ export async function endReviewModeEarly(
 }
 
 async function endedEarlyWithApprove(pool: pg.Pool, scope: ConnectionScope): Promise<boolean> {
-  const { rows } = await pool.query<{ pending: string | null }>(
-    `SELECT (SELECT a.details->>'pending' FROM audit_event a
-              WHERE a.organization_id = cn.organization_id AND a.brand_id = cn.brand_id
-                AND a.subject_type = 'connection' AND a.subject_id = cn.id
-                AND a.action = 'review_mode.ended_early'
-              ORDER BY a.sequence DESC LIMIT 1) AS pending
-       FROM connection cn
-      WHERE cn.organization_id = $1 AND cn.brand_id = $2 AND cn.id = $3
-        AND cn.review_mode = 'on' AND cn.review_mode_ended_at IS NOT NULL`,
+  const { rowCount } = await pool.query(
+    `SELECT 1 FROM connection
+      WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND review_mode_ended_pending = 'approve'`,
     [scope.organizationId, scope.brandId, scope.connectionId],
   );
-  return rows[0]?.pending === 'approve';
+  return rowCount === 1;
 }

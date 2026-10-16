@@ -190,9 +190,9 @@ describe('PgSuggestionStore', () => {
     expect(await ids({ limit: 10 })).toEqual([b.suggestionId]);
     expect(await ids({ status: 'dismissed', limit: 10 })).toEqual([a.suggestionId]);
     expect(await ids({ status: 'all', limit: 10 })).toHaveLength(2);
-    expect(await store.pendingCount(f.scope)).toBe(1);
-    expect(await store.pendingCount(f.scope, f.t.connectionId)).toBe(1);
-    expect(await store.pendingCount(f.scope, uuid())).toBe(0);
+    expect(await store.pendingCounts(f.scope, new Date())).toEqual(
+      new Map([[f.t.connectionId, 1]]),
+    );
   });
 
   it('pendingAuthors groups repeat offenders', async () => {
@@ -208,7 +208,7 @@ describe('PgSuggestionStore', () => {
     const c = await seedCommentRow(ctx.c, f.t, 'one', { authorId: solo.rows[0]!.id });
     created(await propose(f, ruleSource(f), HIDE, c.id));
 
-    expect(await store.pendingAuthors(f.scope, f.t.connectionId, 10)).toEqual([
+    expect(await store.pendingAuthors(f.scope, f.t.connectionId, 10, new Date())).toEqual([
       { authorId: f.t.authorId, authorName: `Author ${f.label}`, pendingCount: 2 },
     ]);
     const views = await store.list(f.scope, { authorId: f.t.authorId, limit: 10 }, new Date());
@@ -302,8 +302,8 @@ describe('PgSuggestionStore', () => {
     expect(
       await store.list(b.scope, { status: 'all', connectionId: a.t.connectionId, limit: 10 }, now),
     ).toEqual([]);
-    expect(await store.pendingAuthors(b.scope, a.t.connectionId, 10)).toEqual([]);
-    expect(await store.pendingCount(b.scope, a.t.connectionId)).toBe(0);
+    expect(await store.pendingAuthors(b.scope, a.t.connectionId, 10, now)).toEqual([]);
+    expect(await store.pendingCounts(b.scope, now)).toEqual(new Map());
     expect(
       await withTransaction(pool, async (tx) => ({
         locked: await store.lockForDecision(tx, b.scope, s.suggestionId),
