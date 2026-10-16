@@ -120,14 +120,16 @@ export function checkStepsForBrand(
   return { errors, warnings };
 }
 
-export type StepStatus =
-  | 'pending'
-  | 'succeeded'
-  | 'failed'
-  | 'skipped'
-  | 'not_applicable'
-  | 'not_supported'
-  | 'simulated';
+export const STEP_STATUSES = [
+  'pending',
+  'succeeded',
+  'failed',
+  'skipped',
+  'not_applicable',
+  'not_supported',
+  'simulated',
+] as const;
+export type StepStatus = (typeof STEP_STATUSES)[number];
 export type StepOutcome = { status: Exclude<StepStatus, 'simulated'>; reason: string | null };
 
 const RATE_LIMIT_CODES: ReadonlySet<string> = new Set([

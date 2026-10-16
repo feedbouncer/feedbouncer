@@ -5,6 +5,9 @@ import {
   PgReviewQueue,
   STEP_META,
   STEP_TYPES,
+  loadBrandName,
+  loadConnectionInfo,
+  loadBrandConnections,
   resolveReviewItem,
   stepSupport,
   undoStep,
@@ -13,7 +16,6 @@ import {
   type StepStatus,
   type StepType,
 } from '@feedbouncer/actions';
-import type { BrandScope } from '@feedbouncer/comments';
 import { systemClock, type Platform } from '@feedbouncer/connectors';
 import { PgRuleStore } from '@feedbouncer/rules';
 import type { AppDeps } from '../deps.js';
@@ -21,7 +23,6 @@ import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { DEPS } from '../tokens.js';
-import { loadBrandConnections } from './brand-connections.js';
 import {
   toLogEntryDto,
   toReviewItemDto,
@@ -121,11 +122,8 @@ export class ActionsService {
       review: this.#review,
       comments: store,
       actions,
-      connection: async (s) =>
-        (await loadBrandConnections(this.deps.pool, s, this.#capabilities)).find(
-          (c) => c.connectionId === s.connectionId,
-        ) ?? null,
-      brandName: (s) => this.#brandName(s),
+      connection: (s) => loadConnectionInfo(this.deps.pool, s, this.#capabilities),
+      brandName: (s) => loadBrandName(this.deps.pool, s),
       producer,
       clock: systemClock,
       log: this.deps.log,
@@ -136,14 +134,6 @@ export class ActionsService {
       rule.actions,
     );
     return { steps };
-  }
-
-  async #brandName(scope: BrandScope): Promise<string> {
-    const { rows } = await this.deps.pool.query<{ name: string }>(
-      'SELECT name FROM brand WHERE organization_id = $1 AND id = $2',
-      [scope.organizationId, scope.brandId],
-    );
-    return rows[0]?.name ?? '';
   }
 
   async log(

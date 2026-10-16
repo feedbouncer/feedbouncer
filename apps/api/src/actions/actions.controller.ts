@@ -11,22 +11,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
-import { STEP_TYPES } from '@feedbouncer/actions';
+import { STEP_STATUSES, STEP_TYPES } from '@feedbouncer/actions';
 import { SessionGuard } from '../auth/session.guard.js';
 import { parseBody, parseUuidOr404, zUuid } from '../http/validation.js';
 import { RequireCapability } from '../tenancy/capability.decorator.js';
 import { OrgAccessGuard, type OrgRequest } from '../tenancy/org-access.guard.js';
 import { ActionsService } from './actions.service.js';
-
-const STEP_STATUSES = [
-  'pending',
-  'succeeded',
-  'failed',
-  'skipped',
-  'not_applicable',
-  'not_supported',
-  'simulated',
-] as const;
 
 const LogQuery = z.strictObject({
   ruleId: zUuid.optional(),

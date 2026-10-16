@@ -286,7 +286,7 @@ export function stepIssues(issues: readonly { path: string; message: string }[],
     .map((i) => stepIssueText(i.message));
 }
 
-const STATUS_LABEL: Record<StepStatus, string> = {
+export const STATUS_LABEL: Record<StepStatus, string> = {
   pending: 'Waiting to run',
   succeeded: 'Done',
   failed: 'Failed',

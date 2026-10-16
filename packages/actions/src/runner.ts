@@ -373,7 +373,13 @@ export class ActionRunner {
         await settle(step, stepOutcomeFor({ kind: 'refused', code: r.code }));
         continue;
       }
-      const linked = await runs.linkAction(tx, scope, step.id, r.action.id, ld.requested!.requestKey);
+      const linked = await runs.linkAction(
+        tx,
+        scope,
+        step.id,
+        r.action.id,
+        ld.requested!.requestKey,
+      );
       if (linked === 'owned_by_other_step') {
         await settle(step, { status: 'skipped', reason: 'duplicate' });
         continue;

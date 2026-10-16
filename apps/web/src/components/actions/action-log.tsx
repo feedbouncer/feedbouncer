@@ -7,6 +7,7 @@ import {
   POLL_MS,
   STEP_LABEL,
   STEP_ORDER,
+  STATUS_LABEL,
   STEP_STATUSES,
   hasPending,
   outcomeText,
@@ -24,16 +25,6 @@ export interface LogFilters {
   status?: string;
   type?: string;
 }
-
-const STATUS_NAME: Record<(typeof STEP_STATUSES)[number], string> = {
-  pending: 'Waiting to run',
-  succeeded: 'Done',
-  failed: 'Failed',
-  skipped: 'Skipped',
-  not_applicable: 'Not applicable',
-  not_supported: 'Not supported',
-  simulated: 'Dry run',
-};
 
 export function ActionLog(props: {
   orgId: string;
@@ -99,7 +90,7 @@ export function ActionLog(props: {
             <option value="">All</option>
             {STEP_STATUSES.map((s) => (
               <option key={s} value={s}>
-                {STATUS_NAME[s]}
+                {STATUS_LABEL[s]}
               </option>
             ))}
           </select>

@@ -3,6 +3,7 @@ import type pg from 'pg';
 import { z } from 'zod';
 import {
   checkStepsForBrand,
+  loadBrandConnections,
   type ActionStep,
   type StepIssue,
   type StepWarning,
@@ -32,7 +33,6 @@ import { lockedActor } from '../tenancy/org-lock.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { DEPS } from '../tokens.js';
 import { listActivity, type ActivityItem, type ActivityQuery } from './decisions.queries.js';
-import { loadBrandConnections } from '../actions/brand-connections.js';
 import { toDomainDto, type DomainDto, type RuleDto, type RuleWriteDto } from './rules.dto.js';
 
 const MAX_ISSUE_CHARS = 300;
