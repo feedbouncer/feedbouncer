@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { ACTION_KINDS, REPLY_KINDS, REQUEST_KEY } from '@feedbouncer/comments';
+import { ACTION_KINDS, REPLY_KINDS, isClientRequestKey } from '@feedbouncer/comments';
 import { replyTextSchema } from '@feedbouncer/connectors';
 import { SessionGuard } from '../auth/session.guard.js';
 import { parseBody, parseUuidOr404, zUuid } from '../http/validation.js';
@@ -31,7 +31,7 @@ const ListQuery = z.strictObject({
 const ActionBody = z
   .strictObject({
     kind: z.enum(ACTION_KINDS),
-    requestKey: z.string().regex(REQUEST_KEY),
+    requestKey: z.string().refine(isClientRequestKey),
     text: replyTextSchema.optional(),
   })
   .refine((b) => REPLY_KINDS.has(b.kind) === (b.text !== undefined), { path: ['text'] });

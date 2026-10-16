@@ -57,12 +57,43 @@ beforeAll(async () => {
      VALUES ($1, $2, 'b rule', '{"type":"keyword","terms":["x"]}'::jsonb, 'flag', 'enforce') RETURNING id`,
     [B.orgId, B.brandId],
   );
+  const bEvaluation = await api.pool.query(
+    `INSERT INTO rule_evaluation (organization_id, brand_id, connection_id, comment_id, body_sha256,
+                                  trigger_key, ruleset_version, status)
+     VALUES ($1, $2, $3, $4, decode(repeat('ab', 32), 'hex'), 'iso', 'v1', 'no_match') RETURNING id`,
+    [B.orgId, B.brandId, bConnectionId, comment.rows[0].id],
+  );
+  const bRun = await api.pool.query(
+    `INSERT INTO action_run (organization_id, brand_id, connection_id, comment_id, rule_id,
+                             rule_evaluation_id, dry_run)
+     VALUES ($1, $2, $3, $4, $5, $6, false) RETURNING id`,
+    [
+      B.orgId,
+      B.brandId,
+      bConnectionId,
+      comment.rows[0].id,
+      bRule.rows[0].id,
+      bEvaluation.rows[0].id,
+    ],
+  );
+  const bStep = await api.pool.query(
+    `INSERT INTO action_run_step (organization_id, brand_id, run_id, position, step_type, config, status,
+                                  completed_at)
+     VALUES ($1, $2, $3, 0, 'flag_for_review', '{"type":"flag_for_review"}'::jsonb, 'succeeded', now())
+     RETURNING id`,
+    [B.orgId, B.brandId, bRun.rows[0].id],
+  );
+  const bReviewItem = await api.pool.query(
+    `INSERT INTO review_item (organization_id, brand_id, connection_id, comment_id, source, rule_id)
+     VALUES ($1, $2, $3, $4, 'action_step', $5) RETURNING id`,
+    [B.orgId, B.brandId, bConnectionId, comment.rows[0].id, bRule.rows[0].id],
+  );
   const bDomain = await api.pool.query(
     `INSERT INTO brand_domain (organization_id, brand_id, domain) VALUES ($1, $2, 'b-own.example')
      RETURNING id`,
     [B.orgId, B.brandId],
   );
-  const bRun = await api.pool.query(
+  const bClassifierRun = await api.pool.query(
     `INSERT INTO classifier_run (organization_id, brand_id, requested_by_user_id, days, since)
      VALUES ($1, $2, $3, 1, now() - interval '1 day') RETURNING id`,
     [B.orgId, B.brandId, B.owner.userId],
@@ -125,7 +156,9 @@ beforeAll(async () => {
     bGrantId,
     bRuleId: bRule.rows[0].id,
     bDomainId: bDomain.rows[0].id,
-    bClassifierRunId: bRun.rows[0].id,
+    bClassifierRunId: bClassifierRun.rows[0].id,
+    bStepId: bStep.rows[0].id,
+    bReviewItemId: bReviewItem.rows[0].id,
     bPolicyId: bPolicy.rows[0].id,
     bPreviewId: bPreview.rows[0].id,
     bConnectionIds: { facebook: bConnectionId, instagram: igConnection.rows[0].id },
@@ -162,6 +195,12 @@ async function snapshot(orgId: string) {
     ),
     actions: await q(
       'SELECT id, status FROM moderation_action WHERE organization_id = $1 ORDER BY id',
+    ),
+    actionSteps: await q(
+      'SELECT id, status, undone_at FROM action_run_step WHERE organization_id = $1 ORDER BY id',
+    ),
+    reviewItems: await q(
+      'SELECT id, status, resolution FROM review_item WHERE organization_id = $1 ORDER BY id',
     ),
     rules: await q(
       `SELECT id, name, conditions, action, mode, enabled, priority, archived_at FROM rule

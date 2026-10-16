@@ -8,6 +8,9 @@ import { createAuthEmails, type AuthEmails } from './auth/emails.js';
 import { createAuthRateLimits } from './auth/rate-limit.js';
 import { SessionGuard } from './auth/session.guard.js';
 import { SignUpController } from './auth/sign-up.controller.js';
+import { ActionsController } from './actions/actions.controller.js';
+import { ActionsService } from './actions/actions.service.js';
+import { ReviewController } from './actions/review.controller.js';
 import { AdsController } from './ads/ads.controller.js';
 import { AdsService } from './ads/ads.service.js';
 import { BrandsController } from './brands/brands.controller.js';
@@ -79,6 +82,8 @@ export class AppModule {
         CommentsController,
         AdsController,
         RulesController,
+        ActionsController,
+        ReviewController,
         DomainsController,
         ActivityController,
         ClassifierController,
@@ -100,6 +105,7 @@ export class AppModule {
         CommentsService,
         AdsService,
         RulesService,
+        ActionsService,
         ClassifierService,
         PoliciesService,
         MembersService,

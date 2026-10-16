@@ -1,4 +1,5 @@
 import { domainToUnicode } from 'node:url';
+import type { ActionStep, StepWarning } from '@feedbouncer/actions';
 import type { RuleAction, RuleKind, RuleMode } from '@feedbouncer/rules';
 
 export interface RuleDto {
@@ -6,7 +7,9 @@ export interface RuleDto {
   name: string;
   kind: RuleKind | null;
   conditions: unknown;
+  /** The decision outcome the steps add up to. */
   action: RuleAction;
+  actions: ActionStep[];
   mode: RuleMode;
   enabled: boolean;
   /** 1-based place in evaluation order. */
@@ -18,6 +21,11 @@ export interface RuleDto {
     neverMatches: boolean;
     invalid: boolean;
   };
+}
+
+/** A rule as returned by create and update, with the brand's connections checked against its steps. */
+export interface RuleWriteDto extends RuleDto {
+  actionWarnings: StepWarning[];
 }
 
 export interface DomainDto {

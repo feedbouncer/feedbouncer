@@ -1,7 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type pg from 'pg';
 import { z } from 'zod';
+import {
+  checkStepsForBrand,
+  type ActionStep,
+  type StepIssue,
+  type StepWarning,
+} from '@feedbouncer/actions';
 import { can, type Capability } from '@feedbouncer/authz';
+import type { Platform } from '@feedbouncer/connectors';
 import { withTransaction } from '@feedbouncer/db';
 import {
   DomainLimitError,
@@ -25,7 +32,8 @@ import { lockedActor } from '../tenancy/org-lock.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { DEPS } from '../tokens.js';
 import { listActivity, type ActivityItem, type ActivityQuery } from './decisions.queries.js';
-import { toDomainDto, type DomainDto, type RuleDto } from './rules.dto.js';
+import { loadBrandConnections } from '../actions/brand-connections.js';
+import { toDomainDto, type DomainDto, type RuleDto, type RuleWriteDto } from './rules.dto.js';
 
 const MAX_ISSUE_CHARS = 300;
 
@@ -33,17 +41,37 @@ function invalidRule(issues: ErrorIssue[]): ApiError {
   return new ApiError(400, 'invalid_rule', undefined, { issues });
 }
 
+/** A step-level problem (path "actions.<n>..."), as opposed to a malformed body or conditions. */
+const isStepIssue = (path: PropertyKey[]): boolean => path[0] === 'actions' && path.length > 1;
+
 function parseRule<S extends z.ZodType>(schema: S, body: unknown): z.output<S> {
   const r = schema.safeParse(body ?? {});
-  if (!r.success)
-    throw invalidRule(
-      r.error.issues.map((i) => ({
-        path: i.path.join('.'),
-        message: i.message.slice(0, MAX_ISSUE_CHARS),
-      })),
-    );
-  return r.data;
+  if (r.success) return r.data;
+  const issues = r.error.issues.map((i) => ({
+    path: i.path.join('.'),
+    message: i.message.slice(0, MAX_ISSUE_CHARS),
+  }));
+  if (r.error.issues.every((i) => isStepIssue(i.path)))
+    throw new ApiError(422, 'invalid_actions', undefined, { issues });
+  throw invalidRule(issues);
 }
+
+function stepErrors(errors: readonly StepIssue[]): ApiError {
+  return new ApiError(422, 'invalid_actions', undefined, {
+    issues: errors.map((e) => ({
+      path: `actions.${e.index}`,
+      message: e.code,
+      ...(e.platform && { platform: e.platform }),
+      ...(e.max !== undefined && { max: e.max }),
+    })),
+  });
+}
+
+/** Platform an author rule is limited to; other rules run on every platform of the brand. */
+const rulePlatform = (conditions: unknown): Platform | undefined => {
+  const c = conditions as { type?: unknown; platform?: unknown } | null;
+  return c?.type === 'author' ? (c.platform as Platform) : undefined;
+};
 
 @Injectable()
 export class RulesService {
@@ -89,6 +117,7 @@ export class RulesService {
         kind: r.kind,
         conditions: r.conditions,
         action: r.action,
+        actions: r.actions,
         mode: r.mode,
         enabled: r.enabled,
         position: i + 1,
@@ -109,10 +138,27 @@ export class RulesService {
     return v;
   }
 
+  /**
+   * The steps checked against the brand's connections: problems no connection can carry out
+   * are errors, partial problems are warnings.
+   */
+  async #checkSteps(
+    db: pg.Pool | pg.PoolClient,
+    scope: BrandScope,
+    conditions: unknown,
+    steps: readonly ActionStep[],
+  ): Promise<ReturnType<typeof checkStepsForBrand>> {
+    const registry = this.deps.connectors?.registry;
+    const capabilities = (p: Platform) => registry?.get(p)?.capabilities;
+    const conns = await loadBrandConnections(db, scope, capabilities);
+    return checkStepsForBrand(steps, conns, rulePlatform(conditions), capabilities);
+  }
+
   #ruleDetails(r: StoredRule, changed?: string[]) {
     return {
       kind: r.kind,
       action: r.action,
+      steps: r.actions.map((a) => a.type).join(','),
       mode: r.mode,
       enabled: r.enabled,
       ...(changed && { changed: changed.join(',') }),
@@ -127,13 +173,15 @@ export class RulesService {
     return this.#view(await requireBrand(this.deps.pool, org, brandId), ruleId);
   }
 
-  async create(org: OrgContext, brandId: unknown, body: unknown): Promise<RuleDto> {
+  async create(org: OrgContext, brandId: unknown, body: unknown): Promise<RuleWriteDto> {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     const input = parseRule(ruleInputSchema, body);
     const problem = checkActionForConditions(input.conditions, input.actions);
     if (problem !== null) throw invalidRule([{ path: 'actions', message: problem }]);
     try {
-      const rule = await this.#write(org, 'rule.write', async (c) => {
+      const { rule, warnings } = await this.#write(org, 'rule.write', async (c) => {
+        const checked = await this.#checkSteps(c, scope, input.conditions, input.actions);
+        if (checked.errors.length > 0) throw stepErrors(checked.errors);
         const created = await this.#store.create(c, scope, input);
         await this.#audit(c, org, scope, {
           action: 'rule.created',
@@ -141,28 +189,40 @@ export class RulesService {
           subjectId: created.id,
           details: this.#ruleDetails(created),
         });
-        return created;
+        return { rule: created, warnings: checked.warnings };
       });
-      return await this.#view(scope, rule.id);
+      return { ...(await this.#view(scope, rule.id)), actionWarnings: warnings };
     } catch (e) {
       if (e instanceof RuleLimitError) throw new ApiError(409, 'rule_limit_reached');
       throw e;
     }
   }
 
-  async update(org: OrgContext, brandId: unknown, ruleId: string, body: unknown): Promise<RuleDto> {
+  async update(
+    org: OrgContext,
+    brandId: unknown,
+    ruleId: string,
+    body: unknown,
+  ): Promise<RuleWriteDto> {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     const patch = parseRule(rulePatchSchema, body);
+    const changesSteps = patch.actions !== undefined || patch.conditions !== undefined;
+    let warnings: StepWarning[];
     try {
-      await this.#write(org, 'rule.write', async (c) => {
+      warnings = await this.#write(org, 'rule.write', async (c) => {
         const updated = await this.#store.update(c, scope, ruleId, patch);
         if (!updated) throw notFound();
+        // Only a change to the steps or the platform can be refused; later changes to the
+        // brand's connections just show up as warnings.
+        const checked = await this.#checkSteps(c, scope, updated.conditions, updated.actions);
+        if (changesSteps && checked.errors.length > 0) throw stepErrors(checked.errors);
         await this.#audit(c, org, scope, {
           action: 'rule.updated',
           subjectType: 'rule',
           subjectId: updated.id,
           details: this.#ruleDetails(updated, Object.keys(patch)),
         });
+        return checked.warnings;
       });
     } catch (e) {
       // The store re-checks the merged rule: the stored conditions or the new action do not fit.
@@ -174,7 +234,7 @@ export class RulesService {
         throw invalidRule([{ path: 'conditions', message: 'The rule conditions are not valid.' }]);
       throw e;
     }
-    return this.#view(scope, ruleId);
+    return { ...(await this.#view(scope, ruleId)), actionWarnings: warnings };
   }
 
   async archive(org: OrgContext, brandId: unknown, ruleId: string): Promise<void> {

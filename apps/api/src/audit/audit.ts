@@ -19,6 +19,8 @@ export type AuditAction =
   | 'rule.updated'
   | 'rule.archived'
   | 'rule.reordered'
+  | 'action_step.undone'
+  | 'review_item.resolved'
   | 'brand_domain.added'
   | 'brand_domain.removed'
   | 'classifier_threshold.updated'
