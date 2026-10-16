@@ -34,6 +34,8 @@ CREATE TABLE review_item (
   resolution_action_id uuid,
   resolved_by_user_id uuid,
   resolved_at timestamptz(3),
+  claim_key text,
+  claimed_at timestamptz(3),
   created_at timestamptz(3) NOT NULL DEFAULT now(),
   updated_at timestamptz(3) NOT NULL DEFAULT now(),
   CONSTRAINT review_item_pkey PRIMARY KEY (id),
@@ -44,6 +46,7 @@ CREATE TABLE review_item (
     resolution IS NULL OR resolution IN ('approved', 'hidden', 'deleted', 'banned', 'dismissed')),
   CONSTRAINT review_item_resolved_check CHECK (
     (status = 'resolved') = (resolution IS NOT NULL AND resolved_at IS NOT NULL)),
+  CONSTRAINT review_item_claim_check CHECK ((claim_key IS NULL) = (claimed_at IS NULL)),
   CONSTRAINT review_item_connection_id_fkey FOREIGN KEY (organization_id, brand_id, connection_id)
     REFERENCES connection (organization_id, brand_id, id) ON DELETE CASCADE,
   CONSTRAINT review_item_comment_id_fkey FOREIGN KEY (brand_id, comment_id)

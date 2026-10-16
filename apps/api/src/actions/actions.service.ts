@@ -19,6 +19,7 @@ import {
 import { systemClock, type Platform } from '@feedbouncer/connectors';
 import { PgRuleStore } from '@feedbouncer/rules';
 import type { AppDeps } from '../deps.js';
+import { recordAudit } from '../audit/audit.js';
 import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
@@ -165,7 +166,7 @@ export class ActionsService {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     const { actions } = this.#configured();
     const r = await undoStep(
-      { pool: this.deps.pool, runs: this.#runs, review: this.#review, actions },
+      { pool: this.deps.pool, runs: this.#runs, review: this.#review, actions, audit: recordAudit },
       scope,
       stepId,
       org.actorUserId,
@@ -197,7 +198,7 @@ export class ActionsService {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     const { store, actions } = this.#configured();
     const r = await resolveReviewItem(
-      { pool: this.deps.pool, review: this.#review, comments: store, actions },
+      { pool: this.deps.pool, review: this.#review, comments: store, actions, audit: recordAudit },
       scope,
       itemId,
       {

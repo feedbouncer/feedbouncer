@@ -46,6 +46,8 @@ export interface AuditInput {
     | 'membership'
     | 'invitation'
     | 'rule'
+    | 'action_run_step'
+    | 'review_item'
     | 'brand_domain'
     | 'classifier_threshold'
     | 'classifier_run'

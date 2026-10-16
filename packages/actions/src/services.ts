@@ -56,27 +56,18 @@ const RESOLUTION = {
   { outcome: string; kind: ActionKind | null; confirm: boolean }
 >;
 
-async function audit(
-  tx: pg.ClientBase,
-  scope: BrandScope,
-  userId: string,
-  e: { action: string; subjectType: string; subjectId: string; details: object },
-): Promise<void> {
-  await tx.query(
-    `INSERT INTO audit_event (organization_id, brand_id, actor_type, actor_user_id, action,
-                              subject_type, subject_id, details)
-     VALUES ($1, $2, 'user', $3, $4, $5, $6, $7::jsonb)`,
-    [
-      scope.organizationId,
-      scope.brandId,
-      userId,
-      e.action,
-      e.subjectType,
-      e.subjectId,
-      JSON.stringify(e.details),
-    ],
-  );
+/** What these services record; the API supplies the writer so events share its audit code. */
+export interface AuditEvent {
+  organizationId: string;
+  brandId: string;
+  actorUserId: string;
+  action: 'action_step.undone' | 'review_item.resolved';
+  subjectType: 'action_run_step' | 'review_item';
+  subjectId: string;
+  details: Readonly<Record<string, string | null>>;
 }
+
+export type Audit = (tx: pg.PoolClient, e: AuditEvent) => Promise<void>;
 
 type Refusal = Extract<RequestActionResult, { status: 'refused' }>['code'];
 
@@ -96,6 +87,7 @@ export async function undoStep(
     runs: PgActionRunStore;
     review: PgReviewQueue;
     actions: Pick<ModerationActions, 'request'>;
+    audit: Audit;
   },
   scope: BrandScope,
   stepId: string,
@@ -162,7 +154,9 @@ export async function undoStep(
       return 'item_resolved';
     if (!(await d.runs.markUndone(tx, scope, stepId, userId, undoActionId, { previous })))
       return false;
-    await audit(tx, scope, userId, {
+    await d.audit(tx, {
+      ...scope,
+      actorUserId: userId,
       action: 'action_step.undone',
       subjectType: 'action_run_step',
       subjectId: stepId,
@@ -188,6 +182,7 @@ export async function resolveReviewItem(
     review: PgReviewQueue;
     comments: PgCommentStore;
     actions: Pick<ModerationActions, 'request'>;
+    audit: Audit;
   },
   scope: BrandScope,
   itemId: string,
@@ -218,35 +213,51 @@ export async function resolveReviewItem(
   if (i.resolution === 'approve' && (await autoHidden(d, scope, item.commentId)))
     request = { kind: 'unhide', requestKey: `review:${itemId}:unhide` };
 
-  // The item stays claimed from the platform request to its resolution, so two moderators
-  // choosing different actions cannot both reach the platform.
-  return withTransaction(d.pool, async (tx): Promise<ResolveResult> => {
-    if (!(await d.review.lockOpen(tx, scope, itemId))) return refused('review_item_resolved');
-    let actionId: string | null = null;
-    if (request) {
-      const r = await d.actions.request({ scope, commentId: item.commentId, actor, ...request });
-      if (r.status === 'refused') {
-        const code =
-          forward(r.code) ?? (r.code === 'request_key_conflict' ? r.code : 'unsupported');
-        return refused(code);
-      }
-      if (r.action.status === 'not_eligible' || r.action.status === 'failed')
-        return refused('unsupported');
-      actionId = r.action.id;
+  // The claim is held from the platform request to the resolution, so two moderators
+  // choosing different actions cannot both reach the platform. No transaction is open while
+  // the request takes its own pool clients.
+  if (!(await d.review.claim(scope, itemId, i.requestKey))) return refused('review_item_resolved');
+  let actionId: string | null = null;
+  if (request) {
+    let r: RequestActionResult;
+    try {
+      r = await d.actions.request({ scope, commentId: item.commentId, actor, ...request });
+    } catch (err) {
+      await d.review.release(scope, itemId, i.requestKey);
+      throw err;
     }
-    await d.review.resolve(tx, scope, itemId, {
+    if (r.status === 'refused') {
+      await d.review.release(scope, itemId, i.requestKey);
+      return refused(
+        forward(r.code) ?? (r.code === 'request_key_conflict' ? r.code : 'unsupported'),
+      );
+    }
+    if (r.action.status === 'not_eligible' || r.action.status === 'failed') {
+      await d.review.release(scope, itemId, i.requestKey);
+      return refused('unsupported');
+    }
+    actionId = r.action.id;
+  }
+  // If this fails the claim stays, so a retry with the same key finds the same action.
+  const resolved = await withTransaction(d.pool, async (tx) => {
+    const done = await d.review.resolve(tx, scope, itemId, {
       resolution: plan.outcome,
       userId: i.userId,
       actionId,
+      claimKey: i.requestKey,
     });
-    await audit(tx, scope, i.userId, {
-      action: 'review_item.resolved',
-      subjectType: 'review_item',
-      subjectId: itemId,
-      details: { itemId, resolution: plan.outcome, actionId },
-    });
-    return { status: 'resolved', actionId };
+    if (done)
+      await d.audit(tx, {
+        ...scope,
+        actorUserId: i.userId,
+        action: 'review_item.resolved',
+        subjectType: 'review_item',
+        subjectId: itemId,
+        details: { itemId, resolution: plan.outcome, actionId },
+      });
+    return done;
   });
+  return resolved ? { status: 'resolved', actionId } : refused('review_item_resolved');
 }
 
 /** True when the comment is hidden and the latest applied hide was not made by a person. */

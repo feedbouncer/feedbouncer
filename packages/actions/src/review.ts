@@ -68,6 +68,8 @@ const toView = (r: ItemDb): ReviewItemView => ({
   platform: r.platform,
 });
 
+const CLAIM_TTL_SECONDS = 120;
+
 export class PgReviewQueue {
   constructor(private readonly pool: pg.Pool) {}
 
@@ -144,30 +146,58 @@ export class PgReviewQueue {
     return r.rows[0] ? toView(r.rows[0]) : null;
   }
 
-  /** Claims an open item until the transaction ends; false when it is resolved or not in scope. */
-  async lockOpen(tx: pg.PoolClient, scope: BrandScope, id: string): Promise<boolean> {
-    const res = await tx.query(
-      `SELECT 1 FROM review_item
+  /**
+   * Holds an open item for the caller's key while its platform action is requested, so two
+   * moderators choosing different actions cannot both reach the platform. The same key can
+   * claim again, and a claim nobody finished expires. False when the item is resolved,
+   * claimed by another key, or not in scope.
+   */
+  async claim(scope: BrandScope, id: string, key: string): Promise<boolean> {
+    const res = await this.pool.query(
+      `UPDATE review_item SET claim_key = $4, claimed_at = now()
         WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND status = 'open'
-          FOR UPDATE`,
-      [scope.organizationId, scope.brandId, id],
+          AND (claim_key IS NULL OR claim_key = $4
+               OR claimed_at < now() - make_interval(secs => $5))`,
+      [scope.organizationId, scope.brandId, id, key, CLAIM_TTL_SECONDS],
     );
     return res.rowCount === 1;
   }
 
-  /** Only while open; false when already resolved or not in scope. */
+  async release(scope: BrandScope, id: string, key: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE review_item SET claim_key = NULL, claimed_at = NULL
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND claim_key = $4`,
+      [scope.organizationId, scope.brandId, id, key],
+    );
+  }
+
+  /** Only while open and not claimed by another key; false otherwise or when not in scope. */
   async resolve(
     tx: pg.PoolClient,
     scope: BrandScope,
     id: string,
-    r: { resolution: ReviewResolution; userId: string | null; actionId: string | null },
+    r: {
+      resolution: ReviewResolution;
+      userId: string | null;
+      actionId: string | null;
+      claimKey?: string;
+    },
   ): Promise<boolean> {
     const res = await tx.query(
       `UPDATE review_item
           SET status = 'resolved', resolution = $4, resolved_by_user_id = $5, resolution_action_id = $6,
-              resolved_at = now()
-        WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND status = 'open'`,
-      [scope.organizationId, scope.brandId, id, r.resolution, r.userId, r.actionId],
+              resolved_at = now(), claim_key = NULL, claimed_at = NULL
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND status = 'open'
+          AND claim_key IS NOT DISTINCT FROM $7::text`,
+      [
+        scope.organizationId,
+        scope.brandId,
+        id,
+        r.resolution,
+        r.userId,
+        r.actionId,
+        r.claimKey ?? null,
+      ],
     );
     return res.rowCount === 1;
   }

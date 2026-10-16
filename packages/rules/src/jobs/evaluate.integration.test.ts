@@ -388,7 +388,14 @@ describe('rule_evaluate', () => {
 
     const runs = new PgActionRunStore(pool);
     const review = new PgReviewQueue(pool);
-    expect(await undoStep({ pool, runs, review, actions }, e.scope, step.id, e.t.userId)).toEqual({
+    expect(
+      await undoStep(
+        { pool, runs, review, actions, audit: async () => {} },
+        e.scope,
+        step.id,
+        e.t.userId,
+      ),
+    ).toEqual({
       status: 'done',
       undoActionId: null,
     });

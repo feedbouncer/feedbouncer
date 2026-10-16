@@ -9,7 +9,7 @@ import { ModerationActions, PgCommentStore } from '@feedbouncer/comments';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { PgReviewQueue } from './review.js';
 import { PgActionRunStore } from './runs.js';
-import { resolveReviewItem, undoStep } from './services.js';
+import { resolveReviewItem, undoStep, type Audit } from './services.js';
 import type { ActionStep, StepType } from './steps.js';
 import { scopeOf, seedCommentRow, seedEvaluationRow, seedModerationActionRow } from './testing.js';
 
@@ -70,7 +70,16 @@ const fresh = async (state = 'visible', withAuthor = false) => {
 };
 type F = Awaited<ReturnType<typeof fresh>>;
 
-const deps = () => ({ pool, runs, review, comments, actions });
+/** Stands in for the API's recordAudit, which the services receive. */
+const audit: Audit = async (tx, e) => {
+  await tx.query(
+    `INSERT INTO audit_event (organization_id, brand_id, actor_type, actor_user_id, action,
+                              subject_type, subject_id, details)
+     VALUES ($1, $2, 'user', $3, $4, $5, $6, $7::jsonb)`,
+    [e.organizationId, e.brandId, e.actorUserId, e.action, e.subjectType, e.subjectId, e.details],
+  );
+};
+const deps = () => ({ pool, runs, review, comments, actions, audit });
 
 /** A settled step; hide and ban steps are linked to an applied rule action. */
 async function seedStep(
@@ -561,6 +570,81 @@ describe('resolveReviewItem', () => {
       { status: 'refused', code: 'review_item_resolved' },
     ]);
     expect(await actionRows(f.comment.id)).toHaveLength(1);
+  });
+
+  it('concurrent resolves on a pool no larger than their number do not hang', async () => {
+    const small = createPool(ctx.db.url, {
+      applicationName: 'actions-services-small',
+      max: 3,
+      onIdleError: () => {},
+    });
+    try {
+      const smallComments = new PgCommentStore(small);
+      const smallActions = new ModerationActions({
+        pool: small,
+        store: smallComments,
+        producer: { enqueue } as never,
+        capabilities: (p) => (p === 'facebook' ? facebook : undefined),
+        clock: { now: () => Date.now() },
+        log: createLogger('actions-services-small', 'error', () => {}),
+      });
+      const fs = [await fresh(), await fresh(), await fresh()];
+      const items = await Promise.all(fs.map((f) => openItem(f)));
+      const results = await Promise.all(
+        fs.map((f, k) =>
+          resolveReviewItem(
+            {
+              pool: small,
+              review: new PgReviewQueue(small),
+              comments: smallComments,
+              actions: smallActions,
+              audit,
+            },
+            f.scope,
+            items[k]!,
+            { resolution: 'hide', userId: f.t.userId, requestKey: `rk-${randomUUID()}` },
+          ),
+        ),
+      );
+      expect(results.map((r) => r.status)).toEqual(['resolved', 'resolved', 'resolved']);
+    } finally {
+      await small.end();
+    }
+  }, 15_000);
+
+  it('a retry with the same key after the resolution failed reuses the queued action', async () => {
+    const f = await fresh();
+    const itemId = await openItem(f);
+    const requestKey = `rk-${randomUUID()}`;
+    const failing: Audit = async () => {
+      throw new Error('audit down');
+    };
+    await expect(
+      resolveReviewItem({ ...deps(), audit: failing }, f.scope, itemId, {
+        resolution: 'hide',
+        userId: f.t.userId,
+        requestKey,
+      }),
+    ).rejects.toThrow('audit down');
+    expect(await review.load(f.scope, itemId)).toMatchObject({ status: 'open' });
+    // Another moderator cannot take the item while it is claimed.
+    expect(await resolve(f, itemId, 'delete', { confirm: true })).toEqual({
+      status: 'refused',
+      code: 'review_item_resolved',
+    });
+    expect(await resolve(f, itemId, 'hide', { requestKey })).toMatchObject({ status: 'resolved' });
+    expect(await actionRows(f.comment.id)).toHaveLength(1);
+  });
+
+  it('a refused request releases the claim', async () => {
+    const f = await fresh();
+    const itemId = await openItem(f);
+    await pool.query("UPDATE connection SET status = 'reconnect_required' WHERE id = $1", [
+      f.t.connectionId,
+    ]);
+    expect((await resolve(f, itemId, 'hide')).status).toBe('refused');
+    await ctx.c.query(`UPDATE connection SET status = 'active' WHERE id = $1`, [f.t.connectionId]);
+    expect(await resolve(f, itemId, 'hide')).toMatchObject({ status: 'resolved' });
   });
 
   it('another brand or a malformed id -> not_found', async () => {
