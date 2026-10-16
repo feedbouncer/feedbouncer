@@ -667,6 +667,18 @@ describe('action runner', () => {
     expect(graph.state(seeded.commentId)).toBe('visible');
   });
 
+  it('a later evaluation retries an automated hide that failed', async () => {
+    const first = await start([HIDE]);
+    graph.failNext(10);
+    await queue.drain();
+    expect(await outcome(first.id, 'hide')).toEqual(['failed', 'missing_permission']);
+    const second = await start([HIDE]);
+    await queue.drain();
+    expect(await outcome(second.id, 'hide')).toEqual(['succeeded', null]);
+    expect(graph.state(seeded.commentId)).toBe('hidden');
+    expect((await actionsOf(seeded.id)).map((a) => a.status).sort()).toEqual(['applied', 'failed']);
+  });
+
   it('ban on instagram reaching execution -> not_supported / unsupported', async () => {
     const { igUserId } = graph.addInstagramAccount(pageId, { username: 'shop.official' });
     await ctx.c.query(

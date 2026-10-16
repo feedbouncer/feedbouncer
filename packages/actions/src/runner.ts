@@ -55,6 +55,7 @@ export interface SimulatedStep {
 
 interface Requested {
   stepId: string;
+  requestKey: string;
   result: Awaited<ReturnType<ModerationActions['request']>>;
 }
 interface PendingRequest {
@@ -72,6 +73,24 @@ const PLATFORM_NAME: Partial<Record<Platform, string>> = {
 };
 const errorName = (err: unknown): string => (err instanceof Error ? err.name : 'NonError');
 const WOULD_RUN: StepOutcome = { status: 'succeeded', reason: 'would_run' };
+
+/**
+ * One key per comment and kind, so automation never repeats an action. An attempt that
+ * failed or was refused does not count: the next evaluation gets a new key and tries again.
+ */
+function automatedRequestKey(
+  commentId: string,
+  kind: ActionKind,
+  views: readonly ModerationActionView[],
+): string {
+  const spent = views.filter(
+    (v) =>
+      v.kind === kind &&
+      v.actorType !== 'user' &&
+      (v.status === 'failed' || v.status === 'not_eligible'),
+  ).length;
+  return `auto:${commentId}:${kind}${spent > 0 ? `:${spent}` : ''}`;
+}
 
 function wake(
   producer: Producer,
@@ -146,6 +165,7 @@ export class ActionRunner {
       if (done.next) {
         requested = {
           stepId: done.next.step.id,
+          requestKey: done.next.requestKey,
           result: await this.#request(scope, done.run, done.next),
         };
         continue;
@@ -341,8 +361,8 @@ export class ActionRunner {
       }
       const type = step.type as Exclude<StepType, 'flag_for_review'>;
       const kind = MODERATION_KIND[type];
-      const requestKey = `auto:${run.commentId}:${kind}`;
       if (!justRequested) {
+        const requestKey = automatedRequestKey(run.commentId, kind, [...views.values()]);
         const text =
           'template' in step.config ? this.#render(step.config, comment!, brand, conn!) : undefined;
         next = { step, kind, requestKey, text };
@@ -353,7 +373,7 @@ export class ActionRunner {
         await settle(step, stepOutcomeFor({ kind: 'refused', code: r.code }));
         continue;
       }
-      const linked = await runs.linkAction(tx, scope, step.id, r.action.id, requestKey);
+      const linked = await runs.linkAction(tx, scope, step.id, r.action.id, ld.requested!.requestKey);
       if (linked === 'owned_by_other_step') {
         await settle(step, { status: 'skipped', reason: 'duplicate' });
         continue;
