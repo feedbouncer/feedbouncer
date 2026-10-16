@@ -760,6 +760,31 @@ describe('action runner', () => {
     expect(graph.state(seeded.commentId)).toBe('hidden');
   });
 
+  it('a step whose request went out is linked even if the precheck would now skip it', async () => {
+    const run = await start([HIDE]);
+    const request = actions.request.bind(actions);
+    // A person unhides the comment while the hide request is on its way.
+    vi.spyOn(actions, 'request').mockImplementationOnce(async (i) => {
+      const r = await request(i);
+      await ctx.c.query(
+        `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind,
+           actor_type, actor_user_id, request_key, status)
+         VALUES ($1, $2, $3, $4, 'unhide', 'user', $5, $6, 'pending')`,
+        [t.organizationId, t.brandId, t.connectionId, seeded.id, t.userId, `ui-${randomUUID()}`],
+      );
+      return r;
+    });
+    await queue.drain(ACTION_RUN_ADVANCE_JOB.type);
+    const step = await stepOf(run.id, 'hide');
+    const [hide] = await pool
+      .query<{
+        id: string;
+      }>(`SELECT id FROM moderation_action WHERE comment_id = $1 AND kind = 'hide'`, [seeded.id])
+      .then((r) => r.rows);
+    expect(step.moderation_action_id).toBe(hide!.id);
+    expect(step.reason_code).not.toBe('moderator_override');
+  });
+
   it('edited comment after undo: hide skipped moderator_override', async () => {
     const first = await start([HIDE]);
     await queue.drain();

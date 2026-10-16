@@ -325,14 +325,12 @@ export class ActionRunner {
         await settleAction(step, step.moderationActionId);
         continue;
       }
-      const blocked = await this.#precheck(
-        scope,
-        step.type,
-        comment,
-        conn,
-        [...views.values()],
-        tx,
-      );
+      // The step requested in the previous pass is linked whatever the precheck says now:
+      // its action already went out, so skipping it would leave that action unrecorded.
+      const justRequested = ld.requested?.stepId === step.id;
+      const blocked = justRequested
+        ? null
+        : await this.#precheck(scope, step.type, comment, conn, [...views.values()], tx);
       if (blocked) {
         await settle(step, blocked);
         continue;
@@ -344,13 +342,13 @@ export class ActionRunner {
       const type = step.type as Exclude<StepType, 'flag_for_review'>;
       const kind = MODERATION_KIND[type];
       const requestKey = `auto:${run.commentId}:${kind}`;
-      if (ld.requested?.stepId !== step.id) {
+      if (!justRequested) {
         const text =
           'template' in step.config ? this.#render(step.config, comment!, brand, conn!) : undefined;
         next = { step, kind, requestKey, text };
         break;
       }
-      const r = ld.requested.result;
+      const r = ld.requested!.result;
       if (r.status === 'refused') {
         await settle(step, stepOutcomeFor({ kind: 'refused', code: r.code }));
         continue;
