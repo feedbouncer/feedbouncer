@@ -342,6 +342,20 @@ describe('listLog', () => {
     expect(await store.listLog(f.scope, { limit: 1 })).toHaveLength(1);
   });
 
+  it('undoable is a boolean on every row, and false for an undone flag step', async () => {
+    const f = await fresh();
+    const run = await mkRun(f, [FLAG, HIDE]);
+    await settle(f, run.steps[0]!.id);
+    await settle(f, run.steps[1]!.id);
+    await undo(f, run.steps[0]!.id);
+    await undo(f, run.steps[1]!.id);
+    const all = await store.listLog(f.scope, { limit: 50 });
+    expect(all.map((e) => [e.type, e.undoable])).toEqual([
+      ['hide', false],
+      ['flag_for_review', false],
+    ]);
+  });
+
   it('clamps the limit and orders the steps of a run by position', async () => {
     const f = await fresh();
     await mkRun(f, [FLAG, REPLY, HIDE]);

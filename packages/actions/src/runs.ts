@@ -112,7 +112,7 @@ const RETRY_UNDO = `('failed', 'not_eligible')`;
 /** Needs the step as s, its run as r and its undo action as u. */
 const UNDOABLE_SQL = `(s.status = 'succeeded' AND NOT r.dry_run
   AND s.step_type IN ('hide', 'ban', 'flag_for_review')
-  AND (s.undone_at IS NULL OR u.status IN ${RETRY_UNDO}))`;
+  AND (s.undone_at IS NULL OR COALESCE(u.status IN ${RETRY_UNDO}, false)))`;
 
 /** The pool, or a client already held (e.g. under the run lock). */
 export type Queryable = Pick<pg.ClientBase, 'query'>;
