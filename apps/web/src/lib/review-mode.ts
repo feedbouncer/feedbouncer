@@ -119,6 +119,10 @@ const decidedBy = (
   fmt: (iso: string) => string,
 ) => `${s.decidedByName ?? 'a team member'}${s.decidedAt ? ` at ${fmt(s.decidedAt)}` : ''}`;
 
+const EXPIRED_TEXT =
+  'Expired: not reviewed within 72 hours after review mode ended. Nothing was run.';
+const WITHDRAWN_TEXT = 'Withdrawn: the rule behind this suggestion was changed or turned off.';
+
 export function suggestionStatusText(s: SuggestionView, fmt: (iso: string) => string): string {
   switch (s.status) {
     case 'pending':
@@ -130,18 +134,28 @@ export function suggestionStatusText(s: SuggestionView, fmt: (iso: string) => st
         ? `Dismissed by ${decidedBy(s, fmt)} when review mode was ended early.`
         : `Dismissed by ${decidedBy(s, fmt)}.`;
     case 'expired':
-      return 'Expired: not reviewed within 72 hours after review mode ended. Nothing was run.';
+      return EXPIRED_TEXT;
     case 'not_applicable':
       return s.statusReason === 'comment_edited'
         ? 'No longer applicable: the comment was edited after this suggestion was made.'
         : 'No longer applicable: the comment was deleted.';
     case 'withdrawn':
-      return 'Withdrawn: the rule behind this suggestion was changed or turned off.';
+      return WITHDRAWN_TEXT;
   }
 }
 
-export const handledText = (h: HandledDetails, fmt: (iso: string) => string): string =>
-  `Already handled by ${decidedBy(h, fmt)}.`;
+export function handledText(h: HandledDetails, fmt: (iso: string) => string): string {
+  switch (h.status) {
+    case 'expired':
+      return EXPIRED_TEXT;
+    case 'withdrawn':
+      return WITHDRAWN_TEXT;
+    case 'not_applicable':
+      return 'No longer applicable: the comment was deleted or edited after this suggestion was made.';
+    default:
+      return `Already handled by ${decidedBy(h, fmt)}.`;
+  }
+}
 
 /** What to show for a failed decision. An already-handled suggestion is news, not an error. */
 export function decisionErrorText(

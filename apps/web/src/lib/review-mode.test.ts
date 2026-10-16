@@ -187,6 +187,20 @@ describe('handledText', () => {
       ),
     ).toBe('Already handled by Ana at <2026-10-22T09:00:00.000Z>.');
   });
+
+  it('explains a suggestion the system closed instead of naming a team member', () => {
+    const h = (status: string) =>
+      handledText({ status, decidedAt: null, decidedByName: null }, fmt);
+    expect(h('expired')).toBe(
+      'Expired: not reviewed within 72 hours after review mode ended. Nothing was run.',
+    );
+    expect(h('withdrawn')).toBe(
+      'Withdrawn: the rule behind this suggestion was changed or turned off.',
+    );
+    expect(h('not_applicable')).toBe(
+      'No longer applicable: the comment was deleted or edited after this suggestion was made.',
+    );
+  });
 });
 
 describe('decisions', () => {
