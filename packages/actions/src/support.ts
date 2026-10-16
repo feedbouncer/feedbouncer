@@ -156,6 +156,7 @@ export function stepOutcomeFor(
   if (r.kind === 'refused') {
     if (r.code === 'not_found') return { status: 'not_applicable', reason: 'comment_gone' };
     if (r.code === 'unsupported') return { status: 'not_supported', reason: 'unsupported' };
+    if (r.code === 'review_mode_active') return { status: 'skipped', reason: 'review_mode_active' };
     return { status: 'failed', reason: safeOutcomeCode(r.code, 'failed') };
   }
   const { status, code } = r;

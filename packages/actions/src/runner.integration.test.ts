@@ -699,8 +699,8 @@ describe('action runner', () => {
       [igUserId],
     );
     const r = await ctx.c.query<{ id: string }>(
-      `INSERT INTO connection (organization_id, brand_id, platform, external_account_id)
-       VALUES ($1, $2, 'instagram', $3) RETURNING id`,
+      `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, review_mode)
+       VALUES ($1, $2, 'instagram', $3, 'legacy') RETURNING id`,
       [t.organizationId, t.brandId, igUserId],
     );
     const ig: ConnectionScope = { ...scope, connectionId: r.rows[0]!.id };
