@@ -776,6 +776,81 @@ describe('ModerationActions.request', () => {
   });
 });
 
+describe('ModerationActions.request after a moderator unhide', () => {
+  const automated = (): ActionActor[] => [
+    { type: 'classifier' },
+    { type: 'policy' },
+    { type: 'rule', ruleId: t.ruleId },
+    { type: 'system' },
+  ];
+  /** A hidden comment unhidden by `actor`; the unhide is applied and the comment visible again. */
+  const unhiddenBy = async (actor: ActionActor): Promise<string> => {
+    const commentId = await seedComment({ state: 'hidden' });
+    const r = await request(commentId, 'unhide', { actor });
+    if (r.status !== 'accepted') throw new Error(`unhide not accepted: ${JSON.stringify(r)}`);
+    await pool.query(
+      `UPDATE moderation_action SET status = 'applied', completed_at = now() WHERE id = $1`,
+      [r.action.id],
+    );
+    await pool.query(`UPDATE comment SET platform_state = 'visible' WHERE id = $1`, [commentId]);
+    return commentId;
+  };
+
+  it('classifier, policy, rule and system hide after a user unhide → refused moderator_override, no row inserted', async () => {
+    for (const actor of automated()) {
+      const commentId = await unhiddenBy(user());
+      expect(await request(commentId, 'hide', { actor })).toEqual({
+        status: 'refused',
+        code: 'moderator_override',
+      });
+      expect((await rowsFor(commentId)).map((r) => r.kind)).toEqual(['unhide']);
+    }
+  });
+
+  it('user hide after a user unhide is allowed', async () => {
+    const commentId = await unhiddenBy(user());
+    expect(await request(commentId, 'hide')).toMatchObject({
+      status: 'accepted',
+      action: { kind: 'hide', status: 'pending' },
+    });
+  });
+
+  it('classifier hide after a classifier unhide (reversal) is allowed', async () => {
+    const commentId = await unhiddenBy({ type: 'classifier' });
+    expect(await request(commentId, 'hide', { actor: { type: 'classifier' } })).toMatchObject({
+      status: 'accepted',
+      action: { kind: 'hide', actorType: 'classifier', status: 'pending' },
+    });
+  });
+
+  it('a pending user unhide already blocks an automated hide', async () => {
+    const commentId = await seedComment({ state: 'hidden' });
+    expect(await request(commentId, 'unhide')).toMatchObject({
+      status: 'accepted',
+      action: { status: 'pending' },
+    });
+    expect(await request(commentId, 'hide', { actor: { type: 'classifier' } })).toEqual({
+      status: 'refused',
+      code: 'moderator_override',
+    });
+    expect((await rowsFor(commentId)).map((r) => r.kind)).toEqual(['unhide']);
+  });
+
+  it('a user unhide recorded noop already_visible also blocks an automated hide', async () => {
+    const commentId = await seedComment({ state: 'hidden' });
+    const r = await request(commentId, 'unhide');
+    if (r.status !== 'accepted') throw new Error('unhide not accepted');
+    await pool.query(
+      `UPDATE moderation_action SET status = 'noop', outcome_code = 'already_visible', completed_at = now() WHERE id = $1`,
+      [r.action.id],
+    );
+    expect(await request(commentId, 'hide', { actor: { type: 'classifier' } })).toEqual({
+      status: 'refused',
+      code: 'moderator_override',
+    });
+  });
+});
+
 describe('ModerationActions.request in review mode', () => {
   const HOUR = 3_600_000;
   /** Sets rv's window to start `startedAgoMs` before the test clock. */

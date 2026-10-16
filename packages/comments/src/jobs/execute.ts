@@ -5,7 +5,9 @@
 // - a public reply retried after an earlier attempt may already be posted, so
 //   from the second attempt on the thread is checked for our reply first;
 // - a private reply the platform reports as already sent on a retry is our
-//   own earlier attempt.
+//   own earlier attempt;
+// - an unhide reads the comment first and records a noop when it is already
+//   visible or gone.
 // The status update, the comment state and the audit record are written in
 // one transaction, and only while the action is still pending.
 // When the platform's answer shows our stored copy is out of date (the comment
@@ -246,6 +248,29 @@ async function findOwnReply(
   }
 }
 
+/**
+ * Reads the comment before unhiding it: our copy may say hidden when someone already
+ * unhid or deleted it on the platform. Returns the outcome when that settles it, or null
+ * to go ahead with the unhide. Throttling, transient and auth errors are handled as they
+ * would be for the unhide itself; any other read error leaves the decision to the unhide.
+ */
+async function checkBeforeUnhide(
+  client: ConnectionClient,
+  ref: CommentRef,
+  attempt: number,
+): Promise<FailureOutcome | null> {
+  try {
+    const c = await client.getComment(ref);
+    if (c === null || c.platformState === 'deleted') return { final: gone() };
+    if (c.platformState === 'visible')
+      return { final: { ...done('noop', 'already_visible'), commentState: 'visible' } };
+    return null;
+  } catch (err) {
+    const e = toConnectorError(err);
+    return RETRY_KINDS.has(e.kind) ? mapFailure(e.info(), attempt) : null;
+  }
+}
+
 /** `recorded` is false when another run recorded the outcome first. */
 async function finish(
   pool: pg.Pool,
@@ -395,12 +420,18 @@ export function executeActionJob(d: {
           outcome = mapRespond(r, ctx.attempt);
         }
       } else {
-        const r = await client.act({
-          action: a.kind,
-          target: commentRef,
-          ...(a.authorExternalId !== null ? { authorExternalId: a.authorExternalId } : {}),
-        });
-        outcome = mapAct(r, a.kind, ctx.attempt);
+        const settled =
+          a.kind === 'unhide' ? await checkBeforeUnhide(client, commentRef, ctx.attempt) : null;
+        if (settled) {
+          outcome = settled;
+        } else {
+          const r = await client.act({
+            action: a.kind,
+            target: commentRef,
+            ...(a.authorExternalId !== null ? { authorExternalId: a.authorExternalId } : {}),
+          });
+          outcome = mapAct(r, a.kind, ctx.attempt);
+        }
       }
 
       if (!('final' in outcome)) {

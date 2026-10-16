@@ -208,6 +208,26 @@ const bodySha = (body: string): Buffer => createHash('sha256').update(body, 'utf
 export class PgCommentStore {
   constructor(private readonly pool: pg.Pool) {}
 
+  /**
+   * Whether a moderator restored the comment: its newest hide/unhide is a user's unhide that is
+   * pending, applied, or recorded because the platform already showed the comment. Automation
+   * must not hide it again.
+   */
+  async userUnhidLast(scope: BrandScope, commentId: string): Promise<boolean> {
+    if (!UUID.test(commentId)) return false;
+    const r = await this.pool.query<{ kind: string; actor_type: string }>(
+      `SELECT kind, actor_type FROM moderation_action
+        WHERE organization_id = $1 AND brand_id = $2 AND comment_id = $3
+          AND kind IN ('hide', 'unhide')
+          AND (status IN ('pending', 'applied')
+               OR (kind = 'unhide' AND status = 'noop' AND outcome_code = 'already_visible'))
+        ORDER BY created_at DESC, id DESC LIMIT 1`,
+      [scope.organizationId, scope.brandId, commentId],
+    );
+    const last = r.rows[0];
+    return last?.kind === 'unhide' && last.actor_type === 'user';
+  }
+
   /** Live, non-deleted comments of one connection whose body the hook was not yet told about. */
   async pendingHooks(
     scope: ConnectionScope,

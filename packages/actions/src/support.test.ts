@@ -179,6 +179,7 @@ describe('stepOutcomeFor', () => {
     [action('failed', null), ok('failed', 'failed')],
     [refused('connection_inactive'), ok('failed', 'connection_inactive')],
     [refused('review_mode_active'), ok('skipped', 'review_mode_active')],
+    [refused('moderator_override'), ok('skipped', 'moderator_override')],
   ])('%j -> %j', (input, expected) => {
     expect(stepOutcomeFor(input)).toEqual(expected);
     if (

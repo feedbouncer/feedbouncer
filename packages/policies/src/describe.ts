@@ -1,4 +1,5 @@
 import { MAX_INPUT_CHARS } from '@feedbouncer/ai';
+import { MODERATOR_OVERRIDE_REASON } from '@feedbouncer/comments';
 import type {
   Downgrade,
   PolicyAction,
@@ -84,5 +85,6 @@ export function describePreviewResult(
 
 /** `code` must already be a closed snake_case outcome code (see `safeOutcomeCode`). */
 export function describeFallback(kind: 'hide' | 'delete', code: string): string {
+  if (code === 'moderator_override') return MODERATOR_OVERRIDE_REASON;
   return `A policy asked to ${kind} this comment, but the platform did not allow it (${code}). Flagged for review instead.`;
 }

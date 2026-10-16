@@ -9,6 +9,7 @@ import { BrandSlots, createPool, withTransaction } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { PgSuggestionStore } from '@feedbouncer/actions';
 import {
+  ModerationActions,
   PgCommentStore,
   PgReviewModeReader,
   type RequestActionResult,
@@ -768,6 +769,43 @@ describe('policy_evaluate', () => {
     expect(actions.request).toHaveBeenCalledTimes(1);
     expect((await decisionsFor(c, 'policy')).map((d) => d.outcome)).toEqual(['hide', 'flag']);
     expect(await evaluationFor(c)).toMatchObject({ fallback_code: 'too_old' });
+  });
+
+  it('policy hide after a user unhide on an ingest re-run is refused moderator_override and falls back to flag', async () => {
+    const { t } = await brand();
+    evaluator.evaluate.mockResolvedValue({ p1: 'clear_match' });
+    const c = await seed(t, { ruleStatus: 'no_match' });
+    await db.c.query(
+      `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind, actor_type,
+         actor_user_id, request_key, status, completed_at)
+       VALUES ($1, $2, $3, $4, 'unhide', 'user', $5, $6, 'applied', now())`,
+      [t.organizationId, t.brandId, t.connectionId, c.id, t.userId, `rk-${randomUUID()}`],
+    );
+    const real = new ModerationActions({
+      pool,
+      store: comments,
+      producer: { enqueue: vi.fn() },
+      // Never reached: the override is decided first.
+      capabilities: () => undefined,
+      clock: { now: () => Date.now() },
+      log: quiet,
+    });
+    const r = await makeJob({ actions: real }).handle(ctx(c, 1), payload(c));
+    expect(r).toMatchObject({ fallback: 'moderator_override' });
+    expect(await evaluationFor(c)).toMatchObject({ fallback_code: 'moderator_override' });
+    expect((await decisionsFor(c, 'policy')).map((d) => [d.outcome, d.reason])).toEqual([
+      ['hide', expect.any(String)],
+      [
+        'flag',
+        'A moderator restored this comment, so it was flagged for review instead of hidden.',
+      ],
+    ]);
+    const hides = await db.c.query(
+      `SELECT 1 FROM moderation_action WHERE organization_id = $1 AND brand_id = $2
+          AND comment_id = $3 AND kind = 'hide'`,
+      [t.organizationId, t.brandId, c.id],
+    );
+    expect(hides.rowCount).toBe(0);
   });
 
   it('a run whose revision is no longer current records skipped/policy_changed', async () => {
