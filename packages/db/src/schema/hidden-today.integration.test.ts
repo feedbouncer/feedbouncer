@@ -67,7 +67,7 @@ describe('applied hide index', () => {
     );
     expect(r.rows).toHaveLength(1);
     const def = r.rows[0]!.indexdef;
-    expect(def).toContain('(organization_id, completed_at DESC, id DESC)');
+    expect(def).toContain('(organization_id, brand_id, completed_at DESC, id DESC)');
     expect(def).toContain("WHERE ((kind = 'hide'::text) AND (status = 'applied'::text))");
   });
 });

@@ -236,9 +236,9 @@ still on the default.
 
 "Today" for a brand starts at `date_trunc('day', now, brand.timezone)`.
 
-`moderation_action_applied_hide_idx` on `(organization_id, completed_at DESC, id DESC)`
-covers only `kind = 'hide' AND status = 'applied'` rows, so the list of hidden comments
-reads newest first without scanning other actions.
+`moderation_action_applied_hide_idx` on `(organization_id, brand_id, completed_at DESC, id DESC)`
+covers only `kind = 'hide' AND status = 'applied'` rows, so the list of hidden comments of a
+brand reads newest first without scanning other actions.
 
 ### Latest decision per comment
 

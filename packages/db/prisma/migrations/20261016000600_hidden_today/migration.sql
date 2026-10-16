@@ -1,5 +1,5 @@
 -- Hidden today: each brand gets a timezone so "today" means local midnight, and the
--- applied hides get a partial index for the per-organization list, newest first.
+-- applied hides get a partial index for the per-brand list, newest first.
 BEGIN;
 
 SET LOCAL lock_timeout = '10s';
@@ -13,7 +13,7 @@ ALTER TABLE brand
     AND timezone ~ '^(UTC|[A-Za-z]+([/_+-][A-Za-z0-9]+)+)$');
 
 CREATE INDEX moderation_action_applied_hide_idx
-  ON moderation_action (organization_id, completed_at DESC, id DESC)
+  ON moderation_action (organization_id, brand_id, completed_at DESC, id DESC)
   WHERE kind = 'hide' AND status = 'applied';
 
 COMMIT;
