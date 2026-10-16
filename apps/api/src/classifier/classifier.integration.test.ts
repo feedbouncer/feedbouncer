@@ -647,7 +647,7 @@ describe('classification and the decision log', () => {
     const created = await send('POST', P, '/rules', admin(P), {
       name: 'regression rule',
       conditions: { type: 'keyword', terms: ['zzz'] },
-      action: 'flag',
+      actions: [{ type: 'flag_for_review' }],
     });
     expect(created.status).toBe(201);
     const { commentId } = await seedClassified(P, null);

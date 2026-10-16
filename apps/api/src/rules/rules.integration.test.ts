@@ -3,10 +3,12 @@
 // (the worker runs it in production).
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ActionRunner, PgActionRunStore, PgReviewQueue } from '@feedbouncer/actions';
 import {
   PgRuleStore,
   PgEvaluationStore,
   RuleSetCache,
+  RuleStepFallback,
   bodySha256,
   ruleEvaluateJob,
 } from '@feedbouncer/rules';
@@ -35,7 +37,7 @@ const keyword = (...terms: string[]) => ({ type: 'keyword', terms });
 const rule = (name: string, conditions: unknown, extra: object = {}) => ({
   name,
   conditions,
-  action: 'flag',
+  actions: [{ type: 'flag_for_review' }],
   ...extra,
 });
 
@@ -99,7 +101,7 @@ describe('rules', () => {
       rule(
         'bad list',
         { type: 'author', list: 'allow', platform: 'facebook', entries: [{ externalId: '1' }] },
-        { action: 'hide' },
+        { actions: [{ type: 'hide' }] },
       ),
     );
     expect(author.status).toBe(400);
@@ -121,7 +123,7 @@ describe('rules', () => {
       mode: 'enforce',
       conditions: { type: 'keyword', terms: ['beta', 'gamma'] },
     });
-    const bad = await call('PATCH', `/rules/${id}`, { action: 'nope' });
+    const bad = await call('PATCH', `/rules/${id}`, { actions: 'nope' });
     expect(bad.status).toBe(400);
     const unknown = await call('PATCH', `/rules/${randomUUID()}`, { enabled: true });
     expect(unknown.status).toBe(404);
@@ -134,10 +136,12 @@ describe('rules', () => {
       rule(
         'allow list',
         { type: 'author', list: 'allow', platform: 'facebook', entries: [{ externalId: '1' }] },
-        { action: 'approve' },
+        { actions: [] },
       ),
     );
-    const r = await call('PATCH', `/rules/${created.body.id}`, { action: 'hide' });
+    const r = await call('PATCH', `/rules/${created.body.id}`, {
+      actions: [{ type: 'hide' }],
+    });
     expect(r.status).toBe(400);
     expect(r.body.error.code).toBe('invalid_rule');
   });
@@ -241,11 +245,32 @@ describe('decisions', () => {
 
   async function evaluate(scope: ConnectionScope, platform: 'facebook' | 'instagram', id: string) {
     const row = (await store().load(scope, id))!;
+    const evaluations = new PgEvaluationStore(api.pool);
+    const rules = new PgRuleStore(api.pool);
+    const runner = new ActionRunner({
+      pool: api.pool,
+      runs: new PgActionRunStore(api.pool),
+      review: new PgReviewQueue(api.pool),
+      comments: store(),
+      actions: api.deps.comments!.actions,
+      connection: async (s) => {
+        const caps = api.deps.connectors!.registry.get(platform)?.capabilities;
+        return caps
+          ? { connectionId: s.connectionId, platform, caps, grantedScopes: caps.defaultScopes }
+          : null;
+      },
+      brandName: async () => 'Brand',
+      // The worker runs the advance job; the test advances inline.
+      producer: { enqueue: async () => ({ status: 'enqueued' }) as never },
+      clock: { now: () => Date.now() },
+      log: api.deps.log,
+      observer: new RuleStepFallback({ evaluations, log: api.deps.log }),
+    });
     const job = ruleEvaluateJob({
       comments: store(),
-      evaluations: new PgEvaluationStore(api.pool),
-      cache: new RuleSetCache(new PgRuleStore(api.pool)),
-      actions: api.deps.comments!.actions,
+      evaluations,
+      cache: new RuleSetCache(rules),
+      runner,
       log: api.deps.log,
     });
     const ctx: JobContext = {
@@ -258,11 +283,17 @@ describe('decisions', () => {
       signal: AbortSignal.timeout(30_000),
       log: api.deps.log,
     };
-    return job.handle(ctx, {
+    const result = await job.handle(ctx, {
       commentId: id,
       bodySha256: bodySha256(row.body),
       trigger: 'ingest',
     });
+    const { rows } = await api.pool.query<{ id: string }>(
+      'SELECT id FROM action_run WHERE comment_id = $1 AND NOT dry_run',
+      [id],
+    );
+    for (const r of rows) await runner.advance(scope, r.id);
+    return result;
   }
 
   beforeAll(async () => {
@@ -282,7 +313,12 @@ describe('decisions', () => {
         { mode: 'enforce' },
       ),
     );
-    await mk(rule('Delete rude', keyword(MARKER), { action: 'remove', mode: 'enforce' }));
+    await mk(
+      rule('Delete rude', keyword(MARKER), {
+        actions: [{ type: 'delete', confirmIrreversible: true }],
+        mode: 'enforce',
+      }),
+    );
     archivedRuleId = await mk(rule('Old rule', keyword('oldterm'), { mode: 'enforce' }));
   });
 
@@ -314,6 +350,17 @@ describe('decisions', () => {
       fallback: false,
       action: { kind: 'delete', status: 'pending', outcomeCode: null },
     });
+  });
+
+  it('joins the action of the run step even when the runner suffixed its request key', async () => {
+    const id = await addComment(fb, `contains ${MARKER}`);
+    await evaluate(fb, 'facebook', id);
+    await api.pool.query(
+      `UPDATE moderation_action SET request_key = request_key || ':1' WHERE comment_id = $1`,
+      [id],
+    );
+    const r = await call('GET', `/comments/${id}/decisions`, undefined, org.owner.cookie, dec);
+    expect(r.body.decisions[0].action).toMatchObject({ kind: 'delete' });
   });
 
   it('marks the fallback flag when the action cannot be requested', async () => {

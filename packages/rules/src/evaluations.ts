@@ -5,8 +5,10 @@
 import type pg from 'pg';
 import { withTransaction } from '@feedbouncer/db';
 import type { BrandScope } from '@feedbouncer/comments';
+import type { Platform } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { describeDecision } from './reason.js';
+import type { ActionStep } from '@feedbouncer/actions';
 import type { RuleAction, RuleHit, Verdict } from './types.js';
 
 export type EvaluationStatus = 'no_match' | 'decided' | 'skipped';
@@ -17,6 +19,8 @@ export interface EvaluationRow {
   matchedRuleId: string | null;
   outcome: RuleAction | null;
   fallbackAt: Date | null;
+  /** The matched rule's steps when it matched; empty unless decided. */
+  matchedActions: ActionStep[];
 }
 
 export interface EvaluationRecord {
@@ -35,13 +39,14 @@ const FALLBACK_CODE = /^[a-z][a-z_]{0,63}$/;
 export const safeFallbackCode = (code: string): string =>
   FALLBACK_CODE.test(code) ? code : 'failed';
 
-const COLS = 'id, status, matched_rule_id, outcome, fallback_at';
+const COLS = 'id, status, matched_rule_id, outcome, fallback_at, matched_actions';
 interface Row {
   id: string;
   status: EvaluationStatus;
   matched_rule_id: string | null;
   outcome: RuleAction | null;
   fallback_at: Date | null;
+  matched_actions: ActionStep[] | null;
 }
 const toRow = (r: Row): EvaluationRow => ({
   id: r.id,
@@ -49,6 +54,7 @@ const toRow = (r: Row): EvaluationRow => ({
   matchedRuleId: r.matched_rule_id,
   outcome: r.outcome,
   fallbackAt: r.fallback_at,
+  matchedActions: r.matched_actions ?? [],
 });
 
 const INSERT_DECISION = `
@@ -90,9 +96,9 @@ export class PgEvaluationStore {
       const { rows } = await tx.query<Row>(
         `INSERT INTO rule_evaluation (organization_id, brand_id, connection_id, comment_id, body_sha256,
                                       trigger_key, ruleset_version, status, skip_reason,
-                                      matched_rule_id, outcome, trace)
+                                      matched_rule_id, outcome, trace, matched_actions)
          SELECT c.organization_id, c.brand_id, c.connection_id, c.id, $5::bytea, $6::text,
-                $7::text, $8::text, $9::text, $10::uuid, $11::text, $12::jsonb
+                $7::text, $8::text, $9::text, $10::uuid, $11::text, $12::jsonb, $13::jsonb
            FROM comment c
           WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3 AND c.id = $4
          ON CONFLICT (comment_id, body_sha256, trigger_key) DO NOTHING
@@ -110,6 +116,7 @@ export class PgEvaluationStore {
           decided?.ruleId ?? null,
           decided?.action ?? null,
           JSON.stringify(e.verdict?.trace ?? []),
+          decided ? JSON.stringify(decided.actions) : null,
         ],
       );
       const row = rows[0];
@@ -179,15 +186,24 @@ export class PgEvaluationStore {
   async loadForFallback(
     scope: BrandScope,
     evaluationId: string,
-  ): Promise<{ ruleId: string; ruleName: string; outcome: RuleAction; commentId: string } | null> {
+  ): Promise<{
+    ruleId: string;
+    ruleName: string;
+    outcome: RuleAction;
+    commentId: string;
+    platform: Platform;
+  } | null> {
     const { rows } = await this.#pool.query<{
       rule_id: string;
       rule_name: string;
       outcome: RuleAction;
       comment_id: string;
+      platform: Platform;
     }>(
-      `SELECT e.matched_rule_id AS rule_id, r.name AS rule_name, e.outcome, e.comment_id
+      `SELECT e.matched_rule_id AS rule_id, r.name AS rule_name, e.outcome, e.comment_id, cn.platform
          FROM rule_evaluation e
+         JOIN connection cn ON cn.id = e.connection_id
+                           AND cn.organization_id = e.organization_id AND cn.brand_id = e.brand_id
          JOIN rule r ON r.id = e.matched_rule_id
                     AND r.organization_id = e.organization_id AND r.brand_id = e.brand_id
         WHERE e.organization_id = $1 AND e.brand_id = $2 AND e.id = $3 AND e.status = 'decided'`,
@@ -195,7 +211,13 @@ export class PgEvaluationStore {
     );
     const r = rows[0];
     return r
-      ? { ruleId: r.rule_id, ruleName: r.rule_name, outcome: r.outcome, commentId: r.comment_id }
+      ? {
+          ruleId: r.rule_id,
+          ruleName: r.rule_name,
+          outcome: r.outcome,
+          commentId: r.comment_id,
+          platform: r.platform,
+        }
       : null;
   }
 }

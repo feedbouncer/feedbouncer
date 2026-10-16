@@ -1,3 +1,4 @@
+import type { ActionStep } from '@feedbouncer/actions';
 import {
   checkActionForConditions,
   ruleConditionsSchema,
@@ -30,6 +31,7 @@ export interface CompiledRule {
   name: string;
   kind: RuleKind;
   action: RuleAction;
+  actions: ActionStep[];
   mode: RuleMode;
   pinned: boolean;
   matcher: Matcher;
@@ -96,7 +98,7 @@ export function compileRuleSet(
   const rules: CompiledRule[] = [];
   const invalid: CompiledRuleSet['invalid'] = [];
   for (const { r, parsed, order } of entries) {
-    if (!parsed.success || checkActionForConditions(parsed.data, r.action) !== null) {
+    if (!parsed.success || checkActionForConditions(parsed.data, r.actions) !== null) {
       invalid.push({ ruleId: r.id, reason: 'invalid_conditions' });
       continue;
     }
@@ -113,6 +115,7 @@ export function compileRuleSet(
       name: r.name,
       kind: c.type,
       action: r.action,
+      actions: r.actions,
       mode: r.mode,
       pinned: order.pinned,
       matcher,
@@ -158,6 +161,7 @@ export function evaluate(
       ruleName: r.name,
       kind: r.kind,
       action: r.action,
+      actions: r.actions,
       evidence: res,
     };
     if (r.mode === 'suggest') {

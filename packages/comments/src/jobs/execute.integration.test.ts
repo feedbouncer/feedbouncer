@@ -24,7 +24,10 @@ import { createFacebookConnector } from '@feedbouncer/connector-facebook';
 import { createInstagramConnector } from '@feedbouncer/connector-instagram';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import {
+  DEFAULT_RETRY_POLICY,
+  JobRegistry,
   classifyFailure,
+  decide,
   type EnqueueRequest,
   type EnqueueResult,
   type JobContext,
@@ -314,6 +317,67 @@ describe('moderation execute job: outcome observer', () => {
     expect(err).toMatchObject({ kind: 'auth_expired', reauthorize: true });
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ status: 'deferred', code: (err as ConnectorError).code });
+  });
+
+  it("rate limit exhausted: action becomes failed/rate_limit_exhausted, observer told 'failed'", async () => {
+    const actionId = await requestAction(seeded.id, 'hide');
+    const handler = observed();
+    // The runner only sees what the registry hands back, so go through it.
+    const registry = new JobRegistry();
+    registry.register(handler);
+    const registered = registry.get(EXECUTE_JOB.type);
+    expect(typeof registered?.onDeadLetter).toBe('function');
+    const policy = { ...DEFAULT_RETRY_POLICY, ...EXECUTE_JOB.policy, maxDeferrals: 1 };
+    let deferrals = 0;
+    for (;;) {
+      graph.throttleNext();
+      const err = await handler
+        .handle(jobCtx(1), EXECUTE_JOB.payload.parse({ actionId }))
+        .catch((e: unknown) => e);
+      const f = classifyFailure(err);
+      const disp = decide(
+        f,
+        { failures: 0, deferrals, deferredMs: 0, replays: 0 },
+        policy,
+        () => 0,
+      );
+      if (disp.type === 'defer') {
+        deferrals += 1;
+        expect(await actionRow(actionId)).toMatchObject({ status: 'pending' });
+        continue;
+      }
+      expect(disp).toMatchObject({ type: 'dead_letter', reason: 'rate_limit_exhausted' });
+      await registered?.onDeadLetter?.(
+        { scope, platform: 'facebook', reason: 'rate_limit_exhausted', errorCode: f.code },
+        EXECUTE_JOB.payload.parse({ actionId }),
+      );
+      break;
+    }
+    expect(deferrals).toBe(1);
+    expect(await actionRow(actionId)).toMatchObject({
+      status: 'failed',
+      outcome_code: 'rate_limit_exhausted',
+    });
+    const audit = await pool.query(
+      `SELECT details FROM audit_event
+        WHERE organization_id = $1 AND action = 'comment.moderated' AND details->>'actionId' = $2`,
+      [t.organizationId, actionId],
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(events.map((e) => e.status)).toEqual(['deferred', 'deferred', 'failed']);
+    expect(events[2]).toMatchObject({ status: 'failed', code: 'rate_limit_exhausted' });
+  });
+
+  it('held for reconnection: action stays pending so the replay can run it', async () => {
+    const actionId = await requestAction(seeded.id, 'hide');
+    const handler = observed();
+    await handler.onDeadLetter?.(
+      { scope, platform: 'facebook', reason: 'needs_reconnection', errorCode: 'token_expired' },
+      EXECUTE_JOB.payload.parse({ actionId }),
+    );
+    expect(await actionRow(actionId)).toMatchObject({ status: 'pending' });
+    expect(events).toEqual([]);
+    expect(await runObserved(actionId)).toMatchObject({ status: 'applied' });
   });
 
   it('an observer that throws does not change the job result', async () => {

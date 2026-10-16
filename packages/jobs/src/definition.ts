@@ -2,7 +2,7 @@ import type { z } from 'zod';
 import { isPlatform, type Platform } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
-import type { JobResult } from './failure.js';
+import type { DeadLetterReason, JobResult } from './failure.js';
 import { SNAKE_CASE } from './keys.js';
 import { LANE, type LaneOf } from './queues.js';
 import { DEFAULT_RETRY_POLICY, resolvePolicy, type RetryPolicy } from './policy.js';
@@ -37,6 +37,19 @@ export interface JobDefinition<P> {
   readonly lane?: string;
   /** Must be safe to repeat (see docs/jobs/defining-a-job.md). */
   readonly handle: (ctx: JobContext, payload: P) => Promise<JobResult>;
+  /**
+   * Called once after the job is dead-lettered, so it can settle state the
+   * handler left open. Not called for invalid_job. Errors are logged, never thrown.
+   */
+  readonly onDeadLetter?: (
+    e: {
+      readonly scope: ConnectionScope;
+      readonly platform: Platform;
+      readonly reason: DeadLetterReason;
+      readonly errorCode: string;
+    },
+    payload: P,
+  ) => Promise<void>;
 }
 
 export class JobRegistry {

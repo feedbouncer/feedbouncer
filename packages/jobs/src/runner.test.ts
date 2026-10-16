@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { ConnectorError } from '@feedbouncer/connectors';
 import { createLogger } from '@feedbouncer/service-runtime';
-import { JobRegistry } from './definition.js';
+import { JobRegistry, type JobDefinition } from './definition.js';
 import type { ClaimResult, JobLedgerPort, LedgerRow } from './ledger.js';
 import { JobMetrics, type JobEventSink } from './metrics.js';
 import { DEFAULT_RETRY_POLICY } from './policy.js';
@@ -59,9 +59,11 @@ function setup(
   handle: () => Promise<unknown>,
   sink?: JobEventSink,
   lanes: { defLane?: string; lane?: string | null } = {},
+  onDeadLetter?: NonNullable<JobDefinition<{ ref: string }>['onDeadLetter']>,
 ) {
   const jobs = new JobRegistry();
   const handler = vi.fn(handle);
+  const hook = onDeadLetter === undefined ? undefined : vi.fn(onDeadLetter);
   jobs.register({
     type: 't',
     platforms: 'all',
@@ -69,6 +71,7 @@ function setup(
     externalRef: (p) => p.ref,
     handle: handler as never,
     timeoutMs: 1_000,
+    ...(hook === undefined ? {} : { onDeadLetter: hook }),
     ...(lanes.defLane === undefined ? {} : { lane: lanes.defLane }),
   });
   const ledger = fakeLedger(claim);
@@ -88,7 +91,7 @@ function setup(
     random: () => 0,
     policyFor: () => ({ ...DEFAULT_RETRY_POLICY, maxAttempts: 3, baseDelayMs: 1_000 }),
   });
-  return { run, ledger, handler, lines };
+  return { run, ledger, handler, lines, hook };
 }
 
 describe('createJobProcessor', () => {
@@ -180,6 +183,83 @@ describe('createJobProcessor', () => {
       throw new Error('boom');
     });
     await expect(s.run(job().j)).rejects.toThrow('dead_lettered: retries_exhausted');
+  });
+
+  it('calls onDeadLetter once with scope, reason and payload when a job dead-letters', async () => {
+    const s = setup(
+      { status: 'claimed', row: row(), waitMs: 1_200 },
+      async () => {
+        throw new ConnectorError('auth_expired', 'reauthorization_required', { reauthorize: true });
+      },
+      undefined,
+      {},
+      async () => {},
+    );
+    await expect(s.run(job().j)).rejects.toThrow('dead_lettered: needs_reconnection');
+    expect(s.hook).toHaveBeenCalledTimes(1);
+    expect(s.hook).toHaveBeenCalledWith(
+      {
+        scope: { organizationId: 'o', brandId: 'b', connectionId: 'c' },
+        platform: 'facebook',
+        reason: 'needs_reconnection',
+        errorCode: 'reauthorization_required',
+      },
+      { ref: 'r' },
+    );
+  });
+
+  it('onDeadLetter throwing is logged and does not change the run outcome', async () => {
+    const s = setup(
+      { status: 'claimed', row: row({ failures: 2 }), waitMs: null },
+      async () => {
+        throw new Error('boom');
+      },
+      undefined,
+      {},
+      async () => {
+        throw new TypeError('hook down: secret body text');
+      },
+    );
+    await expect(s.run(job().j)).rejects.toThrow('dead_lettered: retries_exhausted');
+    expect(s.hook).toHaveBeenCalledTimes(1);
+    const logged = s.lines.find((l) => l.includes('job.dead_letter_hook_failed'));
+    expect(logged).toBeDefined();
+    expect(logged).toContain('TypeError');
+    expect(logged).not.toContain('secret body text');
+  });
+
+  it('does not call onDeadLetter for retries, deferrals or invalid_job', async () => {
+    const hook = async () => {};
+    const retry = setup(
+      { status: 'claimed', row: row(), waitMs: null },
+      async () => {
+        throw new ConnectorError('transient', 'upstream_5xx');
+      },
+      undefined,
+      {},
+      hook,
+    );
+    await expect(retry.run(job().j)).rejects.toBeInstanceOf(DelayedError);
+    expect(retry.hook).not.toHaveBeenCalled();
+
+    const bad = setup(
+      { status: 'claimed', row: row({ payload: { other: 1 } }), waitMs: null },
+      async () => ({}),
+      undefined,
+      {},
+      hook,
+    );
+    await expect(bad.run(job().j)).rejects.toThrow('dead_lettered: invalid_job');
+    const wrongQueue = setup(
+      { status: 'claimed', row: row({ platform: 'youtube' }), waitMs: null },
+      async () => ({}),
+      undefined,
+      {},
+      hook,
+    );
+    await expect(wrongQueue.run(job().j)).rejects.toThrow('dead_lettered: invalid_job');
+    expect(bad.hook).not.toHaveBeenCalled();
+    expect(wrongQueue.hook).not.toHaveBeenCalled();
   });
 
   it('dead-letters a poison job (crashes) before running it', async () => {

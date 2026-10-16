@@ -3,6 +3,7 @@ import {
   checkActionForConditions,
   ruleConditionsSchema,
   ruleInputSchema,
+  rulePatchSchema,
   type RuleConditions,
 } from './conditions.js';
 
@@ -88,37 +89,64 @@ describe('ruleConditionsSchema', () => {
 });
 
 describe('checkActionForConditions / ruleInputSchema', () => {
-  it('allow and trusted author lists must approve; block lists must not', () => {
-    const allow: RuleConditions = {
-      type: 'author',
-      list: 'allow',
-      platform: 'facebook',
-      entries: [{ externalId: '1' }],
-    };
-    expect(checkActionForConditions(allow, 'hide')).toMatch(/allow/i);
-    expect(checkActionForConditions(allow, 'approve')).toBeNull();
-    expect(checkActionForConditions({ ...allow, list: 'block' }, 'approve')).toMatch(/block/i);
+  const allow: RuleConditions = {
+    type: 'author',
+    list: 'allow',
+    platform: 'facebook',
+    entries: [{ externalId: '1' }],
+  };
+  const block: RuleConditions = { ...allow, list: 'block' };
+
+  it('allow list with any step is rejected', () => {
+    expect(checkActionForConditions(allow, [{ type: 'flag_for_review' }])).toMatch(/allow/i);
+    expect(checkActionForConditions({ ...allow, list: 'trusted' }, [{ type: 'hide' }])).toMatch(
+      /trusted/i,
+    );
+    expect(checkActionForConditions(allow, [])).toBeNull();
   });
-  it('rule input: name 1..200, mode defaults to suggest (dry run), enabled defaults to true', () => {
+  it('block list with only auto_reply is rejected', () => {
+    expect(checkActionForConditions(block, [])).toMatch(/block/i);
+    expect(checkActionForConditions(block, [{ type: 'auto_reply', template: 'Hi' }])).toMatch(
+      /block/i,
+    );
+    expect(checkActionForConditions(block, [{ type: 'flag_for_review' }])).toBeNull();
+  });
+  it('other conditions accept any steps', () => {
+    expect(checkActionForConditions({ type: 'keyword', terms: [], match: 'whole_word' }, [])).toBe(
+      null,
+    );
+  });
+  it('rule input accepts actions: name 1..200, mode defaults to suggest, enabled to true', () => {
     const r = ruleInputSchema.safeParse({
       name: ' Spam ',
-      action: 'hide',
+      actions: [{ type: 'flag_for_review' }, { type: 'hide' }],
       conditions: { type: 'keyword', terms: ['x'] },
     });
-    expect(r.success && r.data).toMatchObject({ name: 'Spam', mode: 'suggest', enabled: true });
+    expect(r.success && r.data).toMatchObject({
+      name: 'Spam',
+      mode: 'suggest',
+      enabled: true,
+      actions: [{ type: 'flag_for_review' }, { type: 'hide' }],
+    });
     expect(
       ruleInputSchema.safeParse({
         name: '',
-        action: 'hide',
+        actions: [],
         conditions: { type: 'keyword', terms: [] },
       }).success,
     ).toBe(false);
+  });
+  it('rule input rejects the legacy action key and unconfirmed deletes', () => {
+    const conditions = { type: 'keyword', terms: [] };
+    expect(ruleInputSchema.safeParse({ name: 'x', action: 'hide', conditions }).success).toBe(
+      false,
+    );
     expect(
-      ruleInputSchema.safeParse({
-        name: 'x',
-        action: 'delete',
-        conditions: { type: 'keyword', terms: [] },
-      }).success,
+      ruleInputSchema.safeParse({ name: 'x', actions: [{ type: 'delete' }], conditions }).success,
     ).toBe(false);
+  });
+  it('rule patch accepts actions and rejects action', () => {
+    expect(rulePatchSchema.safeParse({ actions: [{ type: 'hide' }] }).success).toBe(true);
+    expect(rulePatchSchema.safeParse({ action: 'hide' }).success).toBe(false);
   });
 });

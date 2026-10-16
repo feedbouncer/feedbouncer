@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ApiRequestError, apiFetch } from '../../lib/api-client';
 import { messageFor } from '../../lib/messages';
-import { ACTION_LABEL, KIND_LABEL, type RuleView } from '../../lib/rules';
+import { STEP_LABEL } from '../../lib/actions';
+import { KIND_LABEL, type RuleView } from '../../lib/rules';
 
 function isTrustedAuthorList(r: RuleView): boolean {
   const c = r.conditions as { type?: unknown; list?: unknown } | null;
@@ -61,7 +62,7 @@ export function RuleList(props: { orgId: string; brandId: string; rules: RuleVie
             <th scope="col">#</th>
             <th scope="col">Name</th>
             <th scope="col">Type</th>
-            <th scope="col">Action</th>
+            <th scope="col">Steps</th>
             <th scope="col">Mode</th>
             <th scope="col">Enabled</th>
             <th scope="col">Order</th>
@@ -88,7 +89,11 @@ export function RuleList(props: { orgId: string; brandId: string; rules: RuleVie
                 ) : null}
               </td>
               <td>{r.kind ? KIND_LABEL[r.kind] : 'Unknown'}</td>
-              <td>{ACTION_LABEL[r.action]}</td>
+              <td>
+                {r.actions.length > 0
+                  ? r.actions.map((a) => STEP_LABEL[a.type]).join(', ')
+                  : 'Allow'}
+              </td>
               <td>
                 <button
                   type="button"

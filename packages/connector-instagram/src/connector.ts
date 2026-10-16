@@ -35,6 +35,13 @@ export function createInstagramConnector(
       defaultScopes: [...INSTAGRAM_SCOPES],
       requiredScopes: [...INSTAGRAM_REQUIRED_SCOPES],
       maxPageSize: 100,
+      actionScopes: {
+        hide: ['instagram_manage_comments'],
+        unhide: ['instagram_manage_comments'],
+        delete: ['instagram_manage_comments'],
+        public_reply: ['instagram_manage_comments'],
+        private_reply: ['instagram_manage_messages'],
+      },
       constraints: {
         privateReplyWindowMs: 7 * 86_400_000,
         privateReplyTopLevelOnly: true,

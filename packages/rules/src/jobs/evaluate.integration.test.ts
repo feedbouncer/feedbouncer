@@ -5,6 +5,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import type pg from 'pg';
 import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
+import {
+  ActionRunner,
+  PgActionRunStore,
+  PgReviewQueue,
+  deriveOutcome,
+  undoStep,
+  type ActionStep,
+} from '@feedbouncer/actions';
 import { ModerationActions, PgCommentStore } from '@feedbouncer/comments';
 import type { ConnectorCapabilities, Platform } from '@feedbouncer/connectors';
 import type { JobContext } from '@feedbouncer/jobs';
@@ -14,6 +22,7 @@ import type { RuleEvaluatedHook } from '../hooks.js';
 import { PgRuleStore } from '../store.js';
 import { RuleSetCache } from '../cache.js';
 import { PgEvaluationStore } from '../evaluations.js';
+import { RuleStepFallback } from '../step-fallback.js';
 import { ruleEvaluateJob } from './evaluate.js';
 import { RULE_EVALUATE_JOB, RuleEvaluatePayload, bodySha256 } from './specs.js';
 
@@ -35,6 +44,8 @@ let comments: PgCommentStore;
 let evaluations: PgEvaluationStore;
 let cache: RuleSetCache;
 let actions: ModerationActions;
+let runner: ActionRunner;
+let rules: PgRuleStore;
 let enqueue: ReturnType<typeof vi.fn>;
 let n = 0;
 let nowMs = Date.UTC(2026, 9, 15, 12, 0, 0);
@@ -50,7 +61,8 @@ beforeAll(async () => {
   pool = createPool(ctx.db.url, { applicationName: 'rules-evaluate-test', onIdleError: () => {} });
   comments = new PgCommentStore(pool);
   evaluations = new PgEvaluationStore(pool);
-  cache = new RuleSetCache(new PgRuleStore(pool));
+  rules = new PgRuleStore(pool);
+  cache = new RuleSetCache(rules);
 });
 afterAll(async () => {
   await pool.end();
@@ -66,6 +78,29 @@ beforeEach(() => {
     capabilities,
     clock: { now: () => nowMs },
     log: quiet,
+  });
+  runner = new ActionRunner({
+    pool,
+    runs: new PgActionRunStore(pool),
+    review: new PgReviewQueue(pool),
+    comments,
+    actions,
+    connection: async (s) => {
+      const r = await pool.query<{ platform: Platform }>(
+        'SELECT platform FROM connection WHERE organization_id = $1 AND brand_id = $2 AND id = $3',
+        [s.organizationId, s.brandId, s.connectionId],
+      );
+      const platform = r.rows[0]?.platform;
+      const c = platform && capabilities(platform);
+      return platform && c
+        ? { connectionId: s.connectionId, platform, caps: c, grantedScopes: [] }
+        : null;
+    },
+    brandName: async () => 'Shop',
+    producer: { enqueue } as never,
+    clock: { now: () => nowMs },
+    log: quiet,
+    observer: new RuleStepFallback({ evaluations, log: quiet }),
   });
 });
 
@@ -94,23 +129,28 @@ async function env(): Promise<Env> {
 async function addRule(
   e: Env,
   conditions: object,
-  o: { action?: string; mode?: 'enforce' | 'suggest'; priority: number; name?: string },
+  o: { actions?: ActionStep[]; mode?: 'enforce' | 'suggest'; priority: number; name?: string },
 ): Promise<string> {
+  const steps = o.actions ?? HIDE;
   const r = await ctx.c.query<{ id: string }>(
-    `INSERT INTO rule (organization_id, brand_id, name, conditions, action, mode, priority)
-     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7) RETURNING id`,
+    `INSERT INTO rule (organization_id, brand_id, name, conditions, action, actions, mode, priority)
+     VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb, $7, $8) RETURNING id`,
     [
       e.t.organizationId,
       e.t.brandId,
       o.name ?? `rule ${o.priority}`,
       JSON.stringify(conditions),
-      o.action ?? 'hide',
+      deriveOutcome(steps),
+      JSON.stringify(steps),
       o.mode ?? 'enforce',
       o.priority,
     ],
   );
   return r.rows[0]!.id;
 }
+const HIDE: ActionStep[] = [{ type: 'hide' }];
+const FLAG: ActionStep[] = [{ type: 'flag_for_review' }];
+const DELETE: ActionStep[] = [{ type: 'delete', confirmIrreversible: true }];
 const kw = (...terms: string[]) => ({ type: 'keyword', terms });
 
 let seq = 0;
@@ -168,13 +208,14 @@ function run(
     clock?: { now(): number };
     platform?: Platform;
     evaluated?: RuleEvaluatedHook;
+    runner?: Pick<ActionRunner, 'start'>;
   } = {},
 ) {
   const job = ruleEvaluateJob({
     comments,
     evaluations,
     cache,
-    actions,
+    runner: o.runner ?? runner,
     log: o.log ?? quiet,
     ...(o.clock ? { clock: o.clock } : {}),
     ...(o.evaluated ? { evaluated: o.evaluated } : {}),
@@ -204,6 +245,26 @@ const decisions = async (commentId: string) =>
       [commentId],
     )
   ).rows;
+const runRows = async (commentId: string) =>
+  (
+    await pool.query<{ id: string; dry_run: boolean; rule_id: string; steps: string[] }>(
+      `SELECT r.id, r.dry_run, r.rule_id,
+              array(SELECT step_type FROM action_run_step s WHERE s.run_id = r.id ORDER BY position) AS steps
+         FROM action_run r WHERE r.comment_id = $1 ORDER BY r.created_at, r.id`,
+      [commentId],
+    )
+  ).rows;
+const stepRows = async (runId: string) =>
+  (
+    await pool.query<{ step_type: string; status: string; reason_code: string | null }>(
+      `SELECT step_type, status, reason_code FROM action_run_step WHERE run_id = $1 ORDER BY position`,
+      [runId],
+    )
+  ).rows;
+/** Runs the queued advance of every enforcing run of the comment, as the worker would. */
+async function advanceRuns(scope: ConnectionScope, commentId: string) {
+  for (const r of await runRows(commentId)) if (!r.dry_run) await runner.advance(scope, r.id);
+}
 const actionRows = async (commentId: string) =>
   (
     await pool.query(
@@ -214,7 +275,7 @@ const actionRows = async (commentId: string) =>
   ).rows;
 
 describe('rule_evaluate', () => {
-  it('1: a hide rule match records a decided evaluation, an enforce decision and a pending rule action', async () => {
+  it('1: a hide rule match records a decided evaluation, an enforce decision and one run that requests the hide', async () => {
     const e = await env();
     const ruleId = await addRule(e, kw('spam'), { name: 'No spam', priority: 10 });
     const c = await comment(e, 'this is SPAM here');
@@ -233,32 +294,62 @@ describe('rule_evaluate', () => {
         rule_evaluation_id: ev[0].id,
       },
     ]);
+    expect(await actionRows(c.id)).toEqual([]);
+    expect(await runRows(c.id)).toMatchObject([
+      { dry_run: false, rule_id: ruleId, steps: ['hide'] },
+    ]);
+    await advanceRuns(e.scope, c.id);
     expect(await actionRows(c.id)).toEqual([
       {
         kind: 'hide',
         status: 'pending',
         actor_type: 'rule',
         rule_id: ruleId,
-        request_key: `rule-eval:${ev[0].id}`,
+        request_key: `auto:${c.id}:hide`,
       },
     ]);
   });
 
-  it('2: running the same job twice is idempotent', async () => {
+  it('2: a decided rule starts one run with its steps; re-running the job starts none', async () => {
     const e = await env();
-    await addRule(e, kw('spam'), { priority: 10 });
+    await addRule(e, kw('spam'), {
+      actions: [{ type: 'hide' }, { type: 'flag_for_review' }],
+      priority: 10,
+    });
     const c = await comment(e, 'spam');
+    const first = await run(e.scope, c.id, 'spam');
     await run(e.scope, c.id, 'spam');
-    await run(e.scope, c.id, 'spam');
+    expect(first).toMatchObject({ result: 'decided', runId: expect.any(String) });
     expect(await evals(c.id)).toHaveLength(1);
     expect(await decisions(c.id)).toHaveLength(1);
+    expect(await runRows(c.id)).toMatchObject([{ steps: ['flag_for_review', 'hide'] }]);
+    await advanceRuns(e.scope, c.id);
     expect(await actionRows(c.id)).toHaveLength(1);
+  });
+
+  it('a rule with no steps decides without starting a run', async () => {
+    const e = await env();
+    await addRule(e, kw('winner'), { actions: [], priority: 10 });
+    const c = await comment(e, 'winner');
+    expect(await run(e.scope, c.id, 'winner')).toMatchObject({ result: 'decided' });
+    expect(await runRows(c.id)).toEqual([]);
+  });
+
+  it('resuming a recorded evaluation starts the run from the stored rule', async () => {
+    const e = await env();
+    const ruleId = await addRule(e, kw('spam'), { priority: 10 });
+    const c = await comment(e, 'spam');
+    const failing = { start: vi.fn().mockRejectedValueOnce(new Error('queue down')) };
+    await expect(run(e.scope, c.id, 'spam', { runner: failing })).rejects.toThrow('queue down');
+    expect(await runRows(c.id)).toEqual([]);
+    await run(e.scope, c.id, 'spam');
+    expect(await runRows(c.id)).toMatchObject([{ rule_id: ruleId, steps: ['hide'] }]);
   });
 
   it('3: a dry-run hide plus an enforcing flag gives a suggest and an enforce decision, no action', async () => {
     const e = await env();
     const dry = await addRule(e, kw('spam'), { mode: 'suggest', priority: 10 });
-    const flag = await addRule(e, kw('spam'), { action: 'flag', priority: 20 });
+    const flag = await addRule(e, kw('spam'), { actions: FLAG, priority: 20 });
     const c = await comment(e, 'spam');
     await run(e.scope, c.id, 'spam');
     const ds = await decisions(c.id);
@@ -267,6 +358,97 @@ describe('rule_evaluate', () => {
       ['flag', 'enforce', flag],
     ]);
     expect(await actionRows(c.id)).toEqual([]);
+  });
+
+  it('a flag rule: the decision opens the item, the flag step owns it, and undo dismisses it', async () => {
+    const e = await env();
+    const ruleId = await addRule(e, kw('spam'), { actions: FLAG, priority: 10 });
+    const c = await comment(e, 'spam');
+    await run(e.scope, c.id, 'spam');
+    const items = async () =>
+      (
+        await pool.query<{ id: string; source: string; rule_id: string; status: string }>(
+          `SELECT id, source, rule_id, status, resolution FROM review_item WHERE comment_id = $1`,
+          [c.id],
+        )
+      ).rows;
+    const [item] = await items();
+    expect(item).toMatchObject({ source: 'rule', rule_id: ruleId, status: 'open' });
+
+    await advanceRuns(e.scope, c.id);
+    const [r] = await runRows(c.id);
+    const step = (
+      await pool.query<{ id: string; status: string; review_item_id: string | null }>(
+        'SELECT id, status, review_item_id FROM action_run_step WHERE run_id = $1',
+        [r!.id],
+      )
+    ).rows[0]!;
+    expect(step).toMatchObject({ status: 'succeeded', review_item_id: item!.id });
+
+    const runs = new PgActionRunStore(pool);
+    const review = new PgReviewQueue(pool);
+    expect(
+      await undoStep(
+        { pool, runs, review, actions, audit: async () => {} },
+        e.scope,
+        step.id,
+        e.t.userId,
+      ),
+    ).toEqual({
+      status: 'done',
+      undoActionId: null,
+    });
+    expect(await items()).toEqual([
+      expect.objectContaining({ id: item!.id, status: 'resolved', resolution: 'dismissed' }),
+    ]);
+  });
+
+  it('a later evaluation of the same rule does not take over the open item', async () => {
+    const e = await env();
+    await addRule(e, kw('spam'), { actions: FLAG, priority: 10 });
+    const c = await comment(e, 'spam');
+    await run(e.scope, c.id, 'spam');
+    await advanceRuns(e.scope, c.id);
+    // An edit is a new evaluation; its decision finds the item already open.
+    await pool.query('UPDATE comment SET body = $1 WHERE id = $2', ['more spam', c.id]);
+    await run(e.scope, c.id, 'more spam');
+    await advanceRuns(e.scope, c.id);
+    const steps = (
+      await pool.query<{ status: string; reason_code: string | null }>(
+        `SELECT s.status, s.reason_code FROM action_run_step s JOIN action_run r ON r.id = s.run_id
+          WHERE r.comment_id = $1 ORDER BY r.created_at, r.id`,
+        [c.id],
+      )
+    ).rows;
+    expect(steps).toEqual([
+      { status: 'succeeded', reason_code: null },
+      { status: 'skipped', reason_code: 'already_flagged' },
+    ]);
+  });
+
+  it('suggest-mode match produces a simulated run and no moderation_action', async () => {
+    const e = await env();
+    const dry = await addRule(e, kw('spam'), { mode: 'suggest', priority: 10 });
+    const c = await comment(e, 'spam');
+    expect(await run(e.scope, c.id, 'spam')).toMatchObject({ result: 'no_match' });
+    const runs = await runRows(c.id);
+    expect(runs).toMatchObject([{ dry_run: true, rule_id: dry, steps: ['hide'] }]);
+    expect(await stepRows(runs[0]!.id)).toEqual([
+      { step_type: 'hide', status: 'simulated', reason_code: 'would_run' },
+    ]);
+    await run(e.scope, c.id, 'spam');
+    expect(await runRows(c.id)).toHaveLength(1);
+    expect(await actionRows(c.id)).toEqual([]);
+  });
+
+  it('a suggest-mode match with no steps still gets a completed, empty simulated run', async () => {
+    const e = await env();
+    await addRule(e, kw('spam'), { mode: 'suggest', actions: [], priority: 10 });
+    const c = await comment(e, 'spam');
+    await run(e.scope, c.id, 'spam');
+    const runs = await runRows(c.id);
+    expect(runs).toMatchObject([{ dry_run: true, steps: [] }]);
+    expect(await stepRows(runs[0]!.id)).toEqual([]);
   });
 
   it('4: no match records no_match and no decisions', async () => {
@@ -319,10 +501,11 @@ describe('rule_evaluate', () => {
 
   it('9: a delete the platform does not support falls back to a flag decision', async () => {
     const e = await env();
-    const ruleId = await addRule(e, kw('scam'), { action: 'remove', name: 'Scams', priority: 10 });
+    const ruleId = await addRule(e, kw('scam'), { actions: DELETE, name: 'Scams', priority: 10 });
     const c = await comment(e, 'a scam', { ig: true });
     const r = await run(e.igScope, c.id, 'a scam', { platform: 'instagram' });
-    expect(r).toMatchObject({ result: 'decided', outcome: 'remove', fallback: 'unsupported' });
+    expect(r).toMatchObject({ result: 'decided', outcome: 'remove' });
+    await advanceRuns(e.igScope, c.id);
     const ev = await evals(c.id);
     expect(ev[0].fallback_code).toBe('unsupported');
     const ds = await decisions(c.id);
@@ -334,9 +517,12 @@ describe('rule_evaluate', () => {
     expect(ds[1].reason).toContain('Flagged for review');
     expect(ds[1].reason).toContain('Instagram');
     expect(await actionRows(c.id)).toEqual([]);
-    // A rerun does not add a second fallback.
-    await run(e.igScope, c.id, 'a scam', { platform: 'instagram' });
+    // A rerun does not add a second fallback or start the actions again.
+    expect(await run(e.igScope, c.id, 'a scam', { platform: 'instagram' })).toMatchObject({
+      fallback: 'recorded',
+    });
     expect(await decisions(c.id)).toHaveLength(2);
+    expect(await runRows(c.id)).toHaveLength(1);
   });
 
   it('10: a connection that needs reconnecting falls back to a flag decision', async () => {
@@ -347,6 +533,7 @@ describe('rule_evaluate', () => {
       e.t.connectionId,
     ]);
     await run(e.scope, c.id, 'spam');
+    await advanceRuns(e.scope, c.id);
     expect((await evals(c.id))[0].fallback_code).toBe('connection_needs_reconnect');
     const ds = await decisions(c.id);
     expect(ds.map((d) => d.outcome)).toEqual(['hide', 'flag']);
@@ -356,7 +543,7 @@ describe('rule_evaluate', () => {
   it('11: a regex over budget is skipped, a later rule decides, and the log carries no comment text', async () => {
     const e = await env();
     const slow = await addRule(e, { type: 'regex', patterns: ['zz+top'] }, { priority: 10 });
-    const later = await addRule(e, kw('secretword'), { action: 'flag', priority: 20 });
+    const later = await addRule(e, kw('secretword'), { actions: FLAG, priority: 20 });
     const body = 'Alice says secretword and zzzzztop';
     const c = await comment(e, body);
     const lines: string[] = [];
@@ -390,18 +577,20 @@ describe('rule_evaluate', () => {
     await run(e.scope, c.id, 'now spam');
     const ev = await evals(c.id);
     expect(ev.map((x) => x.status)).toEqual(['no_match', 'decided']);
+    await advanceRuns(e.scope, c.id);
     expect(await actionRows(c.id)).toHaveLength(1);
   });
 
   it('13: an approve rule above a hide rule decides approve with no action', async () => {
     const e = await env();
-    const approve = await addRule(e, kw('winner'), { action: 'approve', priority: 10 });
+    const approve = await addRule(e, kw('winner'), { actions: [], priority: 10 });
     await addRule(e, kw('spam'), { priority: 20 });
     const c = await comment(e, 'winner spam');
     await run(e.scope, c.id, 'winner spam');
     expect(await decisions(c.id)).toMatchObject([
       { outcome: 'approve', mode: 'enforce', rule_id: approve },
     ]);
+    expect(await runRows(c.id)).toEqual([]);
     expect(await actionRows(c.id)).toEqual([]);
   });
 
@@ -467,7 +656,7 @@ describe('rule_evaluate', () => {
     expect(seen).toEqual([]);
   });
 
-  it('a failing hook makes the job retry but the rule action was already requested (idempotent on replay)', async () => {
+  it('a failing hook makes the job retry but the run was already started (idempotent on replay)', async () => {
     const e = await env();
     await addRule(e, kw('spam'), { priority: 10 });
     const c = await comment(e, 'spam');
@@ -477,11 +666,32 @@ describe('rule_evaluate', () => {
       },
     };
     await expect(run(e.scope, c.id, 'spam', { evaluated })).rejects.toThrow('queue down');
-    expect(await actionRows(c.id)).toHaveLength(1);
+    expect(await runRows(c.id)).toHaveLength(1);
     expect(await evals(c.id)).toHaveLength(1);
     await run(e.scope, c.id, 'spam');
+    expect(await runRows(c.id)).toHaveLength(1);
+    await advanceRuns(e.scope, c.id);
     expect(await actionRows(c.id)).toHaveLength(1);
     expect(await evals(c.id)).toHaveLength(1);
     expect(await decisions(c.id)).toHaveLength(1);
+  });
+
+  it('a retried evaluation starts the steps that matched, not the rule as edited since', async () => {
+    const e = await env();
+    const ruleId = await addRule(e, kw('spam'), { priority: 10 });
+    const c = await comment(e, 'spam');
+    const failing = {
+      start: async () => {
+        throw new Error('queue down');
+      },
+    };
+    await expect(run(e.scope, c.id, 'spam', { runner: failing })).rejects.toThrow('queue down');
+    await pool.query('UPDATE rule SET action = $2, actions = $3::jsonb WHERE id = $1', [
+      ruleId,
+      deriveOutcome(DELETE),
+      JSON.stringify(DELETE),
+    ]);
+    await run(e.scope, c.id, 'spam');
+    expect((await runRows(c.id)).map((r) => r.steps)).toEqual([['hide']]);
   });
 });

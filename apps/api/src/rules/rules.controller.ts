@@ -17,14 +17,19 @@ import { SessionGuard } from '../auth/session.guard.js';
 import { parseBody, parseUuidOr404, zUuid } from '../http/validation.js';
 import { RequireCapability } from '../tenancy/capability.decorator.js';
 import { OrgAccessGuard, type OrgRequest } from '../tenancy/org-access.guard.js';
+import { ActionsService } from '../actions/actions.service.js';
 import { RulesService } from './rules.service.js';
 
 const OrderBody = z.strictObject({ ruleIds: z.array(zUuid).max(200) });
+const SimulateBody = z.strictObject({ commentId: zUuid });
 
 @Controller('api/v1/orgs/:orgId/brands/:brandId/rules')
 @UseGuards(SessionGuard, OrgAccessGuard)
 export class RulesController {
-  constructor(@Inject(RulesService) private readonly rules: RulesService) {}
+  constructor(
+    @Inject(RulesService) private readonly rules: RulesService,
+    @Inject(ActionsService) private readonly actions: ActionsService,
+  ) {}
 
   @Get()
   @RequireCapability('rule.read')
@@ -61,6 +66,19 @@ export class RulesController {
     @Body() body: unknown,
   ) {
     return this.rules.update(req.org, brandId, parseUuidOr404(ruleId), body);
+  }
+
+  @Post(':ruleId/simulate')
+  @HttpCode(200)
+  @RequireCapability('rule.read')
+  simulate(
+    @Req() req: OrgRequest,
+    @Param('brandId') brandId: string,
+    @Param('ruleId') ruleId: string,
+    @Body() body: unknown,
+  ) {
+    const { commentId } = parseBody(SimulateBody, body);
+    return this.actions.simulate(req.org, brandId, parseUuidOr404(ruleId), commentId);
   }
 
   @Delete(':ruleId')

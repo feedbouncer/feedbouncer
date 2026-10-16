@@ -91,9 +91,19 @@ export async function seedTenant(c: pg.ClientBase, label: string): Promise<Tenan
     );
   }
   if (await has('rule')) {
+    const hasActions =
+      (
+        await c.query(
+          "SELECT 1 FROM information_schema.columns WHERE table_name = 'rule' AND column_name = 'actions'",
+        )
+      ).rowCount === 1;
+    const conditions =
+      '{"type":"link_domain","mode":"blocklist","domains":["bit.ly"],"exemptOwnDomains":true,"shorteners":"ignore","lookalikes":"match"}';
     t.ruleId = await one(
       c,
-      'INSERT INTO rule (organization_id, brand_id, name, conditions, action) VALUES ($1, $2, \'Scam links\', \'{"type":"link_domain","mode":"blocklist","domains":["bit.ly"],"exemptOwnDomains":true,"shorteners":"ignore","lookalikes":"match"}\', \'hide\') RETURNING id',
+      hasActions
+        ? `INSERT INTO rule (organization_id, brand_id, name, conditions, action, actions) VALUES ($1, $2, 'Scam links', '${conditions}', 'hide', '[{"type":"hide"}]') RETURNING id`
+        : `INSERT INTO rule (organization_id, brand_id, name, conditions, action) VALUES ($1, $2, 'Scam links', '${conditions}', 'hide') RETURNING id`,
       [organizationId, brandId],
     );
   }

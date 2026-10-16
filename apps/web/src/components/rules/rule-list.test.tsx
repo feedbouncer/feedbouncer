@@ -11,6 +11,7 @@ const rule = (over: Partial<RuleView>): RuleView => ({
   kind: 'keyword',
   conditions: { type: 'keyword', terms: ['x'], match: 'whole_word' },
   action: 'hide',
+  actions: [{ type: 'hide' }],
   mode: 'enforce',
   enabled: true,
   position: 1,
@@ -24,12 +25,19 @@ const render = (rules: RuleView[]) =>
 describe('RuleList', () => {
   it('lists rules in the given order with action labels', () => {
     const html = render([
-      rule({ id: 'a', name: 'First', action: 'hide', position: 1 }),
-      rule({ id: 'b', name: 'Second', action: 'remove', mode: 'suggest', position: 2 }),
+      rule({ id: 'a', name: 'First', position: 1 }),
+      rule({
+        id: 'b',
+        name: 'Second',
+        action: 'remove',
+        actions: [{ type: 'flag_for_review' }, { type: 'delete', confirmIrreversible: true }],
+        mode: 'suggest',
+        position: 2,
+      }),
     ]);
     expect(html.indexOf('First')).toBeLessThan(html.indexOf('Second'));
     expect(html).toContain('Hide');
-    expect(html).toContain('Delete');
+    expect(html).toContain('Flag for review, Delete');
     expect(html).toContain('Dry run');
     expect(html).toContain('Active');
   });
@@ -74,7 +82,12 @@ describe('RuleList', () => {
 
   it('notes that trusted-author rules are checked first', () => {
     const html = render([
-      rule({ kind: 'author', conditions: { type: 'author', list: 'trusted' }, action: 'approve' }),
+      rule({
+        kind: 'author',
+        conditions: { type: 'author', list: 'trusted' },
+        action: 'approve',
+        actions: [],
+      }),
     ]);
     expect(html).toContain('Always checked first');
   });

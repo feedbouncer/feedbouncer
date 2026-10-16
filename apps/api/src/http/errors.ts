@@ -39,6 +39,11 @@ export type ErrorCode =
   | 'request_key_conflict'
   | 'text_too_long'
   | 'invalid_rule'
+  | 'invalid_actions'
+  | 'undo_not_available'
+  | 'already_undone'
+  | 'review_item_resolved'
+  | 'confirmation_required'
   | 'rule_limit_reached'
   | 'rule_order_mismatch'
   | 'invalid_domain'
@@ -90,6 +95,11 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   request_key_conflict: 'This request key was already used for a different action.',
   text_too_long: 'Reply is too long for this platform.',
   invalid_rule: 'The rule is not valid.',
+  invalid_actions: 'The rule actions are not valid.',
+  undo_not_available: 'This step cannot be undone.',
+  already_undone: 'This step was already undone.',
+  review_item_resolved: 'This item was already resolved.',
+  confirmation_required: 'Confirm this action to continue.',
   rule_limit_reached: 'This brand has reached the maximum number of rules.',
   rule_order_mismatch: 'The order must list every rule of the brand exactly once.',
   invalid_domain: 'Enter a valid domain name.',
@@ -111,6 +121,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
 export interface ErrorIssue {
   path: string;
   message: string;
+  platform?: string;
+  max?: number;
 }
 
 export class ApiError extends Error {

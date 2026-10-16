@@ -68,6 +68,7 @@ export async function evaluateRulesFor(
               ruleName: 'Rule',
               kind: 'keyword',
               action: 'hide',
+              actions: [{ type: 'hide' }],
               evidence: { kind: 'keyword', term: 'x' },
             },
             suggestions: [],

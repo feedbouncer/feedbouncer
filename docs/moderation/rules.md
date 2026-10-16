@@ -55,16 +55,22 @@ under **Own domains**.
 
 ## Actions and fallback
 
-Actions are Allow, Flag for review, Hide and Delete. Allow and Flag record the
-decision only. Hide and Delete ask the platform to act through the normal
-moderation request, so they are deduplicated and rate limited like a manual
-action.
+A rule carries a list of steps rather than one action: Hide, Delete, Ban
+author, Auto-reply, Private reply and Flag for review. Steps run in a fixed
+order, each records its own outcome, and the steps that cannot be combined are
+rejected on save. Every step, its order, its reason codes, templates and the
+per-platform support are in [actions.md](actions.md). Author rules on the
+allow and trusted lists take no steps.
 
-If the platform cannot perform the action (unsupported, not eligible, the
-connection needs reconnecting, permission revoked, or rate limiting that is
-still retrying), the comment is **flagged for review** instead and the
-decision shows why. If a deferred action later succeeds, a further decision
-records that.
+Steps act through the normal moderation request, so they are deduplicated and
+rate limited like a manual action.
+
+If a Hide or Delete step ends as failed or not supported (for example the
+permission was revoked, the connection needs reconnecting, or retries ran out),
+the comment is **flagged for review** instead and the decision shows why. Other
+steps do not fall back; their outcome is in the action log. A step that is
+only deferred (rate limited, or waiting for a reconnect) stays pending and
+falls back only if it finally fails.
 
 ## Idempotency and scope
 

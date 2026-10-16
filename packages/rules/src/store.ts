@@ -1,4 +1,5 @@
 import type pg from 'pg';
+import { deriveOutcome, type ActionStep } from '@feedbouncer/actions';
 import type { BrandScope } from '@feedbouncer/comments';
 import {
   checkActionForConditions,
@@ -16,7 +17,9 @@ export interface StoredRule {
   name: string;
   kind: RuleKind | null;
   conditions: unknown;
-  action: RuleAction;
+  /** Derived from `actions` on every write; never set directly. */
+  readonly action: RuleAction;
+  actions: ActionStep[];
   mode: RuleMode;
   enabled: boolean;
   priority: number;
@@ -56,7 +59,7 @@ export class DomainLimitError extends Error {
   }
 }
 
-const COLS = `id, name, kind, conditions, action, mode, enabled, priority, created_at, updated_at`;
+const COLS = `id, name, kind, conditions, action, actions, mode, enabled, priority, created_at, updated_at`;
 const ORDER = `ORDER BY priority, created_at, id`;
 
 /** Per-brand revision counter, bumped by database triggers on every rule and own-domain write. */
@@ -89,6 +92,7 @@ interface RuleRow {
   kind: RuleKind | null;
   conditions: unknown;
   action: RuleAction;
+  actions: ActionStep[];
   mode: RuleMode;
   enabled: boolean;
   priority: number;
@@ -101,6 +105,7 @@ const toRule = (r: RuleRow): StoredRule => ({
   kind: r.kind,
   conditions: r.conditions,
   action: r.action,
+  actions: r.actions,
   mode: r.mode,
   enabled: r.enabled,
   priority: r.priority,
@@ -159,8 +164,8 @@ export class PgRuleStore {
     );
     if ((counted[0]?.n ?? 0) >= MAX_RULES_PER_BRAND) throw new RuleLimitError();
     const { rows } = await tx.query<RuleRow>(
-      `INSERT INTO rule (organization_id, brand_id, name, conditions, action, mode, enabled, priority)
-       SELECT $1, $2, $3, $4::jsonb, $5, $6, $7,
+      `INSERT INTO rule (organization_id, brand_id, name, conditions, action, actions, mode, enabled, priority)
+       SELECT $1, $2, $3, $4::jsonb, $5, $6::jsonb, $7, $8,
               COALESCE((SELECT max(priority) FROM rule
                          WHERE organization_id = $1 AND brand_id = $2 AND archived_at IS NULL), 0) + 10
        RETURNING ${COLS}`,
@@ -169,7 +174,8 @@ export class PgRuleStore {
         scope.brandId,
         input.name,
         JSON.stringify(input.conditions),
-        input.action,
+        deriveOutcome(input.actions),
+        JSON.stringify(input.actions),
         input.mode,
         input.enabled,
       ],
@@ -196,20 +202,20 @@ export class PgRuleStore {
     const merged = {
       name: patch.name ?? row.name,
       conditions: patch.conditions ?? row.conditions,
-      action: patch.action ?? row.action,
+      actions: patch.actions ?? row.actions,
       mode: patch.mode ?? row.mode,
       enabled: patch.enabled ?? row.enabled,
     };
     let conditions: unknown = row.conditions;
-    if (patch.conditions !== undefined || patch.action !== undefined) {
+    if (patch.conditions !== undefined || patch.actions !== undefined) {
       const parsed = ruleConditionsSchema.safeParse(merged.conditions);
       if (!parsed.success) throw new InvalidRuleConditionsError();
-      if (checkActionForConditions(parsed.data, merged.action) !== null)
+      if (checkActionForConditions(parsed.data, merged.actions) !== null)
         throw new InvalidRuleActionError();
       conditions = parsed.data;
     }
     const { rows } = await tx.query<RuleRow>(
-      `UPDATE rule SET name = $4, conditions = $5::jsonb, action = $6, mode = $7, enabled = $8
+      `UPDATE rule SET name = $4, conditions = $5::jsonb, action = $6, actions = $7::jsonb, mode = $8, enabled = $9
         WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND archived_at IS NULL
         RETURNING ${COLS}`,
       [
@@ -218,7 +224,8 @@ export class PgRuleStore {
         ruleId,
         merged.name,
         JSON.stringify(conditions),
-        merged.action,
+        deriveOutcome(merged.actions),
+        JSON.stringify(merged.actions),
         merged.mode,
         merged.enabled,
       ],
@@ -350,6 +357,7 @@ export class PgRuleStore {
           name: r.name,
           conditions: r.conditions,
           action: r.action,
+          actions: r.actions,
           mode: r.mode,
           priority: r.priority,
           enabled: r.enabled,

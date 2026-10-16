@@ -7,6 +7,7 @@ const hit = (kind: RuleKind, evidence: Evidence, ruleName = 'My rule'): RuleHit 
   ruleName,
   kind,
   action: 'hide',
+  actions: [{ type: 'hide' }],
   evidence,
 });
 

@@ -117,6 +117,11 @@ The local compose stack passes `INSTAGRAM_CONNECTOR_ENABLED` through to the
 | `pages_manage_metadata`     | Subscribing the Page to comment webhooks.                                | yes      |
 | `instagram_manage_messages` | Private replies.                                                         | no       |
 
+Rule steps map onto these actions as described in
+[actions.md](../moderation/actions.md#platform-support): Ban is not available
+on Instagram, and a missing permission is a warning when a rule is saved and a
+failure when the step runs.
+
 Declining a required permission ends the connection with a message naming what
 was missing, and no connection is created. Declining `instagram_manage_messages`
 connects the account without private replies: the picker shows "Private

@@ -154,8 +154,35 @@ export function createJobProcessor(
           countsAsFailure,
           retentionMs: d.dlqRetentionMs,
         });
-        if (ok) d.metrics.record('dead_lettered', { ...base, reason, code: errorCode });
+        if (ok) {
+          d.metrics.record('dead_lettered', { ...base, reason, code: errorCode });
+          await runDeadLetterHook(reason, errorCode);
+        }
         return ok;
+      };
+
+      // Lets the job finalise whatever it left pending. Never for invalid_job,
+      // and never with a payload that no longer parses. Errors are logged by
+      // name only and never change the run.
+      const runDeadLetterHook = async (
+        reason: DeadLetterReason,
+        errorCode: string,
+      ): Promise<void> => {
+        if (reason === 'invalid_job' || def.onDeadLetter === undefined) return;
+        const payload = def.payload.safeParse(row.payload);
+        if (!payload.success) return;
+        try {
+          await def.onDeadLetter(
+            { scope: row.scope, platform: d.platform, reason, errorCode },
+            payload.data,
+          );
+        } catch (err) {
+          d.log.error('job.dead_letter_hook_failed', {
+            ...base,
+            reason,
+            errorName: err instanceof Error ? err.name : 'NonError',
+          });
+        }
       };
 
       const rejectJob = async (

@@ -1,4 +1,13 @@
 import {
+  ActionRunner,
+  ActionStepOutcomeObserver,
+  PgActionRunStore,
+  PgReviewQueue,
+  actionRunAdvanceJob,
+  loadBrandName,
+  loadConnectionInfo,
+} from '@feedbouncer/actions';
+import {
   ClassifierActionFallback,
   ClassifierTrigger,
   PgClassificationStore,
@@ -42,6 +51,7 @@ import {
   CompositeRuleEvaluatedHook,
   RuleActionFallback,
   RuleSetCache,
+  RuleStepFallback,
   RuleTrigger,
   ruleEvaluateJob,
 } from '@feedbouncer/rules';
@@ -121,12 +131,28 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
     log: deps.log,
   });
   const policies = new PgPolicyStore(deps.pool);
+  const rules = new PgRuleStore(deps.pool);
+  const runs = new PgActionRunStore(deps.pool);
+  const runner = new ActionRunner({
+    pool: deps.pool,
+    runs,
+    review: new PgReviewQueue(deps.pool),
+    comments: deps.store,
+    actions,
+    connection: (scope) => loadConnectionInfo(deps.pool, scope, deps.capabilities),
+    brandName: (scope) => loadBrandName(deps.pool, scope),
+    producer: deps.producer,
+    clock: deps.clock,
+    log: deps.log,
+    observer: new RuleStepFallback({ evaluations, log: deps.log }),
+  });
+  registry.register(actionRunAdvanceJob(runner));
   registry.register(
     ruleEvaluateJob({
       comments: deps.store,
       evaluations,
-      cache: new RuleSetCache(new PgRuleStore(deps.pool)),
-      actions,
+      cache: new RuleSetCache(rules),
+      runner,
       log: deps.log,
       evaluated: new CompositeRuleEvaluatedHook([
         new ClassifierTrigger(deps.producer),
@@ -198,6 +224,7 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
         new RuleActionFallback({ evaluations, log: deps.log }),
         new ClassifierActionFallback({ classifications, log: deps.log }),
         new PolicyActionFallback({ evaluations: policyEvaluations, log: deps.log }),
+        new ActionStepOutcomeObserver({ runs, producer: deps.producer, log: deps.log }),
       ]),
     }),
   );

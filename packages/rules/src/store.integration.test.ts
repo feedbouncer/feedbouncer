@@ -4,6 +4,8 @@ import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import {
   DomainLimitError,
+  InvalidRuleActionError,
+  InvalidRuleConditionsError,
   MAX_DOMAINS_PER_BRAND,
   MAX_RULES_PER_BRAND,
   PgRuleStore,
@@ -40,7 +42,7 @@ const kw = (name: string, over: Partial<RuleInput> = {}): RuleInput =>
   ruleInputSchema.parse({
     name,
     conditions: { type: 'keyword', terms: [name] },
-    action: 'hide',
+    actions: [{ type: 'hide' }],
     mode: 'enforce',
     ...over,
   });
@@ -74,13 +76,40 @@ describe('PgRuleStore rules', () => {
   it('toggles enabled and mode on a rule stored in an old format', async () => {
     const { scope } = await fresh();
     const a = await tx((c) => store.create(c, scope, kw('legacy')));
-    await ctx.c.query(`UPDATE rule SET conditions = '{"type":"old_format"}'::jsonb WHERE id = $1`, [
-      a.id,
-    ]);
+    await ctx.c.query(
+      `UPDATE rule SET conditions = '{"type":"keyword","terms":"old"}'::jsonb WHERE id = $1`,
+      [a.id],
+    );
     const off = await tx((c) => store.update(c, scope, a.id, { enabled: false, mode: 'suggest' }));
     expect(off).toMatchObject({ enabled: false, mode: 'suggest' });
-    expect(off?.conditions).toEqual({ type: 'old_format' });
-    await expect(tx((c) => store.update(c, scope, a.id, { action: 'flag' }))).rejects.toThrow();
+    expect(off?.conditions).toEqual({ type: 'keyword', terms: 'old' });
+    await expect(
+      tx((c) => store.update(c, scope, a.id, { actions: [{ type: 'flag_for_review' }] })),
+    ).rejects.toBeInstanceOf(InvalidRuleConditionsError);
+  });
+
+  it('rule input accepts actions and derives action', async () => {
+    const { scope } = await fresh();
+    const steps = [{ type: 'hide' }, { type: 'flag_for_review' }];
+    const created = await tx((c) =>
+      store.create(c, scope, kw('derived', { actions: steps as never })),
+    );
+    expect(created).toMatchObject({
+      action: 'hide',
+      actions: [{ type: 'flag_for_review' }, { type: 'hide' }],
+    });
+    const patched = await tx((c) =>
+      store.update(c, scope, created.id, {
+        actions: [{ type: 'delete', confirmIrreversible: true }],
+      }),
+    );
+    expect(patched).toMatchObject({ action: 'remove' });
+    const cleared = await tx((c) => store.update(c, scope, created.id, { actions: [] }));
+    expect(cleared).toMatchObject({ action: 'approve', actions: [] });
+    const loaded = (await store.loadActive(scope)).records.find((r) => r.id === created.id);
+    expect(loaded).toMatchObject({ action: 'approve', actions: [] });
+    const row = await ctx.c.query('SELECT action, actions FROM rule WHERE id = $1', [created.id]);
+    expect(row.rows[0]).toEqual({ action: 'approve', actions: [] });
   });
 
   it('lists in evaluation order, hides archived, and isolates tenants', async () => {
@@ -199,13 +228,13 @@ describe('PgRuleStore rules', () => {
             platform: 'facebook',
             entries: [{ externalId: 'u1' }],
           },
-          action: 'approve',
+          actions: [],
         }),
       ),
     );
-    await expect(tx((c) => store.update(c, scope, allow.id, { action: 'hide' }))).rejects.toThrow(
-      new TypeError('invalid_action_for_conditions'),
-    );
+    await expect(
+      tx((c) => store.update(c, scope, allow.id, { actions: [{ type: 'hide' }] })),
+    ).rejects.toBeInstanceOf(InvalidRuleActionError);
     const ok = await tx((c) => store.update(c, scope, allow.id, { name: 'vips', enabled: false }));
     expect(ok).toMatchObject({ name: 'vips', enabled: false, action: 'approve' });
   });
@@ -233,7 +262,7 @@ describe('PgRuleStore ordering and tokens', () => {
       platform: 'facebook',
       entries: [{ externalId: 'u1' }],
     },
-    action: 'approve',
+    actions: [],
   });
 
   it('lists and loads pinned trusted-author rules first', async () => {
@@ -270,9 +299,9 @@ describe('PgRuleStore ordering and tokens', () => {
     expect(await tx((c) => store.update(c, scope, a.id, { name: 'x' }))).toBeNull();
     const b = await tx((c) => store.create(c, scope, kw('broken')));
     await ctx.c.query(`UPDATE rule SET conditions = '{"type":"keyword"}' WHERE id = $1`, [b.id]);
-    await expect(tx((c) => store.update(c, scope, b.id, { name: 'y' }))).rejects.toThrow(
-      new TypeError('invalid_conditions'),
-    );
+    await expect(
+      tx((c) => store.update(c, scope, b.id, { actions: [{ type: 'hide' }] })),
+    ).rejects.toBeInstanceOf(InvalidRuleConditionsError);
   });
 });
 

@@ -91,6 +91,7 @@ async function seed(): Promise<Seeded> {
         ruleName: 'No spam',
         kind: 'keyword',
         action: 'hide',
+        actions: [{ type: 'hide' }],
         evidence: { kind: 'keyword', term: 'spam' },
       },
       trace: [],

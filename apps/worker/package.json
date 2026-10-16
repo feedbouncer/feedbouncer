@@ -16,6 +16,7 @@
     "jobs": "tsx src/cli/jobs.ts"
   },
   "dependencies": {
+    "@feedbouncer/actions": "workspace:*",
     "@feedbouncer/classifier": "workspace:*",
     "@feedbouncer/comments": "workspace:*",
     "@feedbouncer/connector-facebook": "workspace:*",

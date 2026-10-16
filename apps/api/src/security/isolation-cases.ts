@@ -10,9 +10,14 @@ export interface IsolationFixture {
   bConnectionId: string;
   bCommentId: string;
   bGrantId: string;
+  /** A's own rule. */
+  aRuleId: string;
   /** B's rule and own domain. */
   bRuleId: string;
   bDomainId: string;
+  /** B's succeeded action step and open review item. */
+  bStepId: string;
+  bReviewItemId: string;
   /** B's classifier re-run. */
   bClassifierRunId: string;
   /** B's custom policy and a dry-run preview of it. */
@@ -160,7 +165,11 @@ export const CASES: IsolationCase[] = [
     route: 'POST /api/v1/orgs/:orgId/brands/:brandId/rules',
     name: 'create a rule in B brand under A path',
     url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/rules`,
-    body: () => ({ name: 'x', conditions: { type: 'keyword', terms: ['x'] }, action: 'flag' }),
+    body: () => ({
+      name: 'x',
+      conditions: { type: 'keyword', terms: ['x'] },
+      actions: [{ type: 'flag_for_review' }],
+    }),
   },
   {
     route: 'PUT /api/v1/orgs/:orgId/brands/:brandId/rules/order',
@@ -339,6 +348,65 @@ export const CASES: IsolationCase[] = [
     name: "B comment's policy evaluation under A's own brand",
     url: (f) =>
       `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/comments/${f.bCommentId}/policy-evaluation`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/action-capabilities',
+    name: "B's action capabilities via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/action-capabilities`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/rules/:ruleId/simulate',
+    name: "simulate B's rule on B's comment via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/rules/${f.bRuleId}/simulate`,
+    body: (f) => ({ commentId: f.bCommentId }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/rules/:ruleId/simulate',
+    name: "simulate B's rule id under A's own brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/rules/${f.bRuleId}/simulate`,
+    body: (f) => ({ commentId: f.bCommentId }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/rules/:ruleId/simulate',
+    name: "simulate A's own rule on B's comment id",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/rules/${f.aRuleId}/simulate`,
+    body: (f) => ({ commentId: f.bCommentId }),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/action-log',
+    name: "B's action log via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/action-log`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/action-log/:stepId/undo',
+    name: "undo B's step via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/action-log/${f.bStepId}/undo`,
+    body: () => ({}),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/action-log/:stepId/undo',
+    name: "undo B's step id under A's own brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/action-log/${f.bStepId}/undo`,
+    body: () => ({}),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/review-items',
+    name: "B's review items via A org",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/review-items?status=open`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/review-items/:itemId/resolve',
+    name: "resolve B's review item via A org",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/review-items/${f.bReviewItemId}/resolve`,
+    body: () => ({ resolution: 'approve', requestKey: 'iso-2' }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/review-items/:itemId/resolve',
+    name: "resolve B's review item id under A's own brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/review-items/${f.bReviewItemId}/resolve`,
+    body: () => ({ resolution: 'approve', requestKey: 'iso-2' }),
   },
   {
     route: 'GET /api/v1/orgs/:orgId/members',
