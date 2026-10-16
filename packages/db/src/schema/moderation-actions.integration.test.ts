@@ -269,7 +269,12 @@ describe('down.sql', () => {
       try {
         const applied = await snapshotSchema(k);
         const prev = await listMigrationDirs(DEFAULT_MIGRATIONS_DIR);
-        expect(prev.at(-1)).toBe(MIGRATION);
+        // Migrations added after this one are rolled back first.
+        for (const later of prev.slice(prev.indexOf(MIGRATION) + 1))
+          expect(await rollbackLatest(k, DEFAULT_MIGRATIONS_DIR)).toEqual({
+            status: 'rolled_back',
+            migration: later,
+          });
         expect(await rollbackLatest(k, DEFAULT_MIGRATIONS_DIR)).toEqual({
           status: 'rolled_back',
           migration: MIGRATION,
