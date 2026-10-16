@@ -52,7 +52,8 @@ import {
   type ActionStepObserver,
 } from './runner.js';
 import type { ActionStep, StepType } from './steps.js';
-import { seedEvaluationRow } from './testing.js';
+import { seedEvaluationRow, seedSuggestionRow } from './testing.js';
+import type { GatedStep } from './suggestion-plan.js';
 import type { BrandConnectionInfo } from './support.js';
 
 const APP_SECRET = 'fb-app-secret-SENTINEL-0123456789';
@@ -253,6 +254,26 @@ async function start(
     dryRun: o.dryRun ?? false,
     steps,
   });
+}
+
+async function approve(
+  steps: readonly GatedStep[],
+  o: { commentId?: string; userId?: string | null } = {},
+): Promise<RunRow> {
+  const commentId = o.commentId ?? seeded.id;
+  const suggestionId = await seedSuggestionRow(ctx.c, { id: commentId, body: '', t });
+  const run = await withTransaction(pool, (tx) =>
+    runs.createSuggestionRun(tx, scope, {
+      suggestionId,
+      commentId,
+      userId: o.userId === undefined ? t.userId : (o.userId as string),
+      steps,
+    }),
+  );
+  if (o.userId === null)
+    await pool.query('UPDATE action_run SET approved_by_user_id = NULL WHERE id = $1', [run.id]);
+  await runner.wakeRun(scope, run.id);
+  return run;
 }
 
 interface StepDb {
@@ -533,7 +554,7 @@ describe.each(Object.keys(MATRIX) as StepType[])('%s step', (type) => {
     if (type === 'flag_for_review') {
       // No platform call to throttle: a repeated start and advance still leave one item.
       const run = await start([m.step]);
-      await start([m.step], { evaluationId: run.evaluationId });
+      await start([m.step], { evaluationId: run.evaluationId! });
       await queue.drain();
       await runner.advance(scope, run.id);
       expect(await outcome(run.id, type)).toEqual(['succeeded', null]);
@@ -555,7 +576,7 @@ describe.each(Object.keys(MATRIX) as StepType[])('%s step', (type) => {
   it('duplicate: one action per kind; a later evaluation of the comment is skipped', async () => {
     const first = await start([m.step]);
     await queue.drain(ACTION_RUN_ADVANCE_JOB.type);
-    const again = await start([m.step], { evaluationId: first.evaluationId });
+    const again = await start([m.step], { evaluationId: first.evaluationId! });
     expect(again.id).toBe(first.id);
     // An edit: a new evaluation of the same comment.
     const second = await start([m.step]);
@@ -699,8 +720,8 @@ describe('action runner', () => {
       [igUserId],
     );
     const r = await ctx.c.query<{ id: string }>(
-      `INSERT INTO connection (organization_id, brand_id, platform, external_account_id)
-       VALUES ($1, $2, 'instagram', $3) RETURNING id`,
+      `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, review_mode)
+       VALUES ($1, $2, 'instagram', $3, 'legacy') RETURNING id`,
       [t.organizationId, t.brandId, igUserId],
     );
     const ig: ConnectionScope = { ...scope, connectionId: r.rows[0]!.id };
@@ -997,6 +1018,213 @@ describe('failures that need the transaction to stay usable', () => {
     expect(await outcome(run.id, 'flag_for_review')).toEqual(['failed', 'internal_error']);
     expect(await outcome(run.id, 'hide')).toEqual(['succeeded', null]);
     expect(await runCompleted(run.id)).toBe(true);
+  });
+
+  describe('approval runs', () => {
+    const userActions = async (commentId: string) =>
+      (
+        await pool.query<{
+          kind: string;
+          actor_type: string;
+          actor_user_id: string | null;
+          request_key: string;
+        }>(
+          `SELECT kind, actor_type, actor_user_id, request_key FROM moderation_action
+            WHERE comment_id = $1 ORDER BY created_at, id`,
+          [commentId],
+        )
+      ).rows;
+
+    it('executes as the approving user with suggestion: keys', async () => {
+      const run = await approve([HIDE]);
+      await queue.drain();
+      expect(await outcome(run.id, 'hide')).toEqual(['succeeded', null]);
+      expect(await userActions(seeded.id)).toEqual([
+        {
+          kind: 'hide',
+          actor_type: 'user',
+          actor_user_id: t.userId,
+          request_key: `suggestion:${run.suggestionId}:hide`,
+        },
+      ]);
+      expect(graph.state(seeded.commentId)).toBe('hidden');
+      expect(await runCompleted(run.id)).toBe(true);
+      expect(settledEvents[0]).toMatchObject({ ruleId: null, evaluationId: null, type: 'hide' });
+    });
+
+    it('wakeRun is idempotent', async () => {
+      const run = await approve([HIDE]);
+      await runner.wakeRun(scope, run.id);
+      await queue.drain();
+      expect(await userActions(seeded.id)).toHaveLength(1);
+      expect(queue.requests.filter((r) => r.deduplicated)).toHaveLength(1);
+    });
+
+    it('during an active review window is not gated', async () => {
+      await pool.query(
+        `UPDATE connection SET review_mode = 'on', review_mode_started_at = now(),
+                review_mode_ends_at = now() + interval '168 hours' WHERE id = $1`,
+        [t.connectionId],
+      );
+      const rule = await start([HIDE]);
+      await queue.drain();
+      expect(await outcome(rule.id, 'hide')).toEqual(['skipped', 'review_mode_active']);
+      const run = await approve([HIDE]);
+      await queue.drain();
+      expect(await outcome(run.id, 'hide')).toEqual(['succeeded', null]);
+      expect(graph.state(seeded.commentId)).toBe('hidden');
+    });
+
+    it('delete waits for earlier steps', async () => {
+      const run = await approve([DELETE, BAN]);
+      await queue.drain(ACTION_RUN_ADVANCE_JOB.type);
+      expect(await outcome(run.id, 'ban')).toEqual(['pending', null]);
+      expect((await stepOf(run.id, 'delete')).moderation_action_id).toBeNull();
+      await queue.drain();
+      expect(await outcome(run.id, 'ban')).toEqual(['succeeded', null]);
+      expect(await outcome(run.id, 'delete')).toEqual(['succeeded', null]);
+      expect((await userActions(seeded.id)).map((a) => a.kind)).toEqual(['ban_author', 'delete']);
+    });
+
+    it('approving several suggestions for one author bans once', async () => {
+      const authorId = (await store.load(t, seeded.id))!.authorExternalId!;
+      const ids = [seeded.id];
+      for (let i = 0; i < 4; i++) ids.push((await addFbComment({ authorId })).id);
+      const started: RunRow[] = [];
+      for (const commentId of ids) {
+        started.push(await approve([BAN], { commentId }));
+        await queue.drain();
+      }
+      const out = await Promise.all(started.map((r) => outcome(r.id, 'ban')));
+      expect(out.filter(([s]) => s === 'succeeded')).toHaveLength(1);
+      expect(out.filter((o) => o[0] === 'skipped' && o[1] === 'already_banned')).toHaveLength(4);
+      expect(graph.blocked(pageId)).toEqual([authorId]);
+    });
+
+    it('overlapping approval runs for one author ban once', async () => {
+      const authorId = (await store.load(t, seeded.id))!.authorExternalId!;
+      const other = await addFbComment({ authorId });
+      const a = await approve([BAN]);
+      const b = await approve([BAN], { commentId: other.id });
+      const request = actions.request.bind(actions);
+      let entered!: () => void;
+      let release!: () => void;
+      const inRequest = new Promise<void>((r) => (entered = r));
+      const gate = new Promise<void>((r) => (release = r));
+      actions.request = async (i) => {
+        if (i.requestKey === `suggestion:${a.suggestionId}:ban_author`) {
+          entered();
+          await gate;
+        }
+        return request(i);
+      };
+      const first = runner.advance(scope, a.id);
+      await inRequest;
+      await runner.advance(scope, b.id);
+      release();
+      await first;
+      actions.request = request;
+      await queue.drain();
+      expect(await outcome(a.id, 'ban')).toEqual(['succeeded', null]);
+      expect(await outcome(b.id, 'ban')).toEqual(['skipped', 'already_banned']);
+      expect(graph.blocked(pageId)).toEqual([authorId]);
+    });
+
+    it('after a moderator unhide still hides', async () => {
+      await start([HIDE]);
+      await queue.drain();
+      const u = await actions.request({
+        scope: t,
+        commentId: seeded.id,
+        kind: 'unhide',
+        actor: { type: 'user', userId: t.userId },
+        requestKey: `ui-${randomUUID()}`,
+      });
+      expect(u.status).toBe('accepted');
+      await queue.drain();
+      expect(graph.state(seeded.commentId)).toBe('visible');
+      const run = await approve([HIDE]);
+      await queue.drain();
+      expect(await outcome(run.id, 'hide')).toEqual(['succeeded', null]);
+      expect(graph.state(seeded.commentId)).toBe('hidden');
+    });
+
+    it('ignores the thread reply limit', async () => {
+      const parent = await start([REPLY]);
+      await queue.drain();
+      expect(await outcome(parent.id, 'auto_reply')).toEqual(['succeeded', null]);
+      const sibling = await addFbComment({ postId: seeded.postId, parentId: seeded.commentId });
+      const run = await approve([REPLY], { commentId: sibling.id });
+      await queue.drain();
+      expect(await outcome(run.id, 'auto_reply')).toEqual(['succeeded', null]);
+    });
+
+    it('fails every step approver_removed when the approver is gone', async () => {
+      const run = await approve([HIDE, BAN], { userId: null });
+      await queue.drain();
+      expect(await outcome(run.id, 'hide')).toEqual(['failed', 'approver_removed']);
+      expect(await outcome(run.id, 'ban')).toEqual(['failed', 'approver_removed']);
+      expect(await userActions(seeded.id)).toEqual([]);
+      expect(await runCompleted(run.id)).toBe(true);
+    });
+
+    const addModerator = async (): Promise<string> => {
+      const { rows } = await pool.query<{ id: string }>(
+        'INSERT INTO app_user (email) VALUES ($1) RETURNING id',
+        [`mod-${randomUUID()}@example.test`],
+      );
+      await pool.query(
+        "INSERT INTO membership (organization_id, user_id, role) VALUES ($1, $2, 'member')",
+        [t.organizationId, rows[0]!.id],
+      );
+      return rows[0]!.id;
+    };
+
+    it('fails the step approver_removed when the approver was removed after approval', async () => {
+      const userId = await addModerator();
+      const run = await approve([HIDE], { userId });
+      await pool.query('DELETE FROM membership WHERE organization_id = $1 AND user_id = $2', [
+        t.organizationId,
+        userId,
+      ]);
+      await queue.drain();
+      expect(await outcome(run.id, 'hide')).toEqual(['failed', 'approver_removed']);
+      expect(await userActions(seeded.id)).toEqual([]);
+      expect(graph.state(seeded.commentId)).toBe('visible');
+      expect(await runCompleted(run.id)).toBe(true);
+    });
+
+    it('runs the step when the approver is still a member', async () => {
+      const run = await approve([HIDE], { userId: await addModerator() });
+      await queue.drain();
+      expect(await outcome(run.id, 'hide')).toEqual(['succeeded', null]);
+      expect(graph.state(seeded.commentId)).toBe('hidden');
+    });
+
+    it('connection needing reconnect mid-run: step pending / awaiting_reconnect, then succeeds', async () => {
+      const run = await approve([HIDE]);
+      await queue.drain(ACTION_RUN_ADVANCE_JOB.type);
+      const job = queue.pending.find((r) => r.type === EXECUTE_JOB.type)!;
+      queue.pending.splice(queue.pending.indexOf(job), 1);
+      graph.failNext(190, 463);
+      await expect(
+        execute.handle(
+          jobCtx(job.scope, job.platform, job.type),
+          job.payload as { actionId: string },
+        ),
+      ).rejects.toBeDefined();
+      await queue.drain();
+      expect(await outcome(run.id, 'hide')).toEqual(['pending', 'awaiting_reconnect']);
+
+      await pool.query(
+        "UPDATE connection SET status = 'active', status_reason = NULL WHERE id = $1",
+        [t.connectionId],
+      );
+      queue.pending.push(job);
+      await queue.drain();
+      expect(await outcome(run.id, 'hide')).toEqual(['succeeded', null]);
+      expect(graph.state(seeded.commentId)).toBe('hidden');
+    });
   });
 
   it('concurrent advances finish on a pool no larger than the number of locks held', async () => {

@@ -37,7 +37,7 @@ const WOULD_RUN: StepOutcome = { status: 'succeeded', reason: 'would_run' };
 export class StepPlanner {
   constructor(
     private readonly d: {
-      runs: Pick<PgActionRunStore, 'hasUserReversal' | 'hasAutomatedThreadReply'>;
+      runs: Pick<PgActionRunStore, 'hasUserReversal' | 'hasAutomatedThreadReply' | 'hasActiveBan'>;
       comments: Pick<PgCommentStore, 'load'>;
       actions: Pick<ModerationActions, 'list'>;
       connection: (scope: ConnectionScope) => Promise<BrandConnectionInfo | null>;
@@ -93,7 +93,11 @@ export class StepPlanner {
     return stepOutcomeFor({ kind: 'action', status: e.verdict, code: e.code });
   }
 
-  /** Reasons a step cannot run at all, checked in a fixed order; null when it can. */
+  /**
+   * Reasons a step cannot run at all, checked in a fixed order; null when it can. An approved
+   * step was chosen by a moderator: earlier reversals and thread replies do not stop it, only
+   * an author who is already banned does.
+   */
   async precheck(
     scope: ConnectionScope,
     type: StepType,
@@ -101,6 +105,7 @@ export class StepPlanner {
     conn: BrandConnectionInfo | null,
     views: readonly ModerationActionView[],
     db?: Queryable,
+    o: { approved?: boolean; suggestionId?: string } = {},
   ): Promise<StepOutcome | null> {
     if (!comment) return { status: 'not_applicable', reason: 'comment_gone' };
     if (comment.isOwnAccount) return { status: 'skipped', reason: 'own_account_comment' };
@@ -108,12 +113,20 @@ export class StepPlanner {
     const support = stepSupport(type, conn);
     if (!support.supported) return { status: 'not_supported', reason: 'unsupported' };
     if (support.missingScopes.length > 0) return { status: 'failed', reason: 'missing_permission' };
-    if (type === 'hide' || type === 'ban') {
+    if (o.approved) {
+      const ownBanKey = o.suggestionId ? `suggestion:${o.suggestionId}:ban_author` : null;
+      if (type === 'ban' && (await this.d.runs.hasActiveBan(scope, comment.id, db, ownBanKey)))
+        return { status: 'skipped', reason: 'already_banned' };
+    } else if (type === 'hide' || type === 'ban') {
       const kind = type === 'hide' ? 'hide' : 'ban_author';
       if (await this.d.runs.hasUserReversal(scope, comment.id, kind, db))
         return { status: 'skipped', reason: 'moderator_override' };
     }
-    if (type === 'auto_reply' && (await this.#threadLimited(scope, comment.id, views, db)))
+    if (
+      !o.approved &&
+      type === 'auto_reply' &&
+      (await this.#threadLimited(scope, comment.id, views, db))
+    )
       return { status: 'skipped', reason: 'reply_thread_limit' };
     if (type === 'flag_for_review') return null;
     const ownAction = views.some(

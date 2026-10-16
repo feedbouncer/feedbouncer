@@ -6,6 +6,7 @@ export * from './connector.js';
 export * from './registry.js';
 export * from './http.js';
 export * from './ports.js';
+export * from './review-mode.js';
 export * from './memory.js';
 export * from './budget.js';
 export * from './webhook.js';

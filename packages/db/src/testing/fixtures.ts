@@ -41,8 +41,20 @@ export interface Tenant {
 const one = async (c: pg.ClientBase, sql: string, v: unknown[]) =>
   (await c.query<{ id: string }>(sql, v)).rows[0]!.id;
 
+const columnExists = async (c: pg.ClientBase, table: string, column: string) =>
+  (
+    await c.query(
+      'SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = $2',
+      [table, column],
+    )
+  ).rowCount === 1;
+
 /** Seeds whatever the applied migrations support; fields for later tables are '' until those exist. */
-export async function seedTenant(c: pg.ClientBase, label: string): Promise<Tenant> {
+export async function seedTenant(
+  c: pg.ClientBase,
+  label: string,
+  opts: { reviewMode?: 'on' | 'opted_out' } = {},
+): Promise<Tenant> {
   const has = async (t: string) =>
     (await c.query('SELECT to_regclass($1) AS t', [t])).rows[0].t !== null;
   const organizationId = await one(c, 'INSERT INTO organization (name) VALUES ($1) RETURNING id', [
@@ -60,9 +72,20 @@ export async function seedTenant(c: pg.ClientBase, label: string): Promise<Tenan
     'INSERT INTO brand (organization_id, name) VALUES ($1, $2) RETURNING id',
     [organizationId, `Brand ${label}`],
   );
+  // Existing suites expect automation, so the connection is 'legacy' unless a mode is asked for.
+  const cols = ['organization_id', 'brand_id', 'platform', 'external_account_id'];
+  const vals = ['$1', '$2', "'facebook'", '$3'];
+  if (await columnExists(c, 'connection', 'review_mode')) {
+    cols.push('review_mode');
+    vals.push(`'${opts.reviewMode ?? 'legacy'}'`);
+    if (opts.reviewMode === 'on') {
+      cols.push('review_mode_started_at', 'review_mode_ends_at');
+      vals.push('now()', "now() + interval '168 hours'");
+    }
+  }
   const connectionId = await one(
     c,
-    "INSERT INTO connection (organization_id, brand_id, platform, external_account_id) VALUES ($1, $2, 'facebook', $3) RETURNING id",
+    `INSERT INTO connection (${cols.join(', ')}) VALUES (${vals.join(', ')}) RETURNING id`,
     [organizationId, brandId, `page-${label}`],
   );
   const t: Tenant = {
@@ -91,12 +114,7 @@ export async function seedTenant(c: pg.ClientBase, label: string): Promise<Tenan
     );
   }
   if (await has('rule')) {
-    const hasActions =
-      (
-        await c.query(
-          "SELECT 1 FROM information_schema.columns WHERE table_name = 'rule' AND column_name = 'actions'",
-        )
-      ).rowCount === 1;
+    const hasActions = await columnExists(c, 'rule', 'actions');
     const conditions =
       '{"type":"link_domain","mode":"blocklist","domains":["bit.ly"],"exemptOwnDomains":true,"shorteners":"ignore","lookalikes":"match"}';
     t.ruleId = await one(

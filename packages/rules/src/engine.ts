@@ -131,14 +131,19 @@ export function evaluate(
     now?: () => number;
     ruleBudgetMs?: number;
     onRuleError?: (ruleId: string, err: unknown) => void;
+    /** Keep going past the decision to list the later enforce rules that also match. */
+    collectAlsoMatched?: boolean;
   } = {},
 ): Verdict {
   const now = opts.now ?? (() => performance.now());
   const limitMs = opts.ruleBudgetMs ?? RULE_BUDGET_MS;
   const trace: TraceEntry[] = [];
   const suggestions: RuleHit[] = [];
+  const alsoMatched: RuleHit[] = [];
+  let decided: RuleHit | null = null;
   const view = new CommentView(facts);
   for (const r of set.rules) {
+    if (decided && r.mode === 'suggest') continue;
     let res: ReturnType<Matcher>;
     try {
       res = r.matcher(view, { now, startedAt: now(), limitMs });
@@ -168,9 +173,14 @@ export function evaluate(
       suggestions.push(hit);
       continue;
     }
-    return { decided: hit, suggestions, trace };
+    if (decided) {
+      alsoMatched.push(hit);
+      continue;
+    }
+    if (!opts.collectAlsoMatched) return { decided: hit, suggestions, alsoMatched, trace };
+    decided = hit;
   }
-  return { decided: null, suggestions, trace };
+  return { decided, suggestions, alsoMatched, trace };
 }
 
 function safeReport(

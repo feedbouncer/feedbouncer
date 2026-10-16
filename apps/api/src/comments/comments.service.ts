@@ -71,6 +71,7 @@ const REFUSALS: Record<Exclude<RefusalCode, 'not_found'>, [number, ErrorCode]> =
   request_key_conflict: [409, 'request_key_conflict'],
   connection_needs_reconnect: [409, 'connection_needs_reconnect'],
   connection_inactive: [409, 'connection_inactive'],
+  review_mode_active: [409, 'review_mode_active'],
 };
 
 /** Used when the platform's connector is not registered (e.g. Instagram disabled after connecting). */

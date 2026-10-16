@@ -87,6 +87,7 @@ async function decided(f: Awaited<ReturnType<typeof fresh>>, action: RuleAction 
   const enforceId = await rule(f.t, 'Spam words', action);
   const verdict: Verdict = {
     suggestions: [hit(suggestId, 'Dry hide', 'hide')],
+    alsoMatched: [],
     decided: hit(enforceId, 'Spam words', action),
     trace: [
       {
@@ -189,7 +190,7 @@ describe('PgEvaluationStore.record', () => {
       triggerKey: 'ingest',
       rulesetVersion: 'v',
       status: 'no_match',
-      verdict: { decided: null, suggestions: [], trace: [] },
+      verdict: { decided: null, suggestions: [], alsoMatched: [], trace: [] },
     });
     expect(nm).toMatchObject({ status: 'no_match' });
     expect(await decisions(f.commentId)).toHaveLength(0);
@@ -204,7 +205,7 @@ describe('PgEvaluationStore.record', () => {
       triggerKey: 'ingest',
       rulesetVersion: 'v',
       status: 'no_match',
-      verdict: { decided: null, suggestions: [], trace: [] },
+      verdict: { decided: null, suggestions: [], alsoMatched: [], trace: [] },
     });
     expect(r).toBeNull();
     const other = await ctx.c.query<{ id: string }>(
@@ -220,7 +221,7 @@ describe('PgEvaluationStore.record', () => {
         triggerKey: 'ingest',
         rulesetVersion: 'v',
         status: 'no_match',
-        verdict: { decided: null, suggestions: [], trace: [] },
+        verdict: { decided: null, suggestions: [], alsoMatched: [], trace: [] },
       },
     );
     expect(r2).toBeNull();
@@ -311,7 +312,7 @@ describe('PgEvaluationStore fallback', () => {
       triggerKey: 'ingest',
       rulesetVersion: 'v',
       status: 'no_match',
-      verdict: { decided: null, suggestions: [], trace: [] },
+      verdict: { decided: null, suggestions: [], alsoMatched: [], trace: [] },
     });
     expect(await store.loadForFallback(f.scope, nm!.id)).toBeNull();
     expect(await store.recordFallback(f.scope, nm!.id, 'unsupported', 'x')).toBe(false);

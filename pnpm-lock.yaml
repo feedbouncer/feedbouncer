@@ -357,6 +357,9 @@ importers:
 
   packages/actions:
     dependencies:
+      '@feedbouncer/authz':
+        specifier: workspace:*
+        version: link:../authz
       '@feedbouncer/comments':
         specifier: workspace:*
         version: link:../comments
@@ -424,6 +427,9 @@ importers:
 
   packages/classifier:
     dependencies:
+      '@feedbouncer/actions':
+        specifier: workspace:*
+        version: link:../actions
       '@feedbouncer/ai':
         specifier: workspace:*
         version: link:../ai
@@ -739,6 +745,9 @@ importers:
 
   packages/policies:
     dependencies:
+      '@feedbouncer/actions':
+        specifier: workspace:*
+        version: link:../actions
       '@feedbouncer/ai':
         specifier: workspace:*
         version: link:../ai

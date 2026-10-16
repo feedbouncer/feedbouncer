@@ -136,7 +136,7 @@ export function ActionLog(props: {
                       View comment
                     </Link>
                   </td>
-                  <td>{e.ruleName}</td>
+                  <td>{e.ruleName ?? 'Approved suggestion'}</td>
                   <td>{STEP_LABEL[e.type]}</td>
                   <td>
                     {outcomeText(e.status, e.reasonCode)}

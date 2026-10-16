@@ -6,7 +6,8 @@ import type pg from 'pg';
 import { ProviderError, type PreparedInput } from '@feedbouncer/ai';
 import { BrandSlots, createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
-import { PgCommentStore } from '@feedbouncer/comments';
+import { PgSuggestionStore } from '@feedbouncer/actions';
+import { PgCommentStore, PgReviewModeReader } from '@feedbouncer/comments';
 import { JobDeferral, type JobContext } from '@feedbouncer/jobs';
 import { PgEvaluationStore, bodySha256, type RuleAction } from '@feedbouncer/rules';
 import { createLogger } from '@feedbouncer/service-runtime';
@@ -102,6 +103,8 @@ function job(provider: ClassifierProvider, o: Partial<ClassifyDeps> = {}) {
     provider,
     slots,
     actions: actions as never,
+    suggestions: new PgSuggestionStore(pool),
+    reviewMode: new PgReviewModeReader(pool, { now: () => Date.now() }),
     languages: LANGS,
     maxWaitMs: 1_800_000,
     log: quiet,
@@ -119,10 +122,85 @@ const payload = (c: { id: string; body: string }): ClassifyPayload => ({
   requestedAt: Date.now(),
 });
 
+const reviewTenant = () => seedTenant(ctxDb.c, `clj${++n}`, { reviewMode: 'on' });
+
 const one = async (sql: string, v: unknown[]) => (await ctxDb.c.query(sql, v)).rows[0];
 const count = async (sql: string, v: unknown[]) => (await ctxDb.c.query(sql, v)).rowCount ?? 0;
 
 describe('comment_classify', () => {
+  it('remove verdict in window: suggestion with delete step, decision mode suggest, no clf: action, no fallback', async () => {
+    const t = await reviewTenant();
+    await setThreshold(t, 'spam', 0.5, 'remove');
+    const c = await seedComment('offer', t);
+    await evaluateRules(c, 'no_match');
+    const r = await job(new FakeProvider([S({ spam: 0.6 })])).handle(ctx(c, 1), payload(c));
+    expect(r).toMatchObject({ result: 'classified', outcome: 'remove', suggested: true });
+    expect(actions.request).not.toHaveBeenCalled();
+    const dec = await one(
+      `SELECT mode FROM decision WHERE classification_id = $1 AND outcome = 'remove'`,
+      [r.classificationId],
+    );
+    expect(dec.mode).toBe('suggest');
+    expect(
+      await count(`SELECT 1 FROM decision WHERE classification_id = $1 AND outcome = 'flag'`, [
+        r.classificationId,
+      ]),
+    ).toBe(0);
+    const s = await one(
+      `SELECT src.source_type, src.source_ref, src.steps, src.reason, s.status
+         FROM action_suggestion s JOIN action_suggestion_source src ON src.suggestion_id = s.id
+        WHERE s.comment_id = $1`,
+      [c.id],
+    );
+    expect(s).toMatchObject({
+      source_type: 'classifier',
+      source_ref: r.classificationId,
+      status: 'pending',
+      steps: [{ type: 'delete', confirmIrreversible: true }],
+    });
+    expect(s.reason.length).toBeGreaterThan(0);
+    expect(
+      (
+        await one(`SELECT review_mode FROM comment_classification WHERE id = $1`, [
+          r.classificationId,
+        ])
+      ).review_mode,
+    ).toBe(true);
+  });
+
+  it('hide verdict in window retried: one suggestion', async () => {
+    const t = await reviewTenant();
+    const c = await seedComment('you people are awful', t);
+    await evaluateRules(c, 'no_match');
+    const j = job(new FakeProvider([S({ hate_speech: 0.93 })]));
+    await j.handle(ctx(c, 1), payload(c));
+    const r = await j.handle(ctx(c, 2), payload(c));
+    expect(r).toMatchObject({ outcome: 'hide', suggested: true });
+    expect(await count(`SELECT 1 FROM action_suggestion WHERE comment_id = $1`, [c.id])).toBe(1);
+    expect(
+      await count(
+        `SELECT 1 FROM action_suggestion_source src JOIN action_suggestion s ON s.id = src.suggestion_id
+          WHERE s.comment_id = $1`,
+        [c.id],
+      ),
+    ).toBe(1);
+  });
+
+  it('flag verdict in window is unchanged', async () => {
+    const t = await reviewTenant();
+    const c = await seedComment('maybe rude', t);
+    await evaluateRules(c, 'no_match');
+    await setThreshold(t, 'profanity', 0.5, 'flag');
+    const r = await job(new FakeProvider([S({ profanity: 0.6 })])).handle(ctx(c, 1), payload(c));
+    expect(r).toMatchObject({ outcome: 'flag' });
+    expect(r.suggested).toBeUndefined();
+    expect(await count(`SELECT 1 FROM action_suggestion WHERE comment_id = $1`, [c.id])).toBe(0);
+    expect(
+      (await one(`SELECT mode FROM decision WHERE classification_id = $1`, [r.classificationId]))
+        .mode,
+    ).toBe('enforce');
+  });
+
   it('stores all seven scores for a no-match comment and applies default thresholds (hide on hate speech)', async () => {
     const c = await seedComment('you people are awful');
     await evaluateRules(c, 'no_match');

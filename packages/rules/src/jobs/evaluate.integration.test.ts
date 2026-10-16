@@ -10,10 +10,11 @@ import {
   PgActionRunStore,
   PgReviewQueue,
   deriveOutcome,
+  PgSuggestionStore,
   undoStep,
   type ActionStep,
 } from '@feedbouncer/actions';
-import { ModerationActions, PgCommentStore } from '@feedbouncer/comments';
+import { ModerationActions, PgCommentStore, PgReviewModeReader } from '@feedbouncer/comments';
 import type { ConnectorCapabilities, Platform } from '@feedbouncer/connectors';
 import type { JobContext } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
@@ -104,8 +105,8 @@ beforeEach(() => {
   });
 });
 
-async function env(): Promise<Env> {
-  const t = await seedTenant(ctx.c, `re${++n}`);
+async function env(o: { reviewMode?: 'on' } = {}): Promise<Env> {
+  const t = await seedTenant(ctx.c, `re${++n}`, o);
   await ctx.c.query('UPDATE rule SET archived_at = now(), enabled = false WHERE brand_id = $1', [
     t.brandId,
   ]);
@@ -114,9 +115,9 @@ async function env(): Promise<Env> {
     t.connectionId,
   ]);
   const ig = await ctx.c.query<{ id: string }>(
-    `INSERT INTO connection (organization_id, brand_id, platform, external_account_id)
-     VALUES ($1, $2, 'instagram', $3) RETURNING id`,
-    [t.organizationId, t.brandId, `${IG_ACCOUNT}${n}`],
+    `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, review_mode)
+     SELECT $1, $2, 'instagram', $3, review_mode FROM connection WHERE id = $4 RETURNING id`,
+    [t.organizationId, t.brandId, `${IG_ACCOUNT}${n}`, t.connectionId],
   );
   const scope = {
     organizationId: t.organizationId,
@@ -209,6 +210,7 @@ function run(
     platform?: Platform;
     evaluated?: RuleEvaluatedHook;
     runner?: Pick<ActionRunner, 'start'>;
+    suggestions?: Pick<PgSuggestionStore, 'propose'>;
   } = {},
 ) {
   const job = ruleEvaluateJob({
@@ -216,6 +218,8 @@ function run(
     evaluations,
     cache,
     runner: o.runner ?? runner,
+    suggestions: o.suggestions ?? new PgSuggestionStore(pool),
+    reviewMode: new PgReviewModeReader(pool, { now: () => nowMs }),
     log: o.log ?? quiet,
     ...(o.clock ? { clock: o.clock } : {}),
     ...(o.evaluated ? { evaluated: o.evaluated } : {}),
@@ -693,5 +697,179 @@ describe('rule_evaluate', () => {
     ]);
     await run(e.scope, c.id, 'spam');
     expect((await runRows(c.id)).map((r) => r.steps)).toEqual([['hide']]);
+  });
+  describe('review mode window', () => {
+    const suggestionRows = async (commentId: string) =>
+      (
+        await pool.query<{
+          status: string;
+          source_type: string;
+          source_ref: string;
+          rule_id: string;
+          also: string[];
+          steps: { type: string }[];
+          reason: string;
+        }>(
+          `SELECT s.status, src.source_type, src.source_ref, src.rule_id,
+                  src.also_matched_rule_ids AS also, src.steps, src.reason
+             FROM action_suggestion s
+             JOIN action_suggestion_source src ON src.suggestion_id = s.id
+            WHERE s.comment_id = $1 ORDER BY src.created_at`,
+          [commentId],
+        )
+      ).rows;
+    const reviewItems = async (commentId: string) =>
+      (await pool.query(`SELECT 1 FROM review_item WHERE comment_id = $1`, [commentId])).rowCount;
+
+    it('hide rule in window: one pending suggestion, decision mode suggest, no moderation_action', async () => {
+      const e = await env({ reviewMode: 'on' });
+      const ruleId = await addRule(e, kw('spam'), { name: 'No spam', priority: 10 });
+      const c = await comment(e, 'spam');
+      const r = await run(e.scope, c.id, 'spam');
+      expect(r).toMatchObject({ result: 'decided', outcome: 'hide' });
+      expect(r.runId).toBeUndefined();
+      const ev = await evals(c.id);
+      expect(await decisions(c.id)).toMatchObject([
+        { outcome: 'hide', mode: 'suggest', rule_id: ruleId, rule_evaluation_id: ev[0].id },
+      ]);
+      const [s] = await suggestionRows(c.id);
+      expect(s).toMatchObject({
+        status: 'pending',
+        source_type: 'rule',
+        source_ref: ev[0].id,
+        rule_id: ruleId,
+        also: [],
+        steps: [{ type: 'hide' }],
+        reason: 'Rule "No spam" (keyword): matched "spam".',
+      });
+      expect(await runRows(c.id)).toEqual([]);
+      expect(await actionRows(c.id)).toEqual([]);
+      expect(
+        (await pool.query('SELECT review_mode FROM rule_evaluation WHERE comment_id = $1', [c.id]))
+          .rows,
+      ).toEqual([{ review_mode: true }]);
+    });
+
+    it('flag+hide rule in window: flag step runs and opens a review item; hide is suggested', async () => {
+      const e = await env({ reviewMode: 'on' });
+      await addRule(e, kw('spam'), {
+        actions: [{ type: 'flag_for_review' }, { type: 'hide' }],
+        priority: 10,
+      });
+      const c = await comment(e, 'spam');
+      await run(e.scope, c.id, 'spam');
+      expect(await runRows(c.id)).toMatchObject([{ dry_run: false, steps: ['flag_for_review'] }]);
+      await advanceRuns(e.scope, c.id);
+      expect(await reviewItems(c.id)).toBe(1);
+      expect(await actionRows(c.id)).toEqual([]);
+      expect(await suggestionRows(c.id)).toMatchObject([
+        { status: 'pending', steps: [{ type: 'hide' }] },
+      ]);
+    });
+
+    it('flag-only rule in window behaves exactly as outside', async () => {
+      const e = await env({ reviewMode: 'on' });
+      await addRule(e, kw('spam'), { actions: FLAG, priority: 10 });
+      const c = await comment(e, 'spam');
+      await run(e.scope, c.id, 'spam');
+      expect(await decisions(c.id)).toMatchObject([{ outcome: 'flag', mode: 'enforce' }]);
+      await advanceRuns(e.scope, c.id);
+      expect(await reviewItems(c.id)).toBe(1);
+      expect(await suggestionRows(c.id)).toEqual([]);
+    });
+
+    it('two enforce rules match: one suggestion listing the second as also matched', async () => {
+      const e = await env({ reviewMode: 'on' });
+      const first = await addRule(e, kw('spam'), { priority: 10 });
+      const second = await addRule(e, kw('spam'), { actions: DELETE, priority: 20 });
+      const c = await comment(e, 'spam');
+      await run(e.scope, c.id, 'spam');
+      expect(await suggestionRows(c.id)).toMatchObject([
+        { rule_id: first, also: [second], steps: [{ type: 'hide' }] },
+      ]);
+      expect(await decisions(c.id)).toHaveLength(1);
+    });
+
+    it('a suggest-mode rule after the decision is not evaluated', async () => {
+      const e = await env({ reviewMode: 'on' });
+      const first = await addRule(e, kw('spam'), { priority: 10 });
+      await addRule(e, kw('spam'), { mode: 'suggest', priority: 20 });
+      const c = await comment(e, 'spam');
+      await run(e.scope, c.id, 'spam');
+      expect(await runRows(c.id)).toEqual([]);
+      expect(await suggestionRows(c.id)).toMatchObject([{ rule_id: first, also: [] }]);
+    });
+
+    it('webhook + poll + retry of the same comment: one suggestion, one source', async () => {
+      const e = await env({ reviewMode: 'on' });
+      await addRule(e, kw('spam'), { priority: 10 });
+      const c = await comment(e, 'spam');
+      await run(e.scope, c.id, 'spam');
+      await run(e.scope, c.id, 'spam');
+      await run(e.scope, c.id, 'spam');
+      expect(await suggestionRows(c.id)).toHaveLength(1);
+      expect(await evals(c.id)).toHaveLength(1);
+    });
+
+    it('act() on a resumed in-window evaluation proposes after the window has ended', async () => {
+      const e = await env({ reviewMode: 'on' });
+      await addRule(e, kw('spam'), { priority: 10 });
+      const c = await comment(e, 'spam');
+      const failing = {
+        propose: async () => {
+          throw new Error('db down');
+        },
+      };
+      await expect(run(e.scope, c.id, 'spam', { suggestions: failing })).rejects.toThrow('db down');
+      expect(await suggestionRows(c.id)).toEqual([]);
+      await pool.query(
+        `UPDATE connection SET review_mode_started_at = $2::timestamptz - interval '8 days',
+                review_mode_ends_at = $2::timestamptz - interval '1 day' WHERE id = $1`,
+        [e.scope.connectionId, new Date(nowMs)],
+      );
+      await run(e.scope, c.id, 'spam');
+      expect(await suggestionRows(c.id)).toMatchObject([{ status: 'pending' }]);
+      expect(await runRows(c.id)).toEqual([]);
+    });
+
+    it('after the window: rule hides as configured', async () => {
+      const e = await env({ reviewMode: 'on' });
+      await pool.query(
+        `UPDATE connection SET review_mode_started_at = $2::timestamptz - interval '8 days',
+                review_mode_ends_at = $2::timestamptz - interval '1 day' WHERE id = $1`,
+        [e.scope.connectionId, new Date(nowMs)],
+      );
+      await addRule(e, kw('spam'), { priority: 10 });
+      const c = await comment(e, 'spam');
+      await run(e.scope, c.id, 'spam');
+      expect(await decisions(c.id)).toMatchObject([{ outcome: 'hide', mode: 'enforce' }]);
+      expect(await runRows(c.id)).toMatchObject([{ dry_run: false, steps: ['hide'] }]);
+      expect(await suggestionRows(c.id)).toEqual([]);
+    });
+
+    it('legacy connection: unchanged behavior', async () => {
+      const e = await env();
+      await addRule(e, kw('spam'), { priority: 10 });
+      const c = await comment(e, 'spam');
+      await run(e.scope, c.id, 'spam');
+      expect(await decisions(c.id)).toMatchObject([{ outcome: 'hide', mode: 'enforce' }]);
+      expect(await runRows(c.id)).toMatchObject([{ steps: ['hide'] }]);
+      expect(await suggestionRows(c.id)).toEqual([]);
+    });
+
+    it('auto_reply-only rule in window: suggestion, no reply posted', async () => {
+      const e = await env({ reviewMode: 'on' });
+      await addRule(e, kw('price'), {
+        actions: [{ type: 'auto_reply', template: 'Thanks!' }],
+        priority: 10,
+      });
+      const c = await comment(e, 'price?');
+      await run(e.scope, c.id, 'price?');
+      expect(await suggestionRows(c.id)).toMatchObject([
+        { steps: [{ type: 'auto_reply' }], status: 'pending' },
+      ]);
+      expect(await runRows(c.id)).toEqual([]);
+      expect(await actionRows(c.id)).toEqual([]);
+    });
   });
 });

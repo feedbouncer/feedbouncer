@@ -1,5 +1,5 @@
-// Durable action runs: one run per (rule evaluation, rule), one step row per configured
-// step. Every statement filters organization_id + brand_id (plus connection_id where the
+// Durable action runs: one run per (rule evaluation, rule) or per approved suggestion, one
+// step row per configured step. Every statement filters organization_id + brand_id (plus connection_id where the
 // scope has one) and is parameterised. Step config can hold reply template text and
 // preview_text holds rendered reply text, so neither is ever logged.
 import type pg from 'pg';
@@ -8,6 +8,7 @@ import type { ActionStatus, BrandScope } from '@feedbouncer/comments';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { clampLimit } from './support.js';
 import { sortSteps, type ActionStep, type StepStatus, type StepType } from './steps.js';
+import type { GatedStep } from './suggestion-plan.js';
 
 export interface StepRow {
   id: string;
@@ -30,8 +31,10 @@ export interface RunRow {
   id: string;
   connectionId: string;
   commentId: string;
-  ruleId: string;
-  evaluationId: string;
+  ruleId: string | null;
+  evaluationId: string | null;
+  suggestionId: string | null;
+  approvedByUserId: string | null;
   dryRun: boolean;
   completedAt: Date | null;
   steps: StepRow[];
@@ -39,8 +42,9 @@ export interface RunRow {
 
 export interface LogEntry extends StepRow {
   commentId: string;
-  ruleId: string;
-  ruleName: string;
+  ruleId: string | null;
+  ruleName: string | null;
+  suggestionId: string | null;
   dryRun: boolean;
   createdAt: Date;
   actionStatus: ActionStatus | null;
@@ -51,7 +55,10 @@ export interface LogEntry extends StepRow {
 export type StepWithRun = StepRow & {
   commentId: string;
   connectionId: string;
-  ruleId: string;
+  ruleId: string | null;
+  evaluationId: string | null;
+  suggestionId: string | null;
+  approvedByUserId: string | null;
   dryRun: boolean;
   /** Status of the latest undo attempt's action, if there was one. */
   undoStatus: ActionStatus | null;
@@ -98,13 +105,16 @@ interface RunDb {
   id: string;
   connection_id: string;
   comment_id: string;
-  rule_id: string;
-  rule_evaluation_id: string;
+  rule_id: string | null;
+  rule_evaluation_id: string | null;
+  suggestion_id: string | null;
+  approved_by_user_id: string | null;
   dry_run: boolean;
   completed_at: Date | null;
 }
 
-const RUN_COLS = `r.id, r.connection_id, r.comment_id, r.rule_id, r.rule_evaluation_id, r.dry_run, r.completed_at`;
+const RUN_COLS = `r.id, r.connection_id, r.comment_id, r.rule_id, r.rule_evaluation_id, r.suggestion_id,
+  r.approved_by_user_id, r.dry_run, r.completed_at`;
 
 /** Undo statuses after which the step can be undone again. */
 const RETRY_UNDO = `('failed', 'not_eligible')`;
@@ -124,21 +134,24 @@ export type Queryable = Pick<pg.ClientBase, 'query'>;
 async function loadRun(
   q: Queryable,
   scope: ConnectionScope,
-  where: { id: string } | { evaluationId: string; ruleId: string },
+  where: { id: string } | { evaluationId: string; ruleId: string } | { suggestionId: string },
   lock: boolean,
 ): Promise<RunRow | null> {
-  const byId = 'id' in where;
+  const [filter, args] =
+    'id' in where
+      ? (['r.id = $4', [where.id]] as const)
+      : 'suggestionId' in where
+        ? (['r.suggestion_id = $4', [where.suggestionId]] as const)
+        : ([
+            'r.rule_evaluation_id = $4 AND r.rule_id = $5',
+            [where.evaluationId, where.ruleId],
+          ] as const);
   const run = await q.query<RunDb>(
     `SELECT ${RUN_COLS} FROM action_run r
       WHERE r.organization_id = $1 AND r.brand_id = $2 AND r.connection_id = $3
-        AND ${byId ? 'r.id = $4' : 'r.rule_evaluation_id = $4 AND r.rule_id = $5'}
+        AND ${filter}
       ${lock ? 'FOR UPDATE' : ''}`,
-    [
-      scope.organizationId,
-      scope.brandId,
-      scope.connectionId,
-      ...(byId ? [where.id] : [where.evaluationId, where.ruleId]),
-    ],
+    [scope.organizationId, scope.brandId, scope.connectionId, ...args],
   );
   const r = run.rows[0];
   if (!r) return null;
@@ -154,6 +167,8 @@ async function loadRun(
     commentId: r.comment_id,
     ruleId: r.rule_id,
     evaluationId: r.rule_evaluation_id,
+    suggestionId: r.suggestion_id,
+    approvedByUserId: r.approved_by_user_id,
     dryRun: r.dry_run,
     completedAt: r.completed_at,
     steps: steps.rows.map(toStep),
@@ -165,6 +180,21 @@ const REVERSAL = {
   hide: { apply: 'hide', reverse: 'unhide', step: 'hide', perAuthor: false },
   ban_author: { apply: 'ban_author', reverse: 'unban_author', step: 'ban', perAuthor: true },
 } as const;
+
+async function insertSteps(
+  tx: pg.PoolClient,
+  scope: BrandScope,
+  runId: string,
+  steps: readonly ActionStep[],
+): Promise<void> {
+  for (const [position, step] of sortSteps(steps).entries()) {
+    await tx.query(
+      `INSERT INTO action_run_step (organization_id, brand_id, run_id, position, step_type, config)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+      [scope.organizationId, scope.brandId, runId, position, step.type, JSON.stringify(step)],
+    );
+  }
+}
 
 export class PgActionRunStore {
   constructor(private readonly pool: pg.Pool) {}
@@ -200,23 +230,7 @@ export class PgActionRunStore {
         ],
       );
       const created = ins.rows[0];
-      if (created) {
-        const steps = sortSteps(i.steps);
-        for (const [position, step] of steps.entries()) {
-          await tx.query(
-            `INSERT INTO action_run_step (organization_id, brand_id, run_id, position, step_type, config)
-             VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
-            [
-              scope.organizationId,
-              scope.brandId,
-              created.id,
-              position,
-              step.type,
-              JSON.stringify(step),
-            ],
-          );
-        }
-      }
+      if (created) await insertSteps(tx, scope, created.id, i.steps);
       const run = await loadRun(
         tx,
         scope,
@@ -226,6 +240,47 @@ export class PgActionRunStore {
       if (!run) throw new Error('evaluation_not_found');
       return run;
     });
+  }
+
+  /** Idempotent on suggestionId; returns the existing run on conflict. */
+  async createSuggestionRun(
+    tx: pg.PoolClient,
+    scope: ConnectionScope,
+    i: { suggestionId: string; commentId: string; userId: string; steps: readonly GatedStep[] },
+  ): Promise<RunRow> {
+    const ins = await tx.query<{ id: string }>(
+      `INSERT INTO action_run (organization_id, brand_id, connection_id, comment_id, suggestion_id,
+                              approved_by_user_id, dry_run)
+       VALUES ($1, $2, $3, $4, $5, $6, false)
+       ON CONFLICT (suggestion_id) WHERE suggestion_id IS NOT NULL DO NOTHING
+       RETURNING id`,
+      [
+        scope.organizationId,
+        scope.brandId,
+        scope.connectionId,
+        i.commentId,
+        i.suggestionId,
+        i.userId,
+      ],
+    );
+    const created = ins.rows[0];
+    if (created) await insertSteps(tx, scope, created.id, i.steps);
+    const run = await loadRun(
+      tx,
+      scope,
+      created ? { id: created.id } : { suggestionId: i.suggestionId },
+      false,
+    );
+    if (!run) throw new Error('suggestion_not_found');
+    return run;
+  }
+
+  async getSuggestionRun(
+    scope: ConnectionScope,
+    suggestionId: string,
+    db: Queryable = this.pool,
+  ): Promise<RunRow | null> {
+    return loadRun(db, scope, { suggestionId }, false);
   }
 
   async getRun(scope: ConnectionScope, runId: string): Promise<RunRow | null> {
@@ -384,6 +439,77 @@ export class PgActionRunStore {
     return r.rows[0]?.reversed === true;
   }
 
+  /**
+   * Serializes ban decisions for the comment's author until the transaction ends. With
+   * claimRequest, a second approval run cannot pass the ban precheck while the first ban
+   * is between precheck and its moderation_action insert.
+   */
+  async lockAuthorBans(tx: pg.PoolClient, scope: BrandScope, commentId: string): Promise<void> {
+    await tx.query(
+      `SELECT pg_advisory_xact_lock(hashtextextended(
+                'ban:' || connection_id || ':' || coalesce(author_id::text, id::text), 0))
+         FROM comment WHERE organization_id = $1 AND brand_id = $2 AND id = $3`,
+      [scope.organizationId, scope.brandId, commentId],
+    );
+  }
+
+  /** Records the key a step is about to request with, before the action exists. */
+  async claimRequest(
+    tx: pg.PoolClient,
+    scope: BrandScope,
+    stepId: string,
+    requestKey: string,
+  ): Promise<void> {
+    await tx.query(
+      `UPDATE action_run_step SET request_key = $4
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND moderation_action_id IS NULL`,
+      [scope.organizationId, scope.brandId, stepId, requestKey],
+    );
+  }
+
+  /**
+   * True when the comment's author is banned: a ban of the author (on any of their comments
+   * on this connection) is pending or applied with no applied unban after it, or another
+   * pending ban step has claimed its request.
+   */
+  async hasActiveBan(
+    scope: BrandScope,
+    commentId: string,
+    db: Queryable = this.pool,
+    ownRequestKey: string | null = null,
+  ): Promise<boolean> {
+    const r = await db.query<{ banned: boolean }>(
+      `WITH me AS (
+         SELECT id, author_id, connection_id FROM comment
+          WHERE organization_id = $1 AND brand_id = $2 AND id = $3
+       ), cs AS (
+         SELECT c.id FROM comment c JOIN me ON c.connection_id = me.connection_id
+          WHERE c.organization_id = $1 AND c.brand_id = $2
+            AND (c.id = me.id OR (me.author_id IS NOT NULL AND c.author_id = me.author_id))
+       )
+       SELECT EXISTS (
+         SELECT 1 FROM moderation_action b
+          WHERE b.organization_id = $1 AND b.brand_id = $2 AND b.comment_id IN (SELECT id FROM cs)
+            AND b.kind = 'ban_author' AND b.status IN ('pending', 'applied')
+            AND b.request_key IS DISTINCT FROM $4
+            AND NOT EXISTS (
+              SELECT 1 FROM moderation_action u
+               WHERE u.organization_id = $1 AND u.brand_id = $2 AND u.comment_id IN (SELECT id FROM cs)
+                 AND u.kind = 'unban_author' AND u.status = 'applied'
+                 AND (u.created_at, u.id) > (b.created_at, b.id))
+       ) OR EXISTS (
+         SELECT 1 FROM action_run_step s
+           JOIN action_run r ON r.brand_id = s.brand_id AND r.id = s.run_id
+          WHERE s.organization_id = $1 AND s.brand_id = $2 AND r.organization_id = $1
+            AND r.comment_id IN (SELECT id FROM cs)
+            AND s.step_type = 'ban' AND s.status = 'pending' AND s.moderation_action_id IS NULL
+            AND s.request_key IS NOT NULL AND s.request_key IS DISTINCT FROM $4
+       ) AS banned`,
+      [scope.organizationId, scope.brandId, commentId, ownRequestKey],
+    );
+    return r.rows[0]?.banned === true;
+  }
+
   /** True when a non-user public reply is live on any comment in this comment's thread. */
   async hasAutomatedThreadReply(
     scope: BrandScope,
@@ -423,8 +549,9 @@ export class PgActionRunStore {
     const r = await this.pool.query<
       StepDb & {
         comment_id: string;
-        rule_id: string;
-        rule_name: string;
+        rule_id: string | null;
+        rule_name: string | null;
+        suggestion_id: string | null;
         dry_run: boolean;
         created_at: Date;
         action_status: ActionStatus | null;
@@ -432,11 +559,11 @@ export class PgActionRunStore {
         undoable: boolean;
       }
     >(
-      `SELECT ${STEP_COLS}, r.comment_id, r.rule_id, ru.name AS rule_name, r.dry_run, s.created_at,
+      `SELECT ${STEP_COLS}, r.comment_id, r.rule_id, ru.name AS rule_name, r.suggestion_id, r.dry_run, s.created_at,
               a.status AS action_status, u.status AS undo_status, ${UNDOABLE_SQL} AS undoable
          FROM action_run_step s
          JOIN action_run r ON r.brand_id = s.brand_id AND r.id = s.run_id
-         JOIN rule ru ON ru.organization_id = r.organization_id AND ru.brand_id = r.brand_id AND ru.id = r.rule_id
+         LEFT JOIN rule ru ON ru.organization_id = r.organization_id AND ru.brand_id = r.brand_id AND ru.id = r.rule_id
          LEFT JOIN moderation_action a ON a.organization_id = s.organization_id AND a.brand_id = s.brand_id
                                       AND a.id = s.moderation_action_id
          LEFT JOIN moderation_action u ON u.organization_id = s.organization_id AND u.brand_id = s.brand_id
@@ -467,6 +594,7 @@ export class PgActionRunStore {
       commentId: row.comment_id,
       ruleId: row.rule_id,
       ruleName: row.rule_name,
+      suggestionId: row.suggestion_id,
       dryRun: row.dry_run,
       createdAt: row.created_at,
       actionStatus: row.action_status,
@@ -480,12 +608,16 @@ export class PgActionRunStore {
       StepDb & {
         comment_id: string;
         connection_id: string;
-        rule_id: string;
+        rule_id: string | null;
+        rule_evaluation_id: string | null;
+        suggestion_id: string | null;
+        approved_by_user_id: string | null;
         dry_run: boolean;
         undo_status: ActionStatus | null;
       }
     >(
-      `SELECT ${STEP_COLS}, r.comment_id, r.connection_id, r.rule_id, r.dry_run, u.status AS undo_status
+      `SELECT ${STEP_COLS}, r.comment_id, r.connection_id, r.rule_id, r.rule_evaluation_id, r.suggestion_id,
+              r.approved_by_user_id, r.dry_run, u.status AS undo_status
          FROM action_run_step s
          JOIN action_run r ON r.brand_id = s.brand_id AND r.id = s.run_id
          LEFT JOIN moderation_action u ON u.organization_id = s.organization_id AND u.brand_id = s.brand_id
@@ -500,6 +632,9 @@ export class PgActionRunStore {
           commentId: row.comment_id,
           connectionId: row.connection_id,
           ruleId: row.rule_id,
+          evaluationId: row.rule_evaluation_id,
+          suggestionId: row.suggestion_id,
+          approvedByUserId: row.approved_by_user_id,
           dryRun: row.dry_run,
           undoStatus: row.undo_status,
         }

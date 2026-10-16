@@ -177,6 +177,7 @@ describe('facebook connect flow', () => {
       status: 'connected',
       statusReason: null,
       backfill: expect.objectContaining({ status: 'pending' }),
+      reviewMode: expect.objectContaining({ connectionId, state: 'active', pendingCount: 0 }),
     });
     const secret = await api.pool.query<{ encrypted_value: Buffer }>(
       `SELECT encrypted_value FROM connection_secret WHERE connection_id = $1 AND kind = 'access_token'`,
@@ -334,6 +335,7 @@ describe('facebook connect flow', () => {
           status: 'connected_elsewhere',
           connectionId: null,
           wasReconnectRequired: false,
+          reviewMode: null,
         },
       ],
     });
@@ -567,6 +569,7 @@ describe('instagram connect flow', () => {
         status: 'not_eligible',
         connectionId: null,
         wasReconnectRequired: false,
+        reviewMode: null,
       },
     ]);
     const rows = await api.pool.query(`SELECT id FROM connection WHERE external_account_id = $1`, [
@@ -653,6 +656,7 @@ describe('instagram connect flow', () => {
           status: 'connected_elsewhere',
           connectionId: null,
           wasReconnectRequired: false,
+          reviewMode: null,
         },
       ],
     });

@@ -2,12 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { isClientRequestKey } from './actions.js';
 
 describe('isClientRequestKey', () => {
-  it.each(['auto:', 'undo:', 'review:', 'clf:', 'pol:', 'rule-eval:'])(
-    'refuses the server-derived prefix %s',
-    (prefix) => {
-      expect(isClientRequestKey(`${prefix}abc`)).toBe(false);
-    },
-  );
+  it.each([
+    'auto:',
+    'undo:',
+    'review:',
+    'clf:',
+    'pol:',
+    'rule-eval:',
+    'suggestion:',
+    'review_end:',
+  ])('refuses the server-derived prefix %s', (prefix) => {
+    expect(isClientRequestKey(`${prefix}abc`)).toBe(false);
+  });
 
   it('accepts well-formed client keys, including manual: ones', () => {
     for (const key of ['k1', 'manual:abc', 'ui-123', 'a.b_c-d'])

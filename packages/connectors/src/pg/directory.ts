@@ -3,11 +3,14 @@ import { isUniqueViolation, withTransaction } from '@feedbouncer/db';
 import { flagReconnectRequired, type ConnectionScope } from '@feedbouncer/secrets';
 import {
   ConnectionTakenError,
+  type ActivateOptions,
+  type ActivateResult,
   type ConnectionDirectory,
   type ConnectionRecord,
   type ConnectionStatus,
   type ReauthReason,
 } from '../ports.js';
+import { reviewModeState } from '../review-mode.js';
 import type { Platform } from '../types.js';
 import { noNul } from './sanitize.js';
 
@@ -16,6 +19,31 @@ const LIVE_ACCOUNT_INDEXES = [
   'connection_facebook_live_external_account_id_key',
   'connection_instagram_live_external_account_id_key',
 ];
+
+interface ReviewRow {
+  review_mode: 'legacy' | 'on' | 'opted_out';
+  review_mode_started_at: Date | null;
+  review_mode_ends_at: Date | null;
+  review_mode_ended_at: Date | null;
+  db_now: Date;
+}
+const REVIEW_RETURNING = `review_mode, review_mode_started_at, review_mode_ends_at,
+  review_mode_ended_at, now() AS db_now`;
+
+/** State at the database's transaction time; a row not in scope reads as off. */
+function reviewResult(row: ReviewRow | undefined, changed: boolean): ActivateResult['reviewMode'] {
+  if (!row) return { state: 'off', endsAt: null, changed: false };
+  const state = reviewModeState(
+    {
+      mode: row.review_mode,
+      startedAt: row.review_mode_started_at,
+      endsAt: row.review_mode_ends_at,
+      endedAt: row.review_mode_ended_at,
+    },
+    row.db_now,
+  );
+  return { state, endsAt: row.review_mode_ends_at, changed };
+}
 
 export class PgConnectionDirectory implements ConnectionDirectory {
   constructor(private readonly pool: pg.Pool) {}
@@ -93,23 +121,64 @@ export class PgConnectionDirectory implements ConnectionDirectory {
     };
   }
 
-  /** Only pending, errored or already-active connections activate; paused and revoked ones never do. */
-  async activate(scope: ConnectionScope, actorUserId: string): Promise<boolean> {
+  /**
+   * Only pending, errored or already-active connections activate; paused and
+   * revoked ones never do. A row in review mode without a window ('on', never
+   * started) gets its window stamped, or is opted out, in the same statement.
+   */
+  async activate(
+    scope: ConnectionScope,
+    actorUserId: string,
+    opts: ActivateOptions = {},
+  ): Promise<ActivateResult> {
+    const optOut = opts.reviewMode === 'opted_out';
     return withTransaction(this.pool, async (c) => {
-      const r = await c.query<{ platform: string }>(
-        `UPDATE connection SET status = 'active', status_reason = NULL
-          WHERE id = $3 AND organization_id = $1 AND brand_id = $2
-            AND status IN ('active', 'reconnect_required', 'error')
-        RETURNING platform`,
-        [scope.organizationId, scope.brandId, scope.connectionId],
+      // `prev` locks the row and keeps its review columns as they were, so the
+      // update knows whether this is the first activation.
+      const r = await c.query<ReviewRow & { platform: string; changed: boolean }>(
+        `WITH prev AS (
+           SELECT id, review_mode = 'on' AND review_mode_started_at IS NULL AS first
+             FROM connection
+            WHERE id = $3 AND organization_id = $1 AND brand_id = $2
+              AND status IN ('active', 'reconnect_required', 'error')
+              FOR UPDATE)
+         UPDATE connection cn
+            SET status = 'active', status_reason = NULL,
+                review_mode = CASE WHEN prev.first AND $4 THEN 'opted_out' ELSE cn.review_mode END,
+                review_mode_started_at = CASE WHEN prev.first AND NOT $4 THEN now()
+                                              ELSE cn.review_mode_started_at END,
+                review_mode_ends_at = CASE WHEN prev.first AND NOT $4 THEN now() + interval '168 hours'
+                                           ELSE cn.review_mode_ends_at END
+           FROM prev
+          WHERE cn.id = prev.id AND cn.organization_id = $1 AND cn.brand_id = $2
+        RETURNING cn.platform, prev.first AS changed, ${REVIEW_RETURNING}`,
+        [scope.organizationId, scope.brandId, scope.connectionId, optOut],
       );
-      if (r.rowCount !== 1) return false;
-      await c.query(
-        `INSERT INTO audit_event (organization_id, brand_id, actor_type, actor_user_id, action, subject_type, subject_id, details)
-         VALUES ($1, $2, 'user', $4, 'connection.authorized', 'connection', $3, jsonb_build_object('platform', $5::text))`,
-        [scope.organizationId, scope.brandId, scope.connectionId, actorUserId, r.rows[0]!.platform],
-      );
-      return true;
+      const row = r.rows[0];
+      if (!row) {
+        const cur = await c.query<ReviewRow>(
+          `SELECT ${REVIEW_RETURNING} FROM connection
+            WHERE id = $3 AND organization_id = $1 AND brand_id = $2`,
+          [scope.organizationId, scope.brandId, scope.connectionId],
+        );
+        return { activated: false, reviewMode: reviewResult(cur.rows[0], false) };
+      }
+      const audit = (action: string) =>
+        c.query(
+          `INSERT INTO audit_event (organization_id, brand_id, actor_type, actor_user_id, action, subject_type, subject_id, details)
+           VALUES ($1, $2, 'user', $4, $6, 'connection', $3, jsonb_build_object('platform', $5::text))`,
+          [
+            scope.organizationId,
+            scope.brandId,
+            scope.connectionId,
+            actorUserId,
+            row.platform,
+            action,
+          ],
+        );
+      await audit('connection.authorized');
+      if (row.changed && optOut) await audit('review_mode.opted_out');
+      return { activated: true, reviewMode: reviewResult(row, row.changed) };
     });
   }
 

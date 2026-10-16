@@ -1,14 +1,21 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { PgSuggestionStore } from '@feedbouncer/actions';
 import type { PgBackfillStore } from '@feedbouncer/comments';
-import type { PgConnectorStack } from '@feedbouncer/connectors';
+import {
+  systemClock,
+  type Platform,
+  type PgConnectorStack,
+  type ReviewMode,
+} from '@feedbouncer/connectors';
 import type { JobProducer } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
 import { parseUuidOr404 } from '../http/validation.js';
-import { requireBrand } from '../tenancy/brand-scope.js';
+import { requireBrand, type BrandScope } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { BACKFILL_STORE, CONNECTOR_STACK, DEPS, JOB_PRODUCER } from '../tokens.js';
+import { toReviewModeStatusDto, type ReviewModeStatusDto } from '../review-mode/dto.js';
 import { enqueueLifecycle } from './lifecycle.js';
 
 export type ConnectionViewStatus =
@@ -38,6 +45,7 @@ export interface ConnectionView {
   /** A snake_case code; the web app maps it to text. */
   statusReason: string | null;
   backfill: BackfillViewDto | null;
+  reviewMode: ReviewModeStatusDto;
 }
 
 /** API status for a stored connection; null when it is not shown at all. */
@@ -63,41 +71,34 @@ export function viewStatus(status: string, reason: string | null): ConnectionVie
 
 @Injectable()
 export class ConnectionsService {
+  readonly #suggestions: PgSuggestionStore;
+
   constructor(
     @Inject(DEPS) private readonly deps: AppDeps,
     @Inject(CONNECTOR_STACK) private readonly stack: PgConnectorStack | null,
     @Inject(JOB_PRODUCER) private readonly producer: JobProducer | null,
     @Inject(BACKFILL_STORE) private readonly backfill: PgBackfillStore,
-  ) {}
+  ) {
+    this.#suggestions = new PgSuggestionStore(deps.pool);
+  }
 
   async list(org: OrgContext, brandId: unknown): Promise<ConnectionView[]> {
     const brand = await requireBrand(this.deps.pool, org, brandId);
-    const r = await this.deps.pool.query<{
-      id: string;
-      platform: string;
-      display_name: string | null;
-      external_account_id: string;
-      status: string;
-      status_reason: string | null;
-    }>(
-      `SELECT id, platform, display_name, external_account_id, status, status_reason
-         FROM connection WHERE organization_id = $1 AND brand_id = $2
-        ORDER BY created_at, id`,
-      [brand.organizationId, brand.brandId],
-    );
-    const bf = await this.backfill.views(brand, new Date());
-    const views: ConnectionView[] = [];
-    for (const row of r.rows) {
-      const status = viewStatus(row.status, row.status_reason);
-      if (status === null) continue;
+    const now = new Date(systemClock.now());
+    const [rows, bf, pending] = await Promise.all([
+      this.#rows(brand),
+      this.backfill.views(brand, now),
+      this.#suggestions.pendingCounts(brand, now),
+    ]);
+    return rows.map((row) => {
       const v = bf.get(row.id);
-      views.push({
+      return {
         id: row.id,
         platform: row.platform,
         displayName: row.display_name,
         externalAccountId: row.external_account_id,
-        status,
-        statusReason: status === 'connected' ? null : row.status_reason,
+        status: row.view_status,
+        statusReason: row.view_status === 'connected' ? null : row.status_reason,
         backfill: v
           ? {
               status: v.status,
@@ -109,9 +110,63 @@ export class ConnectionsService {
               skippedSources: v.skippedCount,
             }
           : null,
-      });
-    }
-    return views;
+        reviewMode: toReviewModeStatusDto(row.connection, pending.get(row.id) ?? 0, now),
+      };
+    });
+  }
+
+  /** Review-mode status of the brand's visible connections, without backfill details. */
+  async reviewModes(org: OrgContext, brandId: unknown): Promise<ReviewModeStatusDto[]> {
+    const brand = await requireBrand(this.deps.pool, org, brandId);
+    const now = new Date(systemClock.now());
+    const [rows, pending] = await Promise.all([
+      this.#rows(brand),
+      this.#suggestions.pendingCounts(brand, now),
+    ]);
+    return rows.map((row) => toReviewModeStatusDto(row.connection, pending.get(row.id) ?? 0, now));
+  }
+
+  /** The brand's connections that are visible to users, oldest first. */
+  async #rows(brand: BrandScope) {
+    const r = await this.deps.pool.query<{
+      id: string;
+      platform: Platform;
+      display_name: string | null;
+      external_account_id: string;
+      status: string;
+      status_reason: string | null;
+      review_mode: ReviewMode;
+      review_mode_started_at: Date | null;
+      review_mode_ends_at: Date | null;
+      review_mode_ended_at: Date | null;
+    }>(
+      `SELECT id, platform, display_name, external_account_id, status, status_reason, review_mode,
+              review_mode_started_at, review_mode_ends_at, review_mode_ended_at
+         FROM connection WHERE organization_id = $1 AND brand_id = $2
+        ORDER BY created_at, id`,
+      [brand.organizationId, brand.brandId],
+    );
+    return r.rows.flatMap((row) => {
+      const viewStat = viewStatus(row.status, row.status_reason);
+      if (viewStat === null) return [];
+      return [
+        {
+          ...row,
+          view_status: viewStat,
+          connection: {
+            id: row.id,
+            platform: row.platform,
+            displayName: row.display_name,
+            review: {
+              mode: row.review_mode,
+              startedAt: row.review_mode_started_at,
+              endsAt: row.review_mode_ends_at,
+              endedAt: row.review_mode_ended_at,
+            },
+          },
+        },
+      ];
+    });
   }
 
   /**

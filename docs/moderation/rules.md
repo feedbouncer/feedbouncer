@@ -72,6 +72,13 @@ steps do not fall back; their outcome is in the action log. A step that is
 only deferred (rate limited, or waiting for a reconnect) stays pending and
 falls back only if it finally fails.
 
+## During review mode
+
+For the first 7 days after an account is connected, a rule that matches still
+records its decision, but its Hide, Delete, Ban author, Auto-reply and Private
+reply steps become a suggestion for a person to approve. Flag for review runs
+as usual. See [review-mode.md](review-mode.md).
+
 ## Idempotency and scope
 
 - There is one evaluation per comment, per version of its text. Redelivered

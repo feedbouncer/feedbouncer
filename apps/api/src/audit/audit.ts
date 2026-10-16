@@ -1,4 +1,5 @@
 import type pg from 'pg';
+import { recordAudit as writeAudit } from '@feedbouncer/actions';
 
 export type AuditAction =
   | 'organization.created'
@@ -33,7 +34,12 @@ export type AuditAction =
   | 'policy.disabled'
   | 'policy.archived'
   | 'policy.preview_requested'
-  | 'policy.run_requested';
+  | 'policy.run_requested'
+  | 'review_mode.opted_out'
+  | 'review_mode.ended_early'
+  | 'suggestion.approved'
+  | 'suggestion.dismissed'
+  | 'suggestion.bulk_requested';
 
 export interface AuditInput {
   organizationId: string;
@@ -53,25 +59,12 @@ export interface AuditInput {
     | 'classifier_run'
     | 'custom_policy'
     | 'policy_preview'
-    | 'policy_run';
+    | 'policy_run'
+    | 'connection'
+    | 'action_suggestion';
   subjectId: string | null;
   /** Ids, roles and booleans only: never emails, people's names or tokens. */
   details?: Readonly<Record<string, string | number | boolean | null>>;
 }
 
-/** Writes inside the caller's transaction, so the event commits or rolls back with the change. */
-export async function recordAudit(c: pg.PoolClient, e: AuditInput): Promise<void> {
-  await c.query(
-    `INSERT INTO audit_event (organization_id, brand_id, actor_type, actor_user_id, action, subject_type, subject_id, details)
-     VALUES ($1, $2, 'user', $3, $4, $5, $6, $7::jsonb)`,
-    [
-      e.organizationId,
-      e.brandId ?? null,
-      e.actorUserId,
-      e.action,
-      e.subjectType,
-      e.subjectId,
-      JSON.stringify(e.details ?? {}),
-    ],
-  );
-}
+export const recordAudit: (c: pg.PoolClient, e: AuditInput) => Promise<void> = writeAudit;

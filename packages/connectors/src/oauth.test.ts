@@ -369,7 +369,10 @@ describe('OAuthFlow.complete', () => {
     );
 
     it('never reports ok when activation did not take effect', async () => {
-      vi.spyOn(directory, 'activate').mockResolvedValue(false);
+      vi.spyOn(directory, 'activate').mockResolvedValue({
+        activated: false,
+        reviewMode: { state: 'off', endsAt: null, changed: false },
+      });
       const first = await flow.start(alice, 'youtube');
       expect(
         await flow.complete(alice, 'youtube', {

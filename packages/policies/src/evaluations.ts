@@ -20,6 +20,7 @@ interface Base {
   /** sha256 of the stored body (32 bytes). */
   sha: Buffer;
   triggerKey: string;
+  reviewMode?: boolean;
 }
 export type EvaluationRecord =
   | (Base & { status: 'skipped'; skipReason: SkipReason; ruleEvaluationId: string | null })
@@ -50,6 +51,8 @@ export interface EvaluationRow {
   outcome: PolicyAction | null;
   winningRevisionId: string | null;
   fallbackAt: Date | null;
+  /** Whether the connection's review window was active when this was evaluated. */
+  reviewMode: boolean;
 }
 
 export interface EvaluationView {
@@ -74,7 +77,8 @@ export interface EvaluationView {
   }[];
 }
 
-const COLS = 'id, status, skip_reason, failure_code, outcome, winning_revision_id, fallback_at';
+const COLS =
+  'id, status, skip_reason, failure_code, outcome, winning_revision_id, fallback_at, review_mode';
 interface Row {
   id: string;
   status: EvaluationStatus;
@@ -83,6 +87,7 @@ interface Row {
   outcome: PolicyAction | null;
   winning_revision_id: string | null;
   fallback_at: Date | null;
+  review_mode: boolean;
 }
 const toRow = (r: Row): EvaluationRow => ({
   id: r.id,
@@ -92,12 +97,13 @@ const toRow = (r: Row): EvaluationRow => ({
   outcome: r.outcome,
   winningRevisionId: r.winning_revision_id,
   fallbackAt: r.fallback_at,
+  reviewMode: r.review_mode,
 });
 
 const INSERT_DECISION = `
   INSERT INTO decision (organization_id, brand_id, comment_id, outcome, mode, actor_type, reason,
                         policy_evaluation_id, policy_revision_id)
-  VALUES ($1, $2, $3, $4, 'enforce', 'policy', $5, $6, $7)`;
+  VALUES ($1, $2, $3, $4, $8, 'policy', $5, $6, $7)`;
 
 export class PgPolicyEvaluationStore {
   readonly #pool: pg.Pool;
@@ -136,10 +142,11 @@ export class PgPolicyEvaluationStore {
         `INSERT INTO policy_evaluation (organization_id, brand_id, connection_id, comment_id, body_sha256,
                                         trigger_key, rule_evaluation_id, status, skip_reason, failure_code,
                                         provider, model, prompt_version, checked_revision_ids,
-                                        input_truncated, low_signal, outcome, winning_revision_id)
+                                        input_truncated, low_signal, outcome, winning_revision_id,
+                                        review_mode)
          SELECT c.organization_id, c.brand_id, c.connection_id, c.id, $5::bytea, $6::text, $7::uuid,
                 $8::text, $9::text, $10::text, $11::text, $12::text, $13::text, $14::uuid[],
-                $15::boolean, $16::boolean, $17::text, $18::uuid
+                $15::boolean, $16::boolean, $17::text, $18::uuid, $19::boolean
            FROM comment c
           WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3 AND c.id = $4
          ON CONFLICT (comment_id, body_sha256, trigger_key) DO NOTHING
@@ -163,6 +170,7 @@ export class PgPolicyEvaluationStore {
           ev?.lowSignal ?? null,
           outcome,
           winner?.revisionId ?? null,
+          r.reviewMode ?? false,
         ],
       );
       const row = rows[0];
@@ -193,10 +201,23 @@ export class PgPolicyEvaluationStore {
             ev.reason,
             row.id,
             winner.revisionId,
+            r.reviewMode && (outcome === 'hide' || outcome === 'remove') ? 'suggest' : 'enforce',
           ]);
       }
       return toRow(row);
     });
+  }
+
+  /** The reason written with the winning decision, for a suggestion made from it. */
+  async decisionReason(s: BrandScope, evaluationId: string): Promise<string | null> {
+    const { rows } = await this.#pool.query<{ reason: string }>(
+      `SELECT reason FROM decision
+        WHERE organization_id = $1 AND brand_id = $2 AND policy_evaluation_id = $3
+          AND outcome IN ('hide', 'remove')
+        ORDER BY sequence LIMIT 1`,
+      [s.organizationId, s.brandId, evaluationId],
+    );
+    return rows[0]?.reason ?? null;
   }
 
   /**

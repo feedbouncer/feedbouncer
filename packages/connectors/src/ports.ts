@@ -1,6 +1,7 @@
 import type { Role } from '@feedbouncer/authz';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { ErrorClass, Logger, Secret } from '@feedbouncer/service-runtime';
+import type { ReviewModeState } from './review-mode.js';
 import type { Platform } from './types.js';
 
 export type ConnectionStatus = 'active' | 'paused' | 'revoked' | 'error' | 'reconnect_required';
@@ -17,6 +18,18 @@ export const REAUTH_REASONS = [
   'setup_not_queued',
 ] as const;
 export type ReauthReason = (typeof REAUTH_REASONS)[number];
+export interface ActivateOptions {
+  readonly reviewMode?: 'on' | 'opted_out';
+}
+export interface ActivateResult {
+  readonly activated: boolean;
+  readonly reviewMode: {
+    readonly state: ReviewModeState;
+    readonly endsAt: Date | null;
+    /** The window was started or opted out by this call. */
+    readonly changed: boolean;
+  };
+}
 export interface ConnectionDirectory {
   load(scope: ConnectionScope): Promise<ConnectionRecord | null>;
   markReauthRequired(scope: ConnectionScope, reason: ReauthReason): Promise<boolean>;
@@ -31,9 +44,18 @@ export interface ConnectionDirectory {
   /**
    * Moves a pending, errored or already-active connection to active. Paused and
    * revoked connections never activate: `revoked` is terminal for the framework.
-   * Resolves true only when the row ended up active.
+   * `activated` is true only when the row ended up active.
+   *
+   * The first activation of a row in review mode ('on', no window yet) starts
+   * its 168-hour window, or with `reviewMode: 'opted_out'` opts it out (audited
+   * as review_mode.opted_out), in the same transaction. Any other row keeps its
+   * review columns (`changed: false`); reconnects never restart or opt out.
    */
-  activate(scope: ConnectionScope, actorUserId: string): Promise<boolean>;
+  activate(
+    scope: ConnectionScope,
+    actorUserId: string,
+    opts?: ActivateOptions,
+  ): Promise<ActivateResult>;
   /**
    * Cross-tenant lookup (documented tenancy exception): the single non-revoked
    * connection for an account, whichever workspace owns it. Permitted callers:

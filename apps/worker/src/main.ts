@@ -14,6 +14,7 @@ import {
   systemClock,
   type ConnectionDirectory,
 } from '@feedbouncer/connectors';
+import { ReviewModeSweeper } from '@feedbouncer/actions';
 import { CLASSIFIER_LANE } from '@feedbouncer/classifier';
 import { POLICY_LANE, PgPolicyPreviewStore } from '@feedbouncer/policies';
 import { createPool, runJobOnce } from '@feedbouncer/db';
@@ -61,6 +62,7 @@ try {
 }
 
 const PREVIEW_PRUNE_INTERVAL_MS = 3_600_000;
+const REVIEW_SWEEP_INTERVAL_MS = 300_000;
 
 const log = createLogger('worker', env.logLevel);
 installCrashHandlers(log);
@@ -286,6 +288,13 @@ try {
       .catch((err: unknown) => log.warn('policy preview prune failed', errorFields(err)));
   }, PREVIEW_PRUNE_INTERVAL_MS);
   previewPruner.unref();
+  const reviewSweeper = new ReviewModeSweeper({ pool, clock: systemClock, log });
+  const reviewModeSweep = setInterval(() => {
+    reviewSweeper
+      .tick()
+      .catch((err: unknown) => log.warn('review mode sweep failed', errorFields(err)));
+  }, REVIEW_SWEEP_INTERVAL_MS);
+  reviewModeSweep.unref();
 
   worker.run().catch((err: unknown) => {
     log.error('worker stopped', errorFields(err));

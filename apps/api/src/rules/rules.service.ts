@@ -3,6 +3,7 @@ import type pg from 'pg';
 import { z } from 'zod';
 import {
   checkStepsForBrand,
+  PgSuggestionStore,
   loadBrandConnections,
   type ActionStep,
   type StepIssue,
@@ -73,12 +74,29 @@ const rulePlatform = (conditions: unknown): Platform | undefined => {
   return c?.type === 'author' ? (c.platform as Platform) : undefined;
 };
 
+const differs = (a: unknown, b: unknown): boolean => JSON.stringify(a) !== JSON.stringify(b);
+
+/** How an edit reaches the pending suggestions the rule contributed to; null when it does not. */
+function suggestionChange(
+  before: StoredRule,
+  after: StoredRule,
+): 'retired' | { actions: StoredRule['actions'] } | null {
+  const retired =
+    (before.enabled && !after.enabled) ||
+    (before.mode !== 'suggest' && after.mode === 'suggest') ||
+    differs(before.conditions, after.conditions);
+  if (retired) return 'retired';
+  return differs(before.actions, after.actions) ? { actions: after.actions } : null;
+}
+
 @Injectable()
 export class RulesService {
   readonly #store: PgRuleStore;
+  readonly #suggestions: PgSuggestionStore;
 
   constructor(@Inject(DEPS) private readonly deps: AppDeps) {
     this.#store = new PgRuleStore(deps.pool);
+    this.#suggestions = new PgSuggestionStore(deps.pool);
   }
 
   /** Runs `fn` in a transaction after re-reading the actor's role under the organization lock. */
@@ -219,11 +237,19 @@ export class RulesService {
           rulePlatform(updated.conditions) !== rulePlatform(before.conditions);
         const checked = await this.#checkSteps(c, scope, updated.conditions, updated.actions);
         if (changesSteps && checked.errors.length > 0) throw stepErrors(checked.errors);
+        const change = suggestionChange(before, updated);
+        const swept = change
+          ? await this.#suggestions.onRuleChanged(c, scope, ruleId, change)
+          : { withdrawn: 0, updated: 0 };
         await this.#audit(c, org, scope, {
           action: 'rule.updated',
           subjectType: 'rule',
           subjectId: updated.id,
-          details: this.#ruleDetails(updated, Object.keys(patch)),
+          details: {
+            ...this.#ruleDetails(updated, Object.keys(patch)),
+            suggestionsWithdrawn: swept.withdrawn,
+            suggestionsUpdated: swept.updated,
+          },
         });
         return checked.warnings;
       });
@@ -245,11 +271,16 @@ export class RulesService {
     await this.#write(org, 'rule.write', async (c) => {
       const before = await this.#store.get(scope, ruleId, c);
       if (!before || !(await this.#store.archive(c, scope, ruleId))) throw notFound();
+      const swept = await this.#suggestions.onRuleChanged(c, scope, ruleId, 'retired');
       await this.#audit(c, org, scope, {
         action: 'rule.archived',
         subjectType: 'rule',
         subjectId: ruleId,
-        details: this.#ruleDetails(before),
+        details: {
+          ...this.#ruleDetails(before),
+          suggestionsWithdrawn: swept.withdrawn,
+          suggestionsUpdated: swept.updated,
+        },
       });
     });
   }

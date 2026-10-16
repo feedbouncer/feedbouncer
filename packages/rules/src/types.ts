@@ -84,5 +84,7 @@ export interface Verdict {
   decided: RuleHit | null;
   /** Dry-run matches seen before the decision point, in order. */
   suggestions: RuleHit[];
+  /** Enforce rules after the decision point that also match; empty unless collected. */
+  alsoMatched: RuleHit[];
   trace: TraceEntry[];
 }

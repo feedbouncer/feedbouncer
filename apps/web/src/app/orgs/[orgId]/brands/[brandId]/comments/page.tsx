@@ -5,12 +5,18 @@ import { CommentBody } from '../../../../../../components/comment-body';
 import { CommentLinks } from '../../../../../../components/comment-links';
 import { DecisionBadge } from '../../../../../../components/rules/decision-badge';
 import { DecisionHistory } from '../../../../../../components/rules/decision-history';
+import { ReviewModeBanner } from '../../../../../../components/review-mode/review-mode-banner';
 import { adBadgeTitle } from '../../../../../../lib/ads';
 import { formatUtc } from '../../../../../../lib/format';
 import { isUuid } from '../../../../../../lib/ids';
 import type { Availability, ReplyLimits } from '../../../../../../lib/moderation';
 import type { DecisionView } from '../../../../../../lib/rules';
-import { dataOrThrow, requireMe, serverGet } from '../../../../../../lib/server-api';
+import {
+  dataOrThrow,
+  loadReviewMode,
+  requireMe,
+  serverGet,
+} from '../../../../../../lib/server-api';
 
 interface Comment {
   id: string;
@@ -55,6 +61,7 @@ export default async function CommentsPage({
   const { orgId, brandId } = await params;
   if (!isUuid(orgId) || !isUuid(brandId)) notFound();
   await requireMe(`/orgs/${orgId}/brands/${brandId}/comments`);
+  const review = await loadReviewMode(orgId, brandId);
   const sp = await searchParams;
   const before = cursor(sp.before);
   const beforeId = isUuid(sp.beforeId) ? sp.beforeId : null;
@@ -75,6 +82,15 @@ export default async function CommentsPage({
   return (
     <main>
       <h1>Comments</h1>
+      {review.connections.map((s) => (
+        <ReviewModeBanner
+          key={s.connectionId}
+          status={s}
+          orgId={orgId}
+          brandId={brandId}
+          canManage={review.canManage}
+        />
+      ))}
       <form method="get">
         <label>
           Show{' '}
@@ -136,7 +152,10 @@ export default async function CommentsPage({
         </p>
       ) : null}
       <p>
-        <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Rules</Link> ·{' '}
+        <Link href={`/orgs/${orgId}/brands/${brandId}/suggestions`}>
+          {`Suggestions (${review.pendingTotal})`}
+        </Link>{' '}
+        · <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Rules</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/policies`}>Policies</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/classifier`}>Classifier</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/domains`}>Own domains</Link> ·{' '}

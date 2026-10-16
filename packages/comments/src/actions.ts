@@ -12,6 +12,7 @@ import type pg from 'pg';
 import { isUniqueViolation, withTransaction } from '@feedbouncer/db';
 import {
   replyTextSchema,
+  reviewModeState,
   type Clock,
   type ConnectorCapabilities,
   type Platform,
@@ -22,6 +23,7 @@ import { UUID, type Logger } from '@feedbouncer/service-runtime';
 import { ACTION_KINDS, type ActionActor, type ActionKind } from './action-kinds.js';
 import type { BrandScope, CommentRow, PgCommentStore } from './store.js';
 import { EXECUTE_JOB } from './jobs/specs.js';
+import { GATED_KINDS } from './review-mode.js';
 import {
   connectionRefusal,
   eligibilityComment,
@@ -50,7 +52,9 @@ export type RefusalCode =
   | 'connection_needs_reconnect'
   | 'connection_inactive'
   | 'unsupported'
-  | 'request_key_conflict';
+  | 'request_key_conflict'
+  /** Automation may only suggest this kind while the connection's review window is active. */
+  | 'review_mode_active';
 
 export type RequestActionResult =
   /** `recorded`: the outcome was known up front (noop / not_eligible); nothing was sent. */
@@ -81,7 +85,16 @@ export function actionFallbackCode(r: RequestActionResult): string | null {
 
 export const REQUEST_KEY = /^[A-Za-z0-9._:-]{1,128}$/;
 /** Prefixes of request keys the server derives itself; clients cannot claim them. */
-const RESERVED_KEY_PREFIXES = ['auto:', 'undo:', 'review:', 'clf:', 'pol:', 'rule-eval:'];
+const RESERVED_KEY_PREFIXES = [
+  'auto:',
+  'undo:',
+  'review:',
+  'clf:',
+  'pol:',
+  'rule-eval:',
+  'suggestion:',
+  'review_end:',
+];
 
 /** A request key a client may supply: well-formed and outside the server-generated key space. */
 export const isClientRequestKey = (key: unknown): key is string =>
@@ -226,6 +239,14 @@ export class ModerationActions {
 
     const blocked = connectionRefusal(comment.connectionStatus);
     if (blocked) return refused(blocked);
+    // After the key replay, so an action stored before the window began still replays.
+    const now = new Date(this.d.clock.now());
+    if (
+      i.actor.type !== 'user' &&
+      GATED_KINDS.includes(i.kind) &&
+      reviewModeState(comment.reviewMode, now) === 'active'
+    )
+      return refused('review_mode_active');
 
     const caps = this.d.capabilities(comment.platform);
     if (!caps) return refused('unsupported');
@@ -236,7 +257,7 @@ export class ModerationActions {
       actorType: i.actor.type,
       comment: eligibilityComment(comment),
       caps,
-      now: new Date(this.d.clock.now()),
+      now,
     });
     if (e.verdict === 'unsupported') return refused('unsupported');
     if (text !== null) {

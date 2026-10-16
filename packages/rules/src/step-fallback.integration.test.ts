@@ -78,6 +78,7 @@ async function seed(): Promise<Seeded> {
     status: 'decided',
     verdict: {
       suggestions: [],
+      alsoMatched: [],
       decided: {
         ruleId,
         ruleName: 'No spam',
@@ -164,6 +165,20 @@ describe('RuleStepFallback', () => {
     await fallback.onStepSettled(settled(s, { type: 'delete', status: 'not_supported' }));
     expect(await decisions(s.commentId)).toHaveLength(2);
     expect(await reviewItems(s.commentId)).toHaveLength(1);
+  });
+
+  it('ignores approval runs, which have no rule', async () => {
+    const s = await seed();
+    await fallback.onStepSettled(
+      settled(s, {
+        ruleId: null,
+        evaluationId: null,
+        status: 'failed',
+        reason: 'missing_permission',
+      }),
+    );
+    expect((await fellBack(s.evaluationId)).fell_back).toBe(false);
+    expect(await decisions(s.commentId)).toHaveLength(1);
   });
 
   it('ignores steps that went well, other step types and other statuses', async () => {

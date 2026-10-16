@@ -50,16 +50,28 @@ export function accountNotes(a: PickerAccount, platform: ConnectablePlatform): s
 export const nothingEligible = (accounts: readonly PickerAccount[]): boolean =>
   accounts.every((a) => !a.eligible);
 
+/** The review-mode choice at connect: on by default; off only once the risk is acknowledged. */
+export interface ReviewModeChoiceState {
+  on: boolean;
+  acknowledged: boolean;
+}
+
+export const canConnect = (r: ReviewModeChoiceState): boolean => r.on || r.acknowledged;
+
 export function connectRequest(
   orgId: string,
   brandId: string,
   platform: ConnectablePlatform,
   grantId: string,
   accountIds: string[],
-): { path: `/api/${string}`; body: { accountIds: string[] } } {
+  reviewMode: ReviewModeChoiceState = { on: true, acknowledged: false },
+): {
+  path: `/api/${string}`;
+  body: { accountIds: string[]; reviewMode?: 'off'; acknowledgeRisk?: true };
+} {
   return {
     path: `/api/v1/orgs/${orgId}/brands/${brandId}/connections/${platform}/grants/${grantId}/connect`,
-    body: { accountIds },
+    body: reviewMode.on ? { accountIds } : { accountIds, reviewMode: 'off', acknowledgeRisk: true },
   };
 }
 

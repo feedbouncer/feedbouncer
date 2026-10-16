@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { GRAPH_ID } from '@feedbouncer/connector-facebook';
 import type { Platform } from '@feedbouncer/connectors';
 import { SessionGuard, type AuthedRequest } from '../auth/session.guard.js';
+import { ApiError } from '../http/errors.js';
 import { parseBody, parseUuidOr404, zUuid } from '../http/validation.js';
 import { RequireCapability } from '../tenancy/capability.decorator.js';
 import { OrgAccessGuard, type OrgRequest } from '../tenancy/org-access.guard.js';
@@ -25,6 +26,8 @@ const AuthorizeBody = z.strictObject({ reconnectConnectionId: zUuid.optional() }
 // Every account-selection platform so far is a Meta one, whose ids are Graph ids.
 const ConnectBody = z.strictObject({
   accountIds: z.array(z.string().regex(GRAPH_ID)).min(1).max(50),
+  reviewMode: z.enum(['on', 'off']).optional(),
+  acknowledgeRisk: z.literal(true).optional(),
 });
 
 /**
@@ -76,8 +79,11 @@ export class OAuthConnectController {
     @Body() body: unknown,
   ) {
     const id = parseUuidOr404(grantId);
-    const { accountIds } = parseBody(ConnectBody, body);
-    return { results: await this.svc.connect(platform, req.org, brandId, id, accountIds) };
+    const { accountIds, reviewMode, acknowledgeRisk } = parseBody(ConnectBody, body);
+    // Opting out is a risk only an informed manager may take, so the server insists on it.
+    if (reviewMode === 'off' && !acknowledgeRisk) throw new ApiError(422, 'risk_not_acknowledged');
+    const opts = { reviewMode: reviewMode === 'off' ? ('opted_out' as const) : ('on' as const) };
+    return { results: await this.svc.connect(platform, req.org, brandId, id, accountIds, opts) };
   }
 }
 

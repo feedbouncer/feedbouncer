@@ -15,6 +15,7 @@ import {
   PgCommentStore,
   enqueueOnly,
 } from '@feedbouncer/comments';
+import { ACTION_RUN_ADVANCE_JOB, SUGGESTION_BULK_JOB } from '@feedbouncer/actions';
 import { CLASSIFIER_RERUN_JOB } from '@feedbouncer/classifier';
 import { POLICY_PREVIEW_JOB, POLICY_RUN_JOB } from '@feedbouncer/policies';
 import { createFacebookConnector } from '@feedbouncer/connector-facebook';
@@ -107,6 +108,9 @@ export function buildMetaDeps(d: {
   jobs.register(enqueueOnly(CLASSIFIER_RERUN_JOB));
   jobs.register(enqueueOnly(POLICY_PREVIEW_JOB));
   jobs.register(enqueueOnly(POLICY_RUN_JOB));
+  // Approving a suggestion wakes its run; bulk by filter runs in the worker.
+  jobs.register(enqueueOnly(ACTION_RUN_ADVANCE_JOB));
+  jobs.register(enqueueOnly(SUGGESTION_BULK_JOB));
   const queues = new QueueSet({
     connection: redis,
     prefix: env.jobs.prefix,

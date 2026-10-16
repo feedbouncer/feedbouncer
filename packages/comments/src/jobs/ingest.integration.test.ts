@@ -550,6 +550,8 @@ describe('comment ingest job on instagram', () => {
       permalink: `https://www.instagram.com/p/${top.mediaId}/`,
       isOwnAccount: false,
       connectionStatus: 'active',
+      // Inserted without a mode: a new connection, not activated yet.
+      reviewMode: { mode: 'on', startedAt: null, endsAt: null, endedAt: null },
       privateReplied: false,
       origin: 'organic',
       ads: [],

@@ -184,6 +184,48 @@ no soft deletion; a platform-side deletion is state
 deleted, so replies can be linked later. Writers must keep `parent_comment_id`
 and `parent_external_id` consistent; the database does not cross-check them.
 
+### Review mode
+
+For 168 hours after a connection is set up, automation only suggests: it records
+what it would have done and waits for a person.
+
+`connection` columns:
+
+- `review_mode`: `legacy` (connected before this feature, never gated), `on`
+  (the default for new rows) or `opted_out`.
+- `review_mode_started_at`, `review_mode_ends_at`: the window. Both set or both
+  NULL, and only while `review_mode = 'on'`. `ends_at` is exactly `started_at +
+168 hours`.
+- `review_mode_ended_at`, `review_mode_ended_by_user_id`: set when a person ends
+  the window early. Requires `review_mode = 'on'` and a started window.
+- `review_mode_ended_pending`: what the person chose for pending suggestions
+  (`leave`, `dismiss` or `approve`); only set together with `review_mode_ended_at`.
+
+`rule_evaluation`, `comment_classification` and `policy_evaluation` each have
+`review_mode boolean` (default `false`): whether review mode applied when the
+evaluation ran. `rule_evaluation.also_matched_rule_ids uuid[]` lists the other
+rules that matched beside the winner (at most 50).
+
+`action_suggestion` is what automation would have done to one comment. Status is
+`pending`, `approved`, `dismissed`, `expired`, `not_applicable` or `withdrawn`;
+`decided_at` is set exactly when the status is not `pending`. At most one
+suggestion per comment is `pending`. `request_key` makes approve/dismiss
+idempotent and is only allowed on `approved` or `dismissed` rows. A trigger
+rejects a comment that belongs to a different connection than the suggestion.
+
+`action_suggestion_source` has one row per rule, classifier verdict or policy
+that proposed the suggestion. A source proposes at most once per brand, unique
+per `(organization_id, brand_id, source_type, source_ref)`, so a redelivered
+evaluation cannot reopen a decided suggestion. It holds the proposed `steps` (1
+to 5), the `reason`, and for rule sources the `rule_id` and `also_matched_rule_ids` (at most 50).
+
+`action_run` is now either a rule run (`rule_id` and `rule_evaluation_id` set) or
+an approval run (`suggestion_id` set, `rule_id` and `rule_evaluation_id` NULL).
+`approved_by_user_id` is only allowed on approval runs. There is at most one
+approval run per suggestion, and its `comment_id` must equal the suggestion's.
+
+Rolling back this migration deletes all suggestions and approval runs.
+
 ### Latest decision per comment
 
 Decisions are never updated. "Restore" is a new `approve` decision. The current

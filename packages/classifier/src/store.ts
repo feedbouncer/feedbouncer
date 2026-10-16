@@ -23,6 +23,7 @@ interface Base {
   commentId: string;
   sha: Buffer;
   triggerKey: string;
+  reviewMode?: boolean;
 }
 export type ClassificationRecord =
   | (Base & { status: 'skipped'; skipReason: ClassificationSkipReason; inputChars: number })
@@ -59,6 +60,8 @@ export interface ClassificationRow {
   triggers: Trigger[];
   provider: string | null;
   model: string | null;
+  /** Whether the connection's review window was active when this was classified. */
+  reviewMode: boolean;
 }
 
 export interface ClassificationView {
@@ -98,9 +101,10 @@ interface DbRow {
   triggers: Trigger[];
   provider: string | null;
   model: string | null;
+  review_mode: boolean;
 }
 const COLUMNS =
-  'id, status, outcome, rule_decided, fallback_at, reversed_at, scores, triggers, provider, model';
+  'id, status, outcome, rule_decided, fallback_at, reversed_at, scores, triggers, provider, model, review_mode';
 const toRow = (r: DbRow): ClassificationRow => ({
   id: r.id,
   status: r.status,
@@ -112,14 +116,16 @@ const toRow = (r: DbRow): ClassificationRow => ({
   triggers: r.triggers,
   provider: r.provider,
   model: r.model,
+  reviewMode: r.review_mode,
 });
 
 const INSERT_CLASSIFICATION = `
 INSERT INTO comment_classification (organization_id, brand_id, connection_id, comment_id, body_sha256, trigger_key, status,
   skip_reason, unclassified_reason, provider, model, prompt_version, scores, language, language_supported, low_signal,
-  truncated, input_chars, scores_reused, rule_evaluation_id, rule_decided, policy, outcome, triggers, downgraded)
+  truncated, input_chars, scores_reused, rule_evaluation_id, rule_decided, policy, outcome, triggers, downgraded,
+  review_mode)
 SELECT c.organization_id, c.brand_id, c.connection_id, c.id, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15,
-  $16, $17, $18, $19, $20, $21, $22::jsonb, $23, $24::jsonb, $25
+  $16, $17, $18, $19, $20, $21, $22::jsonb, $23, $24::jsonb, $25, $26
 FROM comment c
 WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3 AND c.id = $4
 ON CONFLICT (comment_id, body_sha256, trigger_key) DO NOTHING
@@ -128,7 +134,7 @@ RETURNING ${COLUMNS}`;
 const INSERT_DECISION = `
 INSERT INTO decision (organization_id, brand_id, comment_id, outcome, mode, actor_type, classifier_provider,
   classifier_model, category, confidence, threshold, classification_id, reason, reversal)
-VALUES ($1, $2, $3, $4, 'enforce', 'classifier', $5, $6, $7, $8, $9, $10, $11, $12)`;
+VALUES ($1, $2, $3, $4, $13, 'classifier', $5, $6, $7, $8, $9, $10, $11, $12)`;
 
 const CLF_KEY = /^clf:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
@@ -182,6 +188,7 @@ export class PgClassificationStore {
       outcome,
       JSON.stringify(classified?.verdict.triggers ?? []),
       classified?.verdict.downgraded ?? null,
+      r.reviewMode ?? false,
     ];
     return withTransaction(this.pool, async (c) => {
       const ins = await c.query<DbRow>(INSERT_CLASSIFICATION, values);
@@ -202,6 +209,7 @@ export class PgClassificationStore {
           row.id,
           classified.reason,
           false,
+          r.reviewMode && (outcome === 'hide' || outcome === 'remove') ? 'suggest' : 'enforce',
         ]);
       }
       return toRow(row);
@@ -281,9 +289,21 @@ export class PgClassificationStore {
         classificationId,
         reason,
         false,
+        'enforce',
       ]);
       return true;
     });
+  }
+
+  /** The reason written with the hide or remove decision, for a suggestion made from it. */
+  async decisionReason(s: BrandScope, classificationId: string): Promise<string | null> {
+    const r = await this.pool.query<{ reason: string }>(
+      `SELECT reason FROM decision
+       WHERE organization_id = $1 AND brand_id = $2 AND classification_id = $3 AND outcome IN ('hide', 'remove')
+       ORDER BY sequence LIMIT 1`,
+      [s.organizationId, s.brandId, classificationId],
+    );
+    return r.rows[0]?.reason ?? null;
   }
 
   async recordRecovered(s: BrandScope, classificationId: string): Promise<boolean> {
@@ -371,6 +391,7 @@ export class PgClassificationStore {
         classificationId,
         reason,
         true,
+        'enforce',
       ]);
       return true;
     });

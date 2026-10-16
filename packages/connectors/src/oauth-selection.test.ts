@@ -215,6 +215,59 @@ describe('account selection', () => {
   });
 });
 
+describe('review mode on connect', () => {
+  const grant = async (stack: Awaited<ReturnType<typeof setup>>['stack']) => {
+    const { authorizationUrl } = await stack.oauth.start(stack.actor, 'facebook');
+    const g = await stack.oauth.complete(stack.actor, 'facebook', {
+      state: authorizationUrl.searchParams.get('state')!,
+      code: 'c',
+    });
+    return (g as { grantId: string }).grantId;
+  };
+
+  it('a first connect starts a 168h window and reports it', async () => {
+    const { stack } = await setup();
+    const r = await stack.oauth.connectAccounts(stack.actor, 'facebook', await grant(stack), [
+      '101',
+      '102',
+    ]);
+    expect(r.ok && r.results).toEqual([
+      expect.objectContaining({
+        status: 'connected',
+        reviewMode: { state: 'active', endsAt: new Date(now + 168 * 3_600_000).toISOString() },
+      }),
+      expect.objectContaining({ status: 'not_eligible', reviewMode: null }),
+    ]);
+  });
+
+  it('passes the opt-out to a first activation only', async () => {
+    const { stack } = await setup();
+    const first = await stack.oauth.connectAccounts(
+      stack.actor,
+      'facebook',
+      await grant(stack),
+      ['101'],
+      { reviewMode: 'opted_out' },
+    );
+    expect(first.ok && first.results[0]!.reviewMode).toEqual({ state: 'opted_out', endsAt: null });
+
+    const { stack: s2 } = await setup();
+    const start = now;
+    await s2.oauth.connectAccounts(s2.actor, 'facebook', await grant(s2), ['101']);
+    const activate = vi.spyOn(s2.directory, 'activate');
+    const again = await s2.oauth.connectAccounts(s2.actor, 'facebook', await grant(s2), ['101'], {
+      reviewMode: 'opted_out',
+    });
+    expect(activate).toHaveBeenCalledWith(expect.anything(), s2.actor.userId, {
+      reviewMode: 'opted_out',
+    });
+    expect(again.ok && again.results[0]).toMatchObject({
+      status: 'reconnected',
+      reviewMode: { state: 'active', endsAt: new Date(start + 168 * 3_600_000).toISOString() },
+    });
+  });
+});
+
 describe('a failed token write or activation does not leave the page held', () => {
   it('revokes the fresh pending row when the token write throws', async () => {
     const { stack, state } = await setup();
@@ -244,7 +297,10 @@ describe('a failed token write or activation does not leave the page held', () =
     const g = (await stack.oauth.complete(stack.actor, 'facebook', { state, code: 'c' })) as {
       grantId: string;
     };
-    vi.spyOn(stack.directory, 'activate').mockResolvedValueOnce(false);
+    vi.spyOn(stack.directory, 'activate').mockResolvedValueOnce({
+      activated: false,
+      reviewMode: { state: 'off', endsAt: null, changed: false },
+    });
     const r = await stack.oauth.connectAccounts(stack.actor, 'facebook', g.grantId, ['101']);
     expect(r.ok && r.results[0]!.status).toBe('connection_inactive');
     expect(await stack.directory.findLiveByAccount('facebook', '101')).toBeNull();

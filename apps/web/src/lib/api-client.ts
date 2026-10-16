@@ -1,3 +1,9 @@
+export interface HandledDetails {
+  status: string;
+  decidedAt: string | null;
+  decidedByName: string | null;
+}
+
 export class ApiRequestError extends Error {
   constructor(
     readonly status: number,
@@ -7,9 +13,19 @@ export class ApiRequestError extends Error {
     readonly max?: number | undefined,
     /** Field-level problems of a refused rule: a path such as conditions.patterns.1 and a message. */
     readonly issues: { path: string; message: string }[] = [],
+    /** Who already decided a suggestion, on suggestion_already_handled. */
+    readonly handled?: HandledDetails | undefined,
   ) {
     super(message);
   }
+}
+
+function handledOf(v: unknown): HandledDetails | undefined {
+  const { status, decidedAt, decidedByName } = (v ?? {}) as Record<string, unknown>;
+  const optional = (x: unknown): x is string | null => x === null || typeof x === 'string';
+  return typeof status === 'string' && optional(decidedAt) && optional(decidedByName)
+    ? { status, decidedAt, decidedByName }
+    : undefined;
 }
 
 function issuesOf(v: unknown): { path: string; message: string }[] {
@@ -34,7 +50,7 @@ export async function apiFetch<T>(
   });
   if (res.status === 204) return undefined as T;
   const data = (await res.json().catch(() => null)) as {
-    error?: { code: string; message: string; max?: unknown; issues?: unknown };
+    error?: { code: string; message: string; max?: unknown; issues?: unknown; handled?: unknown };
   } | null;
   if (!res.ok) {
     const max = data?.error?.max;
@@ -44,6 +60,7 @@ export async function apiFetch<T>(
       data?.error?.message ?? 'Something went wrong.',
       typeof max === 'number' && Number.isSafeInteger(max) ? max : undefined,
       issuesOf(data?.error?.issues),
+      handledOf(data?.error?.handled),
     );
   }
   return data as T;

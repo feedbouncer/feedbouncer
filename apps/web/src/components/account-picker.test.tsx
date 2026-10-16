@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { accountNotes, connectRequest, type PickerAccount } from '../lib/accounts';
-import { AccountPicker } from './account-picker';
+import { accountNotes, canConnect, connectRequest, type PickerAccount } from '../lib/accounts';
+import { AccountPicker, ReviewModeChoice } from './account-picker';
 
 const IG: PickerAccount = {
   externalAccountId: '17841400000000001',
@@ -28,6 +28,13 @@ const render = (accounts: PickerAccount[]) =>
 /** The checkbox for an account id. */
 function checkbox(html: string, id: string): string {
   const at = html.indexOf(`value="${id}"`);
+  expect(at).toBeGreaterThan(-1);
+  const start = html.lastIndexOf('<input', at);
+  return html.slice(start, html.indexOf('>', start) + 1);
+}
+
+function inputNamed(html: string, name: string): string {
+  const at = html.indexOf(`name="${name}"`);
   expect(at).toBeGreaterThan(-1);
   const start = html.lastIndexOf('<input', at);
   return html.slice(start, html.indexOf('>', start) + 1);
@@ -60,6 +67,38 @@ describe('AccountPicker', () => {
     expect(connectRequest('o', 'b', 'instagram', 'g-1', ['17841400000000001'])).toEqual({
       path: '/api/v1/orgs/o/brands/b/connections/instagram/grants/g-1/connect',
       body: { accountIds: ['17841400000000001'] },
+    });
+  });
+
+  it('starts in review mode by default', () => {
+    const html = render([IG]);
+    expect(inputNamed(html, 'reviewMode')).toContain('checked=""');
+    expect(html).toContain('Start in review mode (recommended)');
+    expect(html).not.toContain('I understand. Start automation now.');
+    expect(html).toMatch(/<button type="submit"(?![^>]*disabled)/);
+  });
+
+  it('account-picker cannot submit opt-out until the risk is acknowledged and sends acknowledgeRisk', () => {
+    const html = renderToStaticMarkup(
+      <ReviewModeChoice on={false} acknowledged={false} onChange={() => undefined} />,
+    );
+    expect(html).toContain(
+      'Without review mode, your rules, the classifier and your policies start hiding, deleting, banning and replying as soon as this account is connected. A mistake in a rule can affect real people before you notice. We recommend keeping review mode on for the first 7 days.',
+    );
+    const ack = inputNamed(html, 'acknowledgeRisk');
+    expect(ack).toContain('required=""');
+    expect(ack).not.toContain('checked');
+    expect(html).toContain('I understand. Start automation now.');
+    expect(canConnect({ on: true, acknowledged: false })).toBe(true);
+    expect(canConnect({ on: false, acknowledged: false })).toBe(false);
+    expect(canConnect({ on: false, acknowledged: true })).toBe(true);
+    expect(
+      connectRequest('o', 'b', 'facebook', 'g', ['1'], { on: false, acknowledged: true }).body,
+    ).toEqual({ accountIds: ['1'], reviewMode: 'off', acknowledgeRisk: true });
+    expect(
+      connectRequest('o', 'b', 'facebook', 'g', ['1'], { on: true, acknowledged: true }).body,
+    ).toEqual({
+      accountIds: ['1'],
     });
   });
 

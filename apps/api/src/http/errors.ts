@@ -35,6 +35,7 @@ export type ErrorCode =
   | 'platform_error'
   | 'connection_needs_reconnect'
   | 'connection_inactive'
+  | 'review_mode_active'
   | 'unsupported_action'
   | 'request_key_conflict'
   | 'text_too_long'
@@ -43,6 +44,9 @@ export type ErrorCode =
   | 'undo_not_available'
   | 'already_undone'
   | 'review_item_resolved'
+  | 'suggestion_already_handled'
+  | 'review_mode_not_active'
+  | 'risk_not_acknowledged'
   | 'confirmation_required'
   | 'rule_limit_reached'
   | 'rule_order_mismatch'
@@ -91,6 +95,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   platform_error: 'The platform could not be reached. Try again shortly.',
   connection_needs_reconnect: 'This connection needs to be reconnected first.',
   connection_inactive: 'This connection is not active.',
+  review_mode_active:
+    'Review mode is on for this connection; automation can only suggest this action.',
   unsupported_action: 'This action is not supported for this platform.',
   request_key_conflict: 'This request key was already used for a different action.',
   text_too_long: 'Reply is too long for this platform.',
@@ -99,6 +105,9 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   undo_not_available: 'This step cannot be undone.',
   already_undone: 'This step was already undone.',
   review_item_resolved: 'This item was already resolved.',
+  suggestion_already_handled: 'This suggestion was already handled.',
+  review_mode_not_active: 'Review mode is not on for this connection.',
+  risk_not_acknowledged: 'Confirm that you understand the risk of starting without review mode.',
   confirmation_required: 'Confirm this action to continue.',
   rule_limit_reached: 'This brand has reached the maximum number of rules.',
   rule_order_mismatch: 'The order must list every rule of the brand exactly once.',
@@ -125,6 +134,13 @@ export interface ErrorIssue {
   max?: number;
 }
 
+/** Who already decided a suggestion, for a 409 suggestion_already_handled. */
+export interface HandledDetails {
+  status: string;
+  decidedAt: string | null;
+  decidedByName: string | null;
+}
+
 export class ApiError extends Error {
   override name = 'ApiError';
   constructor(
@@ -132,7 +148,11 @@ export class ApiError extends Error {
     readonly code: ErrorCode,
     message?: string,
     /** Specifics merged into the envelope: schema problems or a limit, never request values. */
-    readonly details?: { readonly issues?: readonly ErrorIssue[]; readonly max?: number },
+    readonly details?: {
+      readonly issues?: readonly ErrorIssue[];
+      readonly max?: number;
+      readonly handled?: HandledDetails;
+    },
   ) {
     super(message ?? DEFAULT_MESSAGES[code]);
   }
@@ -141,7 +161,13 @@ export class ApiError extends Error {
 export const notFound = (): ApiError => new ApiError(404, 'not_found');
 
 export function errorBody(e: ApiError): {
-  error: { code: ErrorCode; message: string; issues?: readonly ErrorIssue[]; max?: number };
+  error: {
+    code: ErrorCode;
+    message: string;
+    issues?: readonly ErrorIssue[];
+    max?: number;
+    handled?: HandledDetails;
+  };
 } {
   return { error: { ...e.details, code: e.code, message: e.message } };
 }

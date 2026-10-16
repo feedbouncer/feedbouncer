@@ -22,6 +22,7 @@
     "eval": "tsc --build tsconfig.build.json && node --experimental-strip-types eval/run-eval.ts"
   },
   "dependencies": {
+    "@feedbouncer/actions": "workspace:*",
     "@feedbouncer/ai": "workspace:*",
     "@feedbouncer/comments": "workspace:*",
     "@feedbouncer/db": "workspace:*",

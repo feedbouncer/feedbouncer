@@ -6,8 +6,13 @@
 // action step.
 // Logs carry ids, kinds and error names only: never comment text, author
 // names or rule terms.
-import type { ActionRunner, ActionStep } from '@feedbouncer/actions';
-import type { BrandScope, PgCommentStore } from '@feedbouncer/comments';
+import {
+  splitGated,
+  type ActionRunner,
+  type ActionStep,
+  type PgSuggestionStore,
+} from '@feedbouncer/actions';
+import type { BrandScope, PgCommentStore, PgReviewModeReader } from '@feedbouncer/comments';
 import type { JobDefinition, JobResult } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
@@ -28,6 +33,8 @@ export function ruleEvaluateJob(d: {
   evaluations: PgEvaluationStore;
   cache: RuleSetCache;
   runner: Pick<ActionRunner, 'start'>;
+  suggestions: Pick<PgSuggestionStore, 'propose'>;
+  reviewMode: Pick<PgReviewModeReader, 'isActive'>;
   log: Logger;
   clock?: { now(): number };
   evaluated?: RuleEvaluatedHook;
@@ -61,6 +68,7 @@ export function ruleEvaluateJob(d: {
           });
           return { result: 'skipped', reason: skipReason };
         }
+        const reviewMode = await d.reviewMode.isActive(ctx.scope);
         const set = await d.cache.get(brand);
         const clock = d.clock;
         for (const inv of set.invalid)
@@ -75,6 +83,7 @@ export function ruleEvaluateJob(d: {
           },
           {
             ...(clock ? { now: () => clock.now() } : {}),
+            collectAlsoMatched: reviewMode,
             onRuleError: (ruleId, err) =>
               d.log.warn('rule_evaluation_error', {
                 ruleId,
@@ -92,6 +101,7 @@ export function ruleEvaluateJob(d: {
             rulesetVersion: set.version,
             status: verdict.decided ? 'decided' : 'no_match',
             verdict,
+            reviewMode,
           })) ??
           // Lost a race with another run of the same key: resume from its row.
           (await d.evaluations.find(brand, p.commentId, sha, p.trigger));
@@ -116,7 +126,7 @@ export function ruleEvaluateJob(d: {
 }
 
 async function act(
-  d: Pick<Parameters<typeof ruleEvaluateJob>[0], 'runner' | 'log'>,
+  d: Pick<Parameters<typeof ruleEvaluateJob>[0], 'runner' | 'suggestions' | 'evaluations' | 'log'>,
   scope: ConnectionScope,
   ev: EvaluationRow,
   commentId: string,
@@ -130,8 +140,27 @@ async function act(
   if (ev.status !== 'decided' || ev.matchedRuleId === null) return base;
   // Already fell back: the user was told it is flagged; do not start the actions now.
   if (ev.fallbackAt !== null) return { ...base, fallback: 'recorded' };
-  const steps = ev.matchedActions;
-  if (steps.length === 0) return base;
-  const run = await start(ev.matchedRuleId, steps, false);
-  return { ...base, runId: run.id };
+  const { flag, gated } = ev.reviewMode
+    ? splitGated(ev.matchedActions)
+    : { flag: ev.matchedActions, gated: [] };
+  let runId: string | undefined;
+  if (flag.length > 0) runId = (await start(ev.matchedRuleId, flag, false)).id;
+  if (gated.length > 0) {
+    const reason = await d.evaluations.decisionReason(scope, ev.id);
+    if (reason === null) throw new Error('decided evaluation has no decision');
+    const proposed = await d.suggestions.propose(scope, {
+      commentId,
+      source: {
+        type: 'rule',
+        ref: ev.id,
+        ruleId: ev.matchedRuleId,
+        alsoMatchedRuleIds: ev.alsoMatchedRuleIds,
+      },
+      steps: gated,
+      reason,
+    });
+    if ('skipped' in proposed)
+      d.log.info('suggestion_skipped', { evaluationId: ev.id, skipped: proposed.skipped });
+  }
+  return runId ? { ...base, runId } : base;
 }

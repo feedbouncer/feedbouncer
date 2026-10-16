@@ -3,6 +3,8 @@
 // failure is logged and never fails the work that detected the problem.
 import type pg from 'pg';
 import type {
+  ActivateOptions,
+  ActivateResult,
   ConnectionDirectory,
   ConnectionRecord,
   Platform,
@@ -95,8 +97,12 @@ export class NotifyingConnectionDirectory implements ConnectionDirectory {
     return this.inner.upsertPending(i);
   }
 
-  activate(scope: ConnectionScope, actorUserId: string): Promise<boolean> {
-    return this.inner.activate(scope, actorUserId);
+  activate(
+    scope: ConnectionScope,
+    actorUserId: string,
+    opts?: ActivateOptions,
+  ): Promise<ActivateResult> {
+    return this.inner.activate(scope, actorUserId, opts);
   }
 
   findLiveByAccount(platform: Platform, externalAccountId: string) {

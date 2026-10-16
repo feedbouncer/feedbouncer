@@ -3,9 +3,12 @@ import {
   ActionStepOutcomeObserver,
   PgActionRunStore,
   PgReviewQueue,
+  PgSuggestionStore,
   actionRunAdvanceJob,
   loadBrandName,
   loadConnectionInfo,
+  suggestionBulkJob,
+  recordAudit,
 } from '@feedbouncer/actions';
 import {
   ClassifierActionFallback,
@@ -33,6 +36,7 @@ import {
   connectionLifecycleJob,
   type IngestObserver,
   ModerationActions,
+  PgReviewModeReader,
   type PgCommentStore,
 } from '@feedbouncer/comments';
 import {
@@ -147,12 +151,28 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
     observer: new RuleStepFallback({ evaluations, log: deps.log }),
   });
   registry.register(actionRunAdvanceJob(runner));
+  const suggestions = new PgSuggestionStore(deps.pool);
+  const reviewMode = new PgReviewModeReader(deps.pool, deps.clock);
+  registry.register(
+    suggestionBulkJob({
+      pool: deps.pool,
+      suggestions,
+      runs,
+      runner,
+      producer: deps.producer,
+      audit: recordAudit,
+      clock: deps.clock,
+      log: deps.log,
+    }),
+  );
   registry.register(
     ruleEvaluateJob({
       comments: deps.store,
       evaluations,
       cache: new RuleSetCache(rules),
       runner,
+      suggestions,
+      reviewMode,
       log: deps.log,
       evaluated: new CompositeRuleEvaluatedHook([
         new ClassifierTrigger(deps.producer),
@@ -169,6 +189,8 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       provider: createClassifierProvider(deps.classifier),
       slots: new BrandSlots(deps.slotsPool, deps.classifier.perBrandInFlight),
       actions,
+      suggestions,
+      reviewMode,
       languages: deps.classifier.languages,
       maxWaitMs: deps.classifier.maxWaitMs,
       log: deps.log,
@@ -191,6 +213,8 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       evaluator: policyEvaluator,
       slots: policySlots,
       actions,
+      suggestions,
+      reviewMode,
       monthlyCallsPerBrand: deps.policy.monthlyCallsPerBrand,
       maxWaitMs: deps.policy.maxWaitMs,
       log: deps.log,

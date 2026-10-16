@@ -61,6 +61,7 @@ export async function seedModerationActionRow(
     status?: string;
     replyText?: string;
     createdAt?: string;
+    requestKey?: string;
   },
 ): Promise<string> {
   const status = o.status ?? 'applied';
@@ -78,11 +79,21 @@ export async function seedModerationActionRow(
       s.id,
       o.kind,
       o.actorType ?? 'rule',
-      `k-${randomUUID()}`,
+      o.requestKey ?? `k-${randomUUID()}`,
       reply,
       status,
       o.createdAt ?? null,
     ],
+  );
+  return r.rows[0]!.id;
+}
+
+/** A pending action_suggestion row for the comment. */
+export async function seedSuggestionRow(c: pg.ClientBase, s: Seeded): Promise<string> {
+  const r = await c.query<{ id: string }>(
+    `INSERT INTO action_suggestion (organization_id, brand_id, connection_id, comment_id, body_sha256)
+     VALUES ($1, $2, $3, $4, decode(repeat('ab', 32), 'hex')) RETURNING id`,
+    [s.t.organizationId, s.t.brandId, s.t.connectionId, s.id],
   );
   return r.rows[0]!.id;
 }
