@@ -65,6 +65,21 @@ describe('PgSuggestionStore', () => {
     expect(view!.expiresAt).toBeInstanceOf(Date);
   });
 
+  it('a source redelivered after its suggestion was decided writes nothing', async () => {
+    const f = await fresh();
+    const source = ruleSource(f);
+    const a = created(await propose(f, source));
+    await ctx.c.query(
+      "UPDATE action_suggestion SET status = 'dismissed', status_reason = 'x', decided_at = now() WHERE id = $1",
+      [a.suggestionId],
+    );
+    expect(await propose(f, source)).toEqual({ suggestionId: a.suggestionId, created: false });
+    const rows = await ctx.c.query('SELECT status FROM action_suggestion WHERE comment_id = $1', [
+      f.comment.id,
+    ]);
+    expect(rows.rows).toEqual([{ status: 'dismissed' }]);
+  });
+
   it('rule and classifier sources on one comment share one suggestion', async () => {
     const f = await fresh();
     const a = created(await propose(f, ruleSource(f)));

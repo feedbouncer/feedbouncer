@@ -232,6 +232,12 @@ export class PgSuggestionStore {
           FOR UPDATE`,
         [organizationId, brandId, connectionId, i.commentId],
       );
+      const seen = await tx.query<{ suggestion_id: string }>(
+        `SELECT suggestion_id FROM action_suggestion_source
+          WHERE organization_id = $1 AND brand_id = $2 AND source_type = $3 AND source_ref = $4`,
+        [organizationId, brandId, i.source.type, i.source.ref],
+      );
+      if (seen.rows[0]) return { suggestionId: seen.rows[0].suggestion_id, created: false };
       const row = comment.rows[0];
       if (!row || row.platform_state === 'deleted') return { skipped: 'comment_gone' as const };
       if (i.steps.length === 0) return { skipped: 'nothing_gated' as const };
@@ -254,22 +260,28 @@ export class PgSuggestionStore {
             AND status = 'pending' AND body_sha256 <> $5`,
         [organizationId, brandId, connectionId, i.commentId, row.sha],
       );
-      const inserted = await tx.query<{ id: string }>(
-        `INSERT INTO action_suggestion (organization_id, brand_id, connection_id, comment_id, author_id, body_sha256)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (comment_id) WHERE status = 'pending' DO NOTHING
-         RETURNING id`,
-        [organizationId, brandId, connectionId, i.commentId, row.author_id, row.sha],
-      );
-      let suggestionId = inserted.rows[0]?.id;
-      if (!suggestionId) {
-        const existing = await tx.query<{ id: string }>(
-          `SELECT id FROM action_suggestion
-            WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND comment_id = $4
-              AND status = 'pending'`,
-          [organizationId, brandId, connectionId, i.commentId],
+      let created = false;
+      let suggestionId: string | undefined;
+      // A pending row seen by the insert can be decided before the select reads it; then insert again.
+      while (!suggestionId) {
+        const inserted = await tx.query<{ id: string }>(
+          `INSERT INTO action_suggestion (organization_id, brand_id, connection_id, comment_id, author_id, body_sha256)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (comment_id) WHERE status = 'pending' DO NOTHING
+           RETURNING id`,
+          [organizationId, brandId, connectionId, i.commentId, row.author_id, row.sha],
         );
-        suggestionId = existing.rows[0]!.id;
+        created = inserted.rows[0] !== undefined;
+        suggestionId =
+          inserted.rows[0]?.id ??
+          (
+            await tx.query<{ id: string }>(
+              `SELECT id FROM action_suggestion
+                WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND comment_id = $4
+                  AND status = 'pending'`,
+              [organizationId, brandId, connectionId, i.commentId],
+            )
+          ).rows[0]?.id;
       }
 
       const rule = i.source.type === 'rule' ? i.source : null;
@@ -277,7 +289,7 @@ export class PgSuggestionStore {
         `INSERT INTO action_suggestion_source (organization_id, brand_id, suggestion_id, source_type, source_ref,
                                                rule_id, also_matched_rule_ids, steps, reason)
          VALUES ($1, $2, $3, $4, $5, $6, $7::uuid[], $8::jsonb, $9)
-         ON CONFLICT (suggestion_id, source_type, source_ref) DO NOTHING`,
+         ON CONFLICT (organization_id, brand_id, source_type, source_ref) DO NOTHING`,
         [
           organizationId,
           brandId,
@@ -290,7 +302,7 @@ export class PgSuggestionStore {
           i.reason,
         ],
       );
-      return { suggestionId, created: inserted.rows[0] !== undefined };
+      return { suggestionId, created };
     });
   }
 

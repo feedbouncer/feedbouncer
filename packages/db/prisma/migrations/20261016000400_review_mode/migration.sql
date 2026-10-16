@@ -122,7 +122,8 @@ CREATE TABLE action_suggestion_source (
   created_at timestamptz(3) NOT NULL DEFAULT now(),
   updated_at timestamptz(3) NOT NULL DEFAULT now(),
   CONSTRAINT action_suggestion_source_pkey PRIMARY KEY (id),
-  CONSTRAINT action_suggestion_source_ref_key UNIQUE (suggestion_id, source_type, source_ref),
+  -- A source proposes once: a redelivered evaluation must not reopen a decided suggestion.
+  CONSTRAINT action_suggestion_source_ref_key UNIQUE (organization_id, brand_id, source_type, source_ref),
   CONSTRAINT action_suggestion_source_source_type_check CHECK (source_type IN ('rule', 'classifier', 'policy')),
   CONSTRAINT action_suggestion_source_rule_id_check CHECK ((source_type = 'rule') = (rule_id IS NOT NULL)),
   CONSTRAINT action_suggestion_source_steps_check CHECK (

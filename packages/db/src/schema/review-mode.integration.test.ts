@@ -278,7 +278,7 @@ describe('action_suggestion consistency', () => {
 });
 
 describe('action_suggestion_source', () => {
-  it('source unique per (suggestion, type, ref)', async () => {
+  it('source unique per (brand, type, ref), across suggestions', async () => {
     const s = await suggestion(a, await comment(a));
     const ref = uuid();
     await source(a, s, 'classifier', ref, null);
@@ -287,7 +287,14 @@ describe('action_suggestion_source', () => {
       '23505',
       'action_suggestion_source_ref_key',
     );
+    const decided = await suggestion(a, await comment(a), 'dismissed');
+    await expectPgError(
+      source(a, decided, 'classifier', ref, null),
+      '23505',
+      'action_suggestion_source_ref_key',
+    );
     await source(a, s, 'policy', ref, null);
+    await source(b, await suggestion(b, await comment(b)), 'classifier', ref, null);
   });
 
   it('rule source requires rule_id; classifier source forbids it', async () => {
