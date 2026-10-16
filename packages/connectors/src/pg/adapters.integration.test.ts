@@ -104,10 +104,12 @@ describe('tenant isolation (every adapter)', () => {
   it('PgConnectionDirectory.activate cannot touch another tenant', async () => {
     const t = await seedTenant(h.c, 'activate-iso');
     await h.c.query("UPDATE connection SET status = 'error' WHERE id = $1", [t.connectionId]);
-    expect((await dir.activate({ ...scopeOf(t), organizationId: b.organizationId }, b.userId)).activated).toBe(
+    expect(
+      (await dir.activate({ ...scopeOf(t), organizationId: b.organizationId }, b.userId)).activated,
+    ).toBe(false);
+    expect((await dir.activate({ ...scopeOf(t), brandId: b.brandId }, b.userId)).activated).toBe(
       false,
     );
-    expect((await dir.activate({ ...scopeOf(t), brandId: b.brandId }, b.userId)).activated).toBe(false);
     expect(await statusOf(t.connectionId)).toBe('error');
   });
 

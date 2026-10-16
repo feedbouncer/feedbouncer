@@ -97,7 +97,11 @@ export class NotifyingConnectionDirectory implements ConnectionDirectory {
     return this.inner.upsertPending(i);
   }
 
-  activate(scope: ConnectionScope, actorUserId: string, opts?: ActivateOptions): Promise<ActivateResult> {
+  activate(
+    scope: ConnectionScope,
+    actorUserId: string,
+    opts?: ActivateOptions,
+  ): Promise<ActivateResult> {
     return this.inner.activate(scope, actorUserId, opts);
   }
 

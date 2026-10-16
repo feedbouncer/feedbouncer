@@ -780,7 +780,11 @@ describe('ModerationActions.request in review mode', () => {
   const HOUR = 3_600_000;
   /** Sets rv's window to start `startedAgoMs` before the test clock. */
   const setWindow = async (
-    o: { mode?: 'legacy' | 'on' | 'opted_out'; startedAgoMs?: number | null; endedAgoMs?: number } = {},
+    o: {
+      mode?: 'legacy' | 'on' | 'opted_out';
+      startedAgoMs?: number | null;
+      endedAgoMs?: number;
+    } = {},
   ) => {
     const mode = o.mode ?? 'on';
     const started =
@@ -834,9 +838,10 @@ describe('ModerationActions.request in review mode', () => {
     const commentId = await seedComment({ tenant: rv });
     for (const kind of ['delete', 'ban_author', 'public_reply', 'private_reply'] as const) {
       const text = kind === 'public_reply' || kind === 'private_reply' ? 'hi' : undefined;
-      expect(
-        await rvRequest(commentId, kind, { type: 'system' }, text ? { text } : {}),
-      ).toEqual({ status: 'refused', code: 'review_mode_active' });
+      expect(await rvRequest(commentId, kind, { type: 'system' }, text ? { text } : {})).toEqual({
+        status: 'refused',
+        code: 'review_mode_active',
+      });
     }
     expect(await rowsFor(commentId)).toHaveLength(0);
     expect(enqueue).not.toHaveBeenCalled();

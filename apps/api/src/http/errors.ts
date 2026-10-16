@@ -92,7 +92,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   platform_error: 'The platform could not be reached. Try again shortly.',
   connection_needs_reconnect: 'This connection needs to be reconnected first.',
   connection_inactive: 'This connection is not active.',
-  review_mode_active: 'Review mode is on for this connection; automation can only suggest this action.',
+  review_mode_active:
+    'Review mode is on for this connection; automation can only suggest this action.',
   unsupported_action: 'This action is not supported for this platform.',
   request_key_conflict: 'This request key was already used for a different action.',
   text_too_long: 'Reply is too long for this platform.',

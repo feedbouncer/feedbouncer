@@ -89,8 +89,6 @@ const OUTCOMES: Record<string, string> = {
   duplicate: 'the same step already ran for this comment',
   would_run: 'this step would run',
   review_mode_active: 'review mode is on, so this is suggested for approval instead',
-  already_banned: 'the author is already banned',
-  approver_removed: 'the person who approved this is no longer on the team',
   internal_error: 'something went wrong on our side',
   duplicate_step: 'each step can be used once',
   not_supported_anywhere: 'none of the connected accounts support this',

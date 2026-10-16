@@ -12,6 +12,7 @@ import type pg from 'pg';
 import { isUniqueViolation, withTransaction } from '@feedbouncer/db';
 import {
   replyTextSchema,
+  reviewModeState,
   type Clock,
   type ConnectorCapabilities,
   type Platform,
@@ -22,7 +23,7 @@ import { UUID, type Logger } from '@feedbouncer/service-runtime';
 import { ACTION_KINDS, type ActionActor, type ActionKind } from './action-kinds.js';
 import type { BrandScope, CommentRow, PgCommentStore } from './store.js';
 import { EXECUTE_JOB } from './jobs/specs.js';
-import { GATED_KINDS, reviewModeState } from './review-mode.js';
+import { GATED_KINDS } from './review-mode.js';
 import {
   connectionRefusal,
   eligibilityComment,
@@ -84,7 +85,15 @@ export function actionFallbackCode(r: RequestActionResult): string | null {
 
 export const REQUEST_KEY = /^[A-Za-z0-9._:-]{1,128}$/;
 /** Prefixes of request keys the server derives itself; clients cannot claim them. */
-const RESERVED_KEY_PREFIXES = ['auto:', 'undo:', 'review:', 'clf:', 'pol:', 'rule-eval:', 'suggestion:'];
+const RESERVED_KEY_PREFIXES = [
+  'auto:',
+  'undo:',
+  'review:',
+  'clf:',
+  'pol:',
+  'rule-eval:',
+  'suggestion:',
+];
 
 /** A request key a client may supply: well-formed and outside the server-generated key space. */
 export const isClientRequestKey = (key: unknown): key is string =>

@@ -154,9 +154,7 @@ describe('PgConnectionDirectory.activate review mode', () => {
 
   it('a connection that does not activate keeps its review columns', async () => {
     const scope = await pending();
-    await h.c.query("UPDATE connection SET status = 'paused' WHERE id = $1", [
-      scope.connectionId,
-    ]);
+    await h.c.query("UPDATE connection SET status = 'paused' WHERE id = $1", [scope.connectionId]);
     const r = await dir.activate(scope, t.userId, { reviewMode: 'opted_out' });
     expect(r).toEqual({
       activated: false,

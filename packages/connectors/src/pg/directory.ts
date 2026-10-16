@@ -167,7 +167,14 @@ export class PgConnectionDirectory implements ConnectionDirectory {
         c.query(
           `INSERT INTO audit_event (organization_id, brand_id, actor_type, actor_user_id, action, subject_type, subject_id, details)
            VALUES ($1, $2, 'user', $4, $6, 'connection', $3, jsonb_build_object('platform', $5::text))`,
-          [scope.organizationId, scope.brandId, scope.connectionId, actorUserId, row.platform, action],
+          [
+            scope.organizationId,
+            scope.brandId,
+            scope.connectionId,
+            actorUserId,
+            row.platform,
+            action,
+          ],
         );
       await audit('connection.authorized');
       if (row.changed && optOut) await audit('review_mode.opted_out');

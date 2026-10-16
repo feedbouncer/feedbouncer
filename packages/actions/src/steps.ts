@@ -157,8 +157,6 @@ export const REASON_CODES: readonly string[] = [
   'would_run',
   'internal_error',
   'review_mode_active',
-  'already_banned',
-  'approver_removed',
   // step conflicts and schema
   'duplicate_step',
   'reply_to_deleted_comment',
