@@ -18,11 +18,13 @@ about. How rules are matched and ordered is in [rules.md](rules.md).
 
 - **Hide** hides the comment on the platform. It is still stored and can be
   shown again.
-- **Delete** removes the comment from the platform. It needs the explicit
-  confirmation "this is irreversible" when you add it to a rule, and it is
+- **Delete** removes the comment from the platform. Ticking it in the editor
+  adds a second, unticked box, "I understand deleted comments cannot be
+  restored"; the rule cannot be saved until that box is ticked too. Delete is
   never part of a default list of steps.
-- **Ban author** bans the comment's author from the Page. It needs its own
-  confirmation ("hard to reverse") and is never a default. Unbanning is
+- **Ban author** bans the comment's author from the Page. It has its own
+  unticked box, "I understand a ban is hard to reverse", that must be ticked
+  before the rule saves, and it is never a default. Unbanning is
   possible from the log, and an author who was unbanned recently cannot be
   banned again straight away (`reblock_too_soon`). Instagram has no ban.
 - **Auto-reply** posts a public reply built from a template. The reply can be
@@ -38,11 +40,18 @@ See [Platform support](#platform-support).
 
 ### Undo
 
-Hide, Ban and Flag can be undone from the **action log** of the rule or the
-comment. An undone step is a moderator override: automation will not apply it
-again (see [Loops and overrides](#loops-and-overrides)). A step that was
-already undone, or one with no undo, reports "This step cannot be undone" or
-"This step was already undone".
+Hide, Ban and Flag can be undone from the brand's **Action log**,
+which can be filtered by rule, outcome and step; the API can also filter it by
+comment. Undoing Hide or Ban asks the platform to unhide or unban, and the log
+shows the undo as _in progress_ until the platform answers, then _undone_. An
+undone step is a moderator override: automation will not apply it again (see
+[Loops and overrides](#loops-and-overrides)).
+
+If the platform refuses or fails the unhide or unban, the log shows "Undo
+failed. Try again." with a **Retry undo** button, and the step does not count
+as an override. Each retry is a new request; clicking twice sends one. A step
+that was already undone, or one with no undo, reports "This step cannot be
+undone" or "This step was already undone".
 
 ## Execution order
 
@@ -235,8 +244,15 @@ rule that flagged it. Each open item can be resolved with:
   Delete and Ban ask for confirmation first, and Ban is not offered when no
   connected account can ban.
 
-Resolved items stay in the list. Dismissing the item from the action log (the
-undo of Flag) closes it without doing anything.
+The queue lists open items only: a resolved item leaves the list (the API can
+still list resolved ones with `status=resolved`). Dismissing the item from the
+action log (the undo of Flag) closes it without doing anything.
+
+When a rule's Flag for review step runs, the rule's "flag" decision has
+usually opened the item already; the step takes that item over, so undoing the
+step dismisses it. An item opened by something else (another rule's earlier
+evaluation, a classifier or a policy) is left alone and the step is skipped as
+`already_flagged`.
 
 ## Platform support
 
@@ -262,8 +278,10 @@ asks for.
 A step needs the platform permission for its action. When a connected account
 did not grant it:
 
+- the editor notes "Needs a permission on …" beside the step before you save;
 - saving the rule shows a **warning** that names the account and the missing
-  permission, and the rule still saves;
+  permission, and the rule still saves. The editor stays open with the warning
+  and links to the rule and back to the list;
 - at run time the step fails with `missing_permission`.
 
 Reconnecting the account and allowing the permission fixes both. A step that no
@@ -301,6 +319,14 @@ Automation is built not to answer itself or fight a moderator:
   brand's own account. Add them to an **author rule with the Trusted list**
   (matched by author ID, not by name) so rules and automatic replies leave them
   alone. Steps cannot be added to a rule with an Allow or Trusted list.
+
+## Known limits
+
+- **Sibling replies in one thread.** The one-automatic-reply-per-thread check
+  reads the replies already recorded. When two comments of the same thread are
+  processed at the same moment, each can pass the check before the other's
+  reply is recorded, and both get an automatic reply. It is rare (the comments
+  must arrive within the same second or so) and is not prevented yet.
 
 ## Known behavior
 

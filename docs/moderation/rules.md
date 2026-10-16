@@ -68,8 +68,9 @@ rate limited like a manual action.
 If a Hide or Delete step ends as failed or not supported (for example the
 permission was revoked, the connection needs reconnecting, or retries ran out),
 the comment is **flagged for review** instead and the decision shows why. Other
-steps do not fall back; their outcome is in the action log. If a deferred step
-later succeeds, a further decision records that.
+steps do not fall back; their outcome is in the action log. A step that is
+only deferred (rate limited, or waiting for a reconnect) stays pending and
+falls back only if it finally fails.
 
 ## Idempotency and scope
 
