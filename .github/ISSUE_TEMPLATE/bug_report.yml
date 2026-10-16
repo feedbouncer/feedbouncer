@@ -8,7 +8,7 @@ body:
       value: |
         Thanks for taking the time to report this.
 
-        **Security problem?** Do not file it here. Report it privately: https://github.com/feed-bouncer-hq/feed-bouncer/security/advisories/new
+        **Security problem?** Do not file it here. Report it privately: https://github.com/feedbouncer/feedbouncer/security/advisories/new
   - type: input
     id: version
     attributes:

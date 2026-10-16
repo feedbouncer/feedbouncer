@@ -15,4 +15,4 @@ Closes #
 - [ ] No secrets, real tokens, internal hostnames or personal paths in code, tests, fixtures or this description.
 - [ ] Tenant-scoped reads and writes are authorized and have an isolation test.
 
-See the [contributing guide](https://github.com/feed-bouncer-hq/feed-bouncer/blob/main/CONTRIBUTING.md#before-you-ask-for-review).
+See the [contributing guide](https://github.com/feedbouncer/feedbouncer/blob/main/CONTRIBUTING.md#before-you-ask-for-review).

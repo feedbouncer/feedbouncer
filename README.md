@@ -206,7 +206,7 @@ Three more jobs: `Compose config` (static validation of the compose files, inclu
 
 Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), which covers setup, conventions and the checks a pull request must pass. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
-Found a bug or have an idea? [Open an issue](https://github.com/feed-bouncer-hq/feed-bouncer/issues/new/choose).
+Found a bug or have an idea? [Open an issue](https://github.com/feedbouncer/feedbouncer/issues/new/choose).
 
 ## Security
 

@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const REPO_URL = 'https://github.com/feed-bouncer-hq/feed-bouncer';
+const REPO_URL = 'https://github.com/feedbouncer/feedbouncer';
 const abs = (rel) => join(ROOT, rel);
 const read = (rel) => readFileSync(abs(rel), 'utf8');
 
