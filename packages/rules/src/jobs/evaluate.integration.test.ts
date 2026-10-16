@@ -216,7 +216,6 @@ function run(
     evaluations,
     cache,
     runner: o.runner ?? runner,
-    rules,
     log: o.log ?? quiet,
     ...(o.clock ? { clock: o.clock } : {}),
     ...(o.evaluated ? { evaluated: o.evaluated } : {}),
@@ -675,5 +674,24 @@ describe('rule_evaluate', () => {
     expect(await actionRows(c.id)).toHaveLength(1);
     expect(await evals(c.id)).toHaveLength(1);
     expect(await decisions(c.id)).toHaveLength(1);
+  });
+
+  it('a retried evaluation starts the steps that matched, not the rule as edited since', async () => {
+    const e = await env();
+    const ruleId = await addRule(e, kw('spam'), { priority: 10 });
+    const c = await comment(e, 'spam');
+    const failing = {
+      start: async () => {
+        throw new Error('queue down');
+      },
+    };
+    await expect(run(e.scope, c.id, 'spam', { runner: failing })).rejects.toThrow('queue down');
+    await pool.query('UPDATE rule SET action = $2, actions = $3::jsonb WHERE id = $1', [
+      ruleId,
+      deriveOutcome(DELETE),
+      JSON.stringify(DELETE),
+    ]);
+    await run(e.scope, c.id, 'spam');
+    expect((await runRows(c.id)).map((r) => r.steps)).toEqual([['hide']]);
   });
 });

@@ -15,7 +15,6 @@ import type { RuleSetCache } from '../cache.js';
 import { evaluate } from '../engine.js';
 import type { EvaluationRow, PgEvaluationStore } from '../evaluations.js';
 import type { RuleEvaluatedHook } from '../hooks.js';
-import type { PgRuleStore } from '../store.js';
 import type { Verdict } from '../types.js';
 import { RULE_EVALUATE_JOB, bodySha256, type RuleEvaluatePayload } from './specs.js';
 
@@ -29,7 +28,6 @@ export function ruleEvaluateJob(d: {
   evaluations: PgEvaluationStore;
   cache: RuleSetCache;
   runner: Pick<ActionRunner, 'start'>;
-  rules: Pick<PgRuleStore, 'get'>;
   log: Logger;
   clock?: { now(): number };
   evaluated?: RuleEvaluatedHook;
@@ -117,7 +115,7 @@ export function ruleEvaluateJob(d: {
 }
 
 async function act(
-  d: Pick<Parameters<typeof ruleEvaluateJob>[0], 'runner' | 'rules' | 'log'>,
+  d: Pick<Parameters<typeof ruleEvaluateJob>[0], 'runner' | 'log'>,
   scope: ConnectionScope,
   ev: EvaluationRow,
   commentId: string,
@@ -131,8 +129,7 @@ async function act(
   if (ev.status !== 'decided' || ev.matchedRuleId === null) return base;
   // Already fell back: the user was told it is flagged; do not start the actions now.
   if (ev.fallbackAt !== null) return { ...base, fallback: 'recorded' };
-  const steps =
-    verdict?.decided?.actions ?? (await d.rules.get(scope, ev.matchedRuleId))?.actions ?? [];
+  const steps = ev.matchedActions;
   if (steps.length === 0) return base;
   const run = await start(ev.matchedRuleId, steps, false);
   return { ...base, runId: run.id };

@@ -25,8 +25,8 @@ const BUTTONS: { resolution: Resolution; label: string }[] = [
 ];
 
 const CONFIRM_COPY = {
-  delete: { title: 'Delete this comment?', button: 'Delete comment', label: 'delete' },
-  ban: { title: 'Ban this author?', button: 'Ban author', label: 'ban' },
+  delete: { title: 'Delete this comment?', button: 'Delete comment' },
+  ban: { title: 'Ban this author?', button: 'Ban author' },
 } as const;
 
 export function ConfirmResolve(props: {

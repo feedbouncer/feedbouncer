@@ -17,6 +17,12 @@ UPDATE rule SET actions = CASE action
   ELSE '[]'::jsonb
 END;
 
+-- The steps of the matched rule as they were when it matched, so a retried evaluation
+-- starts those and not whatever the rule has been edited to since.
+ALTER TABLE rule_evaluation ADD COLUMN matched_actions jsonb;
+UPDATE rule_evaluation e SET matched_actions = r.actions
+  FROM rule r WHERE r.id = e.matched_rule_id AND e.status = 'decided';
+
 -- Comments waiting for a human. At most one open item per comment. decision_id is a
 -- plain reference, not a foreign key: a key would block TRUNCATE on the append-only
 -- decision log before its guard trigger could refuse it.
@@ -151,6 +157,8 @@ CREATE TABLE action_run_step (
 CREATE UNIQUE INDEX action_run_step_moderation_action_key ON action_run_step (moderation_action_id)
   WHERE moderation_action_id IS NOT NULL;
 CREATE INDEX action_run_step_brand_id_idx ON action_run_step (brand_id);
+CREATE INDEX action_run_step_log_idx
+  ON action_run_step (organization_id, brand_id, created_at DESC, position DESC, id DESC);
 CREATE INDEX action_run_step_undo_action_id_idx ON action_run_step (undo_action_id)
   WHERE undo_action_id IS NOT NULL;
 CREATE INDEX action_run_step_review_item_id_idx ON action_run_step (review_item_id)

@@ -271,7 +271,6 @@ describe('decisions', () => {
       evaluations,
       cache: new RuleSetCache(rules),
       runner,
-      rules,
       log: api.deps.log,
     });
     const ctx: JobContext = {

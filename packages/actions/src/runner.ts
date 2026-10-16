@@ -159,6 +159,37 @@ export class ActionRunner {
     }
   }
 
+  /**
+   * The advance job gave up: fail the steps that never ran so the run can finish and the
+   * rule can fall back. Steps whose platform action is out are settled by its own outcome.
+   */
+  async abandon(scope: ConnectionScope, runId: string): Promise<void> {
+    const events = await this.d.runs.withRunLocked(scope, runId, async (tx, run) => {
+      const abandoned = run.steps.filter((s) => s.status === 'pending' && !s.moderationActionId);
+      for (const step of abandoned)
+        await this.d.runs.settleStep(tx, scope, step.id, {
+          status: 'failed',
+          reason: 'retries_exhausted',
+        });
+      const stillOpen = run.steps.some((s) => s.status === 'pending' && s.moderationActionId);
+      if (!stillOpen) await this.d.runs.markRunCompleted(tx, scope, run.id);
+      return abandoned.map(
+        (step): Settled => ({
+          scope,
+          runId: run.id,
+          stepId: step.id,
+          ruleId: run.ruleId,
+          evaluationId: run.evaluationId,
+          commentId: run.commentId,
+          type: step.type,
+          status: 'failed',
+          reason: 'retries_exhausted',
+        }),
+      );
+    });
+    for (const e of events ?? []) await this.#notify(e);
+  }
+
   async #completeDryRun(scope: ConnectionScope, run: RunRow): Promise<void> {
     const sim = await this.planner.simulate(
       scope,
@@ -363,6 +394,7 @@ export function actionRunAdvanceJob(r: ActionRunner): JobDefinition<ActionRunAdv
   return {
     ...ACTION_RUN_ADVANCE_JOB,
     handle: async (ctx, p) => r.advance(ctx.scope, p.runId),
+    onDeadLetter: (e, p) => r.abandon(e.scope, p.runId),
   };
 }
 

@@ -153,7 +153,6 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       evaluations,
       cache: new RuleSetCache(rules),
       runner,
-      rules,
       log: deps.log,
       evaluated: new CompositeRuleEvaluatedHook([
         new ClassifierTrigger(deps.producer),

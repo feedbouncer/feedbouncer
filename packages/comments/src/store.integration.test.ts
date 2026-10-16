@@ -587,16 +587,7 @@ describe('per-connection comment identity', () => {
            request_key, status, completed_at, created_at)
          VALUES ($1, $2, $3, $4, 'hide', $5, $6, $7::text,
            CASE WHEN $7::text = 'pending' THEN NULL ELSE now() END, $8::timestamptz)`,
-        [
-          t.organizationId,
-          t.brandId,
-          t.connectionId,
-          commentId,
-          actor,
-          `k:${++n}`,
-          status,
-          createdAt,
-        ],
+        [t.organizationId, t.brandId, t.connectionId, commentId, actor, `k:${++n}`, status, createdAt],
       );
     await act('user', 'applied', '2026-10-01T00:00:00Z');
     await act('policy', 'applied', '2026-10-02T00:00:00Z');

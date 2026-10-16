@@ -667,6 +667,18 @@ describe('action runner', () => {
     expect(graph.state(seeded.commentId)).toBe('visible');
   });
 
+  it('an advance job that dead-letters settles the run: unrun steps fail with retries_exhausted', async () => {
+    const run = await start([FLAG, HIDE]);
+    await advanceJob.onDeadLetter?.(
+      { scope, platform: 'facebook', reason: 'retries_exhausted', errorCode: 'internal_error' },
+      { runId: run.id, settled: 0 },
+    );
+    expect(await outcome(run.id, 'flag_for_review')).toEqual(['failed', 'retries_exhausted']);
+    expect(await outcome(run.id, 'hide')).toEqual(['failed', 'retries_exhausted']);
+    expect(await runCompleted(run.id)).toBe(true);
+    expect(graph.state(seeded.commentId)).toBe('visible');
+  });
+
   it('a later evaluation retries an automated hide that failed', async () => {
     const first = await start([HIDE]);
     graph.failNext(10);

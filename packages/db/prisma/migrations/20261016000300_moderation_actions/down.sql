@@ -5,3 +5,4 @@ DROP TABLE action_run_step;
 DROP TABLE action_run;
 DROP TABLE review_item;
 ALTER TABLE rule DROP CONSTRAINT rule_actions_check, DROP COLUMN actions;
+ALTER TABLE rule_evaluation DROP COLUMN matched_actions;
