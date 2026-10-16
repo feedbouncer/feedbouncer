@@ -41,7 +41,14 @@ async function evaluation(tn: Tenant, commentId: string, revisionId: string | nu
        status, provider, model, prompt_version, outcome, winning_revision_id, checked_revision_ids, input_truncated, low_signal)
      VALUES ($1, $2, $3, $4, decode(repeat('ab', 32), 'hex'), 'ingest', 'evaluated', 'openai', 'gpt-x', 'pol-v1',
        $5, $6, ARRAY[$6]::uuid[], false, false) RETURNING id`,
-    [tn.organizationId, tn.brandId, tn.connectionId, commentId, revisionId ? 'hide' : null, revisionId],
+    [
+      tn.organizationId,
+      tn.brandId,
+      tn.connectionId,
+      commentId,
+      revisionId ? 'hide' : null,
+      revisionId,
+    ],
   );
   return r.rows[0]!.id;
 }
@@ -49,8 +56,14 @@ async function evaluation(tn: Tenant, commentId: string, revisionId: string | nu
 describe('custom_policy_revision', () => {
   it('is append-only', async () => {
     const { revisionId } = await policy(t);
-    await expectPgError(ctx.c.query(`UPDATE custom_policy_revision SET text = 'x' WHERE id = $1`, [revisionId]), '23001');
-    await expectPgError(ctx.c.query(`DELETE FROM custom_policy_revision WHERE id = $1`, [revisionId]), '23001');
+    await expectPgError(
+      ctx.c.query(`UPDATE custom_policy_revision SET text = 'x' WHERE id = $1`, [revisionId]),
+      '23001',
+    );
+    await expectPgError(
+      ctx.c.query(`DELETE FROM custom_policy_revision WHERE id = $1`, [revisionId]),
+      '23001',
+    );
   });
   it('rejects approve, short text and revision 0', async () => {
     const { policyId } = await policy(t);
@@ -60,12 +73,24 @@ describe('custom_policy_revision', () => {
          VALUES ($1, $2, $3, $4, $5, $6, false)`,
         [t.organizationId, t.brandId, policyId, rev, text, action],
       );
-    await expectPgError(ins(2, 'long enough text', 'approve'), '23514', 'custom_policy_revision_action_check');
+    await expectPgError(
+      ins(2, 'long enough text', 'approve'),
+      '23514',
+      'custom_policy_revision_action_check',
+    );
     await expectPgError(ins(2, 'short', 'flag'), '23514', 'custom_policy_revision_text_check');
-    await expectPgError(ins(0, 'long enough text', 'flag'), '23514', 'custom_policy_revision_revision_check');
-    await expectPgError(ins(1, 'long enough text', 'flag'), '23505', 'custom_policy_revision_policy_id_revision_key');
+    await expectPgError(
+      ins(0, 'long enough text', 'flag'),
+      '23514',
+      'custom_policy_revision_revision_check',
+    );
+    await expectPgError(
+      ins(1, 'long enough text', 'flag'),
+      '23505',
+      'custom_policy_revision_policy_id_revision_key',
+    );
   });
-  it('cannot point at another brand\'s policy', async () => {
+  it("cannot point at another brand's policy", async () => {
     const { policyId } = await policy(other);
     await expectPgError(
       ctx.c.query(
@@ -82,13 +107,18 @@ describe('custom_policy', () => {
   it('names are unique per brand among non-archived policies, case-insensitively', async () => {
     await policy(t, 'No DMs');
     await expectPgError(policy(t, 'no dms'), '23505', 'custom_policy_brand_id_name_key');
-    await ctx.c.query(`UPDATE custom_policy SET enabled = false, archived_at = now() WHERE brand_id = $1 AND name = 'No DMs'`, [t.brandId]);
+    await ctx.c.query(
+      `UPDATE custom_policy SET enabled = false, archived_at = now() WHERE brand_id = $1 AND name = 'No DMs'`,
+      [t.brandId],
+    );
     await expect(policy(t, 'no dms')).resolves.toBeTruthy();
   });
   it('an archived policy cannot be enabled', async () => {
     const { policyId } = await policy(t);
     await expectPgError(
-      ctx.c.query(`UPDATE custom_policy SET archived_at = now(), enabled = true WHERE id = $1`, [policyId]),
+      ctx.c.query(`UPDATE custom_policy SET archived_at = now(), enabled = true WHERE id = $1`, [
+        policyId,
+      ]),
       '23514',
       'custom_policy_archived_check',
     );
@@ -107,7 +137,9 @@ describe('decision with actor_type policy', () => {
         [t.organizationId, t.brandId, cid, ...vals],
       );
     await expectPgError(ins('', []), '23514', 'decision_actor_check');
-    await expect(ins(', policy_evaluation_id, policy_revision_id', [ev, revisionId])).resolves.toBeTruthy();
+    await expect(
+      ins(', policy_evaluation_id, policy_revision_id', [ev, revisionId]),
+    ).resolves.toBeTruthy();
     await expectPgError(
       ins(', policy_evaluation_id, policy_revision_id, rule_id', [ev, revisionId, t.ruleId]),
       '23514',
@@ -137,8 +169,14 @@ describe('decision with actor_type policy', () => {
        VALUES ($1, $2, $3, 'hide', 'enforce', 'policy', 'r', $4, $5)`,
       [t.organizationId, t.brandId, cid, ev, revisionId],
     );
-    await ctx.c.query(`UPDATE custom_policy SET enabled = false, archived_at = now() WHERE id = $1`, [policyId]);
-    const n = await ctx.c.query(`SELECT count(*)::int AS n FROM decision WHERE policy_revision_id = $1`, [revisionId]);
+    await ctx.c.query(
+      `UPDATE custom_policy SET enabled = false, archived_at = now() WHERE id = $1`,
+      [policyId],
+    );
+    const n = await ctx.c.query(
+      `SELECT count(*)::int AS n FROM decision WHERE policy_revision_id = $1`,
+      [revisionId],
+    );
     expect(n.rows[0].n).toBe(1);
   });
 });
@@ -153,8 +191,14 @@ describe('policy deletion', () => {
        VALUES ($1, $2, $3, 'hide', 'enforce', 'policy', 'r', $4, $5)`,
       [t.organizationId, t.brandId, cid, ev, revisionId],
     );
-    await expectPgError(ctx.c.query(`DELETE FROM custom_policy WHERE id = $1`, [policyId]), '23503');
-    const n = await ctx.c.query(`SELECT count(*)::int AS n FROM decision WHERE policy_revision_id = $1`, [revisionId]);
+    await expectPgError(
+      ctx.c.query(`DELETE FROM custom_policy WHERE id = $1`, [policyId]),
+      '23503',
+    );
+    const n = await ctx.c.query(
+      `SELECT count(*)::int AS n FROM decision WHERE policy_revision_id = $1`,
+      [revisionId],
+    );
     expect(n.rows[0].n).toBe(1);
   });
   it('still lets a brand delete cascade through policies and their decisions', async () => {
@@ -168,7 +212,10 @@ describe('policy deletion', () => {
       [x.organizationId, x.brandId, cid, ev, revisionId],
     );
     await ctx.c.query(`DELETE FROM brand WHERE id = $1`, [x.brandId]);
-    const n = await ctx.c.query(`SELECT count(*)::int AS n FROM custom_policy WHERE brand_id = $1`, [x.brandId]);
+    const n = await ctx.c.query(
+      `SELECT count(*)::int AS n FROM custom_policy WHERE brand_id = $1`,
+      [x.brandId],
+    );
     expect(n.rows[0].n).toBe(0);
   });
 });
@@ -178,10 +225,23 @@ describe('policy_evaluation', () => {
     const { revisionId } = await policy(t);
     const cid = await comment(t);
     const ev = await evaluation(t, cid, revisionId);
-    await expectPgError(evaluation(t, cid, revisionId), '23505', 'policy_evaluation_comment_id_body_sha256_trigger_key_key');
-    await expectPgError(ctx.c.query(`UPDATE policy_evaluation SET outcome = 'flag' WHERE id = $1`, [ev]), '23001');
-    await ctx.c.query(`UPDATE policy_evaluation SET fallback_at = now(), fallback_code = 'not_eligible' WHERE id = $1`, [ev]);
-    await expectPgError(ctx.c.query(`UPDATE policy_evaluation SET fallback_code = 'other' WHERE id = $1`, [ev]), '23001');
+    await expectPgError(
+      evaluation(t, cid, revisionId),
+      '23505',
+      'policy_evaluation_comment_id_body_sha256_trigger_key_key',
+    );
+    await expectPgError(
+      ctx.c.query(`UPDATE policy_evaluation SET outcome = 'flag' WHERE id = $1`, [ev]),
+      '23001',
+    );
+    await ctx.c.query(
+      `UPDATE policy_evaluation SET fallback_at = now(), fallback_code = 'not_eligible' WHERE id = $1`,
+      [ev],
+    );
+    await expectPgError(
+      ctx.c.query(`UPDATE policy_evaluation SET fallback_code = 'other' WHERE id = $1`, [ev]),
+      '23001',
+    );
   });
   it('rejects bad trigger keys and a failed row without a code', async () => {
     const cid = await comment(t);
