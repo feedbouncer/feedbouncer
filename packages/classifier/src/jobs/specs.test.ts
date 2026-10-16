@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decide as decideFailure, JobDeferral, classifyFailure } from '@feedbouncer/jobs';
-import {
-  BRAND_BUSY_RETRY_MS,
-  CLASSIFY_JOB,
-  MAX_CONFIGURABLE_WAIT_MS,
-} from './specs.js';
+import { BRAND_BUSY_RETRY_MS, CLASSIFY_JOB, MAX_CONFIGURABLE_WAIT_MS } from './specs.js';
 
 describe('classify deferral budget', () => {
   it('can defer longer than the longest configurable wait, so queue_timeout fires before dead-lettering', () => {

@@ -316,6 +316,14 @@ services:
     volumes:
       - ./apps/web/src:/repo/apps/web/src:ro
       - ./packages/actions/src:/repo/packages/actions/src:ro
+      - ./packages/authz/src:/repo/packages/authz/src:ro
+      - ./packages/comments/src:/repo/packages/comments/src:ro
+      - ./packages/connectors/src:/repo/packages/connectors/src:ro
+      - ./packages/db/src:/repo/packages/db/src:ro
+      - ./packages/jobs/src:/repo/packages/jobs/src:ro
+      - ./packages/mailer/src:/repo/packages/mailer/src:ro
+      - ./packages/secrets/src:/repo/packages/secrets/src:ro
+      - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
     depends_on:
       api:
         condition: service_healthy
