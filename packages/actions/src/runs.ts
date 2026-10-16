@@ -297,6 +297,25 @@ export class PgActionRunStore {
     return row ? { runId: row.run_id, stepId: row.id, connectionId: row.connection_id } : null;
   }
 
+  /** Records why a step is still waiting (e.g. rate_limited); only while it is pending. */
+  async markStepWaiting(scope: BrandScope, stepId: string, reason: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE action_run_step SET reason_code = $4
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND status = 'pending'`,
+      [scope.organizationId, scope.brandId, stepId, reason],
+    );
+  }
+
+  /** Number of steps of the run that are no longer pending. */
+  async countSettledSteps(scope: BrandScope, runId: string): Promise<number> {
+    const r = await this.pool.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM action_run_step
+        WHERE organization_id = $1 AND brand_id = $2 AND run_id = $3 AND status <> 'pending'`,
+      [scope.organizationId, scope.brandId, runId],
+    );
+    return r.rows[0]?.n ?? 0;
+  }
+
   async markRunCompleted(tx: pg.PoolClient, scope: BrandScope, runId: string): Promise<void> {
     await tx.query(
       `UPDATE action_run SET completed_at = now()
