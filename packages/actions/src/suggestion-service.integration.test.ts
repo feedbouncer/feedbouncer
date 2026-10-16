@@ -469,6 +469,17 @@ describe('approveSuggestion', () => {
     expect(await runCount()).toBe(0);
   });
 
+  it('approve of a deleted comment past grace -> not_applicable, as the list shows', async () => {
+    const { sid, id } = await seedPending();
+    await ctx.c.query("UPDATE comment SET platform_state = 'deleted' WHERE id = $1", [id]);
+    await setWindow(168 + REVIEW_GRACE_MS / HOUR + 10);
+    expect(await approveSuggestion(d, t, sid, user())).toEqual({
+      status: 'not_applicable',
+      reason: 'comment_gone',
+    });
+    expect(await statusOf(sid)).toMatchObject({ status_reason: 'comment_gone' });
+  });
+
   it('approve with delete in the plan requires confirm', async () => {
     await setRuleActions(DELETE);
     const { sid } = await seedPending(DELETE);
@@ -551,6 +562,18 @@ describe('bulk', () => {
     expect(res.map((r) => r.result)).toEqual([
       { status: 'refused', code: 'connection_needs_reconnect' },
       { status: 'refused', code: 'connection_needs_reconnect' },
+    ]);
+  });
+
+  it('bulk stops for the connection that is inactive', async () => {
+    const [a, b] = [await seedPlain(), await seedPlain()] as [string, string];
+    await ctx.c.query("UPDATE connection SET status = 'paused' WHERE id = $1", [
+      t.connectionId,
+    ]);
+    const res = await bulkDecide(d, t, { action: 'approve', ids: [a, b], ...user() });
+    expect(res.map((r) => r.result)).toEqual([
+      { status: 'refused', code: 'connection_inactive' },
+      { status: 'refused', code: 'connection_inactive' },
     ]);
   });
 

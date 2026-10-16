@@ -344,7 +344,7 @@ export function SuggestionQueue(props: {
                   </p>
                   <small>
                     {s.authorName ?? 'Unknown author'}
-                    {s.authorId && s.authorPendingCount > 0 ? (
+                    {s.authorId && s.authorPendingCount >= 2 ? (
                       <>
                         {' · '}
                         <Link

@@ -122,11 +122,6 @@ export function approveSuggestion(
   return decideLocked(d, scope, id, 'approve', i, async (tx, s, now) => {
     const system = (status: 'expired' | 'not_applicable', reason: string): Promise<boolean> =>
       d.suggestions.decide(tx, scope, id, { status, reason, userId: null, requestKey: null });
-    const grace = graceEndsAt(s.reviewMode);
-    if (grace && now.getTime() >= grace.getTime()) {
-      await system('expired', 'grace_period_ended');
-      return { result: { status: 'expired' } };
-    }
     if (s.commentState === null || s.commentState === 'deleted') {
       await system('not_applicable', 'comment_gone');
       return { result: { status: 'not_applicable', reason: 'comment_gone' } };
@@ -134,6 +129,11 @@ export function approveSuggestion(
     if (s.bodyChanged) {
       await system('not_applicable', 'comment_edited');
       return { result: { status: 'not_applicable', reason: 'comment_edited' } };
+    }
+    const grace = graceEndsAt(s.reviewMode);
+    if (grace && now.getTime() >= grace.getTime()) {
+      await system('expired', 'grace_period_ended');
+      return { result: { status: 'expired' } };
     }
     const refusal = connectionRefusal(s.connectionStatus);
     if (refusal) return { result: refused(refusal) };
@@ -235,17 +235,22 @@ export async function bulkDecide(
     [scope.organizationId, scope.brandId, i.ids],
   );
   const connectionOf = new Map(known.rows.map((r) => [r.id, r.connection_id]));
-  const needReconnect = new Set<string>();
+  const refusedConnections = new Map<string, DecisionResult>();
   const out: { id: string; result: DecisionResult }[] = [];
   for (const id of i.ids) {
     const connectionId = connectionOf.get(id);
-    if (connectionId && needReconnect.has(connectionId)) {
-      out.push({ id, result: refused('connection_needs_reconnect') });
+    const connectionRefused = connectionId ? refusedConnections.get(connectionId) : undefined;
+    if (connectionRefused) {
+      out.push({ id, result: connectionRefused });
       continue;
     }
     const result = await decide(d, scope, id, { ...i, requestKey: `${i.requestKey}:${id}` });
-    if (connectionId && result.status === 'refused' && result.code === 'connection_needs_reconnect')
-      needReconnect.add(connectionId);
+    if (
+      connectionId &&
+      result.status === 'refused' &&
+      (result.code === 'connection_needs_reconnect' || result.code === 'connection_inactive')
+    )
+      refusedConnections.set(connectionId, result);
     out.push({ id, result });
   }
   return out;

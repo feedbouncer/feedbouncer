@@ -151,10 +151,13 @@ const EFFECTIVE_SQL = effectiveSql();
 /** Only suggestions still stored as pending, so history never gets scanned. */
 const PENDING_EFFECTIVE_SQL = effectiveSql(" AND s.status = 'pending'");
 
-const PENDING_CTES = `
-  eff AS (${EFFECTIVE_SQL}),
+const pendingCtes = (effSql: string) => `
+  eff AS (${effSql}),
   pend AS (SELECT connection_id, author_id, count(*)::int AS n FROM (${PENDING_EFFECTIVE_SQL}) pe
             WHERE eff_status = 'pending' AND author_id IS NOT NULL GROUP BY connection_id, author_id)`;
+
+const PENDING_CTES = pendingCtes(EFFECTIVE_SQL);
+const PENDING_ONLY_CTES = pendingCtes(PENDING_EFFECTIVE_SQL);
 
 const SOURCES_SQL = `SELECT ss.suggestion_id, ss.source_type, ss.rule_id, ru.name AS rule_name,
          coalesce(ru.enabled AND ru.archived_at IS NULL AND ru.mode = 'enforce', false) AS rule_live,
@@ -314,7 +317,7 @@ export class PgSuggestionStore {
   async list(scope: BrandScope, f: SuggestionFilter, now: Date): Promise<SuggestionView[]> {
     const status = f.status ?? 'pending';
     const { rows } = await this.pool.query<SuggestionDb>(
-      `WITH ${PENDING_CTES}
+      `WITH ${status === 'pending' ? PENDING_ONLY_CTES : PENDING_CTES}
        SELECT e.id, e.connection_id, e.platform, e.comment_id, e.body, e.author_id, e.author_name,
               coalesce(p.n, 0) AS author_pending, e.eff_status, e.eff_reason, e.created_at, e.decided_at,
               e.decided_by_name, e.expires_at
@@ -362,7 +365,7 @@ export class PgSuggestionStore {
     after?: string,
   ): Promise<{ ids: string[]; total: number }> {
     const { rows } = await this.pool.query<{ id: string; total: number }>(
-      `WITH eff AS (${EFFECTIVE_SQL})
+      `WITH eff AS (${PENDING_EFFECTIVE_SQL})
        SELECT e.id, count(*) OVER ()::int AS total
          FROM eff e
         WHERE e.eff_status = 'pending' AND e.connection_id = $4 AND e.created_at <= $5
