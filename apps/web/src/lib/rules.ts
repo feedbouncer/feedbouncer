@@ -1,3 +1,4 @@
+import type { ActionStep } from '@feedbouncer/actions';
 import type { ClassifierEvidence } from './classifier';
 import type { PolicyEvidence } from './policies';
 
@@ -63,7 +64,9 @@ export interface RuleView {
   name: string;
   kind: RuleKind | null;
   conditions: unknown;
+  /** The decision outcome the steps add up to. */
   action: RuleAction;
+  actions: ActionStep[];
   mode: RuleMode;
   enabled: boolean;
   position: number;
@@ -256,10 +259,4 @@ export function formFromConditions(c: unknown): RuleFormState {
 export interface RuleIssue {
   path: string;
   message: string;
-}
-
-/** The actions a rule of this kind may take; author lists are tied to allow or block. */
-export function allowedActions(kind: RuleKind, f: RuleFormState): readonly RuleAction[] {
-  if (kind !== 'author') return RULE_ACTIONS;
-  return f.authorList === 'block' ? RULE_ACTIONS.filter((a) => a !== 'approve') : ['approve'];
 }

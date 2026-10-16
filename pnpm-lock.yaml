@@ -281,6 +281,9 @@ importers:
         specifier: ^0.0.1
         version: 0.0.1
     devDependencies:
+      '@feedbouncer/actions':
+        specifier: workspace:*
+        version: link:../../packages/actions
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6

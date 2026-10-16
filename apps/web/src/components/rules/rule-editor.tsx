@@ -1,18 +1,18 @@
 'use client';
+import type { ActionStep } from '@feedbouncer/actions';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent, type ReactNode } from 'react';
+import type { ActionCapabilitiesDto } from '../../lib/actions';
 import { ApiRequestError, apiFetch } from '../../lib/api-client';
 import { messageFor } from '../../lib/messages';
+import { StepEditor } from '../actions/step-editor';
 import {
-  ACTION_LABEL,
   KIND_LABEL,
   RULE_KINDS,
   RULE_PLATFORMS,
-  allowedActions,
   conditionsFromForm,
   emptyForm,
   formFromConditions,
-  type RuleAction,
   type RuleFormState,
   type RuleIssue,
   type RuleKind,
@@ -28,6 +28,9 @@ const FIELD_KEYS: Record<RuleKind, string[]> = {
   author: ['list', 'platform', 'entries'],
   competitor: ['names', 'handles', 'domains'],
 };
+
+// A problem with one step, as the API names it: actions.<index>[.field].
+const STEP_PATH = /^actions\.\d/;
 
 function issuesAt(issues: RuleIssue[], key: string): RuleIssue[] {
   return issues.filter((i) => i.path.split('.')[1] === key && i.path.startsWith('conditions.'));
@@ -67,6 +70,7 @@ export function RuleEditor(props: {
   orgId: string;
   brandId: string;
   rule?: RuleView;
+  capabilities: ActionCapabilitiesDto;
   initialIssues?: RuleIssue[];
 }) {
   const router = useRouter();
@@ -76,20 +80,22 @@ export function RuleEditor(props: {
   const [form, setForm] = useState<RuleFormState>(() =>
     rule ? formFromConditions(rule.conditions) : emptyForm(),
   );
-  const [action, setAction] = useState<RuleAction>(rule?.action ?? 'flag');
+  const [steps, setSteps] = useState<ActionStep[]>(rule?.actions ?? [{ type: 'flag_for_review' }]);
   const [dryRun, setDryRun] = useState(rule ? rule.mode === 'suggest' : true);
   const [issues, setIssues] = useState<RuleIssue[]>(props.initialIssues ?? []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const actions = allowedActions(kind, form);
-  const shownAction = actions.includes(action) ? action : (actions[0] ?? 'flag');
+  // Allow and trusted author lists let comments through, so they take no steps.
+  const allowList = kind === 'author' && form.authorList !== 'block';
   const set = <K extends keyof RuleFormState>(key: K, value: RuleFormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
   const at = (key: string) => issuesAt(issues, key);
   const known = FIELD_KEYS[kind];
   const general = issues.filter(
-    (i) => !(i.path.startsWith('conditions.') && known.includes(i.path.split('.')[1] ?? '')),
+    (i) =>
+      !(i.path.startsWith('conditions.') && known.includes(i.path.split('.')[1] ?? '')) &&
+      !STEP_PATH.test(i.path),
   );
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -100,7 +106,7 @@ export function RuleEditor(props: {
     const body = {
       name,
       conditions: conditionsFromForm(kind, form),
-      action: shownAction,
+      actions: allowList ? [] : steps,
       mode: dryRun ? 'suggest' : 'enforce',
     };
     const base = `/api/v1/orgs/${props.orgId}/brands/${props.brandId}/rules` as const;
@@ -344,22 +350,17 @@ export function RuleEditor(props: {
         </>
       ) : null}
 
-      <Field label="When it matches" issues={[]}>
-        <select
-          name="action"
-          value={shownAction}
-          onChange={(e) => setAction(e.target.value as RuleAction)}
-        >
-          {actions.map((a) => (
-            <option key={a} value={a}>
-              {ACTION_LABEL[a]}
-            </option>
-          ))}
-        </select>
-      </Field>
-      {shownAction === 'remove' ? (
-        <p role="note">Deleting can't be undone. Consider Hide.</p>
-      ) : null}
+      {allowList ? (
+        <p role="note">Comments from these authors are always allowed, so no steps apply.</p>
+      ) : (
+        <StepEditor
+          value={steps}
+          onChange={setSteps}
+          capabilities={props.capabilities}
+          issues={issues}
+          {...(kind === 'author' && { onlyPlatform: form.authorPlatform })}
+        />
+      )}
       <label style={{ display: 'block', marginBottom: 12 }}>
         <input
           type="checkbox"
