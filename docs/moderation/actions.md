@@ -295,9 +295,13 @@ Actions are sent through the normal moderation request, so they are
 deduplicated and rate limited like a manual action. When the platform asks
 FeedBouncer to slow down, or fails temporarily, the step stays _pending_ and is
 retried with backoff. It ends as `rate_limit_exhausted` if the rate-limit
-budget runs out, and as `retries_exhausted` if it keeps failing. If the
-connection needs to be reconnected, the step waits (`awaiting_reconnect`) and
-is carried out once the connection is reconnected.
+budget runs out, and as `retries_exhausted` if it keeps failing.
+
+A connection that already needs reconnecting when the step is requested is
+refused right away as `connection_needs_reconnect` (Hide and Delete steps then
+fall back to a flag decision instead of being lost). Only a connection whose
+token expires _while a step is already running_ waits for the reconnect
+(`awaiting_reconnect`) and is carried out once it happens.
 
 A comment that is processed twice does not repeat a step: each automated
 request has a fixed key built from the comment and the kind of action, and the

@@ -184,58 +184,6 @@ export function stepOutcomeFor(
   return { status: 'failed', reason: safeOutcomeCode(code, 'failed') };
 }
 
-/**
- * Every reason code this package maps or emits itself; web copy tests cover each one.
- * Unknown reasons are passed through (safeOutcomeCode), so consumers must tolerate them.
- */
-export const REASON_CODES: readonly string[] = [
-  // outcome mapping
-  'comment_gone',
-  'already_hidden',
-  'already_visible',
-  'author_unavailable',
-  'author_is_page',
-  'private_reply_window_closed',
-  'private_reply_nested_comment',
-  'reply_to_hidden_comment',
-  'own_account_comment',
-  'own_comment_always_visible',
-  'private_reply_already_sent',
-  'ban_limit_reached',
-  'reblock_too_soon',
-  'author_not_bannable',
-  'unsupported',
-  'missing_permission',
-  'author_gone',
-  'text_too_long',
-  'reply_too_long',
-  'rate_limited',
-  'awaiting_reconnect',
-  // settling and fallbacks
-  'rate_limit_exhausted',
-  'retries_exhausted',
-  'connection_needs_reconnect',
-  'connection_inactive',
-  'request_key_conflict',
-  'failed',
-  // prechecks and runner
-  'moderator_override',
-  'reply_thread_limit',
-  'duplicate',
-  'already_flagged',
-  'would_run',
-  'internal_error',
-  // step conflicts and schema
-  'duplicate_step',
-  'reply_to_deleted_comment',
-  'message_to_banned_author',
-  'hide_redundant_with_delete',
-  // brand checks
-  'not_supported_anywhere',
-  'not_supported_on_platform',
-  'template_too_long',
-];
-
 /** A page of 100 plus the one extra row callers fetch to know whether another page follows. */
 const MAX_PAGE_SIZE = 101;
 

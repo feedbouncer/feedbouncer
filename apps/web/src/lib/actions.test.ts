@@ -1,4 +1,4 @@
-import { REASON_CODES } from '@feedbouncer/actions';
+import { REASON_CODES } from '@feedbouncer/actions/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   POLL_LIMIT,

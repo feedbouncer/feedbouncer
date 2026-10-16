@@ -2,8 +2,8 @@ import { createFacebookConnector } from '@feedbouncer/connector-facebook';
 import { createInstagramConnector } from '@feedbouncer/connector-instagram';
 import type { ConnectorCapabilities, Platform } from '@feedbouncer/connectors';
 import { describe, expect, it } from 'vitest';
+import { REASON_CODES } from './steps.js';
 import {
-  REASON_CODES,
   checkStepsForBrand,
   stepOutcomeFor,
   stepSupport,
