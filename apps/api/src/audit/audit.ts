@@ -7,6 +7,7 @@ export type AuditAction =
   | 'organization.ownership_transferred'
   | 'brand.created'
   | 'brand.renamed'
+  | 'brand.updated'
   | 'brand.archived'
   | 'membership.role_changed'
   | 'membership.removed'

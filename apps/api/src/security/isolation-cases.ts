@@ -17,6 +17,8 @@ export interface IsolationFixture {
   bDomainId: string;
   /** B's succeeded action step and open review item. */
   bStepId: string;
+  /** B's applied hide of a comment, which shows on its hidden-today list. */
+  bHideActionId: string;
   bReviewItemId: string;
   /** B's pending review-mode suggestion. */
   bSuggestionId: string;
@@ -380,6 +382,19 @@ export const CASES: IsolationCase[] = [
     url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/action-log`,
   },
   {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/hidden-comments/:hideActionId',
+    name: "B's hidden comment under A's own brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/hidden-comments/${f.bHideActionId}`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/hidden-comments/:hideActionId/unhide',
+    name: "unhide B's hidden comment via A org and B brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/hidden-comments/${f.bHideActionId}/unhide`,
+    body: () => ({}),
+  },
+  {
     route: 'POST /api/v1/orgs/:orgId/brands/:brandId/action-log/:stepId/undo',
     name: "undo B's step via A org",
     url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/action-log/${f.bStepId}/undo`,
@@ -558,6 +573,8 @@ export const ACCOUNT_ROUTES = [
   'POST /api/v1/auth/sign-up',
   'GET /api/v1/me',
   'GET /api/v1/orgs',
+  /** Derives its organizations from the caller's memberships; takes no ids. */
+  'GET /api/v1/me/hidden-today',
   'POST /api/v1/orgs',
   'POST /api/v1/invitations/lookup',
   'POST /api/v1/invitations/accept',

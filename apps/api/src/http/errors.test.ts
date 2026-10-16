@@ -62,6 +62,21 @@ describe('ApiError details', () => {
   });
 });
 
+describe('missing_permission', () => {
+  it('names the missing platform permission in the envelope', () => {
+    const e = new ApiError(409, 'missing_permission', undefined, {
+      permission: 'pages_manage_engagement',
+    });
+    expect(errorBody(e)).toEqual({
+      error: {
+        code: 'missing_permission',
+        message: 'Missing platform permission.',
+        permission: 'pages_manage_engagement',
+      },
+    });
+  });
+});
+
 describe('ApiErrorFilter', () => {
   it('converts an ApiError into the envelope with its status', () => {
     const { sent, lines } = run(new ApiError(403, 'invalid_origin'));

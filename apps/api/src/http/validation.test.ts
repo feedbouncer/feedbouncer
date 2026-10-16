@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { ApiError } from './errors.js';
-import { parseBody, parseUuidOr404, zName, zUuid } from './validation.js';
+import {
+  isIanaTimeZone,
+  parseBody,
+  parseUuidOr404,
+  zName,
+  zTimeZone,
+  zUuid,
+} from './validation.js';
 
 function apiErrorOf(fn: () => unknown): ApiError {
   try {
@@ -66,5 +73,29 @@ describe('parseBody', () => {
   });
   it('rejects a non-object body', () => {
     expect(apiErrorOf(() => parseBody(schema, 'name=Acme')).status).toBe(400);
+  });
+});
+
+describe('time zones', () => {
+  it.each(['UTC', 'America/Los_Angeles', 'Europe/Berlin', 'Asia/Kolkata', 'Etc/GMT+5'])(
+    'accepts %s',
+    (v) => {
+      expect(isIanaTimeZone(v)).toBe(true);
+      expect(zTimeZone.parse(v)).toBe(v);
+    },
+  );
+  it.each([
+    '',
+    'Mars/Phobos',
+    'utc ',
+    'America//Chicago',
+    "UTC'; DROP TABLE brand;--",
+    '+05:00',
+    `${'A'.repeat(60)}/B`,
+    42,
+    null,
+  ])('rejects %j', (v) => {
+    expect(isIanaTimeZone(v)).toBe(false);
+    expect(zTimeZone.safeParse(v).success).toBe(false);
   });
 });

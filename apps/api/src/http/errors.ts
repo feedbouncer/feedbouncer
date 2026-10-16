@@ -35,6 +35,7 @@ export type ErrorCode =
   | 'platform_error'
   | 'connection_needs_reconnect'
   | 'connection_inactive'
+  | 'missing_permission'
   | 'review_mode_active'
   | 'unsupported_action'
   | 'request_key_conflict'
@@ -95,6 +96,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   platform_error: 'The platform could not be reached. Try again shortly.',
   connection_needs_reconnect: 'This connection needs to be reconnected first.',
   connection_inactive: 'This connection is not active.',
+  missing_permission: 'Missing platform permission.',
   review_mode_active:
     'Review mode is on for this connection; automation can only suggest this action.',
   unsupported_action: 'This action is not supported for this platform.',
@@ -152,6 +154,8 @@ export class ApiError extends Error {
       readonly issues?: readonly ErrorIssue[];
       readonly max?: number;
       readonly handled?: HandledDetails;
+      /** The platform permission a connection lacks, for 409 missing_permission. */
+      readonly permission?: string;
     },
   ) {
     super(message ?? DEFAULT_MESSAGES[code]);
@@ -167,6 +171,7 @@ export function errorBody(e: ApiError): {
     issues?: readonly ErrorIssue[];
     max?: number;
     handled?: HandledDetails;
+    permission?: string;
   };
 } {
   return { error: { ...e.details, code: e.code, message: e.message } };

@@ -72,6 +72,8 @@ const REFUSALS: Record<Exclude<RefusalCode, 'not_found'>, [number, ErrorCode]> =
   connection_needs_reconnect: [409, 'connection_needs_reconnect'],
   connection_inactive: [409, 'connection_inactive'],
   review_mode_active: [409, 'review_mode_active'],
+  // Only refuses automation; a person's request never gets here.
+  moderator_override: [403, 'forbidden'],
 };
 
 /** Used when the platform's connector is not registered (e.g. Instagram disabled after connecting). */

@@ -24,6 +24,14 @@ async function lockedWriter(c: pg.PoolClient, ctx: OrgContext): Promise<void> {
   if (!can(await lockedActor(c, ctx), 'brand.write')) throw new ApiError(403, 'forbidden');
 }
 
+// Intl accepts names case-insensitively; date_trunc needs the exact name Postgres knows.
+async function requireKnownZone(c: pg.PoolClient, timezone: string): Promise<void> {
+  const known = await c.query('SELECT 1 FROM pg_timezone_names WHERE name = $1', [timezone]);
+  if (known.rowCount === 0) {
+    throw new ApiError(400, 'invalid_request', 'Invalid or missing fields: timezone.');
+  }
+}
+
 @Injectable()
 export class BrandsService {
   constructor(@Inject(DEPS) private readonly deps: AppDeps) {}
@@ -47,14 +55,17 @@ export class BrandsService {
     return toBrandDto(rows[0]);
   }
 
-  async create(ctx: OrgContext, name: string): Promise<BrandDto> {
+  async create(ctx: OrgContext, name: string, timezone?: string): Promise<BrandDto> {
     try {
       return await withTransaction(this.deps.pool, async (c) => {
         await lockedWriter(c, ctx);
+        if (timezone) await requireKnownZone(c, timezone);
         const row = (
           await c.query<BrandRow>(
-            `INSERT INTO brand (organization_id, name) VALUES ($1, $2) RETURNING ${BRAND_COLUMNS}`,
-            [ctx.organizationId, name],
+            `INSERT INTO brand (organization_id, name, timezone, timezone_set_at)
+             VALUES ($1, $2, COALESCE($3::text, 'UTC'), CASE WHEN $3::text IS NULL THEN NULL ELSE now() END)
+             RETURNING ${BRAND_COLUMNS}`,
+            [ctx.organizationId, name, timezone ?? null],
           )
         ).rows[0]!;
         await recordAudit(c, {
@@ -73,7 +84,11 @@ export class BrandsService {
     }
   }
 
-  async rename(ctx: OrgContext, brandId: string, name: string): Promise<BrandDto> {
+  async update(
+    ctx: OrgContext,
+    brandId: string,
+    patch: { name?: string | undefined; timezone?: string | undefined },
+  ): Promise<BrandDto> {
     try {
       return await withTransaction(this.deps.pool, async (c) => {
         await lockedWriter(c, ctx);
@@ -87,20 +102,31 @@ export class BrandsService {
         if (cur.archived_at) {
           throw new ApiError(409, 'brand_archived', 'Archived brands cannot be renamed.');
         }
+        if (patch.timezone) await requireKnownZone(c, patch.timezone);
         const row = (
           await c.query<BrandRow>(
-            `UPDATE brand SET name = $3 WHERE organization_id = $1 AND id = $2 RETURNING ${BRAND_COLUMNS}`,
-            [ctx.organizationId, brandId, name],
+            `UPDATE brand
+                SET name = COALESCE($3::text, name),
+                    timezone = COALESCE($4::text, timezone),
+                    timezone_set_at = CASE WHEN $4::text IS NULL THEN timezone_set_at ELSE now() END
+              WHERE organization_id = $1 AND id = $2 RETURNING ${BRAND_COLUMNS}`,
+            [ctx.organizationId, brandId, patch.name ?? null, patch.timezone ?? null],
           )
         ).rows[0]!;
-        await recordAudit(c, {
-          organizationId: ctx.organizationId,
-          brandId,
-          actorUserId: ctx.actorUserId,
-          action: 'brand.renamed',
-          subjectType: 'brand',
-          subjectId: brandId,
-        });
+        const audit = { organizationId: ctx.organizationId, brandId, actorUserId: ctx.actorUserId };
+        const subject = { subjectType: 'brand', subjectId: brandId } as const;
+        if (patch.name !== undefined) {
+          await recordAudit(c, { ...audit, ...subject, action: 'brand.renamed' });
+        }
+        // The zone itself is not logged.
+        if (patch.timezone !== undefined) {
+          await recordAudit(c, {
+            ...audit,
+            ...subject,
+            action: 'brand.updated',
+            details: { timezoneChanged: true },
+          });
+        }
         return toBrandDto(row);
       });
     } catch (e) {

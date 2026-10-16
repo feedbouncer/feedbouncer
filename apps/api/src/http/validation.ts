@@ -7,6 +7,21 @@ const NO_CONTROL = /^[^\u0000-\u001f\u007f]*$/;
 export const zName = z.string().trim().min(1).max(200).regex(NO_CONTROL);
 export const zUuid = z.uuid();
 
+const IANA_SHAPE = /^(?:UTC|[A-Za-z]+(?:[/_+-][A-Za-z0-9]+)+)$/;
+
+/** An IANA zone name the runtime knows. Postgres has the last word (see BrandsService). */
+export function isIanaTimeZone(v: unknown): v is string {
+  if (typeof v !== 'string' || v.length > 64 || !IANA_SHAPE.test(v)) return false;
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: v });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const zTimeZone = z.string().refine(isIanaTimeZone);
+
 /** Path IDs: anything that is not a UUID cannot exist, so it is a plain 404. */
 export function parseUuidOr404(v: unknown): string {
   const r = zUuid.safeParse(v);
