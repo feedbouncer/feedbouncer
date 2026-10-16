@@ -121,10 +121,10 @@ interface RunDb {
 const GRACE_SECONDS = REVIEW_GRACE_MS / 1000;
 
 // SQL twin of graceEndsAt().
-const GRACE_SQL = `CASE WHEN cn.review_mode = 'on' AND cn.review_mode_started_at IS NOT NULL
+export const GRACE_SQL = `CASE WHEN cn.review_mode = 'on' AND cn.review_mode_started_at IS NOT NULL
        THEN coalesce(cn.review_mode_ended_at, cn.review_mode_ends_at) + ${GRACE_SECONDS} * interval '1 second' END`;
 
-const BODY_CHANGED_SQL = `(c.id IS NOT NULL AND sha256(convert_to(c.body, 'UTF8')) <> s.body_sha256)`;
+export const BODY_CHANGED_SQL = `(c.id IS NOT NULL AND sha256(convert_to(c.body, 'UTF8')) <> s.body_sha256)`;
 
 /** Every suggestion of the brand with its effective status; $1 organization, $2 brand, $3 now. */
 const EFFECTIVE_SQL = `
@@ -334,6 +334,45 @@ export class PgSuggestionStore {
       ],
     );
     return this.toViews(scope, rows);
+  }
+
+  /** Oldest first; `total` counts every match, not just the returned ids. */
+  async matchPending(
+    scope: ConnectionScope,
+    f: { [K in 'ruleId' | 'authorId' | 'stepType']?: SuggestionFilter[K] | undefined },
+    cutoff: Date,
+    now: Date,
+    limit: number,
+  ): Promise<{ ids: string[]; total: number }> {
+    const { rows } = await this.pool.query<{ id: string; total: number }>(
+      `WITH eff AS (${EFFECTIVE_SQL})
+       SELECT e.id, count(*) OVER ()::int AS total
+         FROM eff e
+        WHERE e.eff_status = 'pending' AND e.connection_id = $4 AND e.created_at <= $5
+          AND ($6::uuid IS NULL OR e.author_id = $6)
+          AND ($7::uuid IS NULL OR EXISTS (
+                SELECT 1 FROM action_suggestion_source ss
+                 WHERE ss.organization_id = $1 AND ss.brand_id = $2 AND ss.suggestion_id = e.id
+                   AND ss.rule_id = $7))
+          AND ($8::text IS NULL OR EXISTS (
+                SELECT 1 FROM action_suggestion_source ss
+                 WHERE ss.organization_id = $1 AND ss.brand_id = $2 AND ss.suggestion_id = e.id
+                   AND ss.steps @> jsonb_build_array(jsonb_build_object('type', $8::text))))
+        ORDER BY e.created_at, e.id
+        LIMIT $9`,
+      [
+        scope.organizationId,
+        scope.brandId,
+        now,
+        scope.connectionId,
+        cutoff,
+        f.authorId ?? null,
+        f.ruleId ?? null,
+        f.stepType ?? null,
+        limit,
+      ],
+    );
+    return { ids: rows.map((r) => r.id), total: rows[0]?.total ?? 0 };
   }
 
   async load(scope: BrandScope, id: string, now: Date): Promise<SuggestionView | null> {

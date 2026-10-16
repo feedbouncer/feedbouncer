@@ -10,3 +10,5 @@ export * from './jobs/specs.js';
 export * from './services.js';
 export * from './suggestion-plan.js';
 export * from './suggestions.js';
+export * from './suggestion-service.js';
+export * from './sweeper.js';

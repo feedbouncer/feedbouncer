@@ -275,6 +275,14 @@ export class PgActionRunStore {
     return run;
   }
 
+  async getSuggestionRun(
+    scope: ConnectionScope,
+    suggestionId: string,
+    db: Queryable = this.pool,
+  ): Promise<RunRow | null> {
+    return loadRun(db, scope, { suggestionId }, false);
+  }
+
   async getRun(scope: ConnectionScope, runId: string): Promise<RunRow | null> {
     return loadRun(this.pool, scope, { id: runId }, false);
   }

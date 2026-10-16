@@ -61,10 +61,16 @@ export interface AuditEvent {
   organizationId: string;
   brandId: string;
   actorUserId: string;
-  action: 'action_step.undone' | 'review_item.resolved';
-  subjectType: 'action_run_step' | 'review_item';
+  action:
+    | 'action_step.undone'
+    | 'review_item.resolved'
+    | 'review_mode.ended_early'
+    | 'suggestion.approved'
+    | 'suggestion.dismissed'
+    | 'suggestion.bulk_requested';
+  subjectType: 'action_run_step' | 'review_item' | 'connection' | 'action_suggestion';
   subjectId: string;
-  details: Readonly<Record<string, string | null>>;
+  details: Readonly<Record<string, string | number | null>>;
 }
 
 export type Audit = (tx: pg.PoolClient, e: AuditEvent) => Promise<void>;
