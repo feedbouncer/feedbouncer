@@ -25,9 +25,13 @@ async function lockedWriter(c: pg.PoolClient, ctx: OrgContext): Promise<void> {
 }
 
 // Intl accepts names case-insensitively; date_trunc needs the exact name Postgres knows.
-async function requireKnownZone(c: pg.PoolClient, timezone: string): Promise<void> {
+async function isKnownZone(c: pg.PoolClient, timezone: string): Promise<boolean> {
   const known = await c.query('SELECT 1 FROM pg_timezone_names WHERE name = $1', [timezone]);
-  if (known.rowCount === 0) {
+  return known.rowCount !== 0;
+}
+
+async function requireKnownZone(c: pg.PoolClient, timezone: string): Promise<void> {
+  if (!(await isKnownZone(c, timezone))) {
     throw new ApiError(400, 'invalid_request', 'Invalid or missing fields: timezone.');
   }
 }
@@ -59,13 +63,14 @@ export class BrandsService {
     try {
       return await withTransaction(this.deps.pool, async (c) => {
         await lockedWriter(c, ctx);
-        if (timezone) await requireKnownZone(c, timezone);
+        // The browser supplies the zone unprompted, so one this server doesn't know means UTC, not a failure.
+        const zone = timezone && (await isKnownZone(c, timezone)) ? timezone : null;
         const row = (
           await c.query<BrandRow>(
             `INSERT INTO brand (organization_id, name, timezone, timezone_set_at)
              VALUES ($1, $2, COALESCE($3::text, 'UTC'), CASE WHEN $3::text IS NULL THEN NULL ELSE now() END)
              RETURNING ${BRAND_COLUMNS}`,
-            [ctx.organizationId, name, timezone ?? null],
+            [ctx.organizationId, name, zone],
           )
         ).rows[0]!;
         await recordAudit(c, {
@@ -100,7 +105,7 @@ export class BrandsService {
         ).rows[0];
         if (!cur) throw notFound();
         if (cur.archived_at) {
-          throw new ApiError(409, 'brand_archived', 'Archived brands cannot be renamed.');
+          throw new ApiError(409, 'brand_archived', 'Archived brands cannot be changed.');
         }
         if (patch.timezone) await requireKnownZone(c, patch.timezone);
         const row = (

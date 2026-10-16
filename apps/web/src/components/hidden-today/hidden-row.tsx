@@ -28,13 +28,11 @@ export function HiddenRow({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; reconnect: boolean } | null>(null);
-  const { orgId, brandId, hideActionId } = {
-    orgId: item.organizationId,
-    brandId: item.brandId,
-    hideActionId: item.hideActionId,
-  };
+  const orgId = item.organizationId;
+  const brandId = item.brandId;
+  const hideActionId = item.hideActionId;
 
-  // A fresh closure each render is fine: singleFlight guards a click until its request settles.
+  // Memoised so singleFlight keeps its in-flight state across renders.
   const onClick = useMemo(
     () =>
       singleFlight(async () => {

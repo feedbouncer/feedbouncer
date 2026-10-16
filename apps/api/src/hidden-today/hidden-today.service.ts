@@ -47,9 +47,13 @@ export class HiddenTodayService {
       .filter((m) => can(m.role, 'comment.moderate'))
       .map((m) => m.organization.id);
     if (orgIds.length === 0) return { items: [], next: null, brands: [] };
-    const r = await this.#store.list(orgIds, new Date(systemClock.now()), q);
+    const now = new Date(systemClock.now());
     // Without a Meta connector there is nothing to show or unhide, whatever rows remain.
-    if (!this.deps.comments) return { items: [], next: null, brands: r.brands.map(toBrandDayDto) };
+    if (!this.deps.comments) {
+      const brands = await this.#store.brandDays(orgIds, now);
+      return { items: [], next: null, brands: brands.map(toBrandDayDto) };
+    }
+    const r = await this.#store.list(orgIds, now, q);
     return {
       items: r.items.map(toHiddenItemDto),
       next: toNextDto(r.next),

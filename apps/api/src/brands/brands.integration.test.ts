@@ -149,7 +149,7 @@ describe('brands', () => {
       expect(r.body.brand).toMatchObject({ timezone: 'UTC', timezoneSet: false });
     });
 
-    it('POST brand with timezone stores it', async () => {
+    it('POST brand with timezone stores it; an unknown zone falls back to UTC', async () => {
       const { orgId, owner } = await orgWithRoles(api, 'tz1', shared);
       const created = await api.req('POST', brandsUrl(orgId), {
         cookie: owner.cookie,
@@ -166,7 +166,8 @@ describe('brands', () => {
         cookie: owner.cookie,
         body: { name: 'Mars', timezone: 'Mars/Phobos' },
       });
-      expect(bad.status).toBe(400);
+      expect(bad.status).toBe(201);
+      expect(bad.body.brand).toMatchObject({ timezone: 'UTC', timezoneSet: false });
     });
 
     it("PATCH brand timezone 'America/Los_Angeles' -> timezoneSet true; 'Mars/Phobos' -> 400; member role -> 403", async () => {

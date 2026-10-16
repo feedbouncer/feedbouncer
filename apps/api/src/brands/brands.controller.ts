@@ -18,7 +18,7 @@ import { RequireCapability } from '../tenancy/capability.decorator.js';
 import { OrgAccessGuard, type OrgRequest } from '../tenancy/org-access.guard.js';
 import { BrandsService } from './brands.service.js';
 
-const CreateBody = z.strictObject({ name: zName, timezone: zTimeZone.optional() });
+const CreateBody = z.strictObject({ name: zName, timezone: zTimeZone.optional().catch(undefined) });
 const PatchBody = z
   .strictObject({ name: zName.optional(), timezone: zTimeZone.optional() })
   .refine((b) => b.name !== undefined || b.timezone !== undefined);

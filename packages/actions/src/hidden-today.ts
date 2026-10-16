@@ -305,14 +305,7 @@ export class PgHiddenTodayStore {
   ): Promise<{ items: HiddenItem[]; next: HiddenCursor | null; brands: BrandDay[] }> {
     const [rows, brands] = await Promise.all([
       this.pool.query<Row>(LIST_SQL, listParams(orgIds, now, page)),
-      this.pool.query<{
-        organization_id: string;
-        id: string;
-        name: string;
-        timezone: string;
-        timezone_set: boolean;
-        day_start: Date;
-      }>(`${DAYS_SQL} ORDER BY b.name, b.id`, [[...orgIds], now]),
+      this.brandDays(orgIds, now),
     ]);
     const items = rows.rows.slice(0, page.limit).map(toItem);
     const last = items.at(-1);
@@ -322,15 +315,28 @@ export class PgHiddenTodayStore {
         rows.rows.length > page.limit && last
           ? { hiddenAt: last.hiddenAt, hideActionId: last.hideActionId }
           : null,
-      brands: brands.rows.map((b) => ({
-        organizationId: b.organization_id,
-        brandId: b.id,
-        brandName: b.name,
-        timezone: b.timezone,
-        timezoneSet: b.timezone_set,
-        dayStart: b.day_start,
-      })),
+      brands,
     };
+  }
+
+  /** Each brand's timezone and the start of its current day. */
+  async brandDays(orgIds: readonly string[], now: Date): Promise<BrandDay[]> {
+    const { rows } = await this.pool.query<{
+      organization_id: string;
+      id: string;
+      name: string;
+      timezone: string;
+      timezone_set: boolean;
+      day_start: Date;
+    }>(`${DAYS_SQL} ORDER BY b.name, b.id`, [[...orgIds], now]);
+    return rows.map((b) => ({
+      organizationId: b.organization_id,
+      brandId: b.id,
+      brandName: b.name,
+      timezone: b.timezone,
+      timezoneSet: b.timezone_set,
+      dayStart: b.day_start,
+    }));
   }
 
   /** The hide as a row, only while it is today's latest applied hide on its comment. */
