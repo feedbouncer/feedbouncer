@@ -281,6 +281,8 @@ export class ActionRunner {
         await settle(step, { status: 'failed', reason: 'approver_removed' });
         continue;
       }
+      const approvedBan = run.suggestionId !== null && step.type === 'ban';
+      if (approvedBan && !justRequested) await runs.lockAuthorBans(tx, scope, run.commentId);
       const blocked = justRequested
         ? null
         : await this.planner.precheck(scope, step.type, comment, conn, [...views.values()], tx, {
@@ -305,6 +307,7 @@ export class ActionRunner {
           'template' in step.config
             ? this.planner.render(step.config, comment!, brand, conn!)
             : undefined;
+        if (approvedBan) await runs.claimRequest(tx, scope, step.id, requestKey);
         next = { step, kind, requestKey, text };
         break;
       }

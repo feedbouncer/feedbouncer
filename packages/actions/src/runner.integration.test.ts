@@ -1101,6 +1101,35 @@ describe('failures that need the transaction to stay usable', () => {
       expect(graph.blocked(pageId)).toEqual([authorId]);
     });
 
+    it('overlapping approval runs for one author ban once', async () => {
+      const authorId = (await store.load(t, seeded.id))!.authorExternalId!;
+      const other = await addFbComment({ authorId });
+      const a = await approve([BAN]);
+      const b = await approve([BAN], { commentId: other.id });
+      const request = actions.request.bind(actions);
+      let entered!: () => void;
+      let release!: () => void;
+      const inRequest = new Promise<void>((r) => (entered = r));
+      const gate = new Promise<void>((r) => (release = r));
+      actions.request = async (i) => {
+        if (i.requestKey === `suggestion:${a.suggestionId}:ban_author`) {
+          entered();
+          await gate;
+        }
+        return request(i);
+      };
+      const first = runner.advance(scope, a.id);
+      await inRequest;
+      await runner.advance(scope, b.id);
+      release();
+      await first;
+      actions.request = request;
+      await queue.drain();
+      expect(await outcome(a.id, 'ban')).toEqual(['succeeded', null]);
+      expect(await outcome(b.id, 'ban')).toEqual(['skipped', 'already_banned']);
+      expect(graph.blocked(pageId)).toEqual([authorId]);
+    });
+
     it('after a moderator unhide still hides', async () => {
       await start([HIDE]);
       await queue.drain();

@@ -440,8 +440,37 @@ export class PgActionRunStore {
   }
 
   /**
+   * Serializes ban decisions for the comment's author until the transaction ends. With
+   * claimRequest, a second approval run cannot pass the ban precheck while the first ban
+   * is between precheck and its moderation_action insert.
+   */
+  async lockAuthorBans(tx: pg.PoolClient, scope: BrandScope, commentId: string): Promise<void> {
+    await tx.query(
+      `SELECT pg_advisory_xact_lock(hashtextextended(
+                'ban:' || connection_id || ':' || coalesce(author_id::text, id::text), 0))
+         FROM comment WHERE organization_id = $1 AND brand_id = $2 AND id = $3`,
+      [scope.organizationId, scope.brandId, commentId],
+    );
+  }
+
+  /** Records the key a step is about to request with, before the action exists. */
+  async claimRequest(
+    tx: pg.PoolClient,
+    scope: BrandScope,
+    stepId: string,
+    requestKey: string,
+  ): Promise<void> {
+    await tx.query(
+      `UPDATE action_run_step SET request_key = $4
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND moderation_action_id IS NULL`,
+      [scope.organizationId, scope.brandId, stepId, requestKey],
+    );
+  }
+
+  /**
    * True when the comment's author is banned: a ban of the author (on any of their comments
-   * on this connection) is pending or applied with no applied unban after it.
+   * on this connection) is pending or applied with no applied unban after it, or another
+   * pending ban step has claimed its request.
    */
   async hasActiveBan(
     scope: BrandScope,
@@ -468,6 +497,13 @@ export class PgActionRunStore {
                WHERE u.organization_id = $1 AND u.brand_id = $2 AND u.comment_id IN (SELECT id FROM cs)
                  AND u.kind = 'unban_author' AND u.status = 'applied'
                  AND (u.created_at, u.id) > (b.created_at, b.id))
+       ) OR EXISTS (
+         SELECT 1 FROM action_run_step s
+           JOIN action_run r ON r.brand_id = s.brand_id AND r.id = s.run_id
+          WHERE s.organization_id = $1 AND s.brand_id = $2 AND r.organization_id = $1
+            AND r.comment_id IN (SELECT id FROM cs)
+            AND s.step_type = 'ban' AND s.status = 'pending' AND s.moderation_action_id IS NULL
+            AND s.request_key IS NOT NULL AND s.request_key IS DISTINCT FROM $4
        ) AS banned`,
       [scope.organizationId, scope.brandId, commentId, ownRequestKey],
     );
