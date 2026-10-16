@@ -69,7 +69,7 @@ describe('sanitizeValue', () => {
     ['one dot leader', 'evil․com'],
     ['zero-width split domain', 'evil.​com'],
     ['bidi-wrapped domain', 'evil‮.com‬'],
-    ['soft hyphen split scheme', 'ht­tp://x'],
+    ['soft hyphen split scheme', 'ht\u00ADtp://x'],
     ['fullwidth colon scheme', 'HTTPS：//x'],
     ['hangul filler split domain', 'evil.ㅤcom'],
     ['combining grapheme joiner split', 'evil.͏com'],
@@ -86,7 +86,7 @@ describe('sanitizeValue', () => {
 
   it('applies NFKC and keeps ordinary names', () => {
     expect(sanitizeValue('Ｄａｎａ', 50)).toBe('Dana');
-    expect(sanitizeValue('Zoë Müller', 50)).toBe('Zoë Müller');
+    expect(sanitizeValue('Zo\u00EB M\u00FCller', 50)).toBe('Zo\u00EB M\u00FCller');
     expect(sanitizeValue('Dr. Smith', 50)).toBe('Dr. Smith');
   });
 
@@ -95,8 +95,8 @@ describe('sanitizeValue', () => {
   });
 
   it('truncates by grapheme without splitting clusters', () => {
-    expect(sanitizeValue('👍🏽👍🏽', 1)).toBe('👍🏽');
-    expect(sanitizeValue('q\u0301q\u0301', 1)).toBe('q\u0301');
+    expect(sanitizeValue('👍🏽👍🏽', 2)).toBe('👍🏽');
+    expect(sanitizeValue('q\u0301q\u0301', 2)).toBe('q\u0301');
   });
 });
 
@@ -136,5 +136,78 @@ describe('worstCaseLength', () => {
 
   it('uses the inline fallback when it is longer than the max', () => {
     expect(worstCaseLength(`{{platform|${'z'.repeat(40)}}}`)).toBe(40);
+  });
+});
+
+describe('hardened author-name check', () => {
+  it.each([
+    ['combining mark before dot', 'evil̲.com'],
+    ['devanagari with dot', 'कि.com'],
+    ['TLD containing marks', 'evil.कॉम'],
+    ['ip address', '192.168.0.1'],
+    ['ftp scheme', 'ftp://x/y'],
+    ['mailto', 'mailto:a'],
+    ['javascript', 'javascript:x'],
+    ['tel', 'tel:+1555'],
+    ['arabic full stop', 'evil۔com'],
+    ['devanagari danda', 'evil।com'],
+    ['small full stop', 'evil﹒com'],
+    ['backslash', 'evil\\com'],
+    ['slash', 'a/b'],
+    ['initials glued', 'J.Smith'],
+  ])('rejects %s', (_l, raw) => {
+    expect(sanitizeValue(raw, 50)).toBeNull();
+  });
+
+  it('keeps ordinary names, including non-Latin ones', () => {
+    expect(sanitizeValue("Dana O'Brien-Smith", 50)).toBe("Dana O'Brien-Smith");
+    expect(sanitizeValue('Mary Jr.', 50)).toBe('Mary Jr.');
+    expect(sanitizeValue('דנה לוי', 50)).toBe('דנה לוי');
+    expect(sanitizeValue('किरण शर्मा', 50)).not.toBeNull();
+    expect(sanitizeValue('山田太郎', 50)).toBe('山田太郎');
+  });
+});
+
+describe('code point cap', () => {
+  const hostile = [
+    'a' + '́'.repeat(5000),
+    '\u{1F44D}\u{1F3FD}'.repeat(100),
+    'é'.repeat(200),
+    'x'.repeat(500),
+  ];
+  it.each(hostile.map((h) => [h.length, h]))(
+    'render stays within worstCaseLength (%i)',
+    (_n, h) => {
+      for (const t of [
+        '{{author_name}}',
+        'Hi {{author_first_name}}!',
+        '{{brand_name}}|{{platform}}',
+      ]) {
+        const out = renderTemplate(t, { author_name: h, brand_name: h, platform: h });
+        expect([...out].length).toBeLessThanOrEqual(worstCaseLength(t));
+      }
+    },
+  );
+
+  it('does not leave a dangling combining mark at the cut', () => {
+    const out = sanitizeValue('q' + '\u0301'.repeat(100), 50);
+    expect(out).toBe('q');
+  });
+});
+
+describe('whitespace controls', () => {
+  it('turns newlines and tabs into spaces so first name is correct', () => {
+    expect(sanitizeValue('Dana\nLevi', 50)).toBe('Dana Levi');
+    expect(sanitizeValue('Dana\tLevi', 50)).toBe('Dana Levi');
+    expect(renderTemplate('{{author_first_name}}', { author_name: 'Dana\nLevi' })).toBe('Dana');
+  });
+});
+
+describe('trusted values', () => {
+  it('renders brand_name and platform as written, without the link filter', () => {
+    expect(renderTemplate('{{brand_name}}', { brand_name: 'C#' })).toBe('C#');
+    expect(renderTemplate('{{brand_name}}', { brand_name: 'Cal.com' })).toBe('Cal.com');
+    expect(renderTemplate('{{brand_name}}', { brand_name: 'A‮B\nC' })).toBe('AB C');
+    expect([...renderTemplate('{{brand_name}}', { brand_name: 'b'.repeat(150) })].length).toBe(100);
   });
 });

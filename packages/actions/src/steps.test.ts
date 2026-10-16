@@ -84,6 +84,11 @@ describe('reply templates in steps', () => {
     }
   });
 
+  it('stores the trimmed template', () => {
+    const r = p([{ type: 'auto_reply', template: '  Hi  \n' }]);
+    expect(r.success && r.data[0]).toEqual({ type: 'auto_reply', template: 'Hi' });
+  });
+
   it('rejects empty reply templates', () => {
     expect(p([{ type: 'auto_reply', template: '  ' }]).success).toBe(false);
   });

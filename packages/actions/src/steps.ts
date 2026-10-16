@@ -54,10 +54,13 @@ export const CONFLICTS: readonly (readonly [StepType, StepType, string])[] = [
   ['hide', 'delete', 'hide_redundant_with_delete'],
 ];
 
-const templateSchema = z.string().superRefine((t, ctx) => {
-  const result = validateTemplate(t);
-  if (!result.ok) ctx.addIssue({ code: 'custom', message: result.code });
-});
+const templateSchema = z
+  .string()
+  .superRefine((t, ctx) => {
+    const result = validateTemplate(t);
+    if (!result.ok) ctx.addIssue({ code: 'custom', message: result.code });
+  })
+  .transform((t) => t.trim());
 
 const stepSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('flag_for_review') }),

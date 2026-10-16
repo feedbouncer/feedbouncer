@@ -46,37 +46,72 @@ export function validateTemplate(t: string): TemplateValidation {
   return { ok: true };
 }
 
-// Control, format (bidi, zero-width, joiners, tag chars), line/paragraph separators,
-// variation selectors, and invisible fillers that render as nothing.
-const INVISIBLE =
-  /[\p{Cc}\p{Cf}\u2028\u2029\p{Variation_Selector}\u034F\u115F\u1160\u3164\uFFA0]/gu;
-// Link-, domain-, mention- or token-like. The dot class includes the ideographic full stop
-// (U+3002), which NFKC leaves unchanged.
-const UNSAFE = /https?:|www[.\u3002]|[@#{}]|[\p{L}\p{N}-][.\u3002]\p{L}{2,}/iu;
+// Whitespace-like controls become spaces so words stay separate.
+const SPACE_CONTROLS = /[\t\n\v\f\r\u0085\u2028\u2029]/g;
+// Remaining control and format chars (bidi, zero-width, joiners, tag chars), variation
+// selectors, and invisible fillers that render as nothing.
+const INVISIBLE = /[\p{Cc}\p{Cf}\p{Variation_Selector}\u034F\u115F\u1160\u3164\uFFA0]/gu;
+// Anything that could introduce a scheme, path, mention, tag or template brace.
+const LINK_CHARS = /[:/\\@#{}]/u;
+// Dot-like characters: full stops from many scripts (NFKC maps only some of them to ".").
+const DOTS =
+  '.\u0589\u06D4\u0701\u0702\u0964\u0965\u166E\u1803\u1809\u2024\u2E3C\u3002\uA4FF\uA60E\uA6F3\uA8CE\uFE52\uFF0E\uFF61';
+// A dot between two non-space characters is domain-, address- or version-like.
+const INNER_DOT = new RegExp(`\\S[${DOTS}]\\S`, 'u');
 
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
+/** True when a human name could carry a link, domain, address, mention, tag or brace. */
+function looksLikeLink(cleaned: string): boolean {
+  // Combining marks can be used to separate a dot from its neighbours; test without them.
+  const bare = cleaned.normalize('NFD').replace(/\p{M}/gu, '');
+  return LINK_CHARS.test(bare) || INNER_DOT.test(bare);
+}
+
 /**
  * Cleans a platform-supplied value for use in a public reply. Returns null when the value is
- * empty or could carry a link, domain, mention, tag or template brace.
+ * empty or, unless `trusted`, could carry a link, domain, mention, tag or template brace.
+ * Trusted values (owner-set brand name, platform constants) skip only that last check.
  */
-export function sanitizeValue(raw: string | null | undefined, max: number): string | null {
+export function sanitizeValue(
+  raw: string | null | undefined,
+  max: number,
+  options: { trusted?: boolean } = {},
+): string | null {
   if (!raw) return null;
   // Strip, normalize, strip again: NFKC can itself produce characters that need removing.
   const cleaned = raw
+    .replace(SPACE_CONTROLS, ' ')
     .replace(INVISIBLE, '')
     .normalize('NFKC')
     .replace(INVISIBLE, '')
     .replace(/\s+/gu, ' ')
     .trim();
-  if (cleaned === '' || UNSAFE.test(cleaned)) return null;
-  const graphemes = [...segmenter.segment(cleaned)];
-  if (graphemes.length <= max) return cleaned;
-  return graphemes
-    .slice(0, max)
-    .map((g) => g.segment)
-    .join('')
-    .trimEnd();
+  if (cleaned === '') return null;
+  if (!options.trusted && looksLikeLink(cleaned)) return null;
+
+  // The limit is both a grapheme and a code point limit (worstCaseLength relies on the latter):
+  // keep whole graphemes while both fit. If the first grapheme alone is too long (a base
+  // with thousands of combining marks), cut it by code points and drop the dangling marks.
+  let out = '';
+  let used = 0;
+  let count = 0;
+  for (const { segment } of segmenter.segment(cleaned)) {
+    const size = [...segment].length;
+    if (count === max || used + size > max) {
+      if (count === 0)
+        out = [...segment]
+          .slice(0, max)
+          .join('')
+          .replace(/\p{M}+$/u, '');
+      break;
+    }
+    out += segment;
+    used += size;
+    count += 1;
+  }
+  out = out.trimEnd();
+  return out === '' ? null : out;
 }
 
 function resolve(name: TemplateVariable, v: TemplateValues): string | null {
@@ -85,7 +120,9 @@ function resolve(name: TemplateVariable, v: TemplateValues): string | null {
     const first = full?.split(' ')[0];
     return first ? sanitizeValue(first, TEMPLATE_VARIABLES.author_first_name.max) : null;
   }
-  return sanitizeValue(v[name], TEMPLATE_VARIABLES[name].max);
+  // Only platform-supplied author names get the link filter.
+  const trusted = name !== 'author_name';
+  return sanitizeValue(v[name], TEMPLATE_VARIABLES[name].max, { trusted });
 }
 
 /** Single replace pass: substituted values are never scanned for further tokens. */
