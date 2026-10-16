@@ -141,6 +141,7 @@ CREATE TABLE action_suggestion_source (
     REFERENCES rule (brand_id, id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
 );
 CREATE INDEX action_suggestion_source_brand_id_idx ON action_suggestion_source (brand_id);
+CREATE INDEX action_suggestion_source_suggestion_id_idx ON action_suggestion_source (suggestion_id);
 CREATE INDEX action_suggestion_source_rule_id_idx ON action_suggestion_source (rule_id)
   WHERE rule_id IS NOT NULL;
 CREATE TRIGGER action_suggestion_source_set_updated_at_trg BEFORE UPDATE ON action_suggestion_source
