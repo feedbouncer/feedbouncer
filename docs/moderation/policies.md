@@ -71,6 +71,12 @@ winning policy and revision. Every match is stored and listed in the
 decision's reason, so the log is complete and the outcome is the same
 whatever order the model answered in.
 
+## During review mode
+
+For the first 7 days after an account is connected, a policy that would hide or
+remove a comment records a suggestion instead of acting, until a person
+approves it. See [review-mode.md](review-mode.md).
+
 ## Revisions
 
 Editing a policy's text or action creates a new revision. Revisions are never

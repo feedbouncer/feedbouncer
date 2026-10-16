@@ -234,6 +234,13 @@ fallback (up to 50 characters): `Hi {{author_first_name|friend}}!`.
   and the error names the platform and its limit. The limits are in the table
   below. Lengths are counted in characters (code points).
 
+## During review mode
+
+For the first 7 days after an account is connected, Hide, Delete, Ban author,
+Auto-reply and Private reply are suggested instead of run, and wait for a
+person to approve them. Flag for review is not held back and behaves as above.
+See [review-mode.md](review-mode.md).
+
 ## Review queue
 
 **Flag for review** adds the comment to the queue under **Review** for the

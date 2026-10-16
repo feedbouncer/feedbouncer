@@ -86,6 +86,12 @@ output, rejected request, no classifier configured, or waited too long) and no
 action is taken. The comment itself has already been ingested and rules have
 already run.
 
+## During review mode
+
+For the first 7 days after an account is connected, a hide or remove verdict is
+recorded as a suggestion (Hide or Delete) instead of being carried out, until a
+person approves it. See [review-mode.md](review-mode.md).
+
 ## Edits and duplicates
 
 A comment is classified once per distinct text. Redelivered webhooks and polls
