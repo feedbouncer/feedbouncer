@@ -243,3 +243,9 @@ export const REASON_CODES: readonly string[] = [
   'not_supported_on_platform',
   'template_too_long',
 ];
+
+const MAX_PAGE_SIZE = 100;
+
+/** A page size within 1..100; anything non-numeric becomes 1. */
+export const clampLimit = (n: number): number =>
+  Math.min(Math.max(Math.trunc(n) || 1, 1), MAX_PAGE_SIZE);

@@ -6,7 +6,7 @@ import type pg from 'pg';
 import { isUniqueViolation, withTransaction } from '@feedbouncer/db';
 import type { ActionStatus, BrandScope } from '@feedbouncer/comments';
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import type { StepStatus } from './support.js';
+import { clampLimit, type StepStatus } from './support.js';
 import { sortSteps, type ActionStep, type StepType } from './steps.js';
 
 export interface StepRow {
@@ -422,18 +422,20 @@ export class PgActionRunStore {
               a.status AS action_status, u.status AS undo_status, ${UNDOABLE_SQL} AS undoable
          FROM action_run_step s
          JOIN action_run r ON r.brand_id = s.brand_id AND r.id = s.run_id
-         JOIN rule ru ON ru.brand_id = r.brand_id AND ru.id = r.rule_id
-         LEFT JOIN moderation_action a ON a.brand_id = s.brand_id AND a.id = s.moderation_action_id
-         LEFT JOIN moderation_action u ON u.brand_id = s.brand_id AND u.id = s.undo_action_id
+         JOIN rule ru ON ru.organization_id = r.organization_id AND ru.brand_id = r.brand_id AND ru.id = r.rule_id
+         LEFT JOIN moderation_action a ON a.organization_id = s.organization_id AND a.brand_id = s.brand_id
+                                      AND a.id = s.moderation_action_id
+         LEFT JOIN moderation_action u ON u.organization_id = s.organization_id AND u.brand_id = s.brand_id
+                                      AND u.id = s.undo_action_id
         WHERE s.organization_id = $1 AND s.brand_id = $2 AND r.organization_id = $1
           AND ($3::uuid IS NULL OR r.rule_id = $3)
           AND ($4::uuid IS NULL OR r.comment_id = $4)
           AND ($5::text IS NULL OR s.status = $5)
           AND ($6::text IS NULL OR s.step_type = $6)
-          AND ($7::uuid IS NULL OR (s.created_at, s.id) < (
-                SELECT b.created_at, b.id FROM action_run_step b
+          AND ($7::uuid IS NULL OR (s.created_at, s.position, s.id) < (
+                SELECT b.created_at, b.position, b.id FROM action_run_step b
                  WHERE b.organization_id = $1 AND b.brand_id = $2 AND b.id = $7))
-        ORDER BY s.created_at DESC, s.id DESC
+        ORDER BY s.created_at DESC, s.position DESC, s.id DESC
         LIMIT $8`,
       [
         scope.organizationId,
@@ -443,7 +445,7 @@ export class PgActionRunStore {
         f.status ?? null,
         f.type ?? null,
         f.before ?? null,
-        f.limit,
+        clampLimit(f.limit),
       ],
     );
     return r.rows.map((row) => ({
@@ -481,7 +483,10 @@ export class PgActionRunStore {
       : null;
   }
 
-  /** False when the step was already undone (or is not in scope). */
+  /**
+   * False when the step was already undone, is not in scope, or is not a succeeded, live
+   * hide, ban or flag step (a user reversal marks a moderator override).
+   */
   async markUndone(
     tx: pg.PoolClient,
     scope: BrandScope,
@@ -490,9 +495,13 @@ export class PgActionRunStore {
     undoActionId: string | null,
   ): Promise<boolean> {
     const r = await tx.query(
-      `UPDATE action_run_step
+      `UPDATE action_run_step s
           SET undone_at = now(), undone_by_user_id = $4, undo_action_id = $5
-        WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND undone_at IS NULL`,
+        WHERE s.organization_id = $1 AND s.brand_id = $2 AND s.id = $3 AND s.undone_at IS NULL
+          AND s.status = 'succeeded' AND s.step_type IN ('hide', 'ban', 'flag_for_review')
+          AND EXISTS (SELECT 1 FROM action_run r
+                       WHERE r.organization_id = $1 AND r.brand_id = $2 AND r.id = s.run_id
+                         AND NOT r.dry_run)`,
       [scope.organizationId, scope.brandId, stepId, userId, undoActionId],
     );
     return r.rowCount === 1;

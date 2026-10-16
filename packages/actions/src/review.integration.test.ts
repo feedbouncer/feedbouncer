@@ -102,6 +102,7 @@ describe('PgReviewQueue', () => {
     expect(await queue.list(f.scope, { status: 'open', limit: 5, before: page2[0]!.id })).toEqual(
       [],
     );
+    expect(await queue.list(f.scope, { status: 'open', limit: 0 })).toHaveLength(1);
   });
 
   it('every method called with brand B scope returns null/empty/false for brand A ids', async () => {

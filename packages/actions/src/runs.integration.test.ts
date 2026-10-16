@@ -195,6 +195,24 @@ describe('markUndone', () => {
     expect(await undo(f, run.steps[0]!.id)).toBe(false);
     expect((await store.loadStep(f.scope, run.steps[0]!.id))!.undoneAt).toBeInstanceOf(Date);
   });
+
+  it('only marks succeeded, live hide, ban and flag steps', async () => {
+    const f = await fresh();
+    const run = await mkRun(f, [FLAG, REPLY, HIDE, BAN]);
+    const [flag, reply, hide, ban] = run.steps;
+    await settle(f, hide!.id, 'failed');
+    await settle(f, reply!.id);
+    expect(await undo(f, hide!.id)).toBe(false);
+    expect(await undo(f, reply!.id)).toBe(false);
+    expect(await undo(f, ban!.id)).toBe(false);
+    await settle(f, flag!.id);
+    expect(await undo(f, flag!.id)).toBe(true);
+
+    const dry = await mkRun(f, [HIDE], { dryRun: true });
+    await settle(f, dry.steps[0]!.id);
+    expect(await undo(f, dry.steps[0]!.id)).toBe(false);
+    expect(await store.hasUserReversal(f.scope, f.comment.id, 'hide')).toBe(false);
+  });
 });
 
 describe('hasUserReversal', () => {
@@ -322,6 +340,18 @@ describe('listLog', () => {
     const dryEntry = all.find((e) => e.runId === dry.id);
     expect(dryEntry).toMatchObject({ dryRun: true, undoable: false });
     expect(await store.listLog(f.scope, { limit: 1 })).toHaveLength(1);
+  });
+
+  it('clamps the limit and orders the steps of a run by position', async () => {
+    const f = await fresh();
+    await mkRun(f, [FLAG, REPLY, HIDE]);
+    expect(await store.listLog(f.scope, { limit: 0 })).toHaveLength(1);
+    expect(await store.listLog(f.scope, { limit: -5 })).toHaveLength(1);
+    expect(await store.listLog(f.scope, { limit: 1e9 })).toHaveLength(3);
+    const all = await store.listLog(f.scope, { limit: 10 });
+    expect(all.map((e) => e.position)).toEqual([2, 1, 0]);
+    const rest = await store.listLog(f.scope, { limit: 10, before: all[0]!.id });
+    expect(rest.map((e) => e.position)).toEqual([1, 0]);
   });
 
   it('pages with a before cursor and reports action statuses', async () => {

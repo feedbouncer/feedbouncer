@@ -309,6 +309,51 @@ describe('ModerationActions.request', () => {
     expect(enqueue).toHaveBeenCalledTimes(2);
   });
 
+  it('stores reverses_action_id for an action of the same brand only', async () => {
+    const commentId = await seedComment();
+    const hide = await request(commentId, 'hide');
+    const hideId = (hide as { action: { id: string } }).action.id;
+    await pool.query(
+      `UPDATE moderation_action SET status = 'applied', completed_at = now() WHERE id = $1`,
+      [hideId],
+    );
+    await pool.query(`UPDATE comment SET platform_state = 'hidden' WHERE id = $1`, [commentId]);
+    const r = await actions.request({
+      scope: t,
+      commentId,
+      kind: 'unhide',
+      actor: user(),
+      requestKey: key(),
+      reverses: hideId,
+    });
+    expect(r).toMatchObject({ status: 'accepted' });
+    const { rows } = await pool.query(
+      `SELECT reverses_action_id FROM moderation_action WHERE id = $1`,
+      [(r as { action: { id: string } }).action.id],
+    );
+    expect(rows[0].reverses_action_id).toBe(hideId);
+
+    const foreign = await actions.request({
+      scope: other,
+      commentId: await seedComment({ tenant: other }),
+      kind: 'hide',
+      actor: { type: 'user', userId: other.userId },
+      requestKey: key(),
+      reverses: hideId,
+    });
+    expect(foreign).toEqual({ status: 'refused', code: 'not_found' });
+    await expect(
+      actions.request({
+        scope: t,
+        commentId,
+        kind: 'unhide',
+        actor: user(),
+        requestKey: key(),
+        reverses: 'nope',
+      }),
+    ).rejects.toThrow(TypeError);
+  });
+
   it('a ban made before the comment was deleted can still be undone', async () => {
     const commentId = await seedComment();
     expect(await request(commentId, 'ban_author')).toMatchObject({ status: 'accepted' });

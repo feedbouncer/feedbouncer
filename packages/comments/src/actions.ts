@@ -104,8 +104,8 @@ export const toView = (r: Record<string, unknown>): ModerationActionView => ({
 const INSERT = `
   INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind, actor_type,
                                  actor_user_id, rule_id, request_key, reply_text, status, outcome_code,
-                                 completed_at)
-  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::text, $12,
+                                 reverses_action_id, completed_at)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::text, $12, $13,
           CASE WHEN $11::text = 'pending' THEN NULL ELSE now() END)
   RETURNING ${VIEW_COLUMNS}`;
 
@@ -159,6 +159,8 @@ interface Request {
   actor: ActionActor;
   requestKey: string;
   text?: string;
+  /** The action in this brand this one reverses (an unhide for a hide). */
+  reverses?: string;
 }
 
 const refused = (code: RefusalCode): RequestActionResult => ({ status: 'refused', code });
@@ -176,6 +178,8 @@ function validate(i: Request): string | null {
   } else if (a?.type === 'rule') {
     if (typeof a.ruleId !== 'string' || !UUID.test(a.ruleId)) bad('actor');
   } else if (a?.type !== 'classifier' && a?.type !== 'policy' && a?.type !== 'system') bad('actor');
+  if (i.reverses !== undefined && (typeof i.reverses !== 'string' || !UUID.test(i.reverses)))
+    bad('reverses');
   if (!REPLY_KINDS.has(i.kind)) {
     if (i.text !== undefined) bad('text');
     return null;
@@ -200,6 +204,8 @@ export class ModerationActions {
     const text = validate(i);
     const comment = await this.d.store.load(i.scope, i.commentId);
     if (!comment) return refused('not_found');
+    if (i.reverses !== undefined && !(await this.#inBrand(i.scope, i.reverses)))
+      return refused('not_found');
 
     const existing = await this.#byKey(i.scope, i.requestKey);
     if (existing) return this.#replay(existing, i, comment);
@@ -262,6 +268,7 @@ export class ModerationActions {
       text,
       v.status,
       v.code,
+      i.reverses ?? null,
     ];
     let action: ModerationActionView;
     try {
@@ -365,6 +372,14 @@ export class ModerationActions {
       type: EXECUTE_JOB.type,
       payload: { actionId },
     });
+  }
+
+  async #inBrand(scope: BrandScope, actionId: string): Promise<boolean> {
+    const r = await this.d.pool.query(
+      `SELECT 1 FROM moderation_action WHERE organization_id = $1 AND brand_id = $2 AND id = $3`,
+      [scope.organizationId, scope.brandId, actionId],
+    );
+    return r.rowCount === 1;
   }
 
   async #byKey(scope: BrandScope, requestKey: string): Promise<ModerationActionView | null> {

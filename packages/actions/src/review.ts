@@ -6,6 +6,7 @@ import type pg from 'pg';
 import type { Platform } from '@feedbouncer/connectors';
 import type { BrandScope } from '@feedbouncer/comments';
 import type { ConnectionScope } from '@feedbouncer/secrets';
+import { clampLimit } from './support.js';
 
 export type ReviewResolution = 'approved' | 'hidden' | 'deleted' | 'banned' | 'dismissed';
 
@@ -44,11 +45,12 @@ interface ItemDb {
 const VIEW_SQL = `SELECT i.id, i.comment_id, i.connection_id, i.source, i.rule_id, ru.name AS rule_name, i.status,
          i.resolution, i.created_at, i.resolved_at, c.body, au.display_name, cn.platform
     FROM review_item i
-    JOIN comment c ON c.brand_id = i.brand_id AND c.id = i.comment_id
+    JOIN comment c ON c.organization_id = i.organization_id AND c.brand_id = i.brand_id AND c.id = i.comment_id
     JOIN connection cn ON cn.organization_id = i.organization_id AND cn.brand_id = i.brand_id AND cn.id = i.connection_id
-    LEFT JOIN author au ON au.connection_id = c.connection_id AND au.id = c.author_id
-    LEFT JOIN rule ru ON ru.brand_id = i.brand_id AND ru.id = i.rule_id
-   WHERE i.organization_id = $1 AND i.brand_id = $2 AND c.organization_id = $1`;
+    LEFT JOIN author au ON au.organization_id = c.organization_id AND au.brand_id = c.brand_id
+                       AND au.connection_id = c.connection_id AND au.id = c.author_id
+    LEFT JOIN rule ru ON ru.organization_id = i.organization_id AND ru.brand_id = i.brand_id AND ru.id = i.rule_id
+   WHERE i.organization_id = $1 AND i.brand_id = $2`;
 
 const toView = (r: ItemDb): ReviewItemView => ({
   id: r.id,
@@ -108,7 +110,7 @@ export class PgReviewQueue {
                WHERE b.organization_id = $1 AND b.brand_id = $2 AND b.id = $4))
       ORDER BY i.created_at DESC, i.id DESC
       LIMIT $5`,
-      [scope.organizationId, scope.brandId, f.status, f.before ?? null, f.limit],
+      [scope.organizationId, scope.brandId, f.status, f.before ?? null, clampLimit(f.limit)],
     );
     return r.rows.map(toView);
   }
