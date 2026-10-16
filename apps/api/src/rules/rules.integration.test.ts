@@ -3,7 +3,13 @@
 // (the worker runs it in production).
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ActionRunner, PgActionRunStore, PgReviewQueue } from '@feedbouncer/actions';
+import {
+  ActionRunner,
+  PgActionRunStore,
+  PgReviewQueue,
+  PgSuggestionStore,
+} from '@feedbouncer/actions';
+import { PgReviewModeReader } from '@feedbouncer/comments';
 import {
   PgRuleStore,
   PgEvaluationStore,
@@ -271,6 +277,8 @@ describe('decisions', () => {
       evaluations,
       cache: new RuleSetCache(rules),
       runner,
+      suggestions: new PgSuggestionStore(api.pool),
+      reviewMode: new PgReviewModeReader(api.pool, { now: () => Date.now() }),
       log: api.deps.log,
     });
     const ctx: JobContext = {
@@ -303,6 +311,9 @@ describe('decisions', () => {
     ig = (
       await api.seedConnection(dec, { platform: 'instagram', externalAccountId: '17841400000099' })
     ).scope;
+    await api.pool.query(`UPDATE connection SET review_mode = 'opted_out' WHERE id = ANY($1)`, [
+      [fb.connectionId, ig.connectionId],
+    ]);
     const mk = async (r: object) =>
       (await call('POST', '/rules', r, org.owner.cookie, dec)).body.id;
     keywordRuleId = await mk(rule('Spam words', keyword('buyfollowers'), { mode: 'enforce' }));
