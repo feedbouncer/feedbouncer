@@ -353,6 +353,17 @@ describe('decisions', () => {
     });
   });
 
+  it('joins the action of the run step even when the runner suffixed its request key', async () => {
+    const id = await addComment(fb, `contains ${MARKER}`);
+    await evaluate(fb, 'facebook', id);
+    await api.pool.query(
+      `UPDATE moderation_action SET request_key = request_key || ':1' WHERE comment_id = $1`,
+      [id],
+    );
+    const r = await call('GET', `/comments/${id}/decisions`, undefined, org.owner.cookie, dec);
+    expect(r.body.decisions[0].action).toMatchObject({ kind: 'delete' });
+  });
+
   it('marks the fallback flag when the action cannot be requested', async () => {
     await api.pool.query(`UPDATE connection SET status = 'reconnect_required' WHERE id = $1`, [
       ig.connectionId,

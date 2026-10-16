@@ -92,7 +92,7 @@ interface DecisionRow {
 
 // Rules, classifications and actions are joined on the decision's own organization
 // and brand. The action is the platform call of the decision: a rule evaluation
-// (request_key auto:<comment>:<kind>, or rule-eval:<id> before action steps), a classification (clf:<id>, clf:<id>:unhide for a
+// (the action its run step requested, or request_key rule-eval:<id> before action steps), a classification (clf:<id>, clf:<id>:unhide for a
 // reversal) or a policy evaluation (pol:<id>); it belongs to the enforced decisions only, not to dry-run suggestions.
 const DECISION_FROM = `
   FROM decision d
@@ -109,21 +109,29 @@ const DECISION_FROM = `
                                 AND pe.brand_id = d.brand_id AND pe.id = d.policy_evaluation_id
   LEFT JOIN moderation_action a ON a.organization_id = d.organization_id AND a.brand_id = d.brand_id
                                AND d.mode = 'enforce'
-                               AND a.request_key = CASE
+                               AND CASE
                                  WHEN d.actor_type = 'rule' AND d.outcome IN ('hide', 'remove')
-                                      AND EXISTS (SELECT 1 FROM action_run_step s
-                                                    JOIN action_run ar ON ar.id = s.run_id
+                                      AND EXISTS (SELECT 1 FROM action_run ar
                                                    WHERE ar.organization_id = d.organization_id
                                                      AND ar.brand_id = d.brand_id
                                                      AND ar.rule_evaluation_id = d.rule_evaluation_id
-                                                     AND s.moderation_action_id IS NOT NULL)
-                                   THEN 'auto:' || d.comment_id || ':'
-                                     || CASE d.outcome WHEN 'remove' THEN 'delete' ELSE 'hide' END
-                                 WHEN d.actor_type = 'rule' THEN 'rule-eval:' || d.rule_evaluation_id
-                                 WHEN d.actor_type = 'classifier' AND d.reversal
-                                   THEN 'clf:' || d.classification_id || ':unhide'
-                                 WHEN d.actor_type = 'classifier' THEN 'clf:' || d.classification_id
-                                 WHEN d.actor_type = 'policy' THEN 'pol:' || d.policy_evaluation_id
+                                                     AND ar.rule_id = d.rule_id)
+                                   THEN a.id = (SELECT s.moderation_action_id
+                                                  FROM action_run ar
+                                                  JOIN action_run_step s ON s.run_id = ar.id
+                                                 WHERE ar.organization_id = d.organization_id
+                                                   AND ar.brand_id = d.brand_id
+                                                   AND ar.rule_evaluation_id = d.rule_evaluation_id
+                                                   AND ar.rule_id = d.rule_id
+                                                   AND s.step_type = CASE d.outcome
+                                                         WHEN 'remove' THEN 'delete' ELSE 'hide' END)
+                                 ELSE a.request_key = CASE
+                                   WHEN d.actor_type = 'rule' THEN 'rule-eval:' || d.rule_evaluation_id
+                                   WHEN d.actor_type = 'classifier' AND d.reversal
+                                     THEN 'clf:' || d.classification_id || ':unhide'
+                                   WHEN d.actor_type = 'classifier' THEN 'clf:' || d.classification_id
+                                   WHEN d.actor_type = 'policy' THEN 'pol:' || d.policy_evaluation_id
+                                 END
                                END`;
 
 const DECISION_COLUMNS = `
