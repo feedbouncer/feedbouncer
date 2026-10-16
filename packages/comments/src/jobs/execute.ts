@@ -423,5 +423,24 @@ export function executeActionJob(d: {
       if (outcome.rethrow) throw outcome.rethrow;
       return result;
     },
+    // The job gave up while the action was still pending (rate limit budget
+    // spent, connection needs reconnecting, retries used up): settle it.
+    onDeadLetter: async (e, { actionId }) => {
+      const a = await loadForExecution(d.pool, e.scope, actionId);
+      if (!a || a.status !== 'pending') return;
+      const code =
+        e.reason === 'rate_limit_exhausted'
+          ? 'rate_limit_exhausted'
+          : e.reason === 'needs_reconnection'
+            ? 'connection_needs_reconnect'
+            : 'retries_exhausted';
+      const { recorded } = await finish(d.pool, e.scope, a, done('failed', code));
+      d.log.info('moderation action dead-lettered', {
+        actionId: a.id,
+        kind: a.kind,
+        outcomeCode: code,
+      });
+      if (recorded) await notify(d, e.scope, e.platform, a, 'failed', code);
+    },
   };
 }
