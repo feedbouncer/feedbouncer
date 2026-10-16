@@ -14,7 +14,7 @@ import {
   loadPolicyConfig,
   type PolicyAction,
   type PolicyVerdict,
-} from '@feedbouncer/policies';
+} from '../src/index.js';
 
 type Expect = 'clear_match' | 'possible_match' | 'no_match' | 'not_no_match';
 interface Fixture {
