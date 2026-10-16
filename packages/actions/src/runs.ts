@@ -439,6 +439,7 @@ export class PgActionRunStore {
     scope: BrandScope,
     commentId: string,
     db: Queryable = this.pool,
+    ownRequestKey: string | null = null,
   ): Promise<boolean> {
     const r = await db.query<{ banned: boolean }>(
       `WITH me AS (
@@ -453,13 +454,14 @@ export class PgActionRunStore {
          SELECT 1 FROM moderation_action b
           WHERE b.organization_id = $1 AND b.brand_id = $2 AND b.comment_id IN (SELECT id FROM cs)
             AND b.kind = 'ban_author' AND b.status IN ('pending', 'applied')
+            AND b.request_key IS DISTINCT FROM $4
             AND NOT EXISTS (
               SELECT 1 FROM moderation_action u
                WHERE u.organization_id = $1 AND u.brand_id = $2 AND u.comment_id IN (SELECT id FROM cs)
                  AND u.kind = 'unban_author' AND u.status = 'applied'
                  AND (u.created_at, u.id) > (b.created_at, b.id))
        ) AS banned`,
-      [scope.organizationId, scope.brandId, commentId],
+      [scope.organizationId, scope.brandId, commentId, ownRequestKey],
     );
     return r.rows[0]?.banned === true;
   }

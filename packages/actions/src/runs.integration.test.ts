@@ -152,6 +152,21 @@ describe('hasActiveBan', () => {
     await seedModerationActionRow(ctx.c, mine, { kind: 'ban_author', status: 'applied' });
     expect(await store.hasActiveBan(f.scope, mine.id)).toBe(true);
   });
+
+  it("ignores the ban action with the caller's own request key", async () => {
+    const f = await fresh();
+    const mine = await seedCommentRow(ctx.c, f.t, 'mine', { authorId: f.t.authorId });
+    const key = 'suggestion:s1:ban_author';
+    await seedModerationActionRow(ctx.c, mine, {
+      kind: 'ban_author',
+      status: 'pending',
+      requestKey: key,
+    });
+    expect(await store.hasActiveBan(f.scope, mine.id)).toBe(true);
+    expect(await store.hasActiveBan(f.scope, mine.id, undefined, key)).toBe(false);
+    await seedModerationActionRow(ctx.c, mine, { kind: 'ban_author', status: 'applied' });
+    expect(await store.hasActiveBan(f.scope, mine.id, undefined, key)).toBe(true);
+  });
 });
 
 describe('withRunLocked', () => {

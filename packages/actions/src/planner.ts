@@ -105,7 +105,7 @@ export class StepPlanner {
     conn: BrandConnectionInfo | null,
     views: readonly ModerationActionView[],
     db?: Queryable,
-    o: { approved?: boolean } = {},
+    o: { approved?: boolean; suggestionId?: string } = {},
   ): Promise<StepOutcome | null> {
     if (!comment) return { status: 'not_applicable', reason: 'comment_gone' };
     if (comment.isOwnAccount) return { status: 'skipped', reason: 'own_account_comment' };
@@ -114,7 +114,8 @@ export class StepPlanner {
     if (!support.supported) return { status: 'not_supported', reason: 'unsupported' };
     if (support.missingScopes.length > 0) return { status: 'failed', reason: 'missing_permission' };
     if (o.approved) {
-      if (type === 'ban' && (await this.d.runs.hasActiveBan(scope, comment.id, db)))
+      const ownBanKey = o.suggestionId ? `suggestion:${o.suggestionId}:ban_author` : null;
+      if (type === 'ban' && (await this.d.runs.hasActiveBan(scope, comment.id, db, ownBanKey)))
         return { status: 'skipped', reason: 'already_banned' };
     } else if (type === 'hide' || type === 'ban') {
       const kind = type === 'hide' ? 'hide' : 'ban_author';

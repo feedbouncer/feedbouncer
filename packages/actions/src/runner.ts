@@ -280,6 +280,7 @@ export class ActionRunner {
         ? null
         : await this.planner.precheck(scope, step.type, comment, conn, [...views.values()], tx, {
             approved: run.suggestionId !== null,
+            ...(run.suggestionId ? { suggestionId: run.suggestionId } : {}),
           });
       if (blocked) {
         await settle(step, blocked);

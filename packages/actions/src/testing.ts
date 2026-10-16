@@ -61,6 +61,7 @@ export async function seedModerationActionRow(
     status?: string;
     replyText?: string;
     createdAt?: string;
+    requestKey?: string;
   },
 ): Promise<string> {
   const status = o.status ?? 'applied';
@@ -78,7 +79,7 @@ export async function seedModerationActionRow(
       s.id,
       o.kind,
       o.actorType ?? 'rule',
-      `k-${randomUUID()}`,
+      o.requestKey ?? `k-${randomUUID()}`,
       reply,
       status,
       o.createdAt ?? null,
