@@ -6,15 +6,6 @@ import { reviewModeState, type Clock } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { ActionKind } from './action-kinds.js';
 
-export {
-  REVIEW_GRACE_MS,
-  REVIEW_WINDOW_MS,
-  graceEndsAt,
-  reviewModeState,
-  type ReviewModeColumns,
-  type ReviewModeState,
-} from '@feedbouncer/connectors';
-
 /** Kinds that act on a comment or its author. Undo kinds (unhide, unban) stay automatic. */
 export const GATED_KINDS: readonly ActionKind[] = Object.freeze([
   'hide',
