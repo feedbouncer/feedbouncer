@@ -1,4 +1,4 @@
-import type { ActionStep } from '@feedbouncer/actions';
+import type { ActionStep } from '@feedbouncer/actions/shared';
 import type { ClassifierEvidence } from './classifier';
 import type { PolicyEvidence } from './policies';
 

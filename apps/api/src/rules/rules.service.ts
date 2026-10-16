@@ -206,14 +206,17 @@ export class RulesService {
   ): Promise<RuleWriteDto> {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     const patch = parseRule(rulePatchSchema, body);
-    const changesSteps = patch.actions !== undefined || patch.conditions !== undefined;
     let warnings: StepWarning[];
     try {
       warnings = await this.#write(org, 'rule.write', async (c) => {
+        const before = await this.#store.get(scope, ruleId, c);
         const updated = await this.#store.update(c, scope, ruleId, patch);
-        if (!updated) throw notFound();
+        if (!before || !updated) throw notFound();
         // Only a change to the steps or the platform can be refused; later changes to the
         // brand's connections just show up as warnings.
+        const changesSteps =
+          patch.actions !== undefined ||
+          rulePlatform(updated.conditions) !== rulePlatform(before.conditions);
         const checked = await this.#checkSteps(c, scope, updated.conditions, updated.actions);
         if (changesSteps && checked.errors.length > 0) throw stepErrors(checked.errors);
         await this.#audit(c, org, scope, {

@@ -172,6 +172,22 @@ describe('rule actions', () => {
     expect(r.body.error.issues).toEqual([{ path: 'actions.0', message: 'not_supported_anywhere' }]);
   });
 
+  it('lets the terms of a rule be edited when its saved steps no longer fit the brand', async () => {
+    const ban = [{ type: 'ban', confirmHardToReverse: true }];
+    const saved = await api.pool.query(
+      `INSERT INTO rule (organization_id, brand_id, name, conditions, action, actions, mode)
+       VALUES ($1, $2, 'stale ban', $3::jsonb, 'hide', $4::jsonb, 'enforce') RETURNING id`,
+      [ig.orgId, ig.brandId, JSON.stringify(keyword), JSON.stringify(ban)],
+    );
+    const ruleId = saved.rows[0].id;
+    const terms = await call(ig, 'PATCH', `/rules/${ruleId}`, {
+      conditions: { type: 'keyword', terms: ['zq-edited'] },
+    });
+    expect(terms.status).toBe(200);
+    const steps = await call(ig, 'PATCH', `/rules/${ruleId}`, { actions: ban });
+    expect(steps.status).toBe(422);
+  });
+
   it('rejects a delete without its confirmation and a conflicting pair', async () => {
     const del = await call(fb, 'POST', '/rules', rule([{ type: 'delete' }]));
     expect(del.status).toBe(422);
