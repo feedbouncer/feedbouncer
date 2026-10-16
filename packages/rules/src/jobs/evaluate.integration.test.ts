@@ -375,6 +375,16 @@ describe('rule_evaluate', () => {
     expect(await actionRows(c.id)).toEqual([]);
   });
 
+  it('a suggest-mode match with no steps still gets a completed, empty simulated run', async () => {
+    const e = await env();
+    await addRule(e, kw('spam'), { mode: 'suggest', actions: [], priority: 10 });
+    const c = await comment(e, 'spam');
+    await run(e.scope, c.id, 'spam');
+    const runs = await runRows(c.id);
+    expect(runs).toMatchObject([{ dry_run: true, steps: [] }]);
+    expect(await stepRows(runs[0]!.id)).toEqual([]);
+  });
+
   it('4: no match records no_match and no decisions', async () => {
     const e = await env();
     await addRule(e, kw('spam'), { priority: 10 });

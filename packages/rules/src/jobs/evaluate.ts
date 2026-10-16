@@ -127,8 +127,7 @@ async function act(
   const start = (ruleId: string, steps: ActionStep[], dryRun: boolean) =>
     d.runner.start(scope, { commentId, ruleId, evaluationId: ev.id, dryRun, steps });
   // Only a freshly recorded evaluation has simulations to run: they are not needed to resume.
-  for (const s of verdict?.suggestions ?? [])
-    if (s.actions.length > 0) await start(s.ruleId, s.actions, true);
+  for (const s of verdict?.suggestions ?? []) await start(s.ruleId, s.actions, true);
   if (ev.status !== 'decided' || ev.matchedRuleId === null) return base;
   // Already fell back: the user was told it is flagged; do not start the actions now.
   if (ev.fallbackAt !== null) return { ...base, fallback: 'recorded' };
