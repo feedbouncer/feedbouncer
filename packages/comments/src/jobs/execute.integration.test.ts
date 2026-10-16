@@ -25,6 +25,7 @@ import { createInstagramConnector } from '@feedbouncer/connector-instagram';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import {
   DEFAULT_RETRY_POLICY,
+  JobRegistry,
   classifyFailure,
   decide,
   type EnqueueRequest,
@@ -321,6 +322,11 @@ describe('moderation execute job: outcome observer', () => {
   it("rate limit exhausted: action becomes failed/rate_limit_exhausted, observer told 'failed'", async () => {
     const actionId = await requestAction(seeded.id, 'hide');
     const handler = observed();
+    // The runner only sees what the registry hands back, so go through it.
+    const registry = new JobRegistry();
+    registry.register(handler);
+    const registered = registry.get(EXECUTE_JOB.type);
+    expect(typeof registered?.onDeadLetter).toBe('function');
     const policy = { ...DEFAULT_RETRY_POLICY, ...EXECUTE_JOB.policy, maxDeferrals: 1 };
     let deferrals = 0;
     for (;;) {
@@ -341,7 +347,7 @@ describe('moderation execute job: outcome observer', () => {
         continue;
       }
       expect(disp).toMatchObject({ type: 'dead_letter', reason: 'rate_limit_exhausted' });
-      await handler.onDeadLetter?.(
+      await registered?.onDeadLetter?.(
         { scope, platform: 'facebook', reason: 'rate_limit_exhausted', errorCode: f.code },
         EXECUTE_JOB.payload.parse({ actionId }),
       );
