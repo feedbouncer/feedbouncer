@@ -214,8 +214,8 @@ rejects a comment that belongs to a different connection than the suggestion.
 `action_suggestion_source` has one row per rule, classifier verdict or policy
 that proposed the suggestion. A source proposes at most once per brand, unique
 per `(organization_id, brand_id, source_type, source_ref)`, so a redelivered
-evaluation cannot reopen a decided suggestion. It holds the proposed `steps` (1 to 5), the `reason`, and for rule
-sources the `rule_id` and `also_matched_rule_ids` (at most 50).
+evaluation cannot reopen a decided suggestion. It holds the proposed `steps` (1
+to 5), the `reason`, and for rule sources the `rule_id` and `also_matched_rule_ids` (at most 50).
 
 `action_run` is now either a rule run (`rule_id` and `rule_evaluation_id` set) or
 an approval run (`suggestion_id` set, `rule_id` and `rule_evaluation_id` NULL).

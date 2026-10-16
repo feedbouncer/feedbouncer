@@ -405,8 +405,10 @@ export async function endReviewModeEarly(
            FROM comment c
           WHERE s.organization_id = $1 AND s.brand_id = $2 AND s.connection_id = $3
             AND s.status = 'pending'
-            AND c.organization_id = s.organization_id AND c.brand_id = s.brand_id AND c.id = s.comment_id
-            AND (c.platform_state = 'deleted' OR sha256(convert_to(c.body, 'UTF8')) <> s.body_sha256)`,
+            AND c.organization_id = s.organization_id AND c.brand_id = s.brand_id
+            AND c.id = s.comment_id
+            AND (c.platform_state = 'deleted'
+                 OR sha256(convert_to(c.body, 'UTF8')) <> s.body_sha256)`,
         scopeArgs,
       );
     const count =
@@ -446,7 +448,7 @@ export async function endReviewModeEarly(
       confirm: true,
     });
   if (pendingCount === null) {
-    // The window may have ended early with approve while the enqueue failed: the retry enqueues again.
+    // Ended early with approve but the enqueue failed: the retry enqueues again.
     if (i.pending === 'approve' && (await endedEarlyWithApprove(d.pool, scope)))
       return { status: 'ended', pendingCount: (await approveAll()).matched };
     return { status: 'refused', code: 'review_mode_not_active' };

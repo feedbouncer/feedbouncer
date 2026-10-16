@@ -262,7 +262,7 @@ export class PgSuggestionStore {
       );
       let created = false;
       let suggestionId: string | undefined;
-      // A pending row seen by the insert can be decided before the select reads it; then insert again.
+      // A pending row the insert saw can be decided before the select reads it: insert again.
       while (!suggestionId) {
         const inserted = await tx.query<{ id: string }>(
           `INSERT INTO action_suggestion (organization_id, brand_id, connection_id, comment_id, author_id, body_sha256)
