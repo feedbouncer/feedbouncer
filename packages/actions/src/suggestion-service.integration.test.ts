@@ -693,6 +693,44 @@ describe('endReviewModeEarly', () => {
     expect(graph.state(externalId)).toBe('hidden');
   });
 
+  it('approve retried after the enqueue failed re-enqueues approve-all', async () => {
+    const { sid, externalId } = await seedPending();
+    nowMs = Date.now();
+    const enqueue = queue.enqueue;
+    queue.enqueue = () => Promise.reject(new Error('queue down'));
+    try {
+      await expect(
+        endReviewModeEarly(d, scope, { userId: t.userId, pending: 'approve', confirm: true }),
+      ).rejects.toThrow('queue down');
+    } finally {
+      queue.enqueue = enqueue;
+    }
+    expect(
+      await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'approve', confirm: true }),
+    ).toEqual({ status: 'ended', pendingCount: 1 });
+    await queue.drain();
+    expect(await statusOf(sid)).toMatchObject({ status: 'approved' });
+    expect(graph.state(externalId)).toBe('hidden');
+  });
+
+  it('approve after ending early with leave -> review_mode_not_active, nothing enqueued', async () => {
+    await seedPending();
+    await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'leave' });
+    expect(
+      await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'approve', confirm: true }),
+    ).toEqual({ status: 'refused', code: 'review_mode_not_active' });
+    expect(queue.pending).toHaveLength(0);
+  });
+
+  it('approve after the window ended naturally -> review_mode_not_active', async () => {
+    await seedPending();
+    nowMs = Date.now() + 365 * 24 * HOUR;
+    expect(
+      await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'approve', confirm: true }),
+    ).toEqual({ status: 'refused', code: 'review_mode_not_active' });
+    expect(queue.pending).toHaveLength(0);
+  });
+
   it('end early with approve without confirm -> confirmation_required, window still active', async () => {
     await seedPending();
     expect(await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'approve' })).toEqual({

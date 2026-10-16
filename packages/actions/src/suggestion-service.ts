@@ -424,14 +424,35 @@ export async function endReviewModeEarly(
     });
     return count;
   });
-  if (pendingCount === null) return { status: 'refused', code: 'review_mode_not_active' };
-  if (i.pending === 'approve')
-    await requestBulkByFilter(d, scope, {
+  const approveAll = () =>
+    requestBulkByFilter(d, scope, {
       action: 'approve',
       filter: {},
       userId: i.userId,
       requestKey: `review_end:${scope.connectionId}`,
       confirm: true,
     });
+  if (pendingCount === null) {
+    // The window may have ended early with approve while the enqueue failed: the retry enqueues again.
+    if (i.pending === 'approve' && (await endedEarlyWithApprove(d.pool, scope)))
+      return { status: 'ended', pendingCount: (await approveAll()).matched };
+    return { status: 'refused', code: 'review_mode_not_active' };
+  }
+  if (i.pending === 'approve') await approveAll();
   return { status: 'ended', pendingCount };
+}
+
+async function endedEarlyWithApprove(pool: pg.Pool, scope: ConnectionScope): Promise<boolean> {
+  const { rows } = await pool.query<{ pending: string | null }>(
+    `SELECT (SELECT a.details->>'pending' FROM audit_event a
+              WHERE a.organization_id = cn.organization_id AND a.brand_id = cn.brand_id
+                AND a.subject_type = 'connection' AND a.subject_id = cn.id
+                AND a.action = 'review_mode.ended_early'
+              ORDER BY a.sequence DESC LIMIT 1) AS pending
+       FROM connection cn
+      WHERE cn.organization_id = $1 AND cn.brand_id = $2 AND cn.id = $3
+        AND cn.review_mode = 'on' AND cn.review_mode_ended_at IS NOT NULL`,
+    [scope.organizationId, scope.brandId, scope.connectionId],
+  );
+  return rows[0]?.pending === 'approve';
 }
