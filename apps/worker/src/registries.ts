@@ -8,7 +8,7 @@ import {
   loadBrandName,
   loadConnectionInfo,
   suggestionBulkJob,
-  type Audit,
+  recordAudit,
 } from '@feedbouncer/actions';
 import {
   ClassifierActionFallback,
@@ -95,23 +95,6 @@ export interface WorkerJobDeps {
   /** Set when the Meta Ads connector is enabled: registers ad discovery and ad polling. */
   readonly ads?: { readonly poll: PollSettings };
 }
-
-/** Writes inside the caller's transaction, so the event commits or rolls back with the change. */
-const recordAudit: Audit = async (tx, e) => {
-  await tx.query(
-    `INSERT INTO audit_event (organization_id, brand_id, actor_type, actor_user_id, action, subject_type, subject_id, details)
-     VALUES ($1, $2, 'user', $3, $4, $5, $6, $7::jsonb)`,
-    [
-      e.organizationId,
-      e.brandId,
-      e.actorUserId,
-      e.action,
-      e.subjectType,
-      e.subjectId,
-      JSON.stringify(e.details),
-    ],
-  );
-};
 
 /** Platform connectors this deployment runs. Each registered platform gets its own queue. */
 export function buildConnectorRegistry(cfg: {

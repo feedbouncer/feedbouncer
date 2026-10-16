@@ -75,6 +75,34 @@ export interface AuditEvent {
 
 export type Audit = (tx: pg.PoolClient, e: AuditEvent) => Promise<void>;
 
+export interface AuditRecord {
+  organizationId: string;
+  brandId?: string | null;
+  actorUserId: string;
+  action: string;
+  subjectType: string;
+  subjectId: string | null;
+  /** Ids, roles and booleans only: never emails, people's names or tokens. */
+  details?: Readonly<Record<string, string | number | boolean | null>>;
+}
+
+/** Writes inside the caller's transaction, so the event commits or rolls back with the change. */
+export async function recordAudit(tx: pg.PoolClient, e: AuditRecord): Promise<void> {
+  await tx.query(
+    `INSERT INTO audit_event (organization_id, brand_id, actor_type, actor_user_id, action, subject_type, subject_id, details)
+     VALUES ($1, $2, 'user', $3, $4, $5, $6, $7::jsonb)`,
+    [
+      e.organizationId,
+      e.brandId ?? null,
+      e.actorUserId,
+      e.action,
+      e.subjectType,
+      e.subjectId,
+      JSON.stringify(e.details ?? {}),
+    ],
+  );
+}
+
 type Refusal = Extract<RequestActionResult, { status: 'refused' }>['code'];
 
 const FORWARDED: ReadonlySet<Refusal> = new Set([
