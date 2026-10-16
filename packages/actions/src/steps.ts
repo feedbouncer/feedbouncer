@@ -1,5 +1,6 @@
 import type { ActionKind } from '@feedbouncer/comments';
 import { z } from 'zod';
+import { validateTemplate } from './templates.js';
 
 /** Execution order: review first, harmless replies next, destructive steps last. */
 export const STEP_TYPES = [
@@ -39,7 +40,7 @@ export const STEP_META: Record<
 > = {
   flag_for_review: { reversibility: 'reversible', undo: 'dismiss_review', destructive: false },
   private_reply: { reversibility: 'irreversible', undo: null, destructive: false },
-  auto_reply: { reversibility: 'partly_reversible', undo: 'delete', destructive: false },
+  auto_reply: { reversibility: 'partly_reversible', undo: null, destructive: false },
   hide: { reversibility: 'reversible', undo: 'unhide', destructive: false },
   ban: { reversibility: 'hard_to_reverse', undo: 'unban_author', destructive: true },
   delete: { reversibility: 'irreversible', undo: null, destructive: true },
@@ -53,13 +54,18 @@ export const CONFLICTS: readonly (readonly [StepType, StepType, string])[] = [
   ['hide', 'delete', 'hide_redundant_with_delete'],
 ];
 
+const templateSchema = z.string().superRefine((t, ctx) => {
+  const result = validateTemplate(t);
+  if (!result.ok) ctx.addIssue({ code: 'custom', message: result.code });
+});
+
 const stepSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('flag_for_review') }),
   z.strictObject({ type: z.literal('hide') }),
   z.strictObject({ type: z.literal('delete'), confirmIrreversible: z.literal(true) }),
   z.strictObject({ type: z.literal('ban'), confirmHardToReverse: z.literal(true) }),
-  z.strictObject({ type: z.literal('auto_reply'), template: z.string() }),
-  z.strictObject({ type: z.literal('private_reply'), template: z.string() }),
+  z.strictObject({ type: z.literal('auto_reply'), template: templateSchema }),
+  z.strictObject({ type: z.literal('private_reply'), template: templateSchema }),
 ]);
 
 export const actionStepsSchema: z.ZodType<ActionStep[], unknown> = z
