@@ -1,7 +1,6 @@
-import type { ActionStep } from '@feedbouncer/actions';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { ActionCapabilitiesDto } from '../../lib/actions';
+import type { ActionCapabilitiesDto, DraftStep } from '../../lib/actions';
 import { StepEditor } from './step-editor';
 
 const e = (platform: string, supported: boolean, maxChars: number | null = null) => ({
@@ -31,7 +30,7 @@ const BOTH: ActionCapabilitiesDto = {
 };
 
 const render = (
-  value: ActionStep[],
+  value: DraftStep[],
   capabilities = IG_ONLY,
   extra: Partial<Parameters<typeof StepEditor>[0]> = {},
 ) =>
@@ -42,6 +41,10 @@ const render = (
 /** The opening tag of the checkbox for a step. */
 const box = (html: string, name: string) =>
   new RegExp(`<input[^>]*name="step-${name}"[^>]*>`).exec(html)?.[0];
+
+/** The opening tag of the confirmation box of a destructive step. */
+const confirmBox = (html: string, name: string) =>
+  new RegExp(`<input[^>]*name="confirm-${name}"[^>]*>`).exec(html)?.[0];
 
 describe('StepEditor', () => {
   it('hides ban for an IG-only brand', () => {
@@ -75,14 +78,43 @@ describe('StepEditor', () => {
     expect(html).toContain('Partly reversible (reply can be deleted)');
   });
 
-  it('delete requires ticking the irreversible box: it starts unchecked and out of the value', () => {
-    const html = render([]);
-    const tag = box(html, 'delete')!;
-    expect(tag).not.toContain('checked');
-    expect(html).toContain('cannot be restored');
-    expect(box(render([{ type: 'delete', confirmIrreversible: true }]), 'delete')).toContain(
-      'checked',
-    );
+  it('delete requires ticking the irreversible box before the form is valid', () => {
+    const none = render([]);
+    expect(box(none, 'delete')).not.toContain('checked');
+    expect(confirmBox(none, 'delete')).toBeUndefined();
+
+    const chosen = render([{ type: 'delete' }]);
+    expect(box(chosen, 'delete')).toContain('checked');
+    const confirm = confirmBox(chosen, 'delete')!;
+    expect(confirm).toContain('required');
+    expect(confirm).not.toContain('checked');
+    expect(chosen).toContain('I understand deleted comments cannot be restored');
+
+    const confirmed = render([{ type: 'delete', confirmIrreversible: true }]);
+    expect(confirmBox(confirmed, 'delete')).toContain('checked');
+  });
+
+  it('ban has its own unticked hard-to-reverse box', () => {
+    const html = render([{ type: 'ban' }], BOTH);
+    expect(confirmBox(html, 'ban')).toContain('required');
+    expect(confirmBox(html, 'ban')).not.toContain('checked');
+    expect(html).toContain('I understand a ban is hard to reverse');
+  });
+
+  it('warns where a step lacks a permission, before saving', () => {
+    const caps: ActionCapabilitiesDto = {
+      steps: {
+        ...IG_ONLY.steps,
+        private_reply: {
+          platforms: [
+            { ...e('instagram', true, 1000), missingScopes: ['instagram_manage_messages'] },
+          ],
+        },
+      },
+    };
+    const html = render([], caps);
+    expect(html).toContain('Needs a permission on Instagram');
+    expect(render([], IG_ONLY)).not.toContain('Needs a permission');
   });
 
   it('disables a conflicting step and says why', () => {

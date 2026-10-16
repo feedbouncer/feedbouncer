@@ -1,8 +1,15 @@
 'use client';
-import type { ActionStep } from '@feedbouncer/actions';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent, type ReactNode } from 'react';
-import type { ActionCapabilitiesDto } from '../../lib/actions';
+import {
+  readySteps,
+  savedWarnings,
+  warningText,
+  type ActionCapabilitiesDto,
+  type DraftStep,
+  type StepWarningDto,
+} from '../../lib/actions';
 import { ApiRequestError, apiFetch } from '../../lib/api-client';
 import { messageFor } from '../../lib/messages';
 import { StepEditor } from '../actions/step-editor';
@@ -66,6 +73,28 @@ function Field(props: { label: string; issues: RuleIssue[]; hint?: string; child
   );
 }
 
+/** Shown after a save the API accepted with warnings, instead of leaving the page. */
+export function SaveWarnings(props: {
+  warnings: StepWarningDto[];
+  rulesHref: string;
+  ruleHref: string;
+}) {
+  return (
+    <section role="status">
+      <p>Rule saved. Some steps will not run everywhere:</p>
+      <ul>
+        {props.warnings.map((w, n) => (
+          <li key={n}>{warningText(w)}</li>
+        ))}
+      </ul>
+      <p>
+        <Link href={props.ruleHref}>Edit the rule</Link> ·{' '}
+        <Link href={props.rulesHref}>Back to rules</Link>
+      </p>
+    </section>
+  );
+}
+
 export function RuleEditor(props: {
   orgId: string;
   brandId: string;
@@ -80,11 +109,12 @@ export function RuleEditor(props: {
   const [form, setForm] = useState<RuleFormState>(() =>
     rule ? formFromConditions(rule.conditions) : emptyForm(),
   );
-  const [steps, setSteps] = useState<ActionStep[]>(rule?.actions ?? [{ type: 'flag_for_review' }]);
+  const [steps, setSteps] = useState<DraftStep[]>(rule?.actions ?? [{ type: 'flag_for_review' }]);
   const [dryRun, setDryRun] = useState(rule ? rule.mode === 'suggest' : true);
   const [issues, setIssues] = useState<RuleIssue[]>(props.initialIssues ?? []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState<{ id: string; warnings: StepWarningDto[] } | null>(null);
 
   // Allow and trusted author lists let comments through, so they take no steps.
   const allowList = kind === 'author' && form.authorList !== 'block';
@@ -100,19 +130,33 @@ export function RuleEditor(props: {
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const actions = allowList ? [] : readySteps(steps);
+    if (actions === null) {
+      setError('Tick the confirmation box of each Delete or Ban step.');
+      return;
+    }
     setBusy(true);
     setError(null);
     setIssues([]);
     const body = {
       name,
       conditions: conditionsFromForm(kind, form),
-      actions: allowList ? [] : steps,
+      actions,
       mode: dryRun ? 'suggest' : 'enforce',
     };
     const base = `/api/v1/orgs/${props.orgId}/brands/${props.brandId}/rules` as const;
+    type Saved = { id: string; actionWarnings?: StepWarningDto[] };
     try {
-      if (rule) await apiFetch(`${base}/${rule.id}`, { method: 'PATCH', body });
-      else await apiFetch(base, { method: 'POST', body });
+      const res = rule
+        ? await apiFetch<Saved>(`${base}/${rule.id}`, { method: 'PATCH', body })
+        : await apiFetch<Saved>(base, { method: 'POST', body });
+      const warnings = savedWarnings(res);
+      // A step that lacks a permission still saves: say so before leaving the editor.
+      if (warnings.length > 0) {
+        setSaved({ id: res.id, warnings });
+        router.refresh();
+        return;
+      }
       router.push(`/orgs/${props.orgId}/brands/${props.brandId}/rules`);
       router.refresh();
     } catch (err) {
@@ -123,6 +167,16 @@ export function RuleEditor(props: {
       setBusy(false);
     }
   }
+
+  const rulesHref = `/orgs/${props.orgId}/brands/${props.brandId}/rules`;
+  if (saved)
+    return (
+      <SaveWarnings
+        warnings={saved.warnings}
+        rulesHref={rulesHref}
+        ruleHref={`${rulesHref}/${saved.id}`}
+      />
+    );
 
   return (
     <form onSubmit={onSubmit}>

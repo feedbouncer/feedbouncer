@@ -1,5 +1,4 @@
 'use client';
-import type { ActionStep } from '@feedbouncer/actions';
 import { useId } from 'react';
 import {
   CONFIRM_LABEL,
@@ -9,12 +8,15 @@ import {
   TEMPLATE_HELP,
   TEMPLATE_SYNTAX_HELP,
   conflictReason,
+  isConfirmed,
+  setConfirmed,
   setTemplate,
   stepAvailability,
   stepIssues,
   templateCount,
   toggleStep,
   type ActionCapabilitiesDto,
+  type DraftStep,
 } from '../../lib/actions';
 
 type ReplyType = 'auto_reply' | 'private_reply';
@@ -47,8 +49,8 @@ function Template(props: {
 }
 
 export function StepEditor(props: {
-  value: ActionStep[];
-  onChange: (value: ActionStep[]) => void;
+  value: DraftStep[];
+  onChange: (value: DraftStep[]) => void;
   capabilities: ActionCapabilitiesDto;
   onlyPlatform?: string;
   /** Problems the API reported for the rule; those at actions.<n> show under step n. */
@@ -87,9 +89,28 @@ export function StepEditor(props: {
               />{' '}
               {STEP_LABEL[type]} <small>({REVERSIBILITY_LABEL[type]})</small>
             </label>
-            {CONFIRM_LABEL[type] ? <small>{CONFIRM_LABEL[type]}</small> : null}
+            {step && (step.type === 'delete' || step.type === 'ban') ? (
+              // Its own box, unticked when the step is chosen: required before the form submits.
+              <label style={{ display: 'block' }}>
+                <input
+                  type="checkbox"
+                  name={`confirm-${step.type}`}
+                  required
+                  checked={isConfirmed(step)}
+                  onChange={(e) =>
+                    props.onChange(setConfirmed(props.value, step.type, e.target.checked))
+                  }
+                />{' '}
+                {CONFIRM_LABEL[step.type]}
+              </label>
+            ) : null}
             {a.unavailableOn.length > 0 ? (
               <small>{` Not available on ${a.unavailableOn.join(', ')}`}</small>
+            ) : null}
+            {a.missingPermissionOn.length > 0 ? (
+              <small role="note">
+                {` Needs a permission on ${a.missingPermissionOn.join(', ')}: reconnect the account and allow it, or this step fails there.`}
+              </small>
             ) : null}
             {conflict ? <small id={noteId}>{` ${conflict}`}</small> : null}
             {step?.type === 'auto_reply' || step?.type === 'private_reply' ? (

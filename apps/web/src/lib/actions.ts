@@ -53,7 +53,7 @@ export const REVERSIBILITY_LABEL: Record<StepType, string> = {
   flag_for_review: 'Reversible',
 };
 
-/** Shown beside the unchecked box of a destructive step, which is never pre-selected. */
+/** Label of the separate, initially unticked box that confirms a chosen destructive step. */
 export const CONFIRM_LABEL: Partial<Record<StepType, string>> = {
   delete: 'I understand deleted comments cannot be restored',
   ban: 'I understand a ban is hard to reverse',
@@ -126,6 +126,8 @@ export interface StepAvailability {
   unavailableOn: string[];
   /** The smallest reply length among the platforms that support it. */
   maxChars: number | null;
+  /** Platforms in scope that support the step but did not grant a permission it needs. */
+  missingPermissionOn: string[];
 }
 
 /** What each step can do on the platforms in scope: the author rule's, else all connected. */
@@ -146,41 +148,104 @@ export function stepAvailability(
       available: inScope.length === 0 || supportedOn.size > 0,
       unavailableOn: inScope.filter((p) => !supportedOn.has(p)).map(platformLabel),
       maxChars: limits.length > 0 ? Math.min(...limits) : null,
+      missingPermissionOn: [
+        ...new Set(supported.filter((e) => e.missingScopes.length > 0).map((e) => e.platform)),
+      ].map(platformLabel),
     };
   }
   return result;
 }
 
-const newStep = (type: StepType): ActionStep => {
+/**
+ * A step as edited. Delete and Ban are chosen first and confirmed with their own box, so
+ * until then they lack the confirmation the API requires.
+ */
+export type DraftStep = ActionStep | { type: 'delete' } | { type: 'ban' };
+
+const newStep = (type: StepType): DraftStep => {
   switch (type) {
-    case 'delete':
-      return { type, confirmIrreversible: true };
-    case 'ban':
-      return { type, confirmHardToReverse: true };
     case 'auto_reply':
     case 'private_reply':
       return { type, template: '' };
+    // Delete and Ban start unconfirmed: their own box adds the confirmation.
+    case 'delete':
+      return { type: 'delete' };
+    case 'ban':
+      return { type: 'ban' };
     case 'hide':
     case 'flag_for_review':
       return { type };
   }
 };
 
-const byOrder = (a: ActionStep, b: ActionStep): number =>
+const byOrder = (a: DraftStep, b: DraftStep): number =>
   STEP_ORDER.indexOf(a.type) - STEP_ORDER.indexOf(b.type);
 
-/** Adds or removes a step, keeping execution order. Ticking Delete or Ban is the confirmation. */
-export function toggleStep(value: ActionStep[], type: StepType, on: boolean): ActionStep[] {
+/** Adds or removes a step, keeping execution order. Delete and Ban are added unconfirmed. */
+export function toggleStep(value: DraftStep[], type: StepType, on: boolean): DraftStep[] {
   const rest = value.filter((s) => s.type !== type);
   return on ? [...rest, newStep(type)].sort(byOrder) : rest;
 }
 
+export type DestructiveType = 'delete' | 'ban';
+
+export const isConfirmed = (step: DraftStep): boolean =>
+  step.type === 'delete'
+    ? 'confirmIrreversible' in step
+    : step.type === 'ban'
+      ? 'confirmHardToReverse' in step
+      : true;
+
+/** Ticks or unticks the confirmation box of a chosen Delete or Ban step. */
+export function setConfirmed(value: DraftStep[], type: DestructiveType, on: boolean): DraftStep[] {
+  return value.map((s): DraftStep => {
+    if (s.type !== type) return s;
+    if (!on) return type === 'delete' ? { type: 'delete' } : { type: 'ban' };
+    return type === 'delete'
+      ? { type, confirmIrreversible: true }
+      : { type, confirmHardToReverse: true };
+  });
+}
+
+/** The steps to save, or null while a chosen Delete or Ban is not confirmed. */
+export function readySteps(value: readonly DraftStep[]): ActionStep[] | null {
+  return value.every(isConfirmed) ? (value as ActionStep[]) : null;
+}
+
 export function setTemplate(
-  value: ActionStep[],
+  value: DraftStep[],
   type: 'auto_reply' | 'private_reply',
   template: string,
-): ActionStep[] {
+): DraftStep[] {
   return value.map((s) => (s.type === type ? { type, template } : s));
+}
+
+/** A problem with a saved rule's steps on one connected account (the rule was still saved). */
+export interface StepWarningDto {
+  type: StepType;
+  code: string;
+  platform: string;
+  connectionId: string;
+  scopes?: string[];
+}
+
+/** The warnings of a rule create or update response. */
+export function savedWarnings(
+  res: { actionWarnings?: StepWarningDto[] } | undefined,
+): StepWarningDto[] {
+  return Array.isArray(res?.actionWarnings) ? res.actionWarnings : [];
+}
+
+export function warningText(w: StepWarningDto): string {
+  const step = STEP_LABEL[w.type];
+  const platform = platformLabel(w.platform);
+  if (w.code === 'missing_permission') {
+    const perms = w.scopes && w.scopes.length > 0 ? w.scopes.join(', ') : 'a permission it needs';
+    return `${step}: your ${platform} account has not allowed ${perms}. Reconnect it and allow the permission, or this step fails.`;
+  }
+  if (w.code === 'not_supported_on_platform')
+    return `${step}: not available on ${platform}, so it does not run there.`;
+  return `${step} on ${platform}: ${outcomeSentence(w.code)}`;
 }
 
 const CONFLICTS: readonly (readonly [StepType, StepType, string])[] = [
@@ -191,7 +256,7 @@ const CONFLICTS: readonly (readonly [StepType, StepType, string])[] = [
 ];
 
 /** Why a step cannot be added next to the ones already chosen, or null. */
-export function conflictReason(type: StepType, value: readonly ActionStep[]): string | null {
+export function conflictReason(type: StepType, value: readonly DraftStep[]): string | null {
   for (const [a, b, reason] of CONFLICTS) {
     const other = type === a ? b : type === b ? a : null;
     if (other !== null && value.some((s) => s.type === other)) {

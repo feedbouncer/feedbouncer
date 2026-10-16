@@ -7,6 +7,10 @@ import {
   STEP_LABEL,
   STEP_ORDER,
   conflictReason,
+  readySteps,
+  savedWarnings,
+  setConfirmed,
+  warningText,
   hasPending,
   openConfirm,
   outcomeText,
@@ -97,15 +101,79 @@ describe('stepAvailability', () => {
 });
 
 describe('toggleStep', () => {
-  it('adds destructive steps already confirmed and keeps execution order', () => {
+  it('adds destructive steps unconfirmed and keeps execution order', () => {
     const v = toggleStep(toggleStep(toggleStep([], 'delete', true), 'hide', true), 'ban', true);
     expect(v.map((s) => s.type)).toEqual(['hide', 'ban', 'delete']);
-    expect(v[2]).toEqual({ type: 'delete', confirmIrreversible: true });
-    expect(v[1]).toEqual({ type: 'ban', confirmHardToReverse: true });
+    expect(v[2]).toEqual({ type: 'delete' });
+    expect(v[1]).toEqual({ type: 'ban' });
   });
 
   it('removes a step', () => {
     expect(toggleStep([{ type: 'hide' }], 'hide', false)).toEqual([]);
+  });
+});
+
+describe('destructive step confirmation', () => {
+  it('delete requires ticking the irreversible box before the form is valid', () => {
+    const chosen = toggleStep([{ type: 'hide' }], 'ban', true);
+    expect(readySteps(chosen)).toBeNull();
+    const confirmed = setConfirmed(chosen, 'ban', true);
+    expect(readySteps(confirmed)).toEqual([
+      { type: 'hide' },
+      { type: 'ban', confirmHardToReverse: true },
+    ]);
+
+    const withDelete = toggleStep([], 'delete', true);
+    expect(readySteps(withDelete)).toBeNull();
+    expect(readySteps(setConfirmed(withDelete, 'delete', true))).toEqual([
+      { type: 'delete', confirmIrreversible: true },
+    ]);
+    expect(setConfirmed(setConfirmed(withDelete, 'delete', true), 'delete', false)).toEqual([
+      { type: 'delete' },
+    ]);
+  });
+
+  it('a step list without destructive steps is ready as it is', () => {
+    expect(readySteps([{ type: 'flag_for_review' }])).toEqual([{ type: 'flag_for_review' }]);
+    expect(readySteps([])).toEqual([]);
+  });
+});
+
+describe('permission warnings', () => {
+  it('reads the save warnings, naming the account and the permission', () => {
+    const w = savedWarnings({
+      actionWarnings: [
+        {
+          type: 'private_reply',
+          code: 'missing_permission',
+          platform: 'instagram',
+          connectionId: 'c1',
+          scopes: ['instagram_manage_messages'],
+        },
+        {
+          type: 'ban',
+          code: 'not_supported_on_platform',
+          platform: 'instagram',
+          connectionId: 'c1',
+        },
+      ],
+    });
+    expect(w.map(warningText)).toEqual([
+      'Private reply: your Instagram account has not allowed instagram_manage_messages. Reconnect it and allow the permission, or this step fails.',
+      'Ban author: not available on Instagram, so it does not run there.',
+    ]);
+    expect(savedWarnings({})).toEqual([]);
+    expect(savedWarnings(undefined)).toEqual([]);
+  });
+
+  it('flags the platforms where a supported step lacks a permission', () => {
+    const c = caps(['facebook', 'instagram']);
+    c.steps.private_reply.platforms[1] = {
+      ...c.steps.private_reply.platforms[1]!,
+      missingScopes: ['instagram_manage_messages'],
+    };
+    expect(stepAvailability(c).private_reply.missingPermissionOn).toEqual(['Instagram']);
+    expect(stepAvailability(c).hide.missingPermissionOn).toEqual([]);
   });
 });
 

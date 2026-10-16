@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { ActionCapabilitiesDto } from '../../lib/actions';
 import type { RuleView } from '../../lib/rules';
-import { RuleEditor } from './rule-editor';
+import { RuleEditor, SaveWarnings } from './rule-editor';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: () => undefined, refresh: () => undefined }),
@@ -74,6 +74,7 @@ describe('RuleEditor', () => {
     });
     expect(stepBox(html, 'hide')).toContain('checked');
     expect(stepBox(html, 'delete')).toContain('checked');
+    expect(html).toMatch(/<input[^>]*name="confirm-delete"[^>]*checked=""/);
     expect(html).not.toContain('name="action"');
   });
 
@@ -121,5 +122,30 @@ describe('RuleEditor', () => {
     );
     expect(html).toContain('Unclosed group');
     expect(html.indexOf('Unclosed group')).toBeGreaterThan(html.indexOf('name="patterns"'));
+  });
+});
+
+describe('SaveWarnings', () => {
+  it('keeps the user on the page to read what the saved rule still lacks', () => {
+    const html = renderToStaticMarkup(
+      <SaveWarnings
+        rulesHref="/orgs/o/brands/b/rules"
+        ruleHref="/orgs/o/brands/b/rules/r1"
+        warnings={[
+          {
+            type: 'private_reply',
+            code: 'missing_permission',
+            platform: 'instagram',
+            connectionId: 'c1',
+            scopes: ['instagram_manage_messages'],
+          },
+        ]}
+      />,
+    );
+    expect(html).toContain('role="status"');
+    expect(html).toContain('Rule saved');
+    expect(html).toContain('instagram_manage_messages');
+    expect(html).toContain('href="/orgs/o/brands/b/rules"');
+    expect(html).toContain('href="/orgs/o/brands/b/rules/r1"');
   });
 });
