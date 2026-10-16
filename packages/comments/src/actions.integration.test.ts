@@ -354,6 +354,25 @@ describe('ModerationActions.request', () => {
     ).rejects.toThrow(TypeError);
   });
 
+  it('a replay with a different reverses_action_id -> request_key_conflict', async () => {
+    const commentId = await seedComment({ state: 'hidden' });
+    const mk = async () =>
+      (
+        (await request(commentId, 'hide', { actor: { type: 'system' } })) as {
+          action: { id: string };
+        }
+      ).action.id;
+    const [a, b] = [await mk(), await mk()];
+    const requestKey = key();
+    const base = { scope: t, commentId, kind: 'unhide', actor: user(), requestKey } as const;
+    expect(await actions.request({ ...base, reverses: a })).toMatchObject({ status: 'accepted' });
+    expect(await actions.request({ ...base, reverses: a })).toMatchObject({ status: 'accepted' });
+    expect(await actions.request({ ...base, reverses: b })).toEqual({
+      status: 'refused',
+      code: 'request_key_conflict',
+    });
+  });
+
   it('a ban made before the comment was deleted can still be undone', async () => {
     const commentId = await seedComment();
     expect(await request(commentId, 'ban_author')).toMatchObject({ status: 'accepted' });

@@ -440,6 +440,17 @@ describe('resolveReviewItem', () => {
     expect(await actionRows(f.comment.id)).toEqual([]);
   });
 
+  it.each(['auto:x', 'undo:x', 'review:x'])(
+    'rejects the reserved client request key %s and leaves the item open',
+    async (requestKey) => {
+      const f = await fresh();
+      const itemId = await openItem(f);
+      await expect(resolve(f, itemId, 'hide', { requestKey })).rejects.toThrow(TypeError);
+      expect((await review.load(f.scope, itemId))!.status).toBe('open');
+      expect(await actionRows(f.comment.id)).toEqual([]);
+    },
+  );
+
   it('rejects a malformed request key or an unknown resolution', async () => {
     const f = await fresh();
     const itemId = await openItem(f);

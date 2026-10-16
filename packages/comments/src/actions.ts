@@ -80,6 +80,14 @@ export function actionFallbackCode(r: RequestActionResult): string | null {
 }
 
 export const REQUEST_KEY = /^[A-Za-z0-9._:-]{1,128}$/;
+/** Prefixes of request keys the server derives itself; clients cannot claim them. */
+const RESERVED_KEY_PREFIXES = ['auto:', 'undo:', 'review:'];
+
+/** A request key a client may supply: well-formed and outside the server-generated key space. */
+export const isClientRequestKey = (key: unknown): key is string =>
+  typeof key === 'string' &&
+  REQUEST_KEY.test(key) &&
+  !RESERVED_KEY_PREFIXES.some((p) => key.startsWith(p));
 export const REPLY_KINDS: ReadonlySet<ActionKind> = new Set(['public_reply', 'private_reply']);
 const REQUEST_KEY_UNIQUE = 'moderation_action_organization_id_request_key_key';
 const PRIVATE_REPLY_ONCE = 'moderation_action_private_reply_once_key';
@@ -161,6 +169,12 @@ interface Request {
   text?: string;
   /** The action in this brand this one reverses (an unhide for a hide). */
   reverses?: string;
+}
+
+/** A stored action with the action it reverses, for comparing a replay with the original request. */
+interface StoredAction {
+  readonly view: ModerationActionView;
+  readonly reverses: string | null;
 }
 
 const refused = (code: RefusalCode): RequestActionResult => ({ status: 'refused', code });
@@ -344,11 +358,15 @@ export class ModerationActions {
   }
 
   async #replay(
-    existing: ModerationActionView,
+    { view: existing, reverses }: StoredAction,
     i: Request,
     c: CommentRow,
   ): Promise<RequestActionResult> {
-    if (existing.commentId !== c.id || existing.kind !== i.kind)
+    if (
+      existing.commentId !== c.id ||
+      existing.kind !== i.kind ||
+      reverses !== (i.reverses ?? null)
+    )
       return refused('request_key_conflict');
     if (existing.status === 'pending') {
       await this.#enqueue(i.scope, c, existing.id);
@@ -382,12 +400,13 @@ export class ModerationActions {
     return r.rowCount === 1;
   }
 
-  async #byKey(scope: BrandScope, requestKey: string): Promise<ModerationActionView | null> {
+  async #byKey(scope: BrandScope, requestKey: string): Promise<StoredAction | null> {
     const r = await this.d.pool.query(
-      `SELECT ${VIEW_COLUMNS} FROM moderation_action
+      `SELECT ${VIEW_COLUMNS}, reverses_action_id FROM moderation_action
         WHERE organization_id = $1 AND brand_id = $2 AND request_key = $3`,
       [scope.organizationId, scope.brandId, requestKey],
     );
-    return r.rows[0] ? toView(r.rows[0]) : null;
+    const row = r.rows[0];
+    return row ? { view: toView(row), reverses: row.reverses_action_id ?? null } : null;
   }
 }

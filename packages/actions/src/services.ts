@@ -4,7 +4,7 @@
 import type pg from 'pg';
 import { withTransaction } from '@feedbouncer/db';
 import {
-  REQUEST_KEY,
+  isClientRequestKey,
   type ActionKind,
   type BrandScope,
   type ModerationActions,
@@ -175,7 +175,7 @@ export async function resolveReviewItem(
   };
   if (!Object.hasOwn(RESOLUTION, i.resolution)) bad('resolution');
   if (!UUID.test(i.userId)) bad('userId');
-  if (typeof i.requestKey !== 'string' || !REQUEST_KEY.test(i.requestKey)) bad('requestKey');
+  if (!isClientRequestKey(i.requestKey)) bad('requestKey');
   if (!UUID.test(itemId)) return refused('not_found');
 
   const item = await d.review.load(scope, itemId);
