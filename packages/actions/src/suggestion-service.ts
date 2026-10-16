@@ -387,7 +387,6 @@ export async function endReviewModeEarly(
     return { status: 'refused', code: 'confirmation_required' };
   const now = new Date(d.clock.now());
   const pendingCount = await withTransaction(d.pool, async (tx) => {
-    const count = await d.suggestions.pendingCount(scope, scope.connectionId);
     const ended = await tx.query(
       `UPDATE connection SET review_mode_ended_at = GREATEST($4, review_mode_started_at), review_mode_ended_by_user_id = $5
         WHERE organization_id = $1 AND brand_id = $2 AND id = $3
@@ -396,14 +395,25 @@ export async function endReviewModeEarly(
       [scope.organizationId, scope.brandId, scope.connectionId, now, i.userId],
     );
     if (ended.rowCount !== 1) return null;
-    if (i.pending === 'dismiss')
-      await tx.query(
-        `UPDATE action_suggestion
-            SET status = 'dismissed', status_reason = 'review_mode_ended', decided_by_user_id = $4,
-                decided_at = now()
-          WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND status = 'pending'`,
-        [scope.organizationId, scope.brandId, scope.connectionId, i.userId],
-      );
+    const scopeArgs = [scope.organizationId, scope.brandId, scope.connectionId];
+    const count =
+      i.pending === 'dismiss'
+        ? ((
+            await tx.query(
+              `UPDATE action_suggestion
+                  SET status = 'dismissed', status_reason = 'review_mode_ended', decided_by_user_id = $4,
+                      decided_at = now()
+                WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND status = 'pending'`,
+              [...scopeArgs, i.userId],
+            )
+          ).rowCount ?? 0)
+        : (
+            await tx.query<{ n: number }>(
+              `SELECT count(*)::int AS n FROM action_suggestion
+                WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND status = 'pending'`,
+              scopeArgs,
+            )
+          ).rows[0]!.n;
     await d.audit(tx, {
       ...scope,
       actorUserId: i.userId,
