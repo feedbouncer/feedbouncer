@@ -1,20 +1,22 @@
 // Evaluates one stored comment body against its brand's rules, records the
-// evaluation and decisions, and asks for the platform action an enforcing
-// hide/remove rule wants. Repeating it is safe: the evaluation is unique per
-// (comment, body version, trigger), the action is deduplicated by its request
-// key and the fallback flag is written at most once. A run that finds an
-// existing evaluation resumes at the action step.
+// evaluation and decisions, and starts the action run of the enforcing rule
+// (dry runs for the suggest-mode matches). Repeating it is safe: the evaluation
+// is unique per (comment, body version, trigger) and a run is unique per
+// (evaluation, rule). A run that finds an existing evaluation resumes at the
+// action step.
 // Logs carry ids, kinds and error names only: never comment text, author
 // names or rule terms.
-import type { BrandScope, ModerationActions, PgCommentStore } from '@feedbouncer/comments';
+import type { ActionRunner, ActionStep } from '@feedbouncer/actions';
+import type { BrandScope, PgCommentStore } from '@feedbouncer/comments';
 import type { JobDefinition, JobResult } from '@feedbouncer/jobs';
-import type { Platform } from '@feedbouncer/connectors';
+import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
 import type { RuleSetCache } from '../cache.js';
 import { evaluate } from '../engine.js';
 import type { EvaluationRow, PgEvaluationStore } from '../evaluations.js';
 import type { RuleEvaluatedHook } from '../hooks.js';
-import { describeFallback } from '../reason.js';
+import type { PgRuleStore } from '../store.js';
+import type { Verdict } from '../types.js';
 import { RULE_EVALUATE_JOB, bodySha256, type RuleEvaluatePayload } from './specs.js';
 
 /** ruleset_version of an evaluation that never loaded the rules (skipped comments). */
@@ -26,7 +28,8 @@ export function ruleEvaluateJob(d: {
   comments: PgCommentStore;
   evaluations: PgEvaluationStore;
   cache: RuleSetCache;
-  actions: Pick<ModerationActions, 'request'>;
+  runner: Pick<ActionRunner, 'start'>;
+  rules: Pick<PgRuleStore, 'get'>;
   log: Logger;
   clock?: { now(): number };
   evaluated?: RuleEvaluatedHook;
@@ -46,6 +49,7 @@ export function ruleEvaluateJob(d: {
       if (bodySha256(row.body) !== p.bodySha256) return { result: 'superseded' };
 
       let ev = await d.evaluations.find(brand, p.commentId, sha, p.trigger);
+      let verdict: Verdict | undefined;
       if (!ev) {
         const base = { commentId: p.commentId, sha, triggerKey: p.trigger };
         const skipReason =
@@ -63,7 +67,7 @@ export function ruleEvaluateJob(d: {
         const clock = d.clock;
         for (const inv of set.invalid)
           d.log.warn('rule_conditions_invalid', { ruleId: inv.ruleId });
-        const verdict = evaluate(
+        verdict = evaluate(
           set,
           {
             body: row.body,
@@ -95,7 +99,7 @@ export function ruleEvaluateJob(d: {
           (await d.evaluations.find(brand, p.commentId, sha, p.trigger));
         if (!ev) throw new Error('rule evaluation was neither recorded nor found');
       }
-      const res = await act(d, brand, ev, p.commentId, row.platform);
+      const res = await act(d, ctx.scope, ev, p.commentId, verdict);
       // After act(): a throw here retries the job; record and act are idempotent
       // (unique evaluation, requestKey), so the rule action is never delayed.
       if (d.evaluated && (ev.status === 'no_match' || ev.status === 'decided'))
@@ -113,41 +117,24 @@ export function ruleEvaluateJob(d: {
 }
 
 async function act(
-  d: Pick<Parameters<typeof ruleEvaluateJob>[0], 'actions' | 'evaluations' | 'log'>,
-  brand: BrandScope,
+  d: Pick<Parameters<typeof ruleEvaluateJob>[0], 'runner' | 'rules' | 'log'>,
+  scope: ConnectionScope,
   ev: EvaluationRow,
   commentId: string,
-  platform: Platform,
+  verdict: Verdict | undefined,
 ): Promise<JobResult> {
   const base = { result: ev.status, evaluationId: ev.id, outcome: ev.outcome };
-  const outcome = ev.outcome;
-  // approve and flag need no platform call: the decision row is the record.
-  if (ev.status !== 'decided' || (outcome !== 'hide' && outcome !== 'remove')) return base;
-  // Already fell back: the user was told it is flagged; do not start the action now.
+  const start = (ruleId: string, steps: ActionStep[], dryRun: boolean) =>
+    d.runner.start(scope, { commentId, ruleId, evaluationId: ev.id, dryRun, steps });
+  // Only a freshly recorded evaluation has simulations to run: they are not needed to resume.
+  for (const s of verdict?.suggestions ?? [])
+    if (s.actions.length > 0) await start(s.ruleId, s.actions, true);
+  if (ev.status !== 'decided' || ev.matchedRuleId === null) return base;
+  // Already fell back: the user was told it is flagged; do not start the actions now.
   if (ev.fallbackAt !== null) return { ...base, fallback: 'recorded' };
-  const r = await d.actions.request({
-    scope: brand,
-    commentId,
-    kind: outcome === 'hide' ? 'hide' : 'delete',
-    actor: { type: 'rule', ruleId: ev.matchedRuleId! },
-    requestKey: `rule-eval:${ev.id}`,
-  });
-  let failedCode: string | null = null;
-  if (r.status === 'refused') failedCode = r.code;
-  else if (
-    r.status === 'recorded' &&
-    (r.action.status === 'not_eligible' || r.action.status === 'failed')
-  )
-    failedCode = r.action.outcomeCode ?? 'failed';
-  else return { ...base, action: r.action.status };
-  const info = await d.evaluations.loadForFallback(brand, ev.id);
-  if (info)
-    await d.evaluations.recordFallback(
-      brand,
-      ev.id,
-      failedCode,
-      describeFallback(info.ruleName, outcome, failedCode, platform),
-    );
-  d.log.info('rule_action_fallback', { evaluationId: ev.id, commentId, code: failedCode });
-  return { ...base, fallback: failedCode };
+  const steps =
+    verdict?.decided?.actions ?? (await d.rules.get(scope, ev.matchedRuleId))?.actions ?? [];
+  if (steps.length === 0) return base;
+  const run = await start(ev.matchedRuleId, steps, false);
+  return { ...base, runId: run.id };
 }

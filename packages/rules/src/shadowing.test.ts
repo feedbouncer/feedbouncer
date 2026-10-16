@@ -9,7 +9,7 @@ const r = (
 ): AnalyzableRule => ({
   id: `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`,
   conditions,
-  action: 'hide',
+  actions: [{ type: 'hide' }],
   mode: 'enforce',
   enabled: true,
   priority,
@@ -211,7 +211,7 @@ describe('author shadowing', () => {
     expect(shadow(A, r(authors('block', [{ handle: 'spammer' }]), 20))).toBeNull();
   });
   it('trusted list at priority 9999 shadows a block list at priority 0', () => {
-    const A = r(authors('trusted', [{ externalId: '1' }]), 9999, { action: 'approve' });
+    const A = r(authors('trusted', [{ externalId: '1' }]), 9999, { actions: [] });
     const B = r(authors('block', [{ externalId: '1' }]), 0);
     expect(analyzeRules([B, A]).get(B.id)?.shadowedBy).toBe(A.id);
   });
@@ -243,11 +243,11 @@ describe('who can shadow', () => {
     expect(res.get(B.id)?.shadowedBy).toBeNull();
   });
   it('allow author list with a handle-only entry is invalid', () => {
-    const x = r(authors('allow', [{ handle: 'x' }]), 10, { action: 'approve' });
+    const x = r(authors('allow', [{ handle: 'x' }]), 10, { actions: [] });
     expect(analyzeRules([x]).get(x.id)?.invalid).toBe(true);
   });
   it('action/list mismatch is invalid and never shadows', () => {
-    const A = r(authors('block', [{ externalId: '1' }]), 10, { action: 'approve' });
+    const A = r(authors('block', [{ externalId: '1' }]), 10, { actions: [] });
     const B = r(authors('block', [{ externalId: '1' }]), 20);
     expect(analyzeRules([A, B]).get(A.id)?.invalid).toBe(true);
     expect(analyzeRules([A, B]).get(B.id)?.shadowedBy).toBeNull();

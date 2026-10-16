@@ -146,6 +146,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@feedbouncer/actions':
+        specifier: workspace:*
+        version: link:../../packages/actions
       '@feedbouncer/ai':
         specifier: workspace:*
         version: link:../../packages/ai
@@ -290,6 +293,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@feedbouncer/actions':
+        specifier: workspace:*
+        version: link:../../packages/actions
       '@feedbouncer/classifier':
         specifier: workspace:*
         version: link:../../packages/classifier
@@ -773,6 +779,9 @@ importers:
 
   packages/rules:
     dependencies:
+      '@feedbouncer/actions':
+        specifier: workspace:*
+        version: link:../actions
       '@feedbouncer/comments':
         specifier: workspace:*
         version: link:../comments

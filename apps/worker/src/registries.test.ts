@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ActionStepOutcomeObserver } from '@feedbouncer/actions';
 import * as comments from '@feedbouncer/comments';
 import {
   CompositeRuleEvaluatedHook,
@@ -54,6 +55,15 @@ const fakeDeps = {
   policy: loadPolicyConfig({}),
   slotsPool: {},
 } as unknown as WorkerJobDeps;
+
+// Action outcomes also reach the step observer, which would query the fake pool.
+let stepOutcome: ReturnType<typeof vi.spyOn>;
+beforeEach(() => {
+  stepOutcome = vi
+    .spyOn(ActionStepOutcomeObserver.prototype, 'onActionOutcome')
+    .mockResolvedValue();
+});
+afterEach(() => stepOutcome.mockRestore());
 
 describe('buildConnectorRegistry', () => {
   it('registers facebook only when configured', () => {
@@ -154,6 +164,22 @@ describe('rule engine wiring', () => {
     buildJobRegistry(fakeDeps);
     const outcomes = vi.mocked(comments.executeActionJob).mock.calls[0]?.[0].outcomes;
     expect(outcomes).toBeInstanceOf(comments.CompositeActionOutcomeObserver);
+  });
+});
+
+describe('action runs wiring', () => {
+  it('registers action_run_advance for facebook and instagram', () => {
+    const jobs = buildJobRegistry(fakeDeps);
+    expect(jobs.supports('action_run_advance', 'facebook')).toBe(true);
+    expect(jobs.supports('action_run_advance', 'instagram')).toBe(true);
+  });
+  it('wakes runs from platform action outcomes', async () => {
+    vi.mocked(comments.executeActionJob).mockClear();
+    buildJobRegistry(fakeDeps);
+    const outcomes = vi.mocked(comments.executeActionJob).mock.calls[0]?.[0].outcomes;
+    const event = { actorType: 'user', requestKey: 'k', status: 'applied' } as never;
+    await outcomes?.onActionOutcome(event);
+    expect(stepOutcome).toHaveBeenCalledWith(event);
   });
 });
 

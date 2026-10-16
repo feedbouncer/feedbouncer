@@ -5,6 +5,7 @@
 import type pg from 'pg';
 import { withTransaction } from '@feedbouncer/db';
 import type { BrandScope } from '@feedbouncer/comments';
+import type { Platform } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { describeDecision } from './reason.js';
 import type { RuleAction, RuleHit, Verdict } from './types.js';
@@ -179,15 +180,24 @@ export class PgEvaluationStore {
   async loadForFallback(
     scope: BrandScope,
     evaluationId: string,
-  ): Promise<{ ruleId: string; ruleName: string; outcome: RuleAction; commentId: string } | null> {
+  ): Promise<{
+    ruleId: string;
+    ruleName: string;
+    outcome: RuleAction;
+    commentId: string;
+    platform: Platform;
+  } | null> {
     const { rows } = await this.#pool.query<{
       rule_id: string;
       rule_name: string;
       outcome: RuleAction;
       comment_id: string;
+      platform: Platform;
     }>(
-      `SELECT e.matched_rule_id AS rule_id, r.name AS rule_name, e.outcome, e.comment_id
+      `SELECT e.matched_rule_id AS rule_id, r.name AS rule_name, e.outcome, e.comment_id, cn.platform
          FROM rule_evaluation e
+         JOIN connection cn ON cn.id = e.connection_id
+                           AND cn.organization_id = e.organization_id AND cn.brand_id = e.brand_id
          JOIN rule r ON r.id = e.matched_rule_id
                     AND r.organization_id = e.organization_id AND r.brand_id = e.brand_id
         WHERE e.organization_id = $1 AND e.brand_id = $2 AND e.id = $3 AND e.status = 'decided'`,
@@ -195,7 +205,13 @@ export class PgEvaluationStore {
     );
     const r = rows[0];
     return r
-      ? { ruleId: r.rule_id, ruleName: r.rule_name, outcome: r.outcome, commentId: r.comment_id }
+      ? {
+          ruleId: r.rule_id,
+          ruleName: r.rule_name,
+          outcome: r.outcome,
+          commentId: r.comment_id,
+          platform: r.platform,
+        }
       : null;
   }
 }

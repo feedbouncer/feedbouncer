@@ -1,3 +1,4 @@
+import type { ActionStep } from '@feedbouncer/actions';
 import type { Platform } from '@feedbouncer/connectors';
 
 export const RULE_ACTIONS = ['approve', 'flag', 'hide', 'remove'] as const;
@@ -27,6 +28,7 @@ export interface RuleRecord {
   name: string;
   conditions: unknown;
   action: RuleAction;
+  actions: ActionStep[];
   mode: RuleMode;
   priority: number;
   enabled: boolean;
@@ -73,6 +75,7 @@ export interface RuleHit {
   ruleName: string;
   kind: RuleKind;
   action: RuleAction;
+  actions: ActionStep[];
   evidence: Evidence;
 }
 

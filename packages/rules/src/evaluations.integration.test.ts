@@ -69,6 +69,7 @@ const hit = (ruleId: string, ruleName: string, action: RuleAction): RuleHit => (
   ruleName,
   kind: 'keyword',
   action,
+  actions: [],
   evidence: { kind: 'keyword', term: 'spam' },
 });
 
@@ -239,6 +240,7 @@ describe('PgEvaluationStore fallback', () => {
     expect(info).toEqual({
       ruleId: enforceId,
       ruleName: 'Spam words',
+      platform: 'facebook',
       outcome: 'hide',
       commentId: f.commentId,
     });

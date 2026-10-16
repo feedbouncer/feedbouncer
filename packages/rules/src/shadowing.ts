@@ -1,3 +1,4 @@
+import type { ActionStep } from '@feedbouncer/actions';
 import {
   checkActionForConditions,
   ruleConditionsSchema,
@@ -12,12 +13,12 @@ import { emojiKey } from './emoji.js';
 import { ruleOrder } from './engine.js';
 import { compileKeywords, type KeywordMatcher } from './matchers/keywords.js';
 import { hasUnspacedScript, normalizeText, words } from './normalize.js';
-import type { RuleAction, RuleMode } from './types.js';
+import type { RuleMode } from './types.js';
 
 export interface AnalyzableRule {
   id: string;
   conditions: unknown;
-  action: RuleAction;
+  actions: ActionStep[];
   mode: RuleMode;
   enabled: boolean;
   priority: number;
@@ -175,7 +176,7 @@ function covers(A: Prepared, B: Prepared): boolean {
 export function analyzeRules(rules: readonly AnalyzableRule[]): Map<string, RuleWarnings> {
   const prepared: Prepared[] = rules.map((rule) => {
     const parsed = ruleConditionsSchema.safeParse(rule.conditions);
-    const ok = parsed.success && checkActionForConditions(parsed.data, rule.action) === null;
+    const ok = parsed.success && checkActionForConditions(parsed.data, rule.actions) === null;
     const conditions = ok ? parsed.data : null;
     const ts = conditions && termSetForA(conditions);
     return {

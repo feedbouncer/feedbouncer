@@ -1,10 +1,11 @@
+import { actionStepsSchema, deriveOutcome, type ActionStep } from '@feedbouncer/actions';
 import { PLATFORMS } from '@feedbouncer/connectors';
 import { z } from 'zod';
 import { normalizeDomainEntry } from './domains.js';
 import { isSingleEmoji } from './emoji.js';
 import { normalizeText } from './normalize.js';
 import { compilePattern, RegexCompileError } from './regex.js';
-import { RULE_ACTIONS, RULE_MODES, type RuleAction } from './types.js';
+import { RULE_MODES } from './types.js';
 
 export const CONDITION_LIMITS = {
   terms: 5000,
@@ -175,11 +176,14 @@ export type EmojiConditions = z.output<typeof emojiConditions>;
 export type AuthorConditions = z.output<typeof authorConditions>;
 export type CompetitorConditions = z.output<typeof competitorConditions>;
 
-export function checkActionForConditions(c: RuleConditions, action: RuleAction): string | null {
+export function checkActionForConditions(
+  c: RuleConditions,
+  steps: readonly ActionStep[],
+): string | null {
   if (c.type !== 'author') return null;
-  if (c.list !== 'block' && action !== 'approve')
-    return `An ${c.list} list can only allow comments.`;
-  if (c.list === 'block' && action === 'approve') return 'A block list must flag, hide or delete.';
+  if (c.list !== 'block' && steps.length > 0) return `An ${c.list} list can only allow comments.`;
+  if (c.list === 'block' && deriveOutcome(steps) === 'approve')
+    return 'A block list must flag, hide or delete.';
   return null;
 }
 
@@ -187,7 +191,7 @@ const name = z.string().trim().min(1).max(200);
 export const ruleInputSchema = z.strictObject({
   name,
   conditions: ruleConditionsSchema,
-  action: z.enum(RULE_ACTIONS),
+  actions: actionStepsSchema,
   mode: z.enum(RULE_MODES).default('suggest'),
   enabled: z.boolean().default(true),
 });
@@ -195,7 +199,7 @@ export const rulePatchSchema = z
   .strictObject({
     name: name.optional(),
     conditions: ruleConditionsSchema.optional(),
-    action: z.enum(RULE_ACTIONS).optional(),
+    actions: actionStepsSchema.optional(),
     mode: z.enum(RULE_MODES).optional(),
     enabled: z.boolean().optional(),
   })

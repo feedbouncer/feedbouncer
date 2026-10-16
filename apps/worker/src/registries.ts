@@ -1,4 +1,12 @@
 import {
+  ActionRunner,
+  type BrandConnectionInfo,
+  ActionStepOutcomeObserver,
+  PgActionRunStore,
+  PgReviewQueue,
+  actionRunAdvanceJob,
+} from '@feedbouncer/actions';
+import {
   ClassifierActionFallback,
   ClassifierTrigger,
   PgClassificationStore,
@@ -24,6 +32,7 @@ import {
   connectionLifecycleJob,
   type IngestObserver,
   ModerationActions,
+  type BrandScope,
   type PgCommentStore,
 } from '@feedbouncer/comments';
 import {
@@ -42,6 +51,7 @@ import {
   CompositeRuleEvaluatedHook,
   RuleActionFallback,
   RuleSetCache,
+  RuleStepFallback,
   RuleTrigger,
   ruleEvaluateJob,
 } from '@feedbouncer/rules';
@@ -59,6 +69,7 @@ import {
   policyRunJob,
   type PolicyConfig,
 } from '@feedbouncer/policies';
+import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
 
 /** What the comment jobs need; built once in main.ts from the connector stack. */
@@ -80,6 +91,36 @@ export interface WorkerJobDeps {
   readonly capabilities: (p: Platform) => ConnectorCapabilities | undefined;
   /** Set when the Meta Ads connector is enabled: registers ad discovery and ad polling. */
   readonly ads?: { readonly poll: PollSettings };
+}
+
+/** The connection's platform, capabilities and granted scopes; null when it or its connector is gone. */
+async function connectionInfo(
+  deps: Pick<WorkerJobDeps, 'pool' | 'capabilities'>,
+  scope: ConnectionScope,
+): Promise<BrandConnectionInfo | null> {
+  const { rows } = await deps.pool.query<{ platform: Platform; granted_scopes: string[] }>(
+    `SELECT platform, granted_scopes FROM connection
+      WHERE organization_id = $1 AND brand_id = $2 AND id = $3`,
+    [scope.organizationId, scope.brandId, scope.connectionId],
+  );
+  const row = rows[0];
+  const caps = row && deps.capabilities(row.platform);
+  return row && caps
+    ? {
+        connectionId: scope.connectionId,
+        platform: row.platform,
+        caps,
+        grantedScopes: row.granted_scopes,
+      }
+    : null;
+}
+
+async function brandName(pool: WorkerJobDeps['pool'], scope: BrandScope): Promise<string> {
+  const { rows } = await pool.query<{ name: string }>(
+    'SELECT name FROM brand WHERE organization_id = $1 AND id = $2',
+    [scope.organizationId, scope.brandId],
+  );
+  return rows[0]?.name ?? '';
 }
 
 /** Platform connectors this deployment runs. Each registered platform gets its own queue. */
@@ -121,12 +162,29 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
     log: deps.log,
   });
   const policies = new PgPolicyStore(deps.pool);
+  const rules = new PgRuleStore(deps.pool);
+  const runs = new PgActionRunStore(deps.pool);
+  const runner = new ActionRunner({
+    pool: deps.pool,
+    runs,
+    review: new PgReviewQueue(deps.pool),
+    comments: deps.store,
+    actions,
+    connection: (scope) => connectionInfo(deps, scope),
+    brandName: (scope) => brandName(deps.pool, scope),
+    producer: deps.producer,
+    clock: deps.clock,
+    log: deps.log,
+    observer: new RuleStepFallback({ evaluations, log: deps.log }),
+  });
+  registry.register(actionRunAdvanceJob(runner));
   registry.register(
     ruleEvaluateJob({
       comments: deps.store,
       evaluations,
-      cache: new RuleSetCache(new PgRuleStore(deps.pool)),
-      actions,
+      cache: new RuleSetCache(rules),
+      runner,
+      rules,
       log: deps.log,
       evaluated: new CompositeRuleEvaluatedHook([
         new ClassifierTrigger(deps.producer),
@@ -198,6 +256,7 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
         new RuleActionFallback({ evaluations, log: deps.log }),
         new ClassifierActionFallback({ classifications, log: deps.log }),
         new PolicyActionFallback({ evaluations: policyEvaluations, log: deps.log }),
+        new ActionStepOutcomeObserver({ runs, producer: deps.producer, log: deps.log }),
       ]),
     }),
   );

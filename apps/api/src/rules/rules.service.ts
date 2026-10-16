@@ -130,8 +130,8 @@ export class RulesService {
   async create(org: OrgContext, brandId: unknown, body: unknown): Promise<RuleDto> {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     const input = parseRule(ruleInputSchema, body);
-    const problem = checkActionForConditions(input.conditions, input.action);
-    if (problem !== null) throw invalidRule([{ path: 'action', message: problem }]);
+    const problem = checkActionForConditions(input.conditions, input.actions);
+    if (problem !== null) throw invalidRule([{ path: 'actions', message: problem }]);
     try {
       const rule = await this.#write(org, 'rule.write', async (c) => {
         const created = await this.#store.create(c, scope, input);
@@ -168,7 +168,7 @@ export class RulesService {
       // The store re-checks the merged rule: the stored conditions or the new action do not fit.
       if (e instanceof InvalidRuleActionError)
         throw invalidRule([
-          { path: 'action', message: 'This action is not allowed for this kind of rule.' },
+          { path: 'actions', message: 'These actions are not allowed for this kind of rule.' },
         ]);
       if (e instanceof InvalidRuleConditionsError)
         throw invalidRule([{ path: 'conditions', message: 'The rule conditions are not valid.' }]);

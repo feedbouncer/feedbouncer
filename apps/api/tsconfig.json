@@ -8,6 +8,7 @@
   },
   "include": ["src"],
   "references": [
+    { "path": "../../packages/actions/tsconfig.build.json" },
     { "path": "../../packages/authz/tsconfig.build.json" },
     { "path": "../../packages/service-runtime/tsconfig.build.json" },
     { "path": "../../packages/ai/tsconfig.build.json" },

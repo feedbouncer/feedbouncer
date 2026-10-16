@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { compileRuleSet, evaluate } from './engine.js';
-import type { RuleRecord } from './types.js';
+import type { ActionStep } from '@feedbouncer/actions';
+import type { RuleAction, RuleRecord } from './types.js';
+
+const STEPS: Record<RuleAction, ActionStep[]> = {
+  approve: [],
+  flag: [{ type: 'flag_for_review' }],
+  hide: [{ type: 'hide' }],
+  remove: [{ type: 'delete', confirmIrreversible: true }],
+};
 
 let n = 0;
 const rec = (conditions: unknown, over: Partial<RuleRecord> = {}): RuleRecord => ({
+  actions: STEPS[over.action ?? 'hide'],
   id: `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`,
   name: `r${n}`,
   conditions,
@@ -29,6 +38,24 @@ describe('evaluate', () => {
     const b = rec({ type: 'keyword', terms: ['spam'] }, { action: 'remove', priority: 10 });
     const v = evaluate(compileRuleSet([a, b], ctx, 'v1'), facts('spam here'));
     expect(v.decided).toMatchObject({ ruleId: b.id, action: 'remove' });
+  });
+  it('the decision carries the rule steps', () => {
+    const r = rec(
+      { type: 'keyword', terms: ['spam'] },
+      { actions: [{ type: 'flag_for_review' }, { type: 'hide' }] },
+    );
+    expect(evaluate(compileRuleSet([r], ctx, 'v'), facts('spam')).decided?.actions).toEqual(
+      r.actions,
+    );
+  });
+  it('a block list without a moderating step is invalid', () => {
+    const r = rec(
+      { type: 'author', list: 'block', platform: 'instagram', entries: [{ externalId: '42' }] },
+      { actions: [{ type: 'auto_reply', template: 'Hi' }] },
+    );
+    expect(compileRuleSet([r], ctx, 'v').invalid).toEqual([
+      { ruleId: r.id, reason: 'invalid_conditions' },
+    ]);
   });
   it('an allow rule above a block rule exempts the comment', () => {
     const allow = rec({ type: 'keyword', terms: ['giveaway winner'] }, { action: 'approve' });

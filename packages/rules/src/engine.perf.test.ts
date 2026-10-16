@@ -26,6 +26,7 @@ it('evaluates a 2000-char comment against 5000-term lists within a bounded multi
     id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
     name: `r${i}`,
     action: 'hide' as const,
+    actions: [{ type: 'hide' as const }],
     mode: 'enforce' as const,
     priority: i,
     enabled: true,

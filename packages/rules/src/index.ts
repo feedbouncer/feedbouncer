@@ -60,6 +60,7 @@ export {
 export { RULE_EVALUATE_JOB, RuleEvaluatePayload, bodySha256 } from './jobs/specs.js';
 export { ruleEvaluateJob } from './jobs/evaluate.js';
 export { RuleActionFallback } from './fallback.js';
+export { RuleStepFallback } from './step-fallback.js';
 export { RuleTrigger } from './trigger.js';
 export {
   CompositeRuleEvaluatedHook,

@@ -171,6 +171,7 @@ async function writeRuleEvaluation(
         ruleName: 'Rule',
         kind: 'keyword',
         action,
+        actions: [],
         evidence: { kind: 'keyword', term: 'x' },
       },
       suggestions: [],
