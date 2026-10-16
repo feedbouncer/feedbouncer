@@ -22,7 +22,6 @@ import {
   toggleStep,
   undoLogStep,
   undoText,
-  worstCaseLength,
   type ActionCapabilitiesDto,
 } from './actions';
 import { apiFetch } from './api-client';
@@ -197,9 +196,8 @@ describe('conflictReason', () => {
 
 describe('templateCount', () => {
   it('counts every variable at its maximum, in code points', () => {
-    expect(worstCaseLength('Hi {{author_name}}!')).toBe(3 + 50 + 1);
-    expect(worstCaseLength('Hi {{author_name|short}}')).toBe(3 + 50);
-    expect(worstCaseLength('😀😀')).toBe(2);
+    expect(templateCount('Hi {{author_name}}!', null).count).toBe(3 + 50 + 1);
+    expect(templateCount('😀😀', null).count).toBe(2);
   });
 
   it('is over only above the limit', () => {
@@ -222,6 +220,13 @@ describe('stepIssues', () => {
 });
 
 describe('outcomeText', () => {
+  it.each(['template_too_long', 'reply_to_deleted_comment', 'message_to_banned_author'])(
+    'reads as a fragment after the status for %s',
+    (code) => {
+      expect(outcomeText('failed', code)).toMatch(/^Failed: [a-z][^.]*$/);
+    },
+  );
+
   it('covers every reason code', () => {
     const fallback = outcomeText('failed', 'no_such_reason_code');
     for (const code of REASON_CODES) {

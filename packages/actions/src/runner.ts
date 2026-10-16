@@ -21,13 +21,18 @@ import type { Logger } from '@feedbouncer/service-runtime';
 import { ACTION_RUN_ADVANCE_JOB, type ActionRunAdvancePayload } from './jobs/specs.js';
 import type { PgReviewQueue } from './review.js';
 import type { PgActionRunStore, Queryable, RunRow, StepRow } from './runs.js';
-import { MODERATION_KIND, sortSteps, type ActionStep, type StepType } from './steps.js';
+import {
+  MODERATION_KIND,
+  sortSteps,
+  type ActionStep,
+  type StepStatus,
+  type StepType,
+} from './steps.js';
 import {
   stepOutcomeFor,
   stepSupport,
   type BrandConnectionInfo,
   type StepOutcome,
-  type StepStatus,
 } from './support.js';
 import { renderTemplate } from './templates.js';
 
@@ -263,18 +268,11 @@ export class ActionRunner {
     }
     if (type === 'auto_reply' && (await this.#threadLimited(scope, comment.id, views, db)))
       return { status: 'skipped', reason: 'reply_thread_limit' };
+    if (type === 'flag_for_review') return null;
     const ownAction = views.some(
-      (v) =>
-        v.kind === MODERATION_KIND[type as keyof typeof MODERATION_KIND] &&
-        v.actorType !== 'user' &&
-        v.status !== 'failed',
+      (v) => v.kind === MODERATION_KIND[type] && v.actorType !== 'user' && v.status !== 'failed',
     );
-    if (
-      comment.platformState === 'deleted' &&
-      type !== 'ban' &&
-      type !== 'flag_for_review' &&
-      !ownAction
-    )
+    if (comment.platformState === 'deleted' && type !== 'ban' && !ownAction)
       return { status: 'not_applicable', reason: 'comment_gone' };
     return null;
   }

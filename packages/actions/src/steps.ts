@@ -13,6 +13,17 @@ export const STEP_TYPES = [
 ] as const;
 export type StepType = (typeof STEP_TYPES)[number];
 
+export const STEP_STATUSES = [
+  'pending',
+  'succeeded',
+  'failed',
+  'skipped',
+  'not_applicable',
+  'not_supported',
+  'simulated',
+] as const;
+export type StepStatus = (typeof STEP_STATUSES)[number];
+
 export type ActionStep =
   | { type: 'hide' }
   | { type: 'flag_for_review' }

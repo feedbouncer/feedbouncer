@@ -1,39 +1,24 @@
 // The logic behind the step editor, action log and review queue, kept free of React so it
 // can be tested directly. The API decides what each connection supports; this module
 // presents its answer.
-import type { ActionStep, StepType } from '@feedbouncer/actions';
+import {
+  CONFLICTS,
+  STEP_STATUSES,
+  STEP_TYPES,
+  worstCaseLength,
+  type ActionStep,
+  type StepStatus,
+  type StepType,
+} from '@feedbouncer/actions/shared';
 import { apiFetch } from './api-client';
 import { outcomeSentence, outcomeText as reasonCopy } from './messages';
 import { PLATFORM_COPY, isConnectable } from './platforms';
 
-export type StepStatus =
-  | 'pending'
-  | 'succeeded'
-  | 'failed'
-  | 'skipped'
-  | 'not_applicable'
-  | 'not_supported'
-  | 'simulated';
-
-export const STEP_STATUSES: readonly StepStatus[] = [
-  'pending',
-  'succeeded',
-  'failed',
-  'skipped',
-  'not_applicable',
-  'not_supported',
-  'simulated',
-];
+export { STEP_STATUSES };
+export type { StepStatus };
 
 /** Execution order: the order steps are listed and saved in. */
-export const STEP_ORDER: readonly StepType[] = [
-  'flag_for_review',
-  'private_reply',
-  'auto_reply',
-  'hide',
-  'ban',
-  'delete',
-];
+export const STEP_ORDER: readonly StepType[] = STEP_TYPES;
 
 export const STEP_LABEL: Record<StepType, string> = {
   hide: 'Hide',
@@ -73,26 +58,6 @@ export const TEMPLATE_HELP: readonly { token: string; help: string }[] = [
 ];
 export const TEMPLATE_SYNTAX_HELP =
   'Use {{name}} or {{name|fallback}}. The fallback is used when the value is missing.';
-
-const VARIABLE_MAX: Record<string, number> = {
-  author_name: 50,
-  author_first_name: 30,
-  brand_name: 100,
-  platform: 20,
-};
-const TOKEN = /\{\{\s*([a-z_]{1,32})\s*(?:\|([^{}|\n]{0,50}))?\}\}/g;
-
-const codePoints = (s: string): number => Array.from(s).length;
-
-/** Longest the rendered reply can be, in code points: every variable at its maximum. */
-export function worstCaseLength(template: string): number {
-  const rendered = template.replace(TOKEN, (_m, name: string, inline: string | undefined) => {
-    const max = VARIABLE_MAX[name] ?? 0;
-    const fallback = inline === undefined ? 0 : codePoints(inline.trim());
-    return 'x'.repeat(Math.max(max, fallback));
-  });
-  return codePoints(rendered);
-}
 
 export function templateCount(
   template: string,
@@ -248,19 +213,19 @@ export function warningText(w: StepWarningDto): string {
   return `${step} on ${platform}: ${outcomeSentence(w.code)}`;
 }
 
-const CONFLICTS: readonly (readonly [StepType, StepType, string])[] = [
-  ['auto_reply', 'hide', "Can't reply to a hidden comment."],
-  ['auto_reply', 'delete', "Can't reply to a deleted comment."],
-  ['private_reply', 'ban', "Can't message a banned author."],
-  ['hide', 'delete', 'Delete already removes the comment.'],
-];
+const CONFLICT_REASON: Record<string, string> = {
+  reply_to_hidden_comment: "Can't reply to a hidden comment.",
+  reply_to_deleted_comment: "Can't reply to a deleted comment.",
+  message_to_banned_author: "Can't message a banned author.",
+  hide_redundant_with_delete: 'Delete already removes the comment.',
+};
 
 /** Why a step cannot be added next to the ones already chosen, or null. */
 export function conflictReason(type: StepType, value: readonly DraftStep[]): string | null {
-  for (const [a, b, reason] of CONFLICTS) {
+  for (const [a, b, code] of CONFLICTS) {
     const other = type === a ? b : type === b ? a : null;
     if (other !== null && value.some((s) => s.type === other)) {
-      return `${reason} Remove ${STEP_LABEL[other]} first.`;
+      return `${CONFLICT_REASON[code]} Remove ${STEP_LABEL[other]} first.`;
     }
   }
   return null;

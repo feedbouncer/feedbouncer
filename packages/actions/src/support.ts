@@ -1,6 +1,6 @@
 import { safeOutcomeCode, resolveConstraints, type ActionStatus } from '@feedbouncer/comments';
 import type { ConnectorCapabilities, Platform } from '@feedbouncer/connectors';
-import { MODERATION_KIND, type ActionStep, type StepType } from './steps.js';
+import { MODERATION_KIND, type ActionStep, type StepStatus, type StepType } from './steps.js';
 import { worstCaseLength } from './templates.js';
 
 export interface BrandConnectionInfo {
@@ -120,16 +120,6 @@ export function checkStepsForBrand(
   return { errors, warnings };
 }
 
-export const STEP_STATUSES = [
-  'pending',
-  'succeeded',
-  'failed',
-  'skipped',
-  'not_applicable',
-  'not_supported',
-  'simulated',
-] as const;
-export type StepStatus = (typeof STEP_STATUSES)[number];
 export type StepOutcome = { status: Exclude<StepStatus, 'simulated'>; reason: string | null };
 
 const RATE_LIMIT_CODES: ReadonlySet<string> = new Set([

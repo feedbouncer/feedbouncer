@@ -6,8 +6,8 @@ import type pg from 'pg';
 import { isUniqueViolation, withTransaction } from '@feedbouncer/db';
 import type { ActionStatus, BrandScope } from '@feedbouncer/comments';
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import { clampLimit, type StepStatus } from './support.js';
-import { sortSteps, type ActionStep, type StepType } from './steps.js';
+import { clampLimit } from './support.js';
+import { sortSteps, type ActionStep, type StepStatus, type StepType } from './steps.js';
 
 export interface StepRow {
   id: string;
