@@ -13,3 +13,4 @@ export * from './suggestions.js';
 export * from './suggestion-service.js';
 export * from './sweeper.js';
 export * from './hidden-today.js';
+export * from './unhide.js';
