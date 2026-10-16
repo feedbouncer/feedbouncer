@@ -509,3 +509,132 @@ describe('audit', () => {
     expect(JSON.stringify(rows)).not.toContain(MARKER);
   });
 });
+
+describe('rule edits and pending suggestions', () => {
+  let so: OrgFixture;
+  let scope: ConnectionScope;
+
+  beforeAll(async () => {
+    so = await orgWithRoles(api, 'sugg', org);
+    scope = (
+      await api.seedConnection(so, { platform: 'facebook', externalAccountId: '1000000077' })
+    ).scope;
+  });
+
+  const c = (m: string, p: string, b?: unknown) => call(m, p, b, org.owner.cookie, so);
+
+  async function pendingFor(ruleActions: object[], term: string) {
+    const r = await c(
+      'POST',
+      '/rules',
+      rule(term, keyword(term), { mode: 'enforce', actions: ruleActions }),
+    );
+    const ruleId = r.body.id as string;
+    const n = ++seq;
+    const { commentId } = await api.deps.comments!.store.upsertFromPlatform(
+      scope,
+      {
+        externalId: `8_${n}_1`,
+        sourceExternalId: `8_${n}`,
+        parentExternalId: null,
+        author: { externalId: `5${n}`, displayName: `Author ${n}`, profileUrl: null },
+        body: term,
+        postedAt: new Date(),
+        platformState: 'visible',
+        permalink: null,
+      },
+      { ownAccountExternalId: 'own-account', syncedAt: new Date() },
+    );
+    const store = new PgSuggestionStore(api.pool);
+    const proposed = await store.propose(scope, {
+      commentId,
+      source: { type: 'rule', ref: randomUUID(), ruleId, alsoMatchedRuleIds: [] },
+      steps: ruleActions.filter((a) => (a as { type: string }).type !== 'flag_for_review') as never,
+      reason: 'matched',
+    });
+    if (!('suggestionId' in proposed)) throw new Error('not proposed');
+    return { ruleId, suggestionId: proposed.suggestionId, commentId, store };
+  }
+
+  const status = async (id: string) =>
+    (
+      await api.pool.query<{ status: string }>(
+        'SELECT status FROM action_suggestion WHERE id = $1',
+        [id],
+      )
+    ).rows[0]!.status;
+  const steps = async (id: string) =>
+    (
+      await api.pool.query<{ steps: { type: string }[] }>(
+        'SELECT steps FROM action_suggestion_source WHERE suggestion_id = $1',
+        [id],
+      )
+    ).rows.flatMap((r) => r.steps.map((s) => s.type));
+  const lastAudit = async (action: string) =>
+    (
+      await api.pool.query<{ details: Record<string, unknown> }>(
+        `SELECT details FROM audit_event WHERE organization_id = $1 AND action = $2
+          ORDER BY sequence DESC LIMIT 1`,
+        [so.orgId, action],
+      )
+    ).rows[0]!.details;
+
+  it('disabling a rule withdraws its pending suggestions', async () => {
+    const s = await pendingFor([{ type: 'hide' }], 'zq7disable');
+    const r = await c('PATCH', `/rules/${s.ruleId}`, { enabled: false });
+    expect(r.status).toBe(200);
+    expect(await status(s.suggestionId)).toBe('withdrawn');
+    expect(await lastAudit('rule.updated')).toMatchObject({
+      suggestionsWithdrawn: 1,
+      suggestionsUpdated: 0,
+    });
+  });
+
+  it("changing a rule's actions from hide to delete updates the pending plan", async () => {
+    const s = await pendingFor([{ type: 'hide' }], 'zq7actions');
+    const r = await c('PATCH', `/rules/${s.ruleId}`, {
+      actions: [{ type: 'delete', confirmIrreversible: true }],
+    });
+    expect(r.status).toBe(200);
+    expect(await status(s.suggestionId)).toBe('pending');
+    expect(await steps(s.suggestionId)).toEqual(['delete']);
+    expect(await lastAudit('rule.updated')).toMatchObject({
+      suggestionsWithdrawn: 0,
+      suggestionsUpdated: 1,
+    });
+  });
+
+  it('changing actions to flag-only withdraws', async () => {
+    const s = await pendingFor([{ type: 'hide' }], 'zq7flag');
+    const r = await c('PATCH', `/rules/${s.ruleId}`, { actions: [{ type: 'flag_for_review' }] });
+    expect(r.status).toBe(200);
+    expect(await status(s.suggestionId)).toBe('withdrawn');
+  });
+
+  it('renaming a rule leaves suggestions untouched', async () => {
+    const s = await pendingFor([{ type: 'hide' }], 'zq7rename');
+    const r = await c('PATCH', `/rules/${s.ruleId}`, { name: 'renamed', priority: undefined });
+    expect(r.status).toBe(200);
+    expect(await status(s.suggestionId)).toBe('pending');
+    expect(await steps(s.suggestionId)).toEqual(['hide']);
+    expect(await lastAudit('rule.updated')).toMatchObject({
+      suggestionsWithdrawn: 0,
+      suggestionsUpdated: 0,
+    });
+  });
+
+  it('a suggestion with a classifier source survives withdrawal of its rule source', async () => {
+    const s = await pendingFor([{ type: 'hide' }], 'zq7classifier');
+    await s.store.propose(scope, {
+      commentId: s.commentId,
+      source: { type: 'classifier', ref: randomUUID() },
+      steps: [{ type: 'delete', confirmIrreversible: true }],
+      reason: 'classified',
+    });
+    const r = await c('DELETE', `/rules/${s.ruleId}`);
+    expect(r.status).toBe(204);
+    expect(await status(s.suggestionId)).toBe('pending');
+    expect(await steps(s.suggestionId)).toEqual(['delete']);
+    expect(await lastAudit('rule.archived')).toMatchObject({ suggestionsWithdrawn: 0 });
+  });
+});
