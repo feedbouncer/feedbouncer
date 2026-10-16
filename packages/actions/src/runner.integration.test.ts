@@ -1139,6 +1139,39 @@ describe('failures that need the transaction to stay usable', () => {
       expect(await runCompleted(run.id)).toBe(true);
     });
 
+    const addModerator = async (): Promise<string> => {
+      const { rows } = await pool.query<{ id: string }>(
+        'INSERT INTO app_user (email) VALUES ($1) RETURNING id',
+        [`mod-${randomUUID()}@example.test`],
+      );
+      await pool.query(
+        "INSERT INTO membership (organization_id, user_id, role) VALUES ($1, $2, 'member')",
+        [t.organizationId, rows[0]!.id],
+      );
+      return rows[0]!.id;
+    };
+
+    it('fails the step approver_removed when the approver was removed after approval', async () => {
+      const userId = await addModerator();
+      const run = await approve([HIDE], { userId });
+      await pool.query('DELETE FROM membership WHERE organization_id = $1 AND user_id = $2', [
+        t.organizationId,
+        userId,
+      ]);
+      await queue.drain();
+      expect(await outcome(run.id, 'hide')).toEqual(['failed', 'approver_removed']);
+      expect(await userActions(seeded.id)).toEqual([]);
+      expect(graph.state(seeded.commentId)).toBe('visible');
+      expect(await runCompleted(run.id)).toBe(true);
+    });
+
+    it('runs the step when the approver is still a member', async () => {
+      const run = await approve([HIDE], { userId: await addModerator() });
+      await queue.drain();
+      expect(await outcome(run.id, 'hide')).toEqual(['succeeded', null]);
+      expect(graph.state(seeded.commentId)).toBe('hidden');
+    });
+
     it('connection needing reconnect mid-run: step pending / awaiting_reconnect, then succeeds', async () => {
       const run = await approve([HIDE]);
       await queue.drain(ACTION_RUN_ADVANCE_JOB.type);

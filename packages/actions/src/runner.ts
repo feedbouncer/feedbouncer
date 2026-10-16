@@ -4,6 +4,7 @@
 // banned or replied to twice. Reply text, author names and comment bodies are
 // never logged.
 import type pg from 'pg';
+import { can, isRole } from '@feedbouncer/authz';
 import type { Clock, Platform } from '@feedbouncer/connectors';
 import {
   type ActionKind,
@@ -272,7 +273,11 @@ export class ActionRunner {
       // The step requested in the previous pass is linked whatever the precheck says now:
       // its action already went out, so skipping it would leave that action unrecorded.
       const justRequested = ld.requested?.stepId === step.id;
-      if (!justRequested && run.suggestionId && !run.approvedByUserId) {
+      if (
+        !justRequested &&
+        run.suggestionId &&
+        !(await this.#approverMayModerate(tx, scope, run))
+      ) {
         await settle(step, { status: 'failed', reason: 'approver_removed' });
         continue;
       }
@@ -359,6 +364,17 @@ export class ActionRunner {
     if (item.created)
       await settle(step, { status: 'succeeded', reason: null }, { reviewItemId: item.id });
     else await settle(step, { status: 'skipped', reason: 'already_flagged' });
+  }
+
+  /** A step can run long after approval: the approver must still be allowed to moderate. */
+  async #approverMayModerate(tx: pg.PoolClient, scope: ConnectionScope, run: RunRow) {
+    if (!run.approvedByUserId) return false;
+    const { rows } = await tx.query<{ role: string }>(
+      'SELECT role FROM membership WHERE organization_id = $1 AND user_id = $2',
+      [scope.organizationId, run.approvedByUserId],
+    );
+    const role = rows[0]?.role;
+    return isRole(role) && can(role, 'comment.moderate');
   }
 
   /** Idempotent on the request key, so it runs outside the run lock. */

@@ -357,6 +357,9 @@ importers:
 
   packages/actions:
     dependencies:
+      '@feedbouncer/authz':
+        specifier: workspace:*
+        version: link:../authz
       '@feedbouncer/comments':
         specifier: workspace:*
         version: link:../comments
