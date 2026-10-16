@@ -148,6 +148,7 @@ const NOT_APPLICABLE = new Set([
   'private_reply_window_closed',
   'private_reply_nested_comment',
   'reply_to_hidden_comment',
+  'own_comment_always_visible',
 ]);
 const MISSING_PERMISSION = new Set([
   'permission_denied',
@@ -191,7 +192,10 @@ export function stepOutcomeFor(
   return { status: 'failed', reason: safeOutcomeCode(code, 'failed') };
 }
 
-/** Every reason code this package can report; the web copy tests cover each one. */
+/**
+ * Every reason code this package maps or emits itself; web copy tests cover each one.
+ * Unknown reasons are passed through (safeOutcomeCode), so consumers must tolerate them.
+ */
 export const REASON_CODES: readonly string[] = [
   // outcome mapping
   'comment_gone',
@@ -203,6 +207,7 @@ export const REASON_CODES: readonly string[] = [
   'private_reply_nested_comment',
   'reply_to_hidden_comment',
   'own_account_comment',
+  'own_comment_always_visible',
   'private_reply_already_sent',
   'ban_limit_reached',
   'reblock_too_soon',
@@ -220,9 +225,7 @@ export const REASON_CODES: readonly string[] = [
   'connection_needs_reconnect',
   'connection_inactive',
   'request_key_conflict',
-  'refused',
   'failed',
-  'not_eligible',
   // prechecks and runner
   'moderator_override',
   'reply_thread_limit',

@@ -155,6 +155,10 @@ describe('stepOutcomeFor', () => {
       action('not_eligible', 'reply_to_hidden_comment'),
       ok('not_applicable', 'reply_to_hidden_comment'),
     ],
+    [
+      action('not_eligible', 'own_comment_always_visible'),
+      ok('not_applicable', 'own_comment_always_visible'),
+    ],
     [action('not_eligible', 'own_account_comment'), ok('skipped', 'own_account_comment')],
     [
       action('not_eligible', 'private_reply_already_sent'),
@@ -176,6 +180,12 @@ describe('stepOutcomeFor', () => {
     [refused('connection_inactive'), ok('failed', 'connection_inactive')],
   ])('%j -> %j', (input, expected) => {
     expect(stepOutcomeFor(input)).toEqual(expected);
+    if (
+      expected.reason !== null &&
+      expected.reason !== 'failed' &&
+      expected.reason !== 'something_odd'
+    )
+      expect(REASON_CODES).toContain(expected.reason);
   });
 });
 
@@ -204,6 +214,11 @@ describe('REASON_CODES', () => {
       'retries_exhausted',
       'author_gone',
       'text_too_long',
+      'own_comment_always_visible',
+      'reply_too_long',
+      'connection_needs_reconnect',
+      'connection_inactive',
+      'request_key_conflict',
     ])
       expect(REASON_CODES).toContain(c);
   });
