@@ -148,7 +148,7 @@ async function act(
   if (gated.length > 0) {
     const reason = await d.evaluations.decisionReason(scope, ev.id);
     if (reason === null) throw new Error('decided evaluation has no decision');
-    await d.suggestions.propose(scope, {
+    const proposed = await d.suggestions.propose(scope, {
       commentId,
       source: {
         type: 'rule',
@@ -159,6 +159,8 @@ async function act(
       steps: gated,
       reason,
     });
+    if ('skipped' in proposed)
+      d.log.info('suggestion_skipped', { evaluationId: ev.id, skipped: proposed.skipped });
   }
   return runId ? { ...base, runId } : base;
 }

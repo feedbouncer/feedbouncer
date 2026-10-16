@@ -206,13 +206,15 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
     if (ev.reviewMode) {
       const reason = await d.evaluations.decisionReason(brand, ev.id);
       if (reason === null) throw new Error('policy evaluation has no decision');
-      await d.suggestions.propose(ctx.scope, {
+      const proposed = await d.suggestions.propose(ctx.scope, {
         commentId: row.id,
         source: { type: 'policy', ref: ev.id },
         steps: stepsForOutcome(ev.outcome),
         reason,
       });
-      return { ...result, suggested: true };
+      return 'skipped' in proposed
+        ? { ...result, suggested: false, skipped: proposed.skipped }
+        : { ...result, suggested: true };
     }
     const kind = ev.outcome === 'hide' ? 'hide' : 'delete';
     const r = await d.actions.request({

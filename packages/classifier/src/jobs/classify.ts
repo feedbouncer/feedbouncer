@@ -200,13 +200,15 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
       if (c.reviewMode) {
         const reason = await d.classifications.decisionReason(brand, c.id);
         if (reason === null) throw new Error('classification has no decision');
-        await d.suggestions.propose(ctx.scope, {
+        const proposed = await d.suggestions.propose(ctx.scope, {
           commentId: row.id,
           source: { type: 'classifier', ref: c.id },
           steps: stepsForOutcome(c.outcome),
           reason,
         });
-        return { ...result, suggested: true };
+        return 'skipped' in proposed
+          ? { ...result, suggested: false, skipped: proposed.skipped }
+          : { ...result, suggested: true };
       }
       const kind = c.outcome === 'hide' ? 'hide' : 'delete';
       const r = await d.actions.request({
