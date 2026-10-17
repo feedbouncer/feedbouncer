@@ -21,6 +21,8 @@ const ListQuery = z
   })
   .refine((q) => (q.before === undefined) === (q.beforeId === undefined));
 
+export type ListQueryDto = z.infer<typeof ListQuery>;
+
 @Controller('api/v1/orgs/:orgId/comments')
 @UseGuards(SessionGuard, OrgAccessGuard)
 export class OrgCommentsController {

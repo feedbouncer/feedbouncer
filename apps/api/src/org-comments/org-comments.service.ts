@@ -1,14 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { can } from '@feedbouncer/authz';
-import {
-  PgVisibleComments,
-  type CommentStatus,
-  type VisibleCommentFilter,
-} from '@feedbouncer/actions';
-import type { Platform } from '@feedbouncer/connectors';
+import { PgVisibleComments, type VisibleCommentFilter } from '@feedbouncer/actions';
 import type { AppDeps } from '../deps.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { DEPS } from '../tokens.js';
+import type { ListQueryDto } from './org-comments.controller.js';
 import {
   toAccountDto,
   toCommentDto,
@@ -16,16 +12,6 @@ import {
   type CommentFiltersDto,
   type CommentsPageDto,
 } from './dto.js';
-
-export interface ListQuery {
-  platform?: string | undefined;
-  ad?: string | undefined;
-  category?: string | undefined;
-  status?: string | undefined;
-  before?: string | undefined;
-  beforeId?: string | undefined;
-  limit: number;
-}
 
 @Injectable()
 export class OrgCommentsService {
@@ -35,13 +21,13 @@ export class OrgCommentsService {
     this.#read = new PgVisibleComments(deps.pool);
   }
 
-  async list(org: OrgContext, q: ListQuery): Promise<CommentsPageDto> {
+  async list(org: OrgContext, q: ListQueryDto): Promise<CommentsPageDto> {
     const orgId = org.organizationId;
     const asked: VisibleCommentFilter = {
-      platform: (q.platform as Platform | undefined) ?? null,
+      platform: q.platform ?? null,
       adId: q.ad ?? null,
       category: q.category ?? null,
-      status: (q.status as CommentStatus | undefined) ?? null,
+      status: q.status ?? null,
     };
     const f = await this.#read.applicable(orgId, asked);
     const before = q.before && q.beforeId ? { postedAt: new Date(q.before), id: q.beforeId } : null;

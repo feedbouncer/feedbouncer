@@ -78,7 +78,6 @@ export interface AccountHealth {
 const SYNC_FAILURES = 3;
 const AD_OPTIONS_LIMIT = 500;
 const ADS_PER_ROW = 5;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Mirrors ACCOUNT_PROBLEM_SQL; a test pins the two together. */
 export function accountProblem(a: {
@@ -382,14 +381,14 @@ export class PgVisibleComments {
 
   /** Drops filter values that are not valid for this org, so a stale or foreign value never applies. */
   async applicable(orgId: string, f: VisibleCommentFilter): Promise<VisibleCommentFilter> {
-    const [platform, category, adId] = await Promise.all([
-      f.platform && (await this.platformApplies(orgId, f.platform)) ? f.platform : null,
-      f.category === UNCATEGORIZED ||
-      (f.category && (await this.categoryApplies(orgId, f.category)))
-        ? f.category
-        : null,
-      f.adId === NO_AD || (f.adId && (await this.adApplies(orgId, f.adId))) ? f.adId : null,
+    const [platformOk, categoryOk, adOk] = await Promise.all([
+      f.platform ? this.platformApplies(orgId, f.platform) : true,
+      f.category && f.category !== UNCATEGORIZED ? this.categoryApplies(orgId, f.category) : true,
+      f.adId && f.adId !== NO_AD ? this.adApplies(orgId, f.adId) : true,
     ]);
+    const platform = platformOk ? f.platform : null;
+    const category = categoryOk ? f.category : null;
+    const adId = adOk ? f.adId : null;
     return { platform, category, status: f.status, adId };
   }
 
@@ -413,7 +412,6 @@ export class PgVisibleComments {
   }
 
   private async adApplies(orgId: string, adId: string): Promise<boolean> {
-    if (!UUID.test(adId)) return false;
     const { rows } = await this.pool.query(
       `SELECT 1 FROM meta_ad ma WHERE ma.organization_id = $1 AND ma.id = $2::uuid AND ${adHasListable('ma.id')}`,
       [orgId, adId],

@@ -683,7 +683,7 @@ describe('PgVisibleComments', () => {
       platform: 'facebook',
       status: 'new',
     });
-    expect((await ap({ adId: 'not-a-uuid' })).adId).toBeNull();
+    expect((await ap({ adId: '00000000-0000-4000-8000-000000000000' })).adId).toBeNull();
   });
 
   it('adsTruncated when 501 ads have comments', async () => {
