@@ -365,6 +365,19 @@ describe('ad discovery job', () => {
     expect((await checkOf(adId)).status_checked_at).toBeNull();
   });
 
+  it('a permanently failing lookup is skipped for good and the other ads are still checked', async () => {
+    const first = graph.addAd(adAccountId, { storyId: graph.addDarkPost(pageId).postId });
+    const second = graph.addAd(adAccountId, { storyId: graph.addDarkPost(pageId).postId });
+    await run(1);
+    graph.setAdStatus(first.adId, 'PAUSED');
+    graph.setAdStatus(second.adId, 'PAUSED');
+    nowMs += 60_000;
+    graph.failNext(100, 1, 1);
+    expect(await run(2)).toMatchObject({ retired: 2, checked: 2, complete: true });
+    nowMs += 60_000;
+    expect(await run(3)).toMatchObject({ checked: 0 });
+  });
+
   it('a page connected only in another tenant yields page_not_connected', async () => {
     const { postId } = graph.addDarkPost(pageId);
     graph.addAd(adAccountId, { storyId: postId });

@@ -4,12 +4,15 @@
 // only: never log them.
 import type pg from 'pg';
 import { COMMENT_IS_AD_SQL } from '@feedbouncer/comments';
-import { PLATFORMS, type ConnectionStatus, type Platform } from '@feedbouncer/connectors';
-import { COMMENT_STATUSES, type CommentStatus } from './comment-status.js';
+import { type ConnectionStatus, type Platform } from '@feedbouncer/connectors';
+import {
+  CATEGORY_SLUG,
+  COMMENT_STATUSES,
+  LISTABLE_PLATFORMS,
+  type CommentStatus,
+} from './comment-status.js';
 
-export { COMMENT_STATUSES, type CommentStatus };
-
-export const LISTABLE_PLATFORMS: readonly Platform[] = PLATFORMS.filter((p) => p !== 'meta_ads');
+export { CATEGORY_SLUG, COMMENT_STATUSES, LISTABLE_PLATFORMS, type CommentStatus };
 /** Filter sentinels: not on an ad / no category. `_` cannot start a category slug. */
 export const NO_AD = 'none';
 export const UNCATEGORIZED = '_none';
@@ -378,20 +381,35 @@ export class PgVisibleComments {
   }
 
   /** Drops filter values that are not valid for this org, so a stale or foreign value never applies. */
-  async applicable(
-    orgId: string,
-    f: VisibleCommentFilter,
-    opts: FilterOptions,
-  ): Promise<VisibleCommentFilter> {
-    return {
-      platform: f.platform && opts.platforms.includes(f.platform) ? f.platform : null,
-      category:
-        f.category === UNCATEGORIZED || (f.category && opts.categories.includes(f.category))
-          ? f.category
-          : null,
-      status: f.status,
-      adId: f.adId === NO_AD || (f.adId && (await this.adApplies(orgId, f.adId))) ? f.adId : null,
-    };
+  async applicable(orgId: string, f: VisibleCommentFilter): Promise<VisibleCommentFilter> {
+    const [platform, category, adId] = await Promise.all([
+      f.platform && (await this.platformApplies(orgId, f.platform)) ? f.platform : null,
+      f.category === UNCATEGORIZED ||
+      (f.category && (await this.categoryApplies(orgId, f.category)))
+        ? f.category
+        : null,
+      f.adId === NO_AD || (f.adId && (await this.adApplies(orgId, f.adId))) ? f.adId : null,
+    ]);
+    return { platform, category, status: f.status, adId };
+  }
+
+  private async platformApplies(orgId: string, platform: Platform): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      `SELECT 1 FROM connection cn
+         JOIN brand b ON b.organization_id = cn.organization_id AND b.id = cn.brand_id
+        WHERE cn.organization_id = $1 AND cn.platform = $2 AND cn.platform <> 'meta_ads'
+          AND cn.status <> 'revoked' AND b.archived_at IS NULL LIMIT 1`,
+      [orgId, platform],
+    );
+    return rows.length > 0;
+  }
+
+  private async categoryApplies(orgId: string, category: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      `SELECT 1 FROM ${LISTABLE_FROM} WHERE ${LISTABLE_SQL} AND ${CATEGORY_SQL} = $2 LIMIT 1`,
+      [orgId, category],
+    );
+    return rows.length > 0;
   }
 
   private async adApplies(orgId: string, adId: string): Promise<boolean> {

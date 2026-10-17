@@ -1,4 +1,4 @@
-import { COMMENT_STATUSES } from '@feedbouncer/actions/shared';
+import { CATEGORY_SLUG, COMMENT_STATUSES, LISTABLE_PLATFORMS } from '@feedbouncer/actions/shared';
 import { platformLabel } from './actions';
 import { CATEGORY_LABEL, type Category } from './classifier';
 import { isUuid } from './ids';
@@ -81,17 +81,6 @@ export interface CommentFiltersDto {
 
 export const PAGE_SIZE = 50;
 const AD_LABEL_MAX = 80;
-const LISTABLE_PLATFORMS = [
-  'facebook',
-  'instagram',
-  'tiktok',
-  'youtube',
-  'threads',
-  'linkedin',
-  'x',
-  'bluesky',
-];
-const CATEGORY_SLUG = /^[a-z][a-z0-9_]{0,99}$/;
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 
 type Params = Record<string, string | string[] | undefined>;
@@ -108,7 +97,7 @@ export function parseSearchParams(sp: Params): {
   const beforeId = one('beforeId', isUuid);
   return {
     filters: {
-      platform: one('platform', (v) => LISTABLE_PLATFORMS.includes(v)),
+      platform: one('platform', (v) => (LISTABLE_PLATFORMS as readonly string[]).includes(v)),
       ad: one('ad', (v) => v === 'none' || isUuid(v)),
       category: one('category', (v) => v === '_none' || CATEGORY_SLUG.test(v)),
       status: one('status', (v) => (COMMENT_STATUSES as readonly string[]).includes(v)),

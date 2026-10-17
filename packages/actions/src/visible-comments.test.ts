@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { accountProblem } from './visible-comments.js';
+import { PLATFORMS } from '@feedbouncer/connectors';
+import { accountProblem, LISTABLE_PLATFORMS } from './visible-comments.js';
 
 const base = {
   status: 'active' as const,
@@ -36,5 +37,11 @@ describe('accountProblem', () => {
   });
   it('is null for a paused connection', () => {
     expect(accountProblem({ ...base, status: 'paused' })).toBeNull();
+  });
+});
+
+describe('LISTABLE_PLATFORMS', () => {
+  it('is every connector platform except meta_ads', () => {
+    expect([...LISTABLE_PLATFORMS]).toEqual(PLATFORMS.filter((p) => p !== 'meta_ads'));
   });
 });

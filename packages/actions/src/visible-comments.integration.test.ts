@@ -273,8 +273,9 @@ describe('PgVisibleComments', () => {
     const acc = await store.accounts(a.organizationId);
     expect(acc.map((x) => x.connectionId)).toEqual([a.connectionId]);
     const byB = await store.list(a.organizationId, filter({ adId: bAd }), FIRST);
-    expect(byB.total).toBe(1 - 1 + byB.items.length);
-    const applied = await store.applicable(a.organizationId, filter({ adId: bAd }), o);
+    expect(byB.items).toEqual([]);
+    expect(byB.total).toBe(0);
+    const applied = await store.applicable(a.organizationId, filter({ adId: bAd }));
     expect(applied.adId).toBeNull();
   });
 
@@ -670,8 +671,7 @@ describe('PgVisibleComments', () => {
     const adB = await addAd(b.ads);
     await link(b.ads, adB, b.fb1.sourceId);
     await post(b.fb1);
-    const opts = await store.options(a.orgId);
-    const ap = (f: Partial<VisibleCommentFilter>) => store.applicable(a.orgId, filter(f), opts);
+    const ap = (f: Partial<VisibleCommentFilter>) => store.applicable(a.orgId, filter(f));
     expect(await ap({ adId: adB, category: 'unknown', platform: 'tiktok' })).toEqual(NONE);
     expect(await ap({ adId: NO_AD, category: UNCATEGORIZED })).toMatchObject({
       adId: NO_AD,

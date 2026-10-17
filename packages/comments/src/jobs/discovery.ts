@@ -6,6 +6,7 @@
 import { JobError, type JobDefinition } from '@feedbouncer/jobs';
 import {
   ConnectorError,
+  type AdLookup,
   type Clock,
   type ConnectionDirectory,
   type ConnectorRuntime,
@@ -25,6 +26,9 @@ const STALE_LISTING_MS = 24 * 3_600_000;
 
 /** Retired ads looked up per run, so a large backlog does not spend the rate budget at once. */
 const LOOKUPS_PER_RUN = 25;
+
+/** Lookup failures that affect the whole connection, so the remaining lookups wait for a later run. */
+const ACCOUNT_WIDE_LOOKUP_ERRORS: readonly string[] = ['rate_limited', 'transient', 'auth_expired'];
 
 const FB_REASONS: readonly string[] = [
   'no_post',
@@ -147,13 +151,14 @@ export function adDiscoveryJob(d: {
         retired = await d.tracking.retireUnlisted(ctx.scope, startedAt, at);
         await d.tracking.clearListingProgress(ctx.scope);
         for (const ad of await d.tracking.adsToCheck(ctx.scope, LOOKUPS_PER_RUN)) {
-          let found;
+          let found: AdLookup;
           try {
             found = await client.lookupAd(ad.externalId, { priority: 'background' });
           } catch (e) {
-            const kind = e instanceof ConnectorError ? e.kind : null;
-            if (kind === 'rate_limited' || kind === 'transient') break;
-            throw e;
+            if (!(e instanceof ConnectorError)) throw e;
+            if (ACCOUNT_WIDE_LOOKUP_ERRORS.includes(e.kind)) break;
+            // This ad cannot be read: mark it checked so it does not block the others every run.
+            found = { name: null, deleted: false };
           }
           await d.tracking.recordAdLookup(ctx.scope, ad.id, found, at);
           checked += 1;

@@ -1,6 +1,6 @@
 import { Controller, Get, Inject, Query, Req, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
-import { COMMENT_STATUSES, LISTABLE_PLATFORMS } from '@feedbouncer/actions';
+import { CATEGORY_SLUG, COMMENT_STATUSES, LISTABLE_PLATFORMS } from '@feedbouncer/actions';
 import { SessionGuard } from '../auth/session.guard.js';
 import { parseBody, zUuid } from '../http/validation.js';
 import { RequireCapability } from '../tenancy/capability.decorator.js';
@@ -13,7 +13,7 @@ const ListQuery = z
   .strictObject({
     platform: z.enum(LISTABLE_PLATFORMS).optional(),
     ad: z.union([zUuid, z.literal('none')]).optional(),
-    category: z.union([z.literal('_none'), z.string().regex(/^[a-z][a-z0-9_]{0,99}$/)]).optional(),
+    category: z.union([z.literal('_none'), z.string().regex(CATEGORY_SLUG)]).optional(),
     status: z.enum(COMMENT_STATUSES).optional(),
     before: z.iso.datetime({ offset: true }).optional(),
     beforeId: zUuid.optional(),

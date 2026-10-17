@@ -43,7 +43,7 @@ export class OrgCommentsService {
       category: q.category ?? null,
       status: (q.status as CommentStatus | undefined) ?? null,
     };
-    const f = await this.#read.applicable(orgId, asked, await this.#read.options(orgId));
+    const f = await this.#read.applicable(orgId, asked);
     const before = q.before && q.beforeId ? { postedAt: new Date(q.before), id: q.beforeId } : null;
     const page = await this.#read.list(orgId, f, { before, limit: q.limit });
     // Counts and filter presence only: never bodies, names or filter values.
