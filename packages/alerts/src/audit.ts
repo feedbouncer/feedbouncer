@@ -6,7 +6,7 @@ export interface AlertAuditEvent {
   actorType: 'user' | 'system';
   actorUserId?: string | null;
   action: string;
-  subjectType: 'alert_channel' | 'brand';
+  subjectType: 'alert_channel' | 'brand' | 'report_subscription';
   subjectId: string;
   /** Ids, kinds and codes only: never URLs, emails, tokens or comment text. */
   details?: Record<string, string | number | boolean>;

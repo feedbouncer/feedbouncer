@@ -52,6 +52,17 @@ describe('envelope v1', () => {
     }
   });
 
+  it('seal/open round-trips report_unsubscribe_token; a different subscription id fails to open', async () => {
+    const rctx = {
+      organizationId: 'org',
+      connectionId: 'subscription-1',
+      kind: 'report_unsubscribe_token',
+    } as const;
+    const { blob } = await seal(ringK1, new Secret('unsub-token'), rctx);
+    expect((await open(ringK1, blob, rctx)).reveal()).toBe('unsub-token');
+    await expect(open(ringK1, blob, { ...rctx, connectionId: 'subscription-2' })).rejects.toThrow();
+  });
+
   it('round-trips and records the key id', async () => {
     const { keyId, blob } = await seal(ringK1, new Secret(TOKEN), ctx);
     expect(keyId).toBe('k1');

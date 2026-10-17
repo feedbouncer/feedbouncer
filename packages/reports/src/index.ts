@@ -7,3 +7,4 @@ export * from './rank.js';
 export * from './view.js';
 export * from './links.js';
 export * from './render.js';
+export * from './subscriptions.js';

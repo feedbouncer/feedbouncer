@@ -846,6 +846,12 @@ importers:
       '@feedbouncer/mailer':
         specifier: workspace:*
         version: link:../mailer
+      '@feedbouncer/secrets':
+        specifier: workspace:*
+        version: link:../secrets
+      '@feedbouncer/service-runtime':
+        specifier: workspace:*
+        version: link:../service-runtime
       pg:
         specifier: 8.23.1
         version: 8.23.1
