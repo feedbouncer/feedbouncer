@@ -117,6 +117,7 @@ beforeEach(async () => {
 const recordAdOnBoth = () => {
   const row: DiscoveredAdRow = {
     externalId: '5001',
+    name: null,
     adAccountExternalId: '1001',
     effectiveStatus: 'ACTIVE',
     active: true,
