@@ -4,6 +4,10 @@
 import { messageFor, outcomeSentence, outcomeText } from './messages';
 import { PLATFORM_COPY, isConnectable } from './platforms';
 
+// How often, and how long, to ask the API whether a queued action finished.
+export const POLL_MS = 2000;
+export const POLL_LIMIT = 30;
+
 export type ActionKind =
   | 'hide'
   | 'unhide'

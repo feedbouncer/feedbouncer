@@ -17,6 +17,12 @@ export class ApiRequestError extends Error {
     readonly handled?: HandledDetails | undefined,
     /** The platform permission a connection lacks, on missing_permission. */
     readonly permission?: string | undefined,
+    /** Which rule a refused tag name broke, on invalid_tag_name. */
+    readonly reason?: string | undefined,
+    /** The existing tag, on tag_name_taken. */
+    readonly tag?: { id: string; name: string } | undefined,
+    /** The current number of comments with a tag, on tag_count_changed. */
+    readonly count?: number | undefined,
   ) {
     super(message);
   }
@@ -29,6 +35,14 @@ function handledOf(v: unknown): HandledDetails | undefined {
     ? { status, decidedAt, decidedByName }
     : undefined;
 }
+
+function tagOf(v: unknown): { id: string; name: string } | undefined {
+  const { id, name } = (v ?? {}) as Record<string, unknown>;
+  return typeof id === 'string' && typeof name === 'string' ? { id, name } : undefined;
+}
+
+const safeInt = (v: unknown): number | undefined =>
+  typeof v === 'number' && Number.isSafeInteger(v) ? v : undefined;
 
 function issuesOf(v: unknown): { path: string; message: string }[] {
   if (!Array.isArray(v)) return [];
@@ -59,18 +73,24 @@ export async function apiFetch<T>(
       issues?: unknown;
       handled?: unknown;
       permission?: unknown;
+      reason?: unknown;
+      tag?: unknown;
+      count?: unknown;
     };
   } | null;
   if (!res.ok) {
-    const max = data?.error?.max;
+    const e = data?.error;
     throw new ApiRequestError(
       res.status,
-      data?.error?.code ?? 'internal_error',
-      data?.error?.message ?? 'Something went wrong.',
-      typeof max === 'number' && Number.isSafeInteger(max) ? max : undefined,
-      issuesOf(data?.error?.issues),
-      handledOf(data?.error?.handled),
-      typeof data?.error?.permission === 'string' ? data.error.permission : undefined,
+      e?.code ?? 'internal_error',
+      e?.message ?? 'Something went wrong.',
+      safeInt(e?.max),
+      issuesOf(e?.issues),
+      handledOf(e?.handled),
+      typeof e?.permission === 'string' ? e.permission : undefined,
+      typeof e?.reason === 'string' ? e.reason : undefined,
+      tagOf(e?.tag),
+      safeInt(e?.count),
     );
   }
   return data as T;

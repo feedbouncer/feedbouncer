@@ -13,10 +13,18 @@ import {
   totalText,
   type AccountHealthDto,
   type AdOptionDto,
+  type OrgCommentFilters,
 } from './org-comments';
 
 const ID = '3f9a1c52-8d1e-4b6a-9c3f-2a7b5e4d1c60';
-const NONE = { platform: null, ad: null, category: null, status: null };
+const NONE: OrgCommentFilters = {
+  platform: null,
+  ad: null,
+  category: null,
+  status: null,
+  queue: 'open',
+  tags: [],
+};
 const ISO = '2026-10-27T10:00:00.000Z';
 
 const ad = (o: Partial<AdOptionDto> & { adId: string }): AdOptionDto => ({
@@ -51,7 +59,7 @@ describe('parseSearchParams', () => {
     expect(
       parseSearchParams({ platform: 'instagram', ad: 'none', category: '_none', status: 'new' })
         .filters,
-    ).toEqual({ platform: 'instagram', ad: 'none', category: '_none', status: 'new' });
+    ).toEqual({ ...NONE, platform: 'instagram', ad: 'none', category: '_none', status: 'new' });
     expect(parseSearchParams({ ad: ID, category: 'brand_new_cat' }).filters).toMatchObject({
       ad: ID,
       category: 'brand_new_cat',
@@ -60,6 +68,47 @@ describe('parseSearchParams', () => {
       before: ISO,
       beforeId: ID,
     });
+  });
+});
+
+describe('queue and tags', () => {
+  const T = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+
+  it('parseSearchParams: queue default open, invalid queue → open, tag array dedup and cap 10, malformed tag dropped', () => {
+    expect(parseSearchParams({}).filters.queue).toBe('open');
+    expect(parseSearchParams({ queue: 'done' }).filters.queue).toBe('done');
+    expect(parseSearchParams({ queue: 'all' }).filters.queue).toBe('all');
+    expect(parseSearchParams({ queue: 'closed' }).filters.queue).toBe('open');
+    expect(parseSearchParams({ queue: ['done', 'all'] }).filters.queue).toBe('open');
+    expect(parseSearchParams({ tag: T(1) }).filters.tags).toEqual([T(1)]);
+    expect(
+      parseSearchParams({ tag: [T(1), 'nope', T(2), T(1), T(2).toUpperCase(), ''] }).filters.tags,
+    ).toEqual([T(1), T(2)]);
+    const many = Array.from({ length: 14 }, (_, i) => T(i));
+    expect(parseSearchParams({ tag: many }).filters.tags).toEqual(many.slice(0, 10));
+    expect(parseSearchParams({ tag: 'x,y' }).filters.tags).toEqual([]);
+  });
+
+  it('apiQuery emits queue and comma-joined tags', () => {
+    const q = new URLSearchParams(apiQuery({ ...NONE, tags: [T(1), T(2)] }, null));
+    expect(Object.fromEntries(q)).toEqual({ queue: 'open', tags: `${T(1)},${T(2)}`, limit: '50' });
+    const done = new URLSearchParams(apiQuery({ ...NONE, queue: 'done' }, null));
+    expect(Object.fromEntries(done)).toEqual({ queue: 'done', limit: '50' });
+  });
+
+  it('pageHref repeats tag', () => {
+    const href = pageHref('o1', { ...NONE, queue: 'all', tags: [T(1), T(2)] });
+    const q = new URLSearchParams(href.split('?')[1]);
+    expect(q.getAll('tag')).toEqual([T(1), T(2)]);
+    expect(q.get('queue')).toBe('all');
+    expect(q.has('tags')).toBe(false);
+    // The default queue is left out of the page URL.
+    expect(pageHref('o1', NONE)).toBe('/orgs/o1/comments');
+  });
+
+  it('hasFilters counts tags but not the queue', () => {
+    expect(hasFilters({ ...NONE, queue: 'done' })).toBe(false);
+    expect(hasFilters({ ...NONE, tags: [T(1)] })).toBe(true);
   });
 });
 
@@ -76,7 +125,7 @@ describe('hrefs', () => {
 
   it('apiQuery adds the page size', () => {
     const q = new URLSearchParams(apiQuery({ ...NONE, ad: 'none' }, null));
-    expect(Object.fromEntries(q)).toEqual({ ad: 'none', limit: '50' });
+    expect(Object.fromEntries(q)).toEqual({ ad: 'none', queue: 'open', limit: '50' });
   });
 
   it('hasFilters', () => {

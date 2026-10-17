@@ -5,7 +5,7 @@ export function EmptyState({
   orgId,
   canManage,
 }: {
-  kind: 'no_accounts' | 'no_comments' | 'no_match';
+  kind: 'no_accounts' | 'no_comments' | 'no_match' | 'no_open' | 'no_done';
   orgId: string;
   canManage: boolean;
 }) {
@@ -16,6 +16,21 @@ export function EmptyState({
         <p>
           <Link href={`/orgs/${orgId}/comments`}>Clear filters</Link>
         </p>
+      </section>
+    );
+  if (kind === 'no_open')
+    return (
+      <section>
+        <h2>No open comments</h2>
+        <p>
+          <Link href={`/orgs/${orgId}/comments?queue=done`}>Show done comments</Link>
+        </p>
+      </section>
+    );
+  if (kind === 'no_done')
+    return (
+      <section>
+        <h2>No done comments</h2>
       </section>
     );
   if (kind === 'no_comments')

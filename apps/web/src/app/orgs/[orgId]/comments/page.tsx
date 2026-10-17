@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AccountNotices } from '../../../../components/org-comments/account-notices';
-import { CommentRow } from '../../../../components/org-comments/comment-row';
+import { CommentList } from '../../../../components/org-comments/comment-list';
 import { EmptyState } from '../../../../components/org-comments/empty-state';
 import { FilterBar } from '../../../../components/org-comments/filter-bar';
 import { LocalTime } from '../../../../components/local-time';
@@ -53,7 +53,7 @@ export default async function OrgCommentsPage({
       </main>
     );
   const { items, next, total, applied } = list.data;
-  const { options, accounts, lastSyncedAt, canManageConnections } = meta.data;
+  const { options, accounts, lastSyncedAt, canManageConnections, permissions } = meta.data;
   return (
     <main>
       <h1>Comments</h1>
@@ -80,16 +80,26 @@ export default async function OrgCommentsPage({
           <p>{totalText(total)}</p>
           {items.length === 0 ? (
             <EmptyState
-              kind={hasFilters(applied) ? 'no_match' : 'no_comments'}
+              kind={
+                hasFilters(applied)
+                  ? 'no_match'
+                  : applied.queue === 'open'
+                    ? 'no_open'
+                    : applied.queue === 'done'
+                      ? 'no_done'
+                      : 'no_comments'
+              }
               orgId={orgId}
               canManage={canManageConnections}
             />
           ) : (
-            <ul>
-              {items.map((c) => (
-                <CommentRow key={c.id} item={c} />
-              ))}
-            </ul>
+            <CommentList
+              orgId={orgId}
+              items={items}
+              tags={options.tags}
+              permissions={permissions}
+              canManageConnections={canManageConnections}
+            />
           )}
           <p>
             {next ? <Link href={pageHref(orgId, applied, next)}>Older comments</Link> : null}
