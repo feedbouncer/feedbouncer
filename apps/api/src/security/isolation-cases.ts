@@ -9,6 +9,8 @@ export interface IsolationFixture {
   /** B's Facebook connection, a comment on it, and a pending OAuth grant of B's owner. */
   bConnectionId: string;
   bCommentId: string;
+  /** B's Meta ad, linked to B's comment. */
+  bAdId: string;
   bGrantId: string;
   /** A's own rule. */
   aRuleId: string;
@@ -531,6 +533,16 @@ export const CASES: IsolationCase[] = [
     name: 'revoke B invite under A path',
     url: (f) => `/api/v1/orgs/${f.A.orgId}/invitations/${f.bInvitationId}/revoke`,
     body: () => ({}),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/comments',
+    name: "list B's comments",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/comments`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/comments/filters',
+    name: "read B's comment filters",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/comments/filters`,
   },
 ];
 

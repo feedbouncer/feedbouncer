@@ -52,6 +52,19 @@ beforeAll(async () => {
      VALUES ($1, $2, $3, $4, '1_2_3', 'hi', now()) RETURNING id`,
     [B.orgId, B.brandId, bConnectionId, source.rows[0].id],
   );
+  const bAd = await api.pool.query(
+    `INSERT INTO meta_ad (organization_id, brand_id, ads_connection_id, external_id, ad_account_external_id,
+                          effective_status, active, facebook_source_external_id, facebook_resolution,
+                          instagram_resolution, last_discovered_at)
+     VALUES ($1, $2, $3, '555', '777', 'ACTIVE', true, '1_2', 'linked', 'not_instagram', now())
+     RETURNING id`,
+    [B.orgId, B.brandId, bConnectionId],
+  );
+  await api.pool.query(
+    `INSERT INTO meta_ad_source (organization_id, brand_id, ad_id, source_id, platform)
+     VALUES ($1, $2, $3, $4, 'facebook')`,
+    [B.orgId, B.brandId, bAd.rows[0].id, source.rows[0].id],
+  );
   const bRule = await api.pool.query(
     `INSERT INTO rule (organization_id, brand_id, name, conditions, action, mode)
      VALUES ($1, $2, 'b rule', '{"type":"keyword","terms":["x"]}'::jsonb, 'flag', 'enforce') RETURNING id`,
@@ -183,6 +196,7 @@ beforeAll(async () => {
     bInvitationToken: link.searchParams.get('token')!,
     bConnectionId,
     bCommentId: comment.rows[0].id,
+    bAdId: bAd.rows[0].id,
     bGrantId,
     aRuleId: aRule.rows[0].id,
     bRuleId: bRule.rows[0].id,
@@ -339,5 +353,17 @@ describe('backfill status', () => {
       },
     );
     expect(cross.status).toBe(404);
+  });
+});
+
+describe("B's ad id in A's own comments URL", () => {
+  it('is ignored and leaks nothing of B', async () => {
+    const r = await api.req('GET', `/api/v1/orgs/${f.A.orgId}/comments?ad=${f.bAdId}`, {
+      cookie: f.A.owner.cookie,
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.applied.ad).toBeNull();
+    const text = JSON.stringify(r.body);
+    for (const id of [f.bAdId, f.bCommentId, f.bConnectionId]) expect(text).not.toContain(id);
   });
 });
