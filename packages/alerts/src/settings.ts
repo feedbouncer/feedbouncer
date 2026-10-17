@@ -1,6 +1,7 @@
 import type pg from 'pg';
 import { withTransaction } from '@feedbouncer/db';
 import { recordAlertAudit } from './audit.js';
+import { UUID_RE } from './constants.js';
 import type { Sensitivity } from './spike.js';
 
 export interface BrandAlertSettings {
@@ -24,8 +25,6 @@ export interface AlertRoute {
   channelId: string;
   enabled: boolean;
 }
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class PgAlertSettings {
   constructor(private readonly pool: pg.Pool) {}
@@ -150,31 +149,36 @@ export class PgAlertSettings {
       return { status: 'ok' as const };
     });
   }
+}
 
-  async removeBrand(c: pg.ClientBase, orgId: string, brandId: string): Promise<void> {
-    const tables = [
-      'alert_route',
-      'alert_brand_settings',
-      'alert_brand_state',
-      'alert_negative_hourly',
-    ];
-    for (const table of tables) {
-      await c.query(`DELETE FROM ${table} WHERE organization_id = $1 AND brand_id = $2`, [
-        orgId,
-        brandId,
-      ]);
-    }
-    await c.query(
-      "DELETE FROM alert_flag_item WHERE organization_id = $1 AND brand_id = $2 AND state = 'pending'",
-      [orgId, brandId],
-    );
-    await c.query(
-      `UPDATE alert_delivery d SET state = 'cancelled', lease_until = NULL
-         FROM alert_event e
-        WHERE e.organization_id = d.organization_id AND e.id = d.alert_event_id
-          AND e.organization_id = $1 AND e.brand_id = $2
-          AND d.state IN ('pending', 'retrying')`,
-      [orgId, brandId],
-    );
+/** Deletes a brand's alert data and cancels its open deliveries; run inside the archive transaction. */
+export async function removeBrandAlerts(
+  c: pg.ClientBase,
+  orgId: string,
+  brandId: string,
+): Promise<void> {
+  const tables = [
+    'alert_route',
+    'alert_brand_settings',
+    'alert_brand_state',
+    'alert_negative_hourly',
+  ];
+  for (const table of tables) {
+    await c.query(`DELETE FROM ${table} WHERE organization_id = $1 AND brand_id = $2`, [
+      orgId,
+      brandId,
+    ]);
   }
+  await c.query(
+    "DELETE FROM alert_flag_item WHERE organization_id = $1 AND brand_id = $2 AND state = 'pending'",
+    [orgId, brandId],
+  );
+  await c.query(
+    `UPDATE alert_delivery d SET state = 'cancelled', lease_until = NULL
+       FROM alert_event e
+      WHERE e.organization_id = d.organization_id AND e.id = d.alert_event_id
+        AND e.organization_id = $1 AND e.brand_id = $2
+        AND d.state IN ('pending', 'retrying')`,
+    [orgId, brandId],
+  );
 }

@@ -6,6 +6,7 @@ import { RECIPIENT } from '@feedbouncer/mailer';
 import { open, seal, type KeyProvider } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
 import { recordAlertAudit } from './audit.js';
+import { CODE_RE } from './constants.js';
 
 export const SLACK_WEBHOOK_RE =
   /^https:\/\/hooks\.slack\.com\/services\/T[A-Z0-9]{2,20}\/B[A-Z0-9]{2,20}\/[A-Za-z0-9]{16,64}$/;
@@ -86,7 +87,6 @@ function toChannel(r: ChannelRow): AlertChannel {
   };
 }
 
-const CODE_RE = /^[a-z0-9_]{1,64}$/;
 const cleanLabel = (raw: string) => raw.trim().slice(0, 80).trim();
 
 const newToken = () => randomBytes(32).toString('base64url');

@@ -1,8 +1,9 @@
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { UUID_RE } from './constants.js';
+
 const TOKEN = /^[A-Za-z0-9_-]{16,256}$/;
 
 function id(v: string): string {
-  if (!UUID.test(v)) throw new TypeError('invalid id');
+  if (!UUID_RE.test(v)) throw new TypeError('invalid id');
   return v.toLowerCase();
 }
 

@@ -5,7 +5,7 @@ import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { testKeyring } from '@feedbouncer/secrets/testing';
 import { PgAlertChannels } from './channels.js';
 import { seedChannel, seedFlags } from './testing.js';
-import { DEFAULT_SETTINGS, PgAlertSettings } from './settings.js';
+import { DEFAULT_SETTINGS, PgAlertSettings, removeBrandAlerts } from './settings.js';
 
 const WEBHOOK = 'https://hooks.slack.com/services/TABC12345/BXYZ98765/sentinelHookSecret1234';
 let h: Awaited<ReturnType<typeof migratedDb>>;
@@ -234,7 +234,7 @@ describe('PgAlertSettings', () => {
     await seed(b, chB);
     const c = await pool.connect();
     try {
-      await settings.removeBrand(c, a.organizationId, a.brandId);
+      await removeBrandAlerts(c, a.organizationId, a.brandId);
     } finally {
       c.release();
     }

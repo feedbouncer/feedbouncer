@@ -16,3 +16,5 @@ export const RETRY_DELAYS_MS = [30_000, 120_000, 600_000, 1_800_000, 7_200_000] 
 export const RETRY_AFTER_CAP_MS = 3_600_000;
 export const LEASE_MS = 120_000;
 export const SLACK_PACE_MS = 1_000;
+export const CODE_RE = /^[a-z0-9_]{1,64}$/;
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

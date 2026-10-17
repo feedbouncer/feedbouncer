@@ -7,7 +7,7 @@ import {
   type SafeHttpResponse,
 } from '@feedbouncer/connectors';
 import { SLACK_WEBHOOK_RE } from './channels.js';
-import { SLACK_TIMEOUT_MS } from './constants.js';
+import { CODE_RE, SLACK_TIMEOUT_MS } from './constants.js';
 import type { SlackPayload } from './render.js';
 
 export type SlackOutcome =
@@ -20,7 +20,6 @@ export type SlackOutcome =
     };
 
 const HOSTS = ['hooks.slack.com'];
-const CODE_RE = /^[a-z0-9_]{1,64}$/;
 const REVOKED_CODES = new Set([
   'action_prohibited',
   'invalid_token',
