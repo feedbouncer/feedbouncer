@@ -250,10 +250,24 @@ describe('loadWorkerEnv', () => {
       });
       expect(env.mail).toBeNull();
     });
-    it('slack alone needs no mail config', () => {
-      const env = load({ ...without('SMTP_URL', 'PUBLIC_WEB_URL'), ALERT_CHANNELS: 'slack' });
+    it('slack alone needs no mail config but does need PUBLIC_WEB_URL', () => {
+      const env = load({ ...without('SMTP_URL'), ALERT_CHANNELS: 'slack' });
       expect(env.alerts.slack).toBe(true);
       expect(env.mail).toBeNull();
+      expect(env.publicWebUrl?.origin).toBe('https://app.example.com');
+      expect(() =>
+        load({ ...without('SMTP_URL', 'PUBLIC_WEB_URL'), ALERT_CHANNELS: 'slack' }),
+      ).toThrow(/PUBLIC_WEB_URL is not set/);
+      expect(() =>
+        load({ ...without('SMTP_URL'), ALERT_CHANNELS: 'slack', PUBLIC_WEB_URL: 'nope' }),
+      ).toThrow(EnvError);
+      expect(() =>
+        load({
+          ...without('SMTP_URL'),
+          ALERT_CHANNELS: 'slack',
+          PUBLIC_WEB_URL: 'https://app.example.com/x',
+        }),
+      ).toThrow(/origin/);
     });
     it('email alerts read mail config even when facebook is unset', () => {
       const env = load({ ...base, ALERT_CHANNELS: 'email' });

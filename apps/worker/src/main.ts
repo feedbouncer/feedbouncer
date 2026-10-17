@@ -42,7 +42,6 @@ import {
   installCrashHandlers,
   logConfigurationLoaded,
   onShutdown,
-  readUrl,
   startHealthServer,
   waitUntil,
   writeStartupConfigError,
@@ -302,7 +301,7 @@ try {
   alertLoops = startAlertLoops(
     {
       alerts: env.alerts,
-      web: () => mail?.publicWebUrl ?? readUrl(process.env, 'PUBLIC_WEB_URL', ['http:', 'https:']),
+      web: () => env.publicWebUrl!,
     },
     { pool, log, keys: env.encryption, mailer },
   );
