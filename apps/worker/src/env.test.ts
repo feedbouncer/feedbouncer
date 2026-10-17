@@ -295,6 +295,32 @@ describe('loadWorkerEnv', () => {
     });
   });
 
+  describe('weekly reports', () => {
+    it('WEEKLY_REPORTS unset → false', () => {
+      const env = load(without('SMTP_URL', 'PUBLIC_WEB_URL'));
+      expect(env.weeklyReports).toBe(false);
+      expect(env.mail).toBeNull();
+    });
+    it("'on' without SMTP_URL → EnvError", () => {
+      expect(messageOf(() => load({ ...without('SMTP_URL'), WEEKLY_REPORTS: 'on' }))).toMatch(
+        /SMTP_URL/,
+      );
+      expect(
+        messageOf(() => load({ ...without('SMTP_URL', 'PUBLIC_WEB_URL'), WEEKLY_REPORTS: 'on' })),
+      ).toMatch(/PUBLIC_WEB_URL/);
+    });
+    it("'yes' → EnvError", () => {
+      expect(messageOf(() => load({ ...base, WEEKLY_REPORTS: 'yes' }))).toMatch(/WEEKLY_REPORTS/);
+    });
+    it("'on' with mail and PUBLIC_WEB_URL → true and mail loaded even without Facebook", () => {
+      const env = load({ ...base, WEEKLY_REPORTS: 'on' });
+      expect(env.weeklyReports).toBe(true);
+      expect(env.facebook).toBeNull();
+      expect(env.mail?.smtpUrl.href).toBe('smtp://mailpit:1025');
+      expect(env.publicWebUrl?.origin).toBe('https://app.example.com');
+    });
+  });
+
   describe('facebook, mail and public url', () => {
     it('leaves facebook null when FACEBOOK_APP_ID is unset', () => {
       expect(load(base).facebook).toBeNull();

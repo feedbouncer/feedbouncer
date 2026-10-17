@@ -15,6 +15,7 @@
     { "path": "../../packages/rules/tsconfig.build.json" },
     { "path": "../../packages/mailer/tsconfig.build.json" },
     { "path": "../../packages/jobs/tsconfig.build.json" },
-    { "path": "../../packages/observability/tsconfig.build.json" }
+    { "path": "../../packages/observability/tsconfig.build.json" },
+    { "path": "../../packages/reports/tsconfig.build.json" }
   ]
 }

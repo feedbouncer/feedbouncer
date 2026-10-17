@@ -4,3 +4,4 @@ export * from './transaction.js';
 export * from './pg-errors.js';
 export * from './bounded-query.js';
 export * from './brand-slots.js';
+export * from './audit.js';

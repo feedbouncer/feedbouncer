@@ -6,6 +6,7 @@ import { requireVerified, type AuthedUser } from '../auth/session.guard.js';
 import { BRAND_COLUMNS, toBrandDto, type BrandDto, type BrandRow } from '../brands/dto.js';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
+import { isIanaTimeZone, isKnownZone } from '../http/validation.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { lockedActor } from '../tenancy/org-lock.js';
 import { DEPS } from '../tokens.js';
@@ -62,7 +63,7 @@ export class OrgsService {
 
   async listMine(userId: string): Promise<Array<{ organization: OrgDto; role: Role }>> {
     const { rows } = await this.deps.pool.query<OrgRow & { role: Role }>(
-      `SELECT o.id, o.name, o.created_at, m.role
+      `SELECT o.id, o.name, o.timezone, o.timezone_set_at, o.created_at, m.role
          FROM membership m JOIN organization o ON o.id = m.organization_id
         WHERE m.user_id = $1 ORDER BY o.name, o.id`,
       [userId],
@@ -79,23 +80,46 @@ export class OrgsService {
     return { organization: toOrgDto(rows[0]), role: ctx.role };
   }
 
-  async rename(ctx: OrgContext, name: string): Promise<OrgDto> {
+  async update(
+    ctx: OrgContext,
+    patch: { name?: string | undefined; timezone?: string | undefined },
+  ): Promise<OrgDto> {
     return withTransaction(this.deps.pool, async (c) => {
       if (!can(await lockedActor(c, ctx), 'org.update')) throw new ApiError(403, 'forbidden');
+      const { timezone } = patch;
+      if (
+        timezone !== undefined &&
+        !(isIanaTimeZone(timezone) && (await isKnownZone(c, timezone)))
+      ) {
+        throw new ApiError(400, 'invalid_timezone');
+      }
       const row = (
         await c.query<OrgRow>(
-          `UPDATE organization SET name = $2 WHERE id = $1 RETURNING ${ORG_COLUMNS}`,
-          [ctx.organizationId, name],
+          `UPDATE organization
+              SET name = COALESCE($2::text, name),
+                  timezone = COALESCE($3::text, timezone),
+                  timezone_set_at = CASE WHEN $3::text IS NULL THEN timezone_set_at ELSE now() END
+            WHERE id = $1 RETURNING ${ORG_COLUMNS}`,
+          [ctx.organizationId, patch.name ?? null, timezone ?? null],
         )
       ).rows[0];
       if (!row) throw notFound();
-      await recordAudit(c, {
+      const audit = {
         organizationId: ctx.organizationId,
         actorUserId: ctx.actorUserId,
-        action: 'organization.renamed',
         subjectType: 'organization',
         subjectId: ctx.organizationId,
-      });
+      } as const;
+      if (patch.name !== undefined) {
+        await recordAudit(c, { ...audit, action: 'organization.renamed' });
+      }
+      if (timezone !== undefined) {
+        await recordAudit(c, {
+          ...audit,
+          action: 'organization.timezone_updated',
+          details: { timezone },
+        });
+      }
       return toOrgDto(row);
     });
   }

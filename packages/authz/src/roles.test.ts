@@ -31,6 +31,7 @@ const MATRIX: Record<Capability, Record<Role, boolean>> = {
   'tag.manage': { owner: true, admin: true, member: false },
   'alert.read': { owner: true, admin: true, member: false },
   'alert.manage': { owner: true, admin: true, member: false },
+  'report.read': { owner: true, admin: true, member: false },
   'org.update': { owner: true, admin: true, member: false },
   'org.transfer_ownership': { owner: true, admin: false, member: false },
   'org.delete': { owner: true, admin: false, member: false },
@@ -52,6 +53,16 @@ describe('alert.read/alert.manage', () => {
       expect(can('member', cap, [cap])).toBe(false);
       expect(isGrantable('member', cap)).toBe(false);
     }
+  });
+});
+
+describe('report.read', () => {
+  it('owner and admin true, member false; not grantable', () => {
+    expect(can('owner', 'report.read')).toBe(true);
+    expect(can('admin', 'report.read')).toBe(true);
+    expect(can('member', 'report.read')).toBe(false);
+    expect(can('member', 'report.read', ['report.read'])).toBe(false);
+    expect(isGrantable('member', 'report.read')).toBe(false);
   });
 });
 

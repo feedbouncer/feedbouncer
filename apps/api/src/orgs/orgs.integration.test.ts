@@ -150,6 +150,84 @@ describe('organizations', () => {
     expect(still.rows[0].name).toBe('del400 Org');
   });
 
+  describe('workspace timezone', () => {
+    const patch = (orgId: string, cookie: string, body: unknown) =>
+      api.req('PATCH', `/api/v1/orgs/${orgId}`, { cookie, body });
+
+    it('owner sets timezone Europe/Berlin → 200 and GET shows it', async () => {
+      const { owner, orgId } = await orgWithRoles(api, 'tz-set', shared);
+      const before = await api.req('GET', `/api/v1/orgs/${orgId}`, { cookie: owner.cookie });
+      expect(before.body.organization).toMatchObject({ timezone: 'UTC', timezoneSet: false });
+      const r = await patch(orgId, owner.cookie, { timezone: 'Europe/Berlin' });
+      expect(r.status).toBe(200);
+      expect(r.body.organization).toMatchObject({
+        name: 'tz-set Org',
+        timezone: 'Europe/Berlin',
+        timezoneSet: true,
+      });
+      const got = await api.req('GET', `/api/v1/orgs/${orgId}`, { cookie: owner.cookie });
+      expect(got.body.organization).toMatchObject({
+        timezone: 'Europe/Berlin',
+        timezoneSet: true,
+      });
+      const audit = await api.pool.query(
+        "SELECT actor_user_id, details FROM audit_event WHERE organization_id = $1 AND action = 'organization.timezone_updated'",
+        [orgId],
+      );
+      expect(audit.rows).toEqual([
+        { actor_user_id: owner.userId, details: { timezone: 'Europe/Berlin' } },
+      ]);
+    });
+
+    it('member → 403', async () => {
+      const { member, orgId } = await orgWithRoles(api, 'tz-member', shared);
+      expect((await patch(orgId, member.cookie, { timezone: 'Europe/Berlin' })).status).toBe(403);
+    });
+
+    it.each(['Japan', 'GMT', 'EST5EDT'])(
+      '%s (no region separator) → 400 invalid_timezone',
+      async (timezone) => {
+        const { owner, orgId } = await orgWithRoles(api, `tz-${timezone}`, shared);
+        const r = await patch(orgId, owner.cookie, { timezone });
+        expect([r.status, r.body.error.code]).toEqual([400, 'invalid_timezone']);
+      },
+    );
+
+    it("'Mars/Olympus' → 400 invalid_timezone", async () => {
+      const { owner, orgId } = await orgWithRoles(api, 'tz-mars', shared);
+      const r = await patch(orgId, owner.cookie, { timezone: 'Mars/Olympus' });
+      expect([r.status, r.body.error.code]).toEqual([400, 'invalid_timezone']);
+      const row = await api.pool.query(
+        'SELECT timezone, timezone_set_at FROM organization WHERE id = $1',
+        [orgId],
+      );
+      expect(row.rows[0]).toEqual({ timezone: 'UTC', timezone_set_at: null });
+    });
+
+    it('org B owner → 404', async () => {
+      const { orgId } = await orgWithRoles(api, 'tz-a', shared);
+      const r = await patch(orgId, stranger.cookie, { timezone: 'Europe/Berlin' });
+      expect(r.status).toBe(404);
+    });
+
+    it('rename still works alone', async () => {
+      const { owner, orgId } = await orgWithRoles(api, 'tz-ren', shared);
+      const r = await patch(orgId, owner.cookie, { name: 'Only name' });
+      expect(r.status).toBe(200);
+      expect(r.body.organization).toMatchObject({
+        name: 'Only name',
+        timezone: 'UTC',
+        timezoneSet: false,
+      });
+      expect((await patch(orgId, owner.cookie, {})).status).toBe(400);
+      const audit = await api.pool.query(
+        'SELECT action FROM audit_event WHERE organization_id = $1 ORDER BY sequence',
+        [orgId],
+      );
+      expect(audit.rows.map((x) => x.action)).not.toContain('organization.timezone_updated');
+    });
+  });
+
   describe('mutations re-read the actor under the organization lock', () => {
     const ctxFor = (organizationId: string, actorUserId: string, role: OrgContext['role']) =>
       ({ organizationId, actorUserId, role, grants: [] }) as OrgContext;
@@ -193,8 +271,12 @@ describe('organizations', () => {
         admin.userId,
       ]);
       const svc = new OrgsService(api.deps);
-      expect((await fail(svc.rename(ctxFor(orgId, admin.userId, 'admin'), 'Z'))).status).toBe(404);
-      expect((await fail(svc.rename(ctxFor(orgId, member.userId, 'admin'), 'Z'))).status).toBe(403);
+      expect(
+        (await fail(svc.update(ctxFor(orgId, admin.userId, 'admin'), { name: 'Z' }))).status,
+      ).toBe(404);
+      expect(
+        (await fail(svc.update(ctxFor(orgId, member.userId, 'admin'), { name: 'Z' }))).status,
+      ).toBe(403);
       const row = await api.pool.query('SELECT name FROM organization WHERE id = $1', [orgId]);
       expect(row.rows[0].name).toBe('race-ren Org');
     });
@@ -203,7 +285,9 @@ describe('organizations', () => {
       const { orgId, owner } = await orgWithRoles(api, 'race-gone', shared);
       await api.pool.query('DELETE FROM organization WHERE id = $1', [orgId]);
       const svc = new OrgsService(api.deps);
-      expect((await fail(svc.rename(ctxFor(orgId, owner.userId, 'owner'), 'Z'))).status).toBe(404);
+      expect(
+        (await fail(svc.update(ctxFor(orgId, owner.userId, 'owner'), { name: 'Z' }))).status,
+      ).toBe(404);
     });
 
     it('create rolls back the organization and membership when the brand insert fails', async () => {

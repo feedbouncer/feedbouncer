@@ -17,3 +17,4 @@ export * from './unhide.js';
 export * from './visible-comments.js';
 export * from './triage.js';
 export * from './negative.js';
+export * from './hide-attribution.js';

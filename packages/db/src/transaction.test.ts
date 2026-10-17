@@ -21,6 +21,11 @@ describe('withTransaction', () => {
     expect(f.calls).toEqual(['BEGIN', 'COMMIT']);
     expect(f.client.release).toHaveBeenCalledWith(false);
   });
+  it('opens the transaction at the requested isolation level', async () => {
+    const f = fakePool();
+    await withTransaction(f.pool, async () => 1, { isolation: 'repeatable read' });
+    expect(f.calls).toEqual(['BEGIN ISOLATION LEVEL REPEATABLE READ', 'COMMIT']);
+  });
   it('rolls back and rethrows when work throws', async () => {
     const f = fakePool();
     await expect(

@@ -42,6 +42,8 @@ describe('messageFor', () => {
     'tag_limit_reached',
     'tag_count_changed',
     'unknown_tag',
+    'invalid_timezone',
+    'invalid_week',
   ])('has a specific message for %s', (code) => {
     expect(messageFor(code)).not.toBe(FALLBACK);
   });

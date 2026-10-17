@@ -9,8 +9,9 @@ import type { SafeHttp } from '@feedbouncer/connectors';
 import type { createPool } from '@feedbouncer/db';
 import type { Mailer } from '@feedbouncer/mailer';
 import type { KeyProvider } from '@feedbouncer/secrets';
-import { errorFields, type Logger } from '@feedbouncer/service-runtime';
+import type { Logger } from '@feedbouncer/service-runtime';
 import type { WorkerAlertsConfig } from './env.js';
+import { every } from './interval.js';
 
 const SWEEP_INTERVAL_MS = 60_000;
 const DISPATCH_INTERVAL_MS = 5_000;
@@ -52,29 +53,9 @@ export function startAlertLoops(
     emailPerMinute: alerts.emailPerMinute,
   });
   const timers = [
-    every('spike', SWEEP_INTERVAL_MS, () => spike.tick(), log),
-    every('flags', SWEEP_INTERVAL_MS, () => flags.tick(), log),
-    every('dispatch', DISPATCH_INTERVAL_MS, () => dispatcher.tick(), log),
+    every('spike', SWEEP_INTERVAL_MS, () => spike.tick(), log, 'alerts.tick_failed'),
+    every('flags', SWEEP_INTERVAL_MS, () => flags.tick(), log, 'alerts.tick_failed'),
+    every('dispatch', DISPATCH_INTERVAL_MS, () => dispatcher.tick(), log, 'alerts.tick_failed'),
   ];
   return { stop: () => timers.forEach(clearInterval) };
-}
-
-function every(
-  loop: string,
-  intervalMs: number,
-  tick: () => Promise<unknown>,
-  log: Logger,
-): NodeJS.Timeout {
-  let running = false;
-  const timer = setInterval(() => {
-    if (running) return;
-    running = true;
-    tick()
-      .catch((err: unknown) => log.error('alerts.tick_failed', { loop, ...errorFields(err) }))
-      .finally(() => {
-        running = false;
-      });
-  }, intervalMs);
-  timer.unref();
-  return timer;
 }

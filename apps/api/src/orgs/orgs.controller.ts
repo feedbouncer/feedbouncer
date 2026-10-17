@@ -20,7 +20,10 @@ import { OrgAccessGuard, type OrgRequest } from '../tenancy/org-access.guard.js'
 import { OrgsService } from './orgs.service.js';
 
 const CreateOrg = z.strictObject({ name: zName, brandName: zName.optional() });
-const RenameOrg = z.strictObject({ name: zName });
+// The zone is checked by the service, so every unknown one is invalid_timezone.
+const UpdateOrg = z
+  .strictObject({ name: zName.optional(), timezone: z.string().optional() })
+  .refine((b) => b.name !== undefined || b.timezone !== undefined);
 const TransferOwnership = z.strictObject({ userId: zUuid, newRoleForSelf: z.enum(ROLES) });
 const DeleteOrg = z.strictObject({ confirmName: z.string().max(400) });
 
@@ -57,8 +60,8 @@ export class OrgController {
 
   @Patch()
   @RequireCapability('org.update')
-  async rename(@Req() req: OrgRequest, @Body() body: unknown) {
-    return { organization: await this.orgs.rename(req.org, parseBody(RenameOrg, body).name) };
+  async update(@Req() req: OrgRequest, @Body() body: unknown) {
+    return { organization: await this.orgs.update(req.org, parseBody(UpdateOrg, body)) };
   }
 
   @Delete()

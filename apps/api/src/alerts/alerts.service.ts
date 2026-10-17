@@ -205,7 +205,7 @@ export class AlertsService {
 
   /** 30 requests per minute per client IP across the public recipient routes. */
   limitPublic(ip: string): Promise<void> {
-    return this.limits.consumeAlertRecipient(ip);
+    return this.limits.consumePublicRecipient(ip);
   }
 
   async confirm(token: string): Promise<{ status: 'confirmed' }> {

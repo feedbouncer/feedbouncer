@@ -92,12 +92,14 @@ export interface WorkerEnv {
   readonly metaAds: MetaAdsConfig | null;
   /** Cadence of ad discovery and ad comment polling; null exactly when `metaAds` is. */
   readonly adPolling: AdPollingConfig | null;
-  /** Null unless Facebook is configured or email alerts are enabled: only they send mail or need the web origin. */
+  /** Null unless Facebook, email alerts or weekly reports are enabled: only they send mail. */
   readonly mail: WorkerMailConfig | null;
-  /** Web origin for links and OAuth redirects; null unless Facebook or any alert channel is enabled. */
+  /** Web origin for links and OAuth redirects; null unless Facebook, an alert channel or weekly reports are on. */
   readonly publicWebUrl: URL | null;
   /** Which alert channels this deployment offers; both false means the alert loops do not run. */
   readonly alerts: WorkerAlertsConfig;
+  /** WEEKLY_REPORTS=on: the weekly report loops run, which needs mail and PUBLIC_WEB_URL. */
+  readonly weeklyReports: boolean;
 }
 
 export interface WorkerAlertsConfig {
@@ -199,9 +201,13 @@ export function loadWorkerEnv(
   const metaAds = parseMetaAdsEnv(env, facebook);
   const adPolling = metaAds ? readAdPollingConfig(env) : null;
   const alerts = { ...parseAlertChannels(env.ALERT_CHANNELS), ...readAlertLimits(env) };
-  const publicWebUrl = facebook || alerts.slack || alerts.email ? readPublicWebUrl(env) : null;
+  const weeklyReports = readEnum(env, 'WEEKLY_REPORTS', ['on', 'off'], 'off') === 'on';
+  const publicWebUrl =
+    facebook || alerts.slack || alerts.email || weeklyReports ? readPublicWebUrl(env) : null;
   const mail =
-    publicWebUrl && (facebook || alerts.email) ? readMailConfig(env, publicWebUrl) : null;
+    publicWebUrl && (facebook || alerts.email || weeklyReports)
+      ? readMailConfig(env, publicWebUrl)
+      : null;
   checkNotPlaceholder(appEnv, 'DATABASE_URL', databaseUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);
   if (publicWebUrl) checkNotPlaceholder(appEnv, 'PUBLIC_WEB_URL', publicWebUrl.href, opts.warn);
@@ -240,6 +246,7 @@ export function loadWorkerEnv(
     mail,
     publicWebUrl,
     alerts,
+    weeklyReports,
   };
   // A whole-config dump (JSON, util.inspect) must never carry URL passwords or keys.
   return redactOnSerialize(config, {
@@ -253,6 +260,7 @@ export function loadWorkerEnv(
     metaAdsEnabled: config.metaAds !== null,
     alertSlackEnabled: alerts.slack,
     alertEmailEnabled: alerts.email,
+    weeklyReportsEnabled: weeklyReports,
     activeKeyId: config.encryption.activeKeyId,
     jobQueuePrefix: config.jobs.prefix,
     classifierEnabled: config.classifier.model !== null,

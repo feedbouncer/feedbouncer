@@ -181,6 +181,7 @@ services:
       - ./packages/classifier/src:/repo/packages/classifier/src:ro
       - ./packages/comments/src:/repo/packages/comments/src:ro
       - ./packages/policies/src:/repo/packages/policies/src:ro
+      - ./packages/reports/src:/repo/packages/reports/src:ro
       - ./packages/rules/src:/repo/packages/rules/src:ro
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro
@@ -230,6 +231,8 @@ services:
       PUBLIC_WEB_URL: http://localhost:${WEB_HOST_PORT:-3000}
       MAIL_FROM: ${MAIL_FROM:-}
       ALERT_EMAIL_MAX_PER_MINUTE: ${ALERT_EMAIL_MAX_PER_MINUTE:-}
+      # Weekly email report: on|off, empty means off.
+      WEEKLY_REPORTS: ${WEEKLY_REPORTS:-}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
       # Empty means "use the default" (see docs/operations/job-queue.md).
       JOB_QUEUE_PREFIX: ${JOB_QUEUE_PREFIX:-}
@@ -279,6 +282,7 @@ services:
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
       - ./packages/observability/src:/repo/packages/observability/src:ro
       - ./packages/policies/src:/repo/packages/policies/src:ro
+      - ./packages/reports/src:/repo/packages/reports/src:ro
       - ./packages/rules/src:/repo/packages/rules/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro
@@ -324,12 +328,17 @@ services:
     volumes:
       - ./apps/web/src:/repo/apps/web/src:ro
       - ./packages/actions/src:/repo/packages/actions/src:ro
+      - ./packages/ai/src:/repo/packages/ai/src:ro
+      - ./packages/alerts/src:/repo/packages/alerts/src:ro
       - ./packages/authz/src:/repo/packages/authz/src:ro
+      - ./packages/classifier/src:/repo/packages/classifier/src:ro
       - ./packages/comments/src:/repo/packages/comments/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
+      - ./packages/reports/src:/repo/packages/reports/src:ro
+      - ./packages/rules/src:/repo/packages/rules/src:ro
       - ./packages/secrets/src:/repo/packages/secrets/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
     depends_on:
