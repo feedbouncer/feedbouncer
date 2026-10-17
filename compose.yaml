@@ -105,7 +105,7 @@ services:
 
   mailpit:
     # Dev-only SMTP sink. Every email the stack sends lands here; nothing leaves the machine.
-    image: axllent/mailpit:v1.31.5@sha256:eee7db19e7518ffe47d9b38e46fab655a4edf7e6cb5e664d1b5fde6c9dc49010
+    image: axllent/mailpit:v1.31.5@sha256:94f6b70c1436defae6799d9ac7ff0eeff9540465b842026d5cdb018f1c0234ea
     restart: unless-stopped
     ports:
       - '${FB_BIND_ADDRESS:-127.0.0.1}:${MAILPIT_UI_HOST_PORT:-8025}:8025'
