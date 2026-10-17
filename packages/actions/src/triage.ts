@@ -199,7 +199,7 @@ export class PgTriage {
     op: TriageOp,
   ): Promise<{ status: 'unknown_tags' } | { status: 'ok'; results: TriageItemResult[] }> {
     if (commentIds.length > BULK_MAX) throw new TypeError(`at most ${BULK_MAX} comments`);
-    const tagIds = 'tagIds' in op ? [...new Set(op.tagIds)] : [];
+    const tagIds = 'tagIds' in op ? [...new Set(op.tagIds.map((id) => id.toLowerCase()))] : [];
     if (tagIds.length > TAG_IDS_MAX) throw new TypeError(`at most ${TAG_IDS_MAX} tags`);
 
     if (tagIds.length > 0) {

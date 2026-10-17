@@ -29,8 +29,10 @@ import { RequireCapability } from '../tenancy/capability.decorator.js';
 import { OrgAccessGuard, type OrgRequest } from '../tenancy/org-access.guard.js';
 import { OrgCommentsService } from './org-comments.service.js';
 
-// At most TAG_IDS_MAX comma-separated ids.
-const TAGS_PARAM = /^[0-9a-f-]{36}(,[0-9a-f-]{36}){0,9}$/i;
+const TAGS_PARAM = /^[0-9a-f-]{36}(,[0-9a-f-]{36})*$/i;
+
+// Postgres returns lowercase uuids, so tag ids are lowercased at the boundary.
+const zTagId = zUuid.transform((id) => id.toLowerCase());
 
 // The organization comes only from the path. Well-formed but stale or foreign values are
 // dropped by the service; malformed ones are rejected here.
@@ -46,7 +48,7 @@ const ListQuery = z
       .string()
       .regex(TAGS_PARAM)
       .transform((s) => s.split(','))
-      .pipe(z.array(zUuid))
+      .pipe(z.array(zTagId).max(TAG_IDS_MAX))
       .optional(),
     before: z.iso.datetime({ offset: true }).optional(),
     beforeId: zUuid.optional(),
@@ -60,7 +62,7 @@ const distinct = (ids: readonly string[], ctx: z.RefinementCtx) => {
   if (new Set(ids).size !== ids.length) ctx.addIssue({ code: 'custom', message: 'duplicate' });
 };
 
-const TagIds = z.array(zUuid).min(1).max(TAG_IDS_MAX).superRefine(distinct);
+const TagIds = z.array(zTagId).min(1).max(TAG_IDS_MAX).superRefine(distinct);
 
 const TriageBody = z.strictObject({
   commentIds: z.array(zUuid).min(1).max(BULK_MAX).superRefine(distinct),

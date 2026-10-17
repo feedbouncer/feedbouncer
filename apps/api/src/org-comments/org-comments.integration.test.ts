@@ -670,6 +670,24 @@ describe('replies, done and tags on the workspace list', () => {
     expect(both.body.total).toBe(1);
   });
 
+  it('uppercase tag ids behave like lowercase ones', async () => {
+    const c = await fbComment(page);
+    const tagId = await newTag('Upper case id');
+    const upper = tagId.toUpperCase();
+    const add = await triage({ commentIds: [c.id], op: { type: 'add_tags', tagIds: [upper] } });
+    expect(add.body.results[0]).toMatchObject({ status: 'ok', changed: true });
+    const again = await triage({ commentIds: [c.id], op: { type: 'add_tags', tagIds: [tagId] } });
+    expect(again.body.results[0]).toMatchObject({ status: 'ok', changed: false });
+    const dup = await triage({
+      commentIds: [c.id],
+      op: { type: 'add_tags', tagIds: [tagId, upper] },
+    });
+    expect(dup.status).toBe(400);
+    const filtered = await list(`?queue=all&tags=${upper}`);
+    expect(filtered.body.applied.tags).toEqual([tagId]);
+    expect(idsOf(filtered)).toEqual([c.id]);
+  });
+
   it('tags=<B tag id> ignored (applied.tags empty); tags=notauuid → 400', async () => {
     const bTag = await api.req('POST', `/api/v1/orgs/${B.orgId}/tags`, {
       cookie: B.owner.cookie,

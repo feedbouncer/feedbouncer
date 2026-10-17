@@ -69,10 +69,10 @@ const iso = (d: Date): string => d.toISOString();
 const isoOrNull = (d: Date | null): string | null => d && iso(d);
 
 export function toCommentDto(c: VisibleComment, reply: ReplyAvailability): VisibleCommentDto {
-  const shown: Partial<VisibleComment> = { ...c };
-  delete shown.replyTarget;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- dropped from the response
+  const { replyTarget: _, ...shown } = c;
   return {
-    ...(shown as Omit<VisibleComment, 'replyTarget'>),
+    ...shown,
     postedAt: iso(c.postedAt),
     done: c.done && { at: iso(c.done.at), byName: c.done.byName },
     replies: c.replies.map((r) => ({

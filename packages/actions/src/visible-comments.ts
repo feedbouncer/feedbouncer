@@ -497,7 +497,7 @@ export class PgVisibleComments {
   }
 
   private async tagsApply(orgId: string, tagIds: string[]): Promise<string[]> {
-    const wanted = [...new Set(tagIds)];
+    const wanted = [...new Set(tagIds.map((id) => id.toLowerCase()))];
     if (wanted.length === 0) return [];
     const { rows } = await this.pool.query<{ id: string }>(
       `SELECT id FROM tag WHERE organization_id = $1 AND id = ANY($2::uuid[])`,
