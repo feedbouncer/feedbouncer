@@ -152,6 +152,7 @@ describe('lockedActor', () => {
   const ctxFor = (organizationId: string, actorUserId: string, role: Role): OrgContext => ({
     organizationId,
     actorUserId,
+    grants: [],
     role,
   });
   const inTx = async <T>(fn: (c: pg.PoolClient) => Promise<T>): Promise<T> =>

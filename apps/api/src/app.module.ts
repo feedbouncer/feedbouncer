@@ -38,6 +38,8 @@ import {
   OrgInvitationsController,
 } from './invitations/invitations.controller.js';
 import { InvitationsService } from './invitations/invitations.service.js';
+import { RoleGrantsController } from './role-grants/role-grants.controller.js';
+import { RoleGrantsService } from './role-grants/role-grants.service.js';
 import { MembersController } from './members/members.controller.js';
 import { MembersService } from './members/members.service.js';
 import { MeController } from './me/me.controller.js';
@@ -102,6 +104,7 @@ export class AppModule {
         ClassifierController,
         PoliciesController,
         MembersController,
+        RoleGrantsController,
         OrgInvitationsController,
         InvitationsController,
       ],
@@ -125,6 +128,7 @@ export class AppModule {
         ClassifierService,
         PoliciesService,
         MembersService,
+        RoleGrantsService,
         InvitationsService,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.

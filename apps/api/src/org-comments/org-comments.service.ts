@@ -1,8 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { can } from '@feedbouncer/authz';
 import { PgVisibleComments, type VisibleCommentFilter } from '@feedbouncer/actions';
 import type { AppDeps } from '../deps.js';
-import type { OrgContext } from '../tenancy/org-access.guard.js';
+import { orgCan, type OrgContext } from '../tenancy/org-access.guard.js';
 import { DEPS } from '../tokens.js';
 import type { ListQueryDto } from './org-comments.controller.js';
 import {
@@ -58,7 +57,7 @@ export class OrgCommentsService {
       options,
       accounts: accounts.map(toAccountDto),
       lastSyncedAt: synced.length ? new Date(Math.max(...synced)).toISOString() : null,
-      canManageConnections: can(org.role, 'connection.manage'),
+      canManageConnections: orgCan(org, 'connection.manage'),
     };
   }
 }

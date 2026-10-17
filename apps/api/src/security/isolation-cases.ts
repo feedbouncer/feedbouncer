@@ -518,6 +518,17 @@ export const CASES: IsolationCase[] = [
     url: (f) => `/api/v1/orgs/${f.A.orgId}/members/${f.B.member.userId}`,
   },
   {
+    route: 'GET /api/v1/orgs/:orgId/role-grants',
+    name: 'list B role grants',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/role-grants`,
+  },
+  {
+    route: 'PUT /api/v1/orgs/:orgId/role-grants',
+    name: 'grant reply in B',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/role-grants`,
+    body: () => ({ role: 'member', capability: 'comment.reply', granted: true }),
+  },
+  {
     route: 'GET /api/v1/orgs/:orgId/invitations',
     name: 'list B invitations',
     url: (f) => `/api/v1/orgs/${f.B.orgId}/invitations`,

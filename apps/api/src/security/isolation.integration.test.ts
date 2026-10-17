@@ -223,6 +223,9 @@ async function snapshot(orgId: string) {
     brands: await q(
       'SELECT id, name, archived_at FROM brand WHERE organization_id = $1 ORDER BY id',
     ),
+    roleGrants: await q(
+      'SELECT role, capability FROM role_grant WHERE organization_id = $1 ORDER BY role, capability',
+    ),
     members: await q(
       'SELECT user_id, role FROM membership WHERE organization_id = $1 ORDER BY user_id',
     ),

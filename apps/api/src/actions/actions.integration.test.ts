@@ -307,6 +307,7 @@ describe('simulate', () => {
       organizationId: fb.orgId,
       actorUserId: fb.member.userId,
       role: 'member',
+      grants: [],
     } as const;
     const r = await service.simulate(org, fb.brandId, created.body.id, s.commentId);
     expect(r.steps.map((x) => x.type)).toEqual(['hide']);
