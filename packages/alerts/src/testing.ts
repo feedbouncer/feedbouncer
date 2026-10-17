@@ -93,3 +93,24 @@ export async function seedNegativeComments(
   );
   return ids;
 }
+
+/** Inserts `count` live (or backfill) comments flagged by the classifier; their review items are created at `createdAt`. */
+export async function seedFlags(
+  c: pg.ClientBase,
+  tenant: Tenant,
+  o: { count: number; createdAt: Date; origin?: 'live' | 'backfill' },
+): Promise<string[]> {
+  const commentIds = await seedNegativeComments(c, tenant, {
+    count: o.count,
+    postedAt: o.createdAt,
+    outcome: 'flag',
+    ...(o.origin ? { origin: o.origin } : {}),
+  });
+  const r = await c.query<{ id: string }>(
+    `UPDATE review_item SET created_at = $3
+      WHERE organization_id = $1 AND comment_id = ANY($2::uuid[])
+      RETURNING id`,
+    [tenant.organizationId, commentIds, o.createdAt],
+  );
+  return r.rows.map((x) => x.id);
+}

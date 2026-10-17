@@ -8,3 +8,6 @@ export const SHARE_CEILING = 0.9;
 export const SENSITIVITY_MULTIPLIER = { high: 2, medium: 3, low: 5 } as const;
 export const ESCALATION_FACTOR = 2;
 export const ROLLUP_REFRESH_HOURS = 2;
+export const FLAG_BATCH_SECONDS = 120;
+export const FLAG_DIGEST_MAX = 100;
+export const FLAG_LOOKBACK_HOURS = 24;
