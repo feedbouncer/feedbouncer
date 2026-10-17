@@ -72,7 +72,7 @@ export class AlertChannelsController {
   @HttpCode(200)
   @RequireCapability('alert.manage')
   test(@Req() req: OrgRequest, @Param('channelId') channelId: string) {
-    return this.alerts.test(req.org, parseUuidOr404(channelId));
+    return this.alerts.test(req.org, parseUuidOr404(channelId), req.ip);
   }
 
   @Delete(':channelId')

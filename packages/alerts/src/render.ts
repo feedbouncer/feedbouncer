@@ -91,6 +91,9 @@ function content(v: AlertView): Content {
     counts += ` Up from ${c.triggerCount} when the alert started.`;
   }
   lines.push(counts);
+  lines.push(
+    'The link lists only comments still visible; hidden or removed ones are counted but not shown.',
+  );
   return {
     title:
       v.type === 'spike_escalation'

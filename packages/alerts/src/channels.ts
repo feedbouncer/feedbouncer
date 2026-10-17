@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { withTransaction, isUniqueViolation } from '@feedbouncer/db';
 import { assertAllowedUrl } from '@feedbouncer/connectors';
-import { RECIPIENT } from '@feedbouncer/mailer';
+import { normalizeAddress } from '@feedbouncer/mailer';
 import { open, seal, type KeyProvider } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
 import { recordAlertAudit } from './audit.js';
@@ -25,11 +25,6 @@ export function parseSlackWebhookUrl(
   } catch {
     return { ok: false };
   }
-}
-
-export function normalizeEmail(raw: string): string | null {
-  const email = raw.trim().toLowerCase();
-  return email.length <= 254 && RECIPIENT.test(email) ? email : null;
 }
 
 export type ChannelKind = 'slack' | 'email';
@@ -198,7 +193,7 @@ export class PgAlertChannels {
     | { status: 'created'; channel: AlertChannel; confirmToken: string }
     | { status: 'invalid_email' | 'email_taken' }
   > {
-    const email = normalizeEmail(i.email);
+    const email = normalizeAddress(i.email);
     if (email === null) return { status: 'invalid_email' };
     const label = cleanLabel(i.label ?? '') || cleanLabel(email);
     const id = randomUUID();

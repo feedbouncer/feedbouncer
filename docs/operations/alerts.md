@@ -19,7 +19,7 @@ These do not count:
 - decisions from rules that are not enforced;
 - `approve` decisions.
 
-The same definition drives the "View comments" link in a spike alert, so the count in the message and the linked list agree.
+The "View comments" link in a spike alert uses the same filter, but the comments list only shows comments that are still visible. Comments the platform has already hidden or removed are counted in the message and not listed, and the message says so.
 
 ## Spike formula
 

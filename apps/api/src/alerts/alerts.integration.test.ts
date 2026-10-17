@@ -521,7 +521,7 @@ describe('alerts API', () => {
     });
     const mail = await api.req('POST', `/api/v1/orgs/${o.orgId}/alert-channels/email`, {
       cookie: o.admin.cookie,
-      body: { email: 'audit-person@alerts.test' },
+      body: { email: `audit-person-${randomUUID().slice(0, 6)}@alerts.test` },
     });
     await api.req('PUT', brandUrl(o), {
       cookie: o.admin.cookie,

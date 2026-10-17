@@ -81,6 +81,12 @@ describe('renderSlack', () => {
     expect(s).toContain('Worst &lt;service&gt; &amp; @​here');
   });
 
+  it('spike alerts say the linked list leaves out comments already hidden or removed', () => {
+    expect(json(renderSlack(spike()))).toContain(
+      'The link lists only comments still visible; hidden or removed ones are counted but not shown.',
+    );
+  });
+
   it('rounds the usual level from 10 per hour', () => {
     const s = json(
       renderSlack(spike({ counts: { negatives: 30, total: 31, expectedPerHour: 12.6 } })),

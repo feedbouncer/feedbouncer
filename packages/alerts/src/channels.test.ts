@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeEmail, parseSlackWebhookUrl } from './channels.js';
+import { parseSlackWebhookUrl } from './channels.js';
 
 const GOOD = 'https://hooks.slack.com/services/TABC12345/BXYZ98765/abcdefghijklmnop1234';
 
@@ -24,14 +24,5 @@ describe('parseSlackWebhookUrl', () => {
     expect(r.ok && r.hint).toBe('T…2345/B…8765');
     expect(r.ok && r.url.href).toBe(GOOD);
     expect(r.ok && r.hint).not.toContain('abcdefgh');
-  });
-});
-
-describe('normalizeEmail', () => {
-  it('trims and lowercases', () => {
-    expect(normalizeEmail('  Ann@Example.COM ')).toBe('ann@example.com');
-  });
-  it.each(['a@b,c@d', '<a@b>', `${'a'.repeat(250)}@b.co`, 'nope', ''])('rejects %s', (raw) => {
-    expect(normalizeEmail(raw)).toBeNull();
   });
 });

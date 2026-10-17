@@ -181,10 +181,14 @@ export class AlertsService {
   async test(
     org: OrgContext,
     channelId: string,
+    ip: string,
   ): Promise<{ ok: true } | { ok: false; code: string }> {
     const channel = await this.#channels.get(org.organizationId, channelId);
     if (!channel) throw notFound();
     await this.limits.consumeAlertTest(channelId);
+    if (channel.kind === 'email') {
+      await this.limits.consumeEmailSend(normalizeEmail(channel.email!), ip);
+    }
     const r = await this.#dispatcher.sendTest(org.organizationId, channelId);
     this.deps.log.info('alerts.test', {
       kind: channel.kind,
