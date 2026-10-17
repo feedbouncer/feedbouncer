@@ -18,6 +18,7 @@ import {
   GATED_STEP_TYPES,
   mergePlan,
   needsConfirmation,
+  sendsReply,
   type SuggestionStatus,
 } from './suggestion-plan.js';
 import type { LockedSuggestion, PgSuggestionStore, SuggestionFilter } from './suggestions.js';
@@ -51,7 +52,8 @@ export type DecisionResult =
         | 'not_found'
         | 'confirmation_required'
         | 'connection_needs_reconnect'
-        | 'connection_inactive';
+        | 'connection_inactive'
+        | 'forbidden';
     }
   | {
       status: 'refused';
@@ -117,7 +119,7 @@ export function approveSuggestion(
   d: Deps,
   scope: BrandScope,
   id: string,
-  i: { userId: string; requestKey: string; confirm?: boolean },
+  i: { userId: string; requestKey: string; confirm?: boolean; mayReply: boolean },
 ): Promise<DecisionResult> {
   return decideLocked(d, scope, id, 'approve', i, async (tx, s, now) => {
     const system = (status: 'expired' | 'not_applicable', reason: string): Promise<boolean> =>
@@ -153,6 +155,7 @@ export function approveSuggestion(
       });
       return { result: { status: 'withdrawn' } };
     }
+    if (!i.mayReply && sendsReply(plan.steps)) return { result: refused('forbidden') };
     if (needsConfirmation(plan.steps) && !i.confirm)
       return { result: refused('confirmation_required') };
 
@@ -214,7 +217,7 @@ const decide = (
   d: Deps,
   scope: BrandScope,
   id: string,
-  i: { action: Action; userId: string; requestKey: string; confirm?: boolean },
+  i: { action: Action; userId: string; requestKey: string; confirm?: boolean; mayReply: boolean },
 ): Promise<DecisionResult> =>
   i.action === 'approve' ? approveSuggestion(d, scope, id, i) : dismissSuggestion(d, scope, id, i);
 
@@ -227,6 +230,7 @@ export async function bulkDecide(
     userId: string;
     requestKey: string;
     confirm?: boolean;
+    mayReply: boolean;
   },
 ): Promise<{ id: string; result: DecisionResult }[]> {
   const known = await d.pool.query<{ id: string; connection_id: string }>(
@@ -269,6 +273,8 @@ export const SUGGESTION_BULK_JOB = {
     userId: z.string().regex(UUID),
     requestKey: z.string().regex(REQUEST_KEY),
     confirm: z.boolean(),
+    // Whether the requester may approve reply steps; a payload without it refuses them.
+    mayReply: z.boolean().default(false),
     cutoff: z.iso.datetime(),
     batch: z.number().int().min(0).max(100_000),
     after: z.string().regex(UUID).optional(),
@@ -287,6 +293,7 @@ export async function requestBulkByFilter(
     userId: string;
     requestKey: string;
     confirm?: boolean;
+    mayReply: boolean;
   },
 ): Promise<{ matched: number }> {
   const conn = await d.pool.query<{ platform: 'facebook' | 'instagram' }>(
@@ -324,6 +331,7 @@ export async function requestBulkByFilter(
         userId: i.userId,
         requestKey: i.requestKey,
         confirm: i.confirm ?? false,
+        mayReply: i.mayReply,
         cutoff: now.toISOString(),
         batch: 0,
       },
@@ -352,6 +360,7 @@ export function suggestionBulkJob(d: Deps): JobDefinition<SuggestionBulkPayload>
           userId: p.userId,
           requestKey: `${p.requestKey}:${id}`,
           confirm: p.confirm,
+          mayReply: p.mayReply,
         });
         if (
           result.status === 'refused' &&
@@ -383,7 +392,12 @@ export function suggestionBulkJob(d: Deps): JobDefinition<SuggestionBulkPayload>
 export async function endReviewModeEarly(
   d: Deps,
   scope: ConnectionScope,
-  i: { userId: string; pending: 'leave' | 'dismiss' | 'approve'; confirm?: boolean },
+  i: {
+    userId: string;
+    pending: 'leave' | 'dismiss' | 'approve';
+    confirm?: boolean;
+    mayReply: boolean;
+  },
 ): Promise<
   | { status: 'ended'; pendingCount: number }
   | { status: 'refused'; code: 'review_mode_not_active' | 'confirmation_required' }
@@ -452,6 +466,7 @@ export async function endReviewModeEarly(
       userId: i.userId,
       requestKey: `review_end:${scope.connectionId}`,
       confirm: true,
+      mayReply: i.mayReply,
     });
   if (pendingCount === null) {
     // Ended early with approve but the enqueue failed: the retry enqueues again.

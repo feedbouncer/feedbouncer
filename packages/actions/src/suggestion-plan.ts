@@ -21,6 +21,10 @@ export const SUGGESTION_REASONS = [
   'grace_period_ended',
 ] as const;
 
+/** Steps that send text to the author; approving them takes the reply capability. */
+export const sendsReply = (steps: readonly ActionStep[]): boolean =>
+  steps.some((s) => s.type === 'auto_reply' || s.type === 'private_reply');
+
 const isGated = (s: ActionStep): s is GatedStep => s.type !== 'flag_for_review';
 
 export function splitGated(steps: readonly ActionStep[]): {

@@ -22,7 +22,7 @@ import { recordAudit } from '../audit/audit.js';
 import { ConnectionsService } from '../connections/connections.service.js';
 import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
 import { requireBrand, type BrandScope } from '../tenancy/brand-scope.js';
-import type { OrgContext } from '../tenancy/org-access.guard.js';
+import { orgCan, type OrgContext } from '../tenancy/org-access.guard.js';
 import { DEPS } from '../tokens.js';
 import {
   toDecisionDto,
@@ -66,6 +66,7 @@ const REFUSALS = {
   connection_needs_reconnect: [409, 'connection_needs_reconnect'],
   connection_inactive: [409, 'connection_inactive'],
   review_mode_not_active: [409, 'review_mode_not_active'],
+  forbidden: [403, 'forbidden'],
 } as const satisfies Record<string, readonly [number, ErrorCode]>;
 
 function refusal(code: keyof typeof REFUSALS): ApiError {
@@ -164,6 +165,7 @@ export class ReviewModeService {
     );
     const r = await endReviewModeEarly(this.#configured(), scope, {
       userId: org.actorUserId,
+      mayReply: orgCan(org, 'comment.reply'),
       pending: body.pending,
       ...(body.confirm && { confirm: true }),
     });
@@ -223,6 +225,7 @@ export class ReviewModeService {
       await approveSuggestion(this.#configured(), scope, id, {
         userId: org.actorUserId,
         requestKey: body.requestKey,
+        mayReply: orgCan(org, 'comment.reply'),
         ...(body.confirm && { confirm: true }),
       }),
     );
@@ -256,6 +259,7 @@ export class ReviewModeService {
       action: body.action,
       userId: org.actorUserId,
       requestKey: body.requestKey,
+      mayReply: orgCan(org, 'comment.reply'),
       ...(body.confirm && { confirm: true }),
     };
     if ('ids' in body) {

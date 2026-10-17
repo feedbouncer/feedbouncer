@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   ACTION_KINDS,
+  REPLY_KINDS,
   availabilityFor,
   connectionRefusal,
   eligibilityComment,
@@ -9,22 +10,22 @@ import {
   type ActionKind,
   type CommentRow,
   type ModerationActionView,
-  type RefusalCode,
 } from '@feedbouncer/comments';
 import type { ClassificationView } from '@feedbouncer/classifier';
 import { PgPolicyEvaluationStore, type EvaluationView } from '@feedbouncer/policies';
 import { systemClock, type ConnectorCapabilities } from '@feedbouncer/connectors';
 import type { AppDeps } from '../deps.js';
-import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
+import { ApiError, notFound } from '../http/errors.js';
 import { ClassifierService } from '../classifier/classifier.service.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
-import type { OrgContext } from '../tenancy/org-access.guard.js';
+import { orgCan, type OrgContext } from '../tenancy/org-access.guard.js';
 import {
   listCommentDecisions,
   latestDecisions,
   type DecisionDto,
 } from '../rules/decisions.queries.js';
 import { COMMENTS, DEPS } from '../tokens.js';
+import { throwRefusal } from './refusals.js';
 
 export interface CommentView {
   id: string;
@@ -66,16 +67,6 @@ export interface ListCommentsQuery {
 // Sorts before every comment id, so `before` alone means "posted strictly earlier".
 const MIN_UUID = '00000000-0000-0000-0000-000000000000';
 
-const REFUSALS: Record<Exclude<RefusalCode, 'not_found'>, [number, ErrorCode]> = {
-  unsupported: [422, 'unsupported_action'],
-  request_key_conflict: [409, 'request_key_conflict'],
-  connection_needs_reconnect: [409, 'connection_needs_reconnect'],
-  connection_inactive: [409, 'connection_inactive'],
-  review_mode_active: [409, 'review_mode_active'],
-  // Only refuses automation; a person's request never gets here.
-  moderator_override: [403, 'forbidden'],
-};
-
 /** Used when the platform's connector is not registered (e.g. Instagram disabled after connecting). */
 const DEFAULT_REPLY_LIMITS = { public_reply: 8000, private_reply: 8000 } as const;
 
@@ -89,11 +80,15 @@ function availability(
   c: CommentRow,
   caps: ConnectorCapabilities | undefined,
   now: Date,
+  mayReply: boolean,
 ): Record<ActionKind, ActionAvailability> {
   const blocked = connectionRefusal(c.connectionStatus);
   if (blocked) return unavailable(blocked);
   if (!caps) return unavailable('unsupported');
-  return availabilityFor({ comment: eligibilityComment(c), caps, now });
+  const all = availabilityFor({ comment: eligibilityComment(c), caps, now });
+  if (mayReply) return all;
+  const notPermitted: ActionAvailability = { available: false, reason: 'not_permitted' };
+  return { ...all, public_reply: notPermitted, private_reply: notPermitted };
 }
 
 const toView = (
@@ -101,6 +96,7 @@ const toView = (
   caps: ConnectorCapabilities | undefined,
   now: Date,
   latestDecision: DecisionDto | null,
+  mayReply: boolean,
 ): CommentView => ({
   id: c.id,
   connectionId: c.connectionId,
@@ -116,7 +112,7 @@ const toView = (
   mediaExternalId: c.sourceExternalId,
   origin: c.origin,
   ads: c.ads.map((a) => ({ adId: a.adId, adAccountId: a.adAccountId })),
-  availability: availability(c, caps, now),
+  availability: availability(c, caps, now, mayReply),
   replyLimits: caps ? { ...resolveConstraints(caps).maxReplyChars } : { ...DEFAULT_REPLY_LIMITS },
   latestDecision,
 });
@@ -157,8 +153,15 @@ export class CommentsService {
       scope,
       rows.map((c) => c.id),
     );
+    const mayReply = orgCan(org, 'comment.reply');
     return rows.map((c) =>
-      toView(c, registry?.get(c.platform)?.capabilities, now, decisions.get(c.id) ?? null),
+      toView(
+        c,
+        registry?.get(c.platform)?.capabilities,
+        now,
+        decisions.get(c.id) ?? null,
+        mayReply,
+      ),
     );
   }
 
@@ -210,6 +213,8 @@ export class CommentsService {
     body: { kind: ActionKind; requestKey: string; text?: string | undefined },
   ): Promise<{ status: 200 | 202; action: ModerationActionView }> {
     const { actions } = this.#configured();
+    if (REPLY_KINDS.has(body.kind) && !orgCan(org, 'comment.reply'))
+      throw new ApiError(403, 'forbidden');
     const scope = await requireBrand(this.deps.pool, org, brandId);
     const r = await actions.request({
       scope,
@@ -223,8 +228,7 @@ export class CommentsService {
       if (r.code === 'not_found') throw notFound();
       if (r.code === 'text_too_long')
         throw new ApiError(422, 'text_too_long', undefined, { max: r.max });
-      const [status, code] = REFUSALS[r.code];
-      throw new ApiError(status, code);
+      throwRefusal(r.code);
     }
     return { status: r.status === 'accepted' ? 202 : 200, action: r.action };
   }

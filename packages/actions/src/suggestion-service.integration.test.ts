@@ -315,7 +315,7 @@ const seedPending = async (steps: readonly GatedStep[] = HIDE) => {
 };
 
 const key = () => `k-${randomUUID()}`;
-const user = () => ({ userId: t.userId, requestKey: key() });
+const user = () => ({ userId: t.userId, requestKey: key(), mayReply: true });
 const statusOf = async (sid: string) =>
   (
     await pool.query<{
@@ -507,7 +507,11 @@ describe('approveSuggestion', () => {
     const { sid } = await seedPending();
     const other = await seedTenant(ctx.c, `svcx${++n}`, { reviewMode: 'on' });
     expect(
-      await approveSuggestion(d, other, sid, { userId: other.userId, requestKey: key() }),
+      await approveSuggestion(d, other, sid, {
+        userId: other.userId,
+        requestKey: key(),
+        mayReply: true,
+      }),
     ).toEqual({
       status: 'refused',
       code: 'not_found',
@@ -567,9 +571,7 @@ describe('bulk', () => {
 
   it('bulk stops for the connection that is inactive', async () => {
     const [a, b] = [await seedPlain(), await seedPlain()] as [string, string];
-    await ctx.c.query("UPDATE connection SET status = 'paused' WHERE id = $1", [
-      t.connectionId,
-    ]);
+    await ctx.c.query("UPDATE connection SET status = 'paused' WHERE id = $1", [t.connectionId]);
     const res = await bulkDecide(d, t, { action: 'approve', ids: [a, b], ...user() });
     expect(res.map((r) => r.result)).toEqual([
       { status: 'refused', code: 'connection_inactive' },
@@ -681,7 +683,9 @@ describe('endReviewModeEarly', () => {
   it('end early with dismiss dismisses all pending with review_mode_ended', async () => {
     const a = (await seedPending()).sid;
     const b = (await seedPending()).sid;
-    expect(await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'dismiss' })).toEqual({
+    expect(
+      await endReviewModeEarly(d, scope, { userId: t.userId, mayReply: true, pending: 'dismiss' }),
+    ).toEqual({
       status: 'ended',
       pendingCount: 2,
     });
@@ -703,7 +707,9 @@ describe('endReviewModeEarly', () => {
     const edited = await seedPending();
     await pool.query("UPDATE comment SET platform_state = 'deleted' WHERE id = $1", [gone.id]);
     await pool.query("UPDATE comment SET body = 'changed' WHERE id = $1", [edited.id]);
-    expect(await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'dismiss' })).toEqual({
+    expect(
+      await endReviewModeEarly(d, scope, { userId: t.userId, mayReply: true, pending: 'dismiss' }),
+    ).toEqual({
       status: 'ended',
       pendingCount: 1,
     });
@@ -722,7 +728,7 @@ describe('endReviewModeEarly', () => {
 
   it('end early with leave keeps them pending and grace runs from ended_at', async () => {
     const { sid } = await seedPending();
-    await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'leave' });
+    await endReviewModeEarly(d, scope, { userId: t.userId, mayReply: true, pending: 'leave' });
     expect(await statusOf(sid)).toMatchObject({ status: 'pending' });
     const view = await suggestions.load(t, sid, new Date());
     const endedAt = (await ended()).review_mode_ended_at!;
@@ -733,7 +739,12 @@ describe('endReviewModeEarly', () => {
   it('end early with approve approves all pending', async () => {
     const { sid, externalId } = await seedPending();
     nowMs = Date.now();
-    await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'approve', confirm: true });
+    await endReviewModeEarly(d, scope, {
+      userId: t.userId,
+      mayReply: true,
+      pending: 'approve',
+      confirm: true,
+    });
     await queue.drain();
     expect(await statusOf(sid)).toMatchObject({ status: 'approved' });
     expect(graph.state(externalId)).toBe('hidden');
@@ -746,13 +757,23 @@ describe('endReviewModeEarly', () => {
     queue.enqueue = () => Promise.reject(new Error('queue down'));
     try {
       await expect(
-        endReviewModeEarly(d, scope, { userId: t.userId, pending: 'approve', confirm: true }),
+        endReviewModeEarly(d, scope, {
+          userId: t.userId,
+          mayReply: true,
+          pending: 'approve',
+          confirm: true,
+        }),
       ).rejects.toThrow('queue down');
     } finally {
       queue.enqueue = enqueue;
     }
     expect(
-      await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'approve', confirm: true }),
+      await endReviewModeEarly(d, scope, {
+        userId: t.userId,
+        mayReply: true,
+        pending: 'approve',
+        confirm: true,
+      }),
     ).toEqual({ status: 'ended', pendingCount: 1 });
     await queue.drain();
     expect(await statusOf(sid)).toMatchObject({ status: 'approved' });
@@ -761,9 +782,14 @@ describe('endReviewModeEarly', () => {
 
   it('approve after ending early with leave -> review_mode_not_active, nothing enqueued', async () => {
     await seedPending();
-    await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'leave' });
+    await endReviewModeEarly(d, scope, { userId: t.userId, mayReply: true, pending: 'leave' });
     expect(
-      await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'approve', confirm: true }),
+      await endReviewModeEarly(d, scope, {
+        userId: t.userId,
+        mayReply: true,
+        pending: 'approve',
+        confirm: true,
+      }),
     ).toEqual({ status: 'refused', code: 'review_mode_not_active' });
     expect(queue.pending).toHaveLength(0);
   });
@@ -772,14 +798,21 @@ describe('endReviewModeEarly', () => {
     await seedPending();
     nowMs = Date.now() + 365 * 24 * HOUR;
     expect(
-      await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'approve', confirm: true }),
+      await endReviewModeEarly(d, scope, {
+        userId: t.userId,
+        mayReply: true,
+        pending: 'approve',
+        confirm: true,
+      }),
     ).toEqual({ status: 'refused', code: 'review_mode_not_active' });
     expect(queue.pending).toHaveLength(0);
   });
 
   it('end early with approve without confirm -> confirmation_required, window still active', async () => {
     await seedPending();
-    expect(await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'approve' })).toEqual({
+    expect(
+      await endReviewModeEarly(d, scope, { userId: t.userId, mayReply: true, pending: 'approve' }),
+    ).toEqual({
       status: 'refused',
       code: 'confirmation_required',
     });
@@ -787,8 +820,10 @@ describe('endReviewModeEarly', () => {
   });
 
   it('end early twice -> review_mode_not_active', async () => {
-    await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'leave' });
-    expect(await endReviewModeEarly(d, scope, { userId: t.userId, pending: 'leave' })).toEqual({
+    await endReviewModeEarly(d, scope, { userId: t.userId, mayReply: true, pending: 'leave' });
+    expect(
+      await endReviewModeEarly(d, scope, { userId: t.userId, mayReply: true, pending: 'leave' }),
+    ).toEqual({
       status: 'refused',
       code: 'review_mode_not_active',
     });
@@ -798,11 +833,68 @@ describe('endReviewModeEarly', () => {
     const other = await seedTenant(ctx.c, `svcy${++n}`, { reviewMode: 'on' });
     const foreign = { ...scope, organizationId: other.organizationId, brandId: other.brandId };
     expect(
-      await endReviewModeEarly(d, foreign, { userId: other.userId, pending: 'leave' }),
+      await endReviewModeEarly(d, foreign, {
+        userId: other.userId,
+        mayReply: true,
+        pending: 'leave',
+      }),
     ).toEqual({
       status: 'refused',
       code: 'review_mode_not_active',
     });
     expect((await ended()).review_mode_ended_at).toBeNull();
+  });
+});
+
+describe('reply steps without the reply capability', () => {
+  const REPLY: GatedStep[] = [{ type: 'auto_reply', template: 'Thanks for writing!' }];
+  const noReply = () => ({ ...user(), mayReply: false });
+
+  it('approve is refused forbidden and leaves the suggestion pending without a run', async () => {
+    await setRuleActions(REPLY);
+    const { sid } = await seedPending(REPLY);
+    expect(await approveSuggestion(d, t, sid, noReply())).toEqual({
+      status: 'refused',
+      code: 'forbidden',
+    });
+    expect(await statusOf(sid)).toMatchObject({ status: 'pending' });
+    expect(await runCount()).toBe(0);
+    expect(await approveSuggestion(d, t, sid, user())).toMatchObject({ status: 'approved' });
+  });
+
+  it('bulk by filter and end-early approve leave reply suggestions pending', async () => {
+    await setRuleActions(REPLY);
+    const filtered = (await seedPending(REPLY)).sid;
+    nowMs = Date.now();
+    expect(
+      await requestBulkByFilter(d, scope, { action: 'approve', filter: {}, ...noReply() }),
+    ).toEqual({
+      matched: 1,
+    });
+    await queue.drain();
+    expect(await statusOf(filtered)).toMatchObject({ status: 'pending' });
+
+    await endReviewModeEarly(d, scope, {
+      userId: t.userId,
+      mayReply: false,
+      pending: 'approve',
+      confirm: true,
+    });
+    await queue.drain();
+    expect(await statusOf(filtered)).toMatchObject({ status: 'pending' });
+    expect(await runCount()).toBe(0);
+  });
+
+  it('a queued bulk payload without mayReply refuses replies', () => {
+    const p = SUGGESTION_BULK_JOB.payload.parse({
+      action: 'approve',
+      filter: {},
+      userId: t.userId,
+      requestKey: key(),
+      confirm: true,
+      cutoff: new Date().toISOString(),
+      batch: 0,
+    });
+    expect(p.mayReply).toBe(false);
   });
 });

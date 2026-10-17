@@ -52,6 +52,8 @@ export function shownActions(
 
 /** Text for an unavailable action, from the outcome texts. */
 export function reasonText(reason: string, platform: string): string {
+  if (reason === 'not_permitted')
+    return "You don't have permission to reply. Ask an owner or admin.";
   return outcomeSentence(reason, platform);
 }
 
