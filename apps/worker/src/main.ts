@@ -48,6 +48,7 @@ import {
 } from '@feedbouncer/service-runtime';
 import { startAlertLoops } from './alerts.js';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
+import { startReportLoops } from './reports.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
 import { buildConnectorRegistry, buildJobRegistry } from './registries.js';
 import { reportStartupFailure } from './startup.js';
@@ -128,11 +129,12 @@ try {
   }
 
   const { facebook, mail } = env;
-  // Mail is only configured (and only needed) alongside the Facebook connector or email alerts.
+  // Mail is only configured (and only needed) for Facebook, email alerts or weekly reports.
   const mailer = mail ? createSmtpMailer(mail.smtpUrl, mail.mailFrom) : null;
   let jobs = new JobRegistry();
   let scheduler: PollScheduler | null = null;
   let alertLoops: ReturnType<typeof startAlertLoops> = null;
+  let reportLoops: ReturnType<typeof startReportLoops> = null;
   if (facebook && mail && mailer) {
     const stack = buildPgConnectorStack({
       pool,
@@ -255,6 +257,7 @@ try {
 
   onShutdown(async () => {
     alertLoops?.stop();
+    reportLoops?.stop();
     await scheduler?.stop();
     await Promise.all([worker.close(), jobWorkers.close()]);
     await queues.close();
@@ -304,6 +307,10 @@ try {
       web: () => env.publicWebUrl!,
     },
     { pool, log, keys: env.encryption, mailer },
+  );
+  reportLoops = startReportLoops(
+    { enabled: env.weeklyReports },
+    { pool, log, keys: env.encryption, mailer, web: env.publicWebUrl },
   );
 
   worker.run().catch((err: unknown) => {
