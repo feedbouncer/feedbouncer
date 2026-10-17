@@ -43,6 +43,15 @@ describe('envelope v1', () => {
     await expect(open(ringK1, blob, { ...gctx, connectionId: 'grant-2' })).rejects.toThrow();
   });
 
+  it('seal/open round-trips both alert kinds; context with a different channel id fails to open', async () => {
+    for (const kind of ['alert_slack_webhook', 'alert_unsubscribe_token'] as const) {
+      const actx = { organizationId: 'org', connectionId: 'channel-1', kind };
+      const { blob } = await seal(ringK1, new Secret('https://hooks.example.test/T0/B0/x'), actx);
+      expect((await open(ringK1, blob, actx)).reveal()).toBe('https://hooks.example.test/T0/B0/x');
+      await expect(open(ringK1, blob, { ...actx, connectionId: 'channel-2' })).rejects.toThrow();
+    }
+  });
+
   it('round-trips and records the key id', async () => {
     const { keyId, blob } = await seal(ringK1, new Secret(TOKEN), ctx);
     expect(keyId).toBe('k1');

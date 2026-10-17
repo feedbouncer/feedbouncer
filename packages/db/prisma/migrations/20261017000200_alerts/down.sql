@@ -1,0 +1,9 @@
+DROP INDEX comment_organization_id_brand_id_posted_at_live_idx;
+DROP TABLE alert_flag_item;
+DROP TABLE alert_delivery;
+DROP TABLE alert_event;
+DROP TABLE alert_negative_hourly;
+DROP TABLE alert_brand_state;
+DROP TABLE alert_route;
+DROP TABLE alert_brand_settings;
+DROP TABLE alert_channel;

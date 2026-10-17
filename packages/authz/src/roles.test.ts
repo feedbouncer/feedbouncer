@@ -6,6 +6,7 @@ import {
   canInviteWithRole,
   canManageInvitation,
   canRemoveMember,
+  isGrantable,
   type Capability,
   type Role,
 } from './roles.js';
@@ -28,6 +29,8 @@ const MATRIX: Record<Capability, Record<Role, boolean>> = {
   'comment.reply': { owner: true, admin: true, member: false },
   'comment.triage': { owner: true, admin: true, member: true },
   'tag.manage': { owner: true, admin: true, member: false },
+  'alert.read': { owner: true, admin: true, member: false },
+  'alert.manage': { owner: true, admin: true, member: false },
   'org.update': { owner: true, admin: true, member: false },
   'org.transfer_ownership': { owner: true, admin: false, member: false },
   'org.delete': { owner: true, admin: false, member: false },
@@ -38,6 +41,18 @@ describe('capability matrix (brief "Roles" table)', () => {
     for (const role of ROLES)
       it(`${role} ${row[role] ? 'can' : 'cannot'} ${cap}`, () =>
         expect(can(role, cap as Capability)).toBe(row[role]));
+});
+
+describe('alert.read/alert.manage', () => {
+  it('owner and admin true, member false; not grantable', () => {
+    for (const cap of ['alert.read', 'alert.manage'] as const) {
+      expect(can('owner', cap)).toBe(true);
+      expect(can('admin', cap)).toBe(true);
+      expect(can('member', cap)).toBe(false);
+      expect(can('member', cap, [cap])).toBe(false);
+      expect(isGrantable('member', cap)).toBe(false);
+    }
+  });
 });
 
 describe('canChangeRole', () => {

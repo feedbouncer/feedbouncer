@@ -19,6 +19,11 @@ const NATURAL_KEY_TABLES: Record<string, string> = {
   comment_tag: 'PRIMARY KEY (comment_id, tag_id)',
   comment_done: 'PRIMARY KEY (comment_id)',
   role_grant: 'PRIMARY KEY (organization_id, role, capability)',
+  alert_brand_settings: 'PRIMARY KEY (brand_id)',
+  alert_route: 'PRIMARY KEY (brand_id, alert_type, channel_id)',
+  alert_brand_state: 'PRIMARY KEY (brand_id)',
+  alert_negative_hourly: 'PRIMARY KEY (brand_id, hour)',
+  alert_flag_item: 'PRIMARY KEY (review_item_id)',
 };
 // Link and grant rows are inserted or deleted, never edited: they keep one event timestamp
 // (added_at, done_at, created_at) instead of created_at/updated_at and have no updated_at trigger.
