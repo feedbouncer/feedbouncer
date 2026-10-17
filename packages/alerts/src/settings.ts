@@ -25,6 +25,8 @@ export interface AlertRoute {
   enabled: boolean;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export class PgAlertSettings {
   constructor(private readonly pool: pg.Pool) {}
 
@@ -72,10 +74,16 @@ export class PgAlertSettings {
     brandId: string,
     actorUserId: string,
     i: { settings: BrandAlertSettings; routes: AlertRoute[] },
-  ): Promise<{ status: 'ok' } | { status: 'unknown_channel' }> {
+  ): Promise<{ status: 'ok' } | { status: 'unknown_channel' | 'unknown_brand' }> {
     const routes = [...new Map(i.routes.map((r) => [`${r.alertType}/${r.channelId}`, r])).values()];
     const channelIds = [...new Set(routes.map((r) => r.channelId))];
+    if (!channelIds.every((id) => UUID_RE.test(id))) return { status: 'unknown_channel' };
     return withTransaction(this.pool, async (tx) => {
+      const brand = await tx.query(
+        'SELECT 1 FROM brand WHERE organization_id = $1 AND id = $2 AND archived_at IS NULL FOR SHARE',
+        [orgId, brandId],
+      );
+      if (brand.rowCount === 0) return { status: 'unknown_brand' as const };
       const known = await tx.query(
         'SELECT count(*)::int AS n FROM alert_channel WHERE organization_id = $1 AND id = ANY($2::uuid[])',
         [orgId, channelIds],
@@ -90,7 +98,8 @@ export class PgAlertSettings {
          ON CONFLICT (brand_id) DO UPDATE SET
            sensitivity = EXCLUDED.sensitivity, min_negative_count = EXCLUDED.min_negative_count,
            cooldown_minutes = EXCLUDED.cooldown_minutes, content_mode = EXCLUDED.content_mode,
-           updated_by_user_id = EXCLUDED.updated_by_user_id`,
+           updated_by_user_id = EXCLUDED.updated_by_user_id
+         WHERE alert_brand_settings.organization_id = EXCLUDED.organization_id`,
         [
           orgId,
           brandId,
@@ -123,7 +132,8 @@ export class PgAlertSettings {
       if (routes.some((r) => r.enabled && r.alertType === 'negative_spike')) {
         await tx.query(
           `INSERT INTO alert_brand_state (organization_id, brand_id, next_eval_at) VALUES ($1, $2, now())
-           ON CONFLICT (brand_id) DO UPDATE SET next_eval_at = now()`,
+           ON CONFLICT (brand_id) DO UPDATE SET next_eval_at = now()
+           WHERE alert_brand_state.organization_id = EXCLUDED.organization_id`,
           [orgId, brandId],
         );
       }

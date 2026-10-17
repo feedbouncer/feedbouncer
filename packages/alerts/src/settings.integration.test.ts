@@ -77,6 +77,52 @@ describe('PgAlertSettings', () => {
     ).toBe(0);
   });
 
+  it('refuses malformed channel ids', async () => {
+    const r = await settings.put(a.organizationId, a.brandId, a.userId, {
+      settings: custom,
+      routes: [{ alertType: 'negative_spike', channelId: 'not-a-uuid', enabled: true }],
+    });
+    expect(r).toEqual({ status: 'unknown_channel' });
+  });
+
+  it('refuses another org brand and leaves its rows untouched', async () => {
+    const before = await h.c.query('SELECT count(*)::int AS n FROM alert_brand_settings');
+    const r = await settings.put(a.organizationId, b.brandId, a.userId, {
+      settings: custom,
+      routes: [{ alertType: 'negative_spike', channelId: chA, enabled: true }],
+    });
+    expect(r).toEqual({ status: 'unknown_brand' });
+    expect((await h.c.query('SELECT count(*)::int AS n FROM alert_brand_settings')).rows).toEqual(
+      before.rows,
+    );
+    for (const t of ['alert_route', 'alert_brand_state'])
+      expect(
+        (await h.c.query(`SELECT 1 FROM ${t} WHERE brand_id = $1`, [b.brandId])).rowCount,
+      ).toBe(0);
+
+    await settings.put(b.organizationId, b.brandId, b.userId, {
+      settings: DEFAULT_SETTINGS,
+      routes: [],
+    });
+    const bRow = await h.c.query('SELECT * FROM alert_brand_settings WHERE brand_id = $1', [
+      b.brandId,
+    ]);
+    await settings.put(a.organizationId, b.brandId, a.userId, { settings: custom, routes: [] });
+    expect(
+      (await h.c.query('SELECT * FROM alert_brand_settings WHERE brand_id = $1', [b.brandId])).rows,
+    ).toEqual(bRow.rows);
+  });
+
+  it('refuses an archived brand', async () => {
+    const c = await seedTenant(h.c, 'c');
+    await h.c.query('UPDATE brand SET archived_at = now() WHERE id = $1', [c.brandId]);
+    expect(
+      await settings.put(c.organizationId, c.brandId, c.userId, { settings: custom, routes: [] }),
+    ).toEqual({
+      status: 'unknown_brand',
+    });
+  });
+
   it('sets enabled_at only on false → true, drops unlisted routes, and creates brand state', async () => {
     const route = (enabled: boolean) => ({
       alertType: 'negative_spike' as const,

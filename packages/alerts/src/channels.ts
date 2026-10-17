@@ -86,6 +86,9 @@ function toChannel(r: ChannelRow): AlertChannel {
   };
 }
 
+const CODE_RE = /^[a-z0-9_]{1,64}$/;
+const cleanLabel = (raw: string) => raw.trim().slice(0, 80).trim();
+
 const newToken = () => randomBytes(32).toString('base64url');
 const sha256 = (s: string) => createHash('sha256').update(s).digest();
 
@@ -116,7 +119,12 @@ export class PgAlertChannels {
     orgId: string,
     actorUserId: string,
     i: { label: string; webhookUrl: string },
-  ): Promise<{ status: 'created'; channel: AlertChannel } | { status: 'invalid_webhook_url' }> {
+  ): Promise<
+    | { status: 'created'; channel: AlertChannel }
+    | { status: 'invalid_webhook_url' | 'invalid_label' }
+  > {
+    const label = cleanLabel(i.label);
+    if (label === '') return { status: 'invalid_label' };
     const parsed = parseSlackWebhookUrl(i.webhookUrl);
     if (!parsed.ok) return { status: 'invalid_webhook_url' };
     const id = randomUUID();
@@ -130,7 +138,7 @@ export class PgAlertChannels {
         `INSERT INTO alert_channel
            (id, organization_id, kind, label, status, key_id, encrypted_webhook_url, webhook_hint, created_by_user_id)
          VALUES ($1, $2, 'slack', $3, 'active', $4, $5, $6, $7) RETURNING ${COLUMNS}`,
-        [id, orgId, i.label.trim(), sealed.keyId, sealed.blob, parsed.hint, actorUserId],
+        [id, orgId, label, sealed.keyId, sealed.blob, parsed.hint, actorUserId],
       );
       await recordAlertAudit(tx, {
         organizationId: orgId,
@@ -192,7 +200,7 @@ export class PgAlertChannels {
   > {
     const email = normalizeEmail(i.email);
     if (email === null) return { status: 'invalid_email' };
-    const label = i.label?.trim() || email;
+    const label = cleanLabel(i.label ?? '') || cleanLabel(email);
     const id = randomUUID();
     const confirmToken = newToken();
     const unsubscribeToken = newToken();
@@ -208,7 +216,7 @@ export class PgAlertChannels {
           [
             id,
             orgId,
-            label.slice(0, 80),
+            label,
             sealed.keyId,
             email,
             sha256(confirmToken),
@@ -388,8 +396,9 @@ export class PgAlertChannels {
     c: pg.ClientBase,
     orgId: string,
     channelId: string,
-    code: string,
+    rawCode: string,
   ): Promise<boolean> {
+    const code = CODE_RE.test(rawCode) ? rawCode : 'unknown';
     const r = await c.query(
       `UPDATE alert_channel SET status = 'disconnected', disconnected_code = $3
         WHERE organization_id = $1 AND id = $2 AND kind = 'slack' AND status = 'active'`,

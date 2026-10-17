@@ -116,6 +116,39 @@ describe('slack channels', () => {
     expect(ev.rows).toEqual([{ actor_type: 'system', details: { code: 'webhook_revoked' } }]);
   });
 
+  it('stores an unknown code for malformed disconnect codes', async () => {
+    const r = await channels.createSlack(a.organizationId, a.userId, {
+      label: 'Bad code',
+      webhookUrl: URL_A,
+    });
+    if (r.status !== 'created') throw new Error(r.status);
+    await channels.markDisconnected(h.c, a.organizationId, r.channel.id, 'Revoked https://x.io/T0');
+    expect(await channels.get(a.organizationId, r.channel.id)).toMatchObject({
+      disconnectedCode: 'unknown',
+    });
+    const ev = await h.c.query(
+      "SELECT details FROM audit_event WHERE action = 'alert.channel_disconnected' AND subject_id = $1",
+      [r.channel.id],
+    );
+    expect(ev.rows).toEqual([{ details: { code: 'unknown' } }]);
+  });
+
+  it('normalizes labels and rejects empty ones', async () => {
+    expect(
+      await channels.createSlack(a.organizationId, a.userId, { label: '   ', webhookUrl: URL_A }),
+    ).toEqual({ status: 'invalid_label' });
+    const r = await channels.createSlack(a.organizationId, a.userId, {
+      label: `${'x'.repeat(79)}   tail`,
+      webhookUrl: URL_A,
+    });
+    expect(r.status === 'created' && r.channel.label).toBe('x'.repeat(79));
+    const e = await channels.createEmail(a.organizationId, a.userId, {
+      email: 'lbl@example.com',
+      label: '  ',
+    });
+    expect(e.status === 'created' && e.channel.label).toBe('lbl@example.com');
+  });
+
   it('reports delivery_problem when the last failure is newer than the last success', async () => {
     const r = await channels.createSlack(a.organizationId, a.userId, {
       label: 'Hp',
