@@ -5,6 +5,8 @@ export const TOP_ADS_LIMIT = 5;
 export const TOP_ADS_MIN_COMMENTS = 10;
 export const SEND_HOUR_LOCAL = 8;
 export const CATCHUP_HOURS = 24;
+/** A workspace whose report failed to compute is skipped for this long, so it cannot starve the others. */
+export const FAILURE_BACKOFF_HOURS = 1;
 export const SCHEDULER_EVERY_MS = 60_000;
 export const DISPATCH_EVERY_MS = 10_000;
 export const SCHEDULER_BATCH = 20;

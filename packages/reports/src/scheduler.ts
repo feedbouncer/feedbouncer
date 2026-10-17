@@ -3,7 +3,12 @@
 import type pg from 'pg';
 import { withTransaction } from '@feedbouncer/db';
 import type { Logger } from '@feedbouncer/service-runtime';
-import { CATCHUP_HOURS, SCHEDULER_BATCH, SEND_HOUR_LOCAL } from './constants.js';
+import {
+  CATCHUP_HOURS,
+  FAILURE_BACKOFF_HOURS,
+  SCHEDULER_BATCH,
+  SEND_HOUR_LOCAL,
+} from './constants.js';
 import { reportPeriod } from './period.js';
 import { rankTopAds } from './rank.js';
 import { computeWeeklyStats } from './stats.js';
@@ -11,7 +16,7 @@ import { computeWeeklyStats } from './stats.js';
 const HOUR_MS = 3_600_000;
 
 // The reportPeriod expressions, per organization: m is the local Monday 00:00 ending the week.
-// $1 now, $2 SEND_HOUR_LOCAL, $3 batch.
+// $1 now, $2 SEND_HOUR_LOCAL, $3 batch, $4 organizations backing off after a failure.
 const DUE_SQL = `
   WITH o AS (
     SELECT id, timezone, date_trunc('week', $1::timestamptz AT TIME ZONE timezone) AS m
@@ -19,6 +24,7 @@ const DUE_SQL = `
   SELECT o.id, o.timezone, to_char(o.m - interval '7 days', 'YYYY-MM-DD') AS week_start
     FROM o
    WHERE (o.m + make_interval(hours => $2)) AT TIME ZONE o.timezone <= $1
+     AND o.id <> ALL($4::uuid[])
      AND NOT EXISTS (SELECT 1 FROM weekly_report r
                       WHERE r.organization_id = o.id AND r.week_start = (o.m - interval '7 days')::date)
    ORDER BY (o.m + make_interval(hours => $2)) AT TIME ZONE o.timezone, o.id
@@ -59,6 +65,7 @@ interface Due {
 export class WeeklyReportScheduler {
   private readonly now: () => Date;
   private readonly batch: number;
+  private readonly retryAfter = new Map<string, number>();
 
   constructor(
     private readonly d: { pool: pg.Pool; log: Logger; now?: () => Date; batch?: number },
@@ -70,7 +77,13 @@ export class WeeklyReportScheduler {
   async tick(): Promise<{ created: number; quiet: number; missed: number; failed: number }> {
     const now = this.now();
     const result = { created: 0, quiet: 0, missed: 0, failed: 0 };
-    const due = await this.d.pool.query<Due>(DUE_SQL, [now, SEND_HOUR_LOCAL, this.batch]);
+    for (const [id, at] of this.retryAfter) if (at <= now.getTime()) this.retryAfter.delete(id);
+    const due = await this.d.pool.query<Due>(DUE_SQL, [
+      now,
+      SEND_HOUR_LOCAL,
+      this.batch,
+      [...this.retryAfter.keys()],
+    ]);
     for (const org of due.rows) {
       try {
         // One snapshot per organization, so every metric in the report agrees.
@@ -80,6 +93,7 @@ export class WeeklyReportScheduler {
         if (outcome) result[outcome] += 1;
       } catch (err) {
         result.failed += 1;
+        this.retryAfter.set(org.id, now.getTime() + FAILURE_BACKOFF_HOURS * HOUR_MS);
         this.d.log.error('reports.compute_failed', {
           organizationId: org.id,
           weekStart: org.week_start,

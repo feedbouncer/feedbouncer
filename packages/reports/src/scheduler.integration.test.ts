@@ -219,6 +219,17 @@ describe('WeeklyReportScheduler', () => {
     expect(await scheduler(BERLIN_DUE).tick()).toEqual({ ...none, created: 1 });
   });
 
+  it('a failing org is backed off, so it cannot starve later orgs when the batch is small', async () => {
+    const [x, y] = (await Promise.all([org(), org()])).sort((a, b) =>
+      a.organizationId < b.organizationId ? -1 : 1,
+    );
+    failing.add(x!.organizationId);
+    const s = new WeeklyReportScheduler({ pool, log, now: () => BERLIN_DUE, batch: 1 });
+    expect(await s.tick()).toEqual({ ...none, failed: 1 });
+    expect(await s.tick()).toEqual({ ...none, created: 1 });
+    expect(await reports(y!)).toHaveLength(1);
+  });
+
   it('two orgs in different timezones become due at their own local 08:00', async () => {
     const berlin = await org('Europe/Berlin');
     // America/New_York is still on EDT (UTC-4) on 2026-10-26: 08:00 local is 12:00Z.

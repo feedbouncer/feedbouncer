@@ -114,7 +114,11 @@ export class OrgsService {
         await recordAudit(c, { ...audit, action: 'organization.renamed' });
       }
       if (timezone !== undefined) {
-        await recordAudit(c, { ...audit, action: 'organization.timezone_updated', details: { timezone } });
+        await recordAudit(c, {
+          ...audit,
+          action: 'organization.timezone_updated',
+          details: { timezone },
+        });
       }
       return toOrgDto(row);
     });
