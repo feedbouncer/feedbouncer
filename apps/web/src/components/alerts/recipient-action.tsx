@@ -1,26 +1,9 @@
 'use client';
 import { useState, type FormEvent } from 'react';
+import { RECIPIENT_COPY, type RecipientKind } from '../../lib/alerts';
 import { ApiRequestError, apiFetch } from '../../lib/api-client';
 
-export const RECIPIENT_COPY = {
-  confirm: {
-    button: 'Confirm alerts',
-    success: "You'll now receive FeedBouncer alerts.",
-    invalid:
-      'This confirmation link is invalid or has expired. Ask a workspace admin to resend it.',
-  },
-  unsubscribe: {
-    button: 'Unsubscribe',
-    success: "You're unsubscribed from these alerts.",
-    invalid: 'This link is invalid. Manage alerts in FeedBouncer.',
-  },
-} as const;
-
-type Kind = keyof typeof RECIPIENT_COPY;
-
-export const RECIPIENT_TOKEN = /^[A-Za-z0-9_-]{43}$/;
-
-function actionUrl(kind: Kind, token: string): `/api/${string}` {
+function actionUrl(kind: RecipientKind, token: string): `/api/${string}` {
   return kind === 'confirm'
     ? '/api/v1/alert-recipients/confirm'
     : `/api/v1/alert-recipients/unsubscribe?token=${encodeURIComponent(token)}`;
@@ -31,7 +14,7 @@ function actionUrl(kind: Kind, token: string): `/api/${string}` {
  * confirm or unsubscribe anyone. Without script the unsubscribe form still works as the
  * RFC 8058 one-click POST; confirm needs script because the API takes JSON.
  */
-export function RecipientAction({ kind, token }: { kind: Kind; token: string }) {
+export function RecipientAction({ kind, token }: { kind: RecipientKind; token: string }) {
   const copy = RECIPIENT_COPY[kind];
   const [state, setState] = useState<'idle' | 'busy' | 'done' | 'invalid' | 'error'>('idle');
 

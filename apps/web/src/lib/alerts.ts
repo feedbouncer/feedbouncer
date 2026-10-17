@@ -129,3 +129,21 @@ export function alertTypeLabel(type: string): string {
 export function channelName(c: Pick<AlertChannelDto, 'kind' | 'label' | 'email'>): string {
   return c.kind === 'email' && c.email ? c.email : c.label;
 }
+
+export const RECIPIENT_COPY = {
+  confirm: {
+    button: 'Confirm alerts',
+    success: "You'll now receive FeedBouncer alerts.",
+    invalid:
+      'This confirmation link is invalid or has expired. Ask a workspace admin to resend it.',
+  },
+  unsubscribe: {
+    button: 'Unsubscribe',
+    success: "You're unsubscribed from these alerts.",
+    invalid: 'This link is invalid. Manage alerts in FeedBouncer.',
+  },
+} as const;
+
+export type RecipientKind = keyof typeof RECIPIENT_COPY;
+
+export const RECIPIENT_TOKEN = /^[A-Za-z0-9_-]{43}$/;
