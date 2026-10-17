@@ -1,4 +1,4 @@
-// Integration-test helpers: alert channel and route seeding.
+// Integration-test helpers: alert channel, route and comment seeding.
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import type { Tenant } from '@feedbouncer/db/testing';
@@ -53,4 +53,43 @@ export async function enableRoute(
      VALUES ($1, $2, $3, $4, $5, CASE WHEN $5 THEN now() END)`,
     [tenant.organizationId, tenant.brandId, alertType, channelId, enabled],
   );
+}
+
+/** Inserts `count` comments, each with one decision of `outcome` (default 'hide'). */
+export async function seedNegativeComments(
+  c: pg.ClientBase,
+  tenant: Tenant,
+  o: {
+    count: number;
+    postedAt: Date;
+    origin?: 'live' | 'backfill';
+    outcome?: 'hide' | 'flag' | 'approve';
+    ingestedAt?: Date;
+  },
+): Promise<string[]> {
+  const r = await c.query<{ id: string }>(
+    `INSERT INTO comment (organization_id, brand_id, connection_id, source_id, external_id, body, posted_at,
+       ingested_at, ingest_origin)
+     SELECT $1, $2, $3, $4, $5 || '-' || i, 'seeded', $6, $7, $8 FROM generate_series(1, $9::int) i
+     RETURNING id`,
+    [
+      tenant.organizationId,
+      tenant.brandId,
+      tenant.connectionId,
+      tenant.sourceId,
+      randomUUID(),
+      o.postedAt,
+      o.ingestedAt ?? o.postedAt,
+      o.origin ?? 'live',
+      o.count,
+    ],
+  );
+  const ids = r.rows.map((x) => x.id);
+  await c.query(
+    `INSERT INTO decision (organization_id, brand_id, comment_id, outcome, mode, actor_type, classifier_provider,
+       classifier_model, reason)
+     SELECT $1, $2, id, $4, 'enforce', 'classifier', 'test', 'test-model', 'seeded' FROM unnest($3::uuid[]) id`,
+    [tenant.organizationId, tenant.brandId, ids, o.outcome ?? 'hide'],
+  );
+  return ids;
 }
