@@ -15,3 +15,4 @@ export * from './sweeper.js';
 export * from './hidden-today.js';
 export * from './unhide.js';
 export * from './visible-comments.js';
+export * from './triage.js';
