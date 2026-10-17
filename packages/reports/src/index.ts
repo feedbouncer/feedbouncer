@@ -8,3 +8,5 @@ export * from './view.js';
 export * from './links.js';
 export * from './render.js';
 export * from './subscriptions.js';
+export { WeeklyReportScheduler } from './scheduler.js';
+export { WeeklyReportDispatcher } from './dispatcher.js';
