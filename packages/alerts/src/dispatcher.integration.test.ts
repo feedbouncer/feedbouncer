@@ -390,6 +390,37 @@ describe('AlertDispatcher', () => {
     expect(mailer.sent).toHaveLength(5);
   });
 
+  it('two dispatchers in parallel never exceed the deployment-wide email cap', async () => {
+    const chans = await Promise.all(Array.from({ length: 8 }, () => emailChannel()));
+    await spikeEvent(chans);
+    const ds = Array.from({ length: 4 }, () => dispatcher({ emailPerMinute: 3, batch: 2 }));
+    const results = await Promise.all(ds.map((x) => x.tick()));
+    expect(results.reduce((n, r) => n + r.sent, 0)).toBe(3);
+    expect(mailer.sent).toHaveLength(3);
+  });
+
+  it('an exception while sending is logged by name and code, without secrets', async () => {
+    const s = await slackChannel();
+    await spikeEvent([s]);
+    vi.spyOn(channels, 'openWebhookUrl').mockRejectedValueOnce(
+      Object.assign(new Error('decrypt failed'), { name: 'DecryptError', code: 'ERR_DECRYPT' }),
+    );
+    expect(await dispatcher().tick()).toMatchObject({ retried: 1 });
+    const entry = logs.find((l) => l.msg === 'alerts.dispatch_error');
+    expect(entry).toMatchObject({
+      level: 'error',
+      fields: { error: 'DecryptError', errorCode: 'ERR_DECRYPT', errorMessage: 'decrypt failed' },
+    });
+    expect((await forChannel(s))[0]).toMatchObject({
+      state: 'retrying',
+      last_error_code: 'internal_error',
+    });
+    const text = JSON.stringify(logs);
+    expect(text).not.toContain('hooks.slack.com');
+    expect(text).not.toContain('sentinelHookSecret');
+    expect(text).not.toContain(SECRET_BODY);
+  });
+
   it('enabled.email false → email deliveries cancelled, no errors logged', async () => {
     const e = await emailChannel();
     await spikeEvent([e]);

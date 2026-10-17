@@ -4,7 +4,13 @@ import type { SafeHttp } from '@feedbouncer/connectors';
 import type { Mailer } from '@feedbouncer/mailer';
 import { errorFields, type Logger } from '@feedbouncer/service-runtime';
 import type { ChannelKind, PgAlertChannels } from './channels.js';
-import { LEASE_MS, RETRY_AFTER_CAP_MS, RETRY_DELAYS_MS, SLACK_PACE_MS } from './constants.js';
+import {
+  CODE_RE,
+  LEASE_MS,
+  RETRY_AFTER_CAP_MS,
+  RETRY_DELAYS_MS,
+  SLACK_PACE_MS,
+} from './constants.js';
 import { settingsLink } from './links.js';
 import {
   renderDisconnectEmail,
@@ -52,7 +58,6 @@ interface Claimed {
 }
 
 const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
-const CODE_RE = /^[a-z0-9_]{1,64}$/;
 const TRANSIENT_SMTP = new Set(['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS']);
 
 function emailFailure(err: unknown): Failure {
@@ -209,7 +214,7 @@ export class AlertDispatcher {
             FOR UPDATE OF d SKIP LOCKED`,
         [now, locked.rows.map((x) => x.id)],
       );
-      const budget = await this.emailBudget(c, now);
+      const budget = due.rows.some((x) => x.kind === 'email') ? await this.emailBudget(c, now) : 0;
       let emails = 0;
       const ids = due.rows.filter((x) => x.kind === 'slack' || emails++ < budget).map((x) => x.id);
       if (ids.length === 0) return [];
@@ -240,7 +245,12 @@ export class AlertDispatcher {
     });
   }
 
+  /**
+   * Sends left this minute across every dispatcher. The advisory lock is held until the claiming
+   * transaction commits, so a concurrent dispatcher counts these claims before taking its own.
+   */
   private async emailBudget(c: pg.ClientBase, now: Date): Promise<number> {
+    await c.query("SELECT pg_advisory_xact_lock(hashtextextended('alert-email-budget', 0))");
     const r = await c.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM alert_delivery d
          JOIN alert_channel ch ON ch.organization_id = d.organization_id AND ch.id = d.channel_id
@@ -254,7 +264,13 @@ export class AlertDispatcher {
     let outcome: Outcome;
     try {
       outcome = await this.send(d);
-    } catch {
+    } catch (err) {
+      // Name, message and code only: never the payload, URL, webhook or address.
+      this.d.log.error('alerts.dispatch_error', {
+        deliveryId: d.id,
+        channelKind: d.kind,
+        ...errorFields(err),
+      });
       outcome = { ok: false, kind: 'transient', code: 'internal_error' };
     }
     return this.settle(d, outcome);
