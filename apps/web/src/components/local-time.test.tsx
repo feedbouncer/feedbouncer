@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { formatLocal } from '../lib/review-mode';
+import { formatLocal, formatLocalExact } from '../lib/review-mode';
 import { LocalTime } from './local-time';
 
 const effects: (() => void)[] = [];
@@ -28,6 +28,17 @@ describe('LocalTime', () => {
     expect(updates).toEqual([]);
     for (const fn of effects) fn();
     expect(updates).toEqual([formatLocal(iso)]);
+  });
+
+  it('exactTitle renders a UTC exact title on the server, then the local one', () => {
+    updates.length = 0;
+    effects.length = 0;
+    const iso = '2026-10-27T10:04:05.000Z';
+    expect(renderToStaticMarkup(<LocalTime iso={iso} exactTitle />)).toBe(
+      `<time dateTime="${iso}" title="2026-10-27 10:04:05 UTC">2026-10-27 10:04 UTC</time>`,
+    );
+    for (const fn of effects) fn();
+    expect(updates).toEqual([formatLocal(iso), formatLocalExact(iso)]);
   });
 
   it('renders markup in the time as text', () => {

@@ -29,6 +29,9 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
     <main>
       <h1>{org.data.organization.name}</h1>
       <p>Your role: {org.data.role}</p>
+      <p>
+        <Link href={`/orgs/${orgId}/comments`}>All comments</Link>
+      </p>
       <h2>Brands</h2>
       <ul>
         {brandList.map((b) => (
