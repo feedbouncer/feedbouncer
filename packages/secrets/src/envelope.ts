@@ -24,7 +24,6 @@ export const ENVELOPE_KINDS = [
   'oauth_grant_token',
   'alert_slack_webhook',
   'alert_unsubscribe_token',
-  'report_unsubscribe_token',
 ] as const;
 export type EnvelopeKind = (typeof ENVELOPE_KINDS)[number];
 

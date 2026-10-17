@@ -25,8 +25,7 @@ export type Capability =
   | 'comment.triage'
   | 'tag.manage'
   | 'alert.read'
-  | 'alert.manage'
-  | 'report.read';
+  | 'alert.manage';
 
 const ALL: readonly Role[] = ROLES;
 const MANAGERS: readonly Role[] = ['owner', 'admin'];
@@ -53,7 +52,6 @@ const GRANTS: Readonly<Record<Capability, readonly Role[]>> = {
   'tag.manage': MANAGERS,
   'alert.read': MANAGERS,
   'alert.manage': MANAGERS,
-  'report.read': MANAGERS,
   'org.transfer_ownership': OWNERS,
   'org.delete': OWNERS,
 };

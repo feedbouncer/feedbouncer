@@ -96,8 +96,8 @@ CREATE TABLE weekly_report_delivery (
   CONSTRAINT weekly_report_delivery_last_error_code_check CHECK (last_error_code ~ '^[a-z0-9_]{1,64}$'),
   CONSTRAINT weekly_report_delivery_organization_id_report_id_fkey FOREIGN KEY (organization_id, report_id)
     REFERENCES weekly_report (organization_id, id) ON DELETE CASCADE,
-  CONSTRAINT weekly_report_delivery_user_id_fkey FOREIGN KEY (user_id)
-    REFERENCES app_user (id) ON DELETE CASCADE
+  CONSTRAINT weekly_report_delivery_organization_id_user_id_fkey FOREIGN KEY (organization_id, user_id)
+    REFERENCES membership (organization_id, user_id) ON DELETE CASCADE
 );
 CREATE INDEX weekly_report_delivery_organization_id_report_id_idx
   ON weekly_report_delivery (organization_id, report_id);

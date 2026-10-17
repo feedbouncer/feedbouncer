@@ -191,6 +191,27 @@ describe('weekly_report_delivery', () => {
     expect(await count('weekly_report_delivery', 'report_id = $1', [rA])).toBe(0);
   });
 
+  it('requires an existing membership of the report org (23503); removing the membership deletes the delivery', async () => {
+    const a = await seedTenant(c, 'del-m-a');
+    const b = await seedTenant(c, 'del-m-b');
+    const r = await report(a.organizationId);
+    await expectPgError(delivery(a.organizationId, r, b.userId), '23503');
+    const member = await id('INSERT INTO app_user (email) VALUES ($1) RETURNING id', [
+      `d-${uuid()}@example.test`,
+    ]);
+    await c.query(
+      "INSERT INTO membership (organization_id, user_id, role) VALUES ($1, $2, 'member')",
+      [a.organizationId, member],
+    );
+    await delivery(a.organizationId, r, member);
+    expect(await count('weekly_report_delivery', 'user_id = $1', [member])).toBe(1);
+    await c.query('DELETE FROM membership WHERE organization_id = $1 AND user_id = $2', [
+      a.organizationId,
+      member,
+    ]);
+    expect(await count('weekly_report_delivery', 'user_id = $1', [member])).toBe(0);
+  });
+
   it("last_error_code rejects 'Bad Code!'", async () => {
     const t = await seedTenant(c, 'del-code');
     const r = await report(t.organizationId);
