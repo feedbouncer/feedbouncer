@@ -1,5 +1,3 @@
-import { TAGS_PER_ORG } from '@feedbouncer/actions/shared';
-
 const MESSAGES: Record<string, string> = {
   invalid_request: 'Check the details and try again.',
   invalid_origin: 'This request was blocked. Reload the page and try again.',
@@ -61,7 +59,7 @@ const MESSAGES: Record<string, string> = {
   domain_limit_reached: 'This brand has reached the maximum number of own domains.',
   invalid_tag_name: 'Enter a tag name of 1 to 50 characters without control characters.',
   tag_name_taken: 'A tag with this name already exists.',
-  tag_limit_reached: `This workspace has the maximum of ${TAGS_PER_ORG} tags.`,
+  tag_limit_reached: 'This workspace has reached its tag limit.',
   tag_count_changed: 'The number of comments with this tag changed. Confirm again.',
   unknown_tag: 'A tag was deleted. Reload the page and try again.',
   // Where Facebook sends the browser back after sign-in.
