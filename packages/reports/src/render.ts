@@ -1,8 +1,13 @@
 import { UUID_RE, type EmailContent } from '@feedbouncer/alerts';
 import { escapeHtml, headerSafe } from '@feedbouncer/mailer';
-import { TOP_ADS_MIN_COMMENTS } from './constants.js';
 import { dashboardLink, settingsLink, unsubscribeApiLink, unsubscribePageLink } from './links.js';
-import type { ReportView } from './view.js';
+import {
+  NONE_QUALIFY,
+  REPORT_HEADINGS,
+  TOP_ADS_COLUMNS,
+  TOP_ADS_EXPLAINER,
+  type ReportView,
+} from './view.js';
 
 interface Section {
   heading: string;
@@ -11,10 +16,6 @@ interface Section {
 }
 
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-const TOP_ADS_HEADING = 'Ads with the highest share of hidden comments';
-const TOP_ADS_COLUMNS = ['Ad', 'Platform', 'Hidden', 'Comments', 'Hidden share'];
-const TOP_ADS_EXPLAINER = `Hidden share = hidden comments ÷ all comments on the ad this week. Ads with fewer than ${TOP_ADS_MIN_COMMENTS} comments are not ranked.`;
-const NONE_QUALIFY = `No ad had at least ${TOP_ADS_MIN_COMMENTS} comments with hidden ones this week, so there is no ranking.`;
 
 const para = (s: string, style = '') => `<p style="margin:0 0 8px;${style}">${escapeHtml(s)}</p>`;
 const muted = (s: string) => para(s, 'color:#555555;font-size:13px;');
@@ -26,7 +27,7 @@ const cell = (tag: 'th' | 'td', s: string, align: 'left' | 'right') =>
 function sections(v: ReportView): Section[] {
   const out: Section[] = [
     {
-      heading: 'Comments processed',
+      heading: REPORT_HEADINGS.processed,
       text: [v.processedLine, v.changeLine],
       html: para(v.processedLine, 'font-size:18px;font-weight:600;') + muted(v.changeLine),
     },
@@ -35,13 +36,13 @@ function sections(v: ReportView): Section[] {
     const rows = v.categories.map((c) => `${c.label} — ${c.count} (${c.share})`);
     const total = `Total hidden: ${v.totalHidden}`;
     out.push({
-      heading: 'Hidden by category',
+      heading: REPORT_HEADINGS.hidden,
       text: [...rows, total],
       html: rows.map((r) => para(r)).join('') + para(total, 'font-weight:600;'),
     });
   }
   if (v.topAds === 'none_qualify') {
-    out.push({ heading: TOP_ADS_HEADING, text: [NONE_QUALIFY], html: para(NONE_QUALIFY) });
+    out.push({ heading: REPORT_HEADINGS.topAds, text: [NONE_QUALIFY], html: para(NONE_QUALIFY) });
   } else if (v.topAds) {
     const ads = v.topAds.map((a) => ({ ...a, ad: a.archived ? `${a.ad} (archived)` : a.ad }));
     const head = TOP_ADS_COLUMNS.map((c, i) => cell('th', c, i < 2 ? 'left' : 'right')).join('');
@@ -52,7 +53,7 @@ function sections(v: ReportView): Section[] {
       )
       .join('');
     out.push({
-      heading: TOP_ADS_HEADING,
+      heading: REPORT_HEADINGS.topAds,
       text: [
         ...ads.map(
           (a) => `- ${a.ad} — ${a.platform}: ${a.hidden} hidden of ${a.total} comments, ${a.share}`,
@@ -66,13 +67,17 @@ function sections(v: ReportView): Section[] {
     });
   }
   out.push({
-    heading: 'Estimated time saved',
+    heading: REPORT_HEADINGS.timeSaved,
     text: [v.timeSaved, v.timeSavedNote],
     html: para(v.timeSaved, 'font-size:18px;font-weight:600;') + muted(v.timeSavedNote),
   });
   if (v.brands) {
     const rows = v.brands.map((b) => `${b.name} — ${b.processed} processed, ${b.hidden} hidden`);
-    out.push({ heading: 'By brand', text: rows, html: rows.map((r) => para(r)).join('') });
+    out.push({
+      heading: REPORT_HEADINGS.brands,
+      text: rows,
+      html: rows.map((r) => para(r)).join(''),
+    });
   }
   return out;
 }

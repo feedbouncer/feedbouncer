@@ -14,6 +14,11 @@
       "@feedbouncer/source": "./src/testing.ts",
       "types": "./dist/testing.d.ts",
       "default": "./dist/testing.js"
+    },
+    "./shared": {
+      "@feedbouncer/source": "./src/shared.ts",
+      "types": "./dist/shared.d.ts",
+      "default": "./dist/shared.js"
     }
   },
   "scripts": {

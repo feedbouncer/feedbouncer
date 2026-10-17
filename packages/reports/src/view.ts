@@ -1,4 +1,4 @@
-import { SECONDS_SAVED_PER_HIDDEN_COMMENT } from './constants.js';
+import { SECONDS_SAVED_PER_HIDDEN_COMMENT, TOP_ADS_MIN_COMMENTS } from './constants.js';
 import {
   adLabel,
   formatChange,
@@ -25,6 +25,18 @@ export const BUCKET_LABELS: Record<ReportBucket, string> = {
   custom_policy: 'Your custom policies',
   other: 'Other',
 };
+
+/** Copy shared by the email and the Weekly report page. */
+export const REPORT_HEADINGS = {
+  processed: 'Comments processed',
+  hidden: 'Hidden by category',
+  topAds: 'Ads with the highest share of hidden comments',
+  timeSaved: 'Estimated time saved',
+  brands: 'By brand',
+} as const;
+export const TOP_ADS_COLUMNS = ['Ad', 'Platform', 'Hidden', 'Comments', 'Hidden share'] as const;
+export const TOP_ADS_EXPLAINER = `Hidden share = hidden comments ÷ all comments on the ad this week. Ads with fewer than ${TOP_ADS_MIN_COMMENTS} comments are not ranked.`;
+export const NONE_QUALIFY = `No ad had at least ${TOP_ADS_MIN_COMMENTS} comments with hidden ones this week, so there is no ranking.`;
 
 const INCOMPLETE_NAMES_MAX = 5;
 

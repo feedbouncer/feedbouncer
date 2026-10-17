@@ -68,6 +68,8 @@ const MESSAGES: Record<string, string> = {
   tag_limit_reached: 'This workspace has reached its tag limit.',
   tag_count_changed: 'The number of comments with this tag changed. Confirm again.',
   unknown_tag: 'A tag was deleted. Reload the page and try again.',
+  invalid_timezone: 'Choose a valid time zone.',
+  invalid_week: 'Choose a past week from the last year.',
   // Where Facebook sends the browser back after sign-in.
   denied: 'Facebook access was not granted. Nothing was connected.',
   missing_permissions:

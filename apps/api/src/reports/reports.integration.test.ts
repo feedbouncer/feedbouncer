@@ -1,14 +1,20 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withTransaction } from '@feedbouncer/db';
 import { seedTenant, type Tenant } from '@feedbouncer/db/testing';
+import { MemoryMailer } from '@feedbouncer/mailer/testing';
 import {
   PgReportSubscriptions,
+  WeeklyReportDispatcher,
+  WeeklyReportScheduler,
+  buildView,
   computeWeeklyStats,
   periodForWeek,
   rankTopAds,
   reportPeriod,
   type ReportPeriod,
+  type WeeklyStats,
 } from '@feedbouncer/reports';
+import type { Logger } from '@feedbouncer/service-runtime';
 import { seedAd, seedHide, seedProcessed, seedSource } from '@feedbouncer/reports/testing';
 import {
   orgWithRoles,
@@ -243,5 +249,58 @@ describe('report subscriptions', () => {
     expect(wrongForm.status).toBe(400);
     expect(JSON.parse(wrongForm.text).error.code).toBe('invalid_request');
     expect(api.logLines.join('\n')).not.toContain(token);
+  });
+});
+
+describe('email and dashboard parity', () => {
+  it('the API response for a sent week, rendered through buildView, matches the email text', async () => {
+    const c = await api.pool.connect();
+    try {
+      const postedAt = new Date(last.start.getTime() + DAY_MS);
+      const adSource = await seedSource(c, tn);
+      await seedAd(c, tn, { name: 'Autumn <b>deal</b>', sourceId: adSource });
+      for (let i = 0; i < 10; i++) {
+        const id = await seedProcessed(c, tn, { postedAt, sourceId: adSource });
+        if (i < 3)
+          await seedHide(c, tn, id, { by: 'classifier', category: 'scam_phishing', at: postedAt });
+      }
+      const id = await seedProcessed(c, tn, { postedAt, via: 'rule' });
+      await seedHide(c, tn, id, { by: 'rule', at: postedAt });
+    } finally {
+      c.release();
+    }
+    const log: Logger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
+    const dueNow = new Date(last.dueAt.getTime() + 60_000);
+    await new WeeklyReportScheduler({ pool: api.pool, log, now: () => dueNow }).tick();
+    const mailer = new MemoryMailer();
+    await new WeeklyReportDispatcher({
+      pool: api.pool,
+      log,
+      mailer,
+      subscriptions: subs,
+      web: api.deps.env.publicWebUrl,
+    }).tick();
+    // The owner unsubscribed above; the admin re-subscribed.
+    const text = mailer.lastTo(users.admin.email)!.text;
+
+    const r = await weekly(last.weekStart);
+    expect(r.status).toBe(200);
+    expect(r.body.source).toBe('snapshot');
+    const view = buildView(r.body.stats as WeeklyStats, 'Org rpa');
+    expect(view).toMatchObject({ processedLine: '11 comments processed', totalHidden: '4' });
+    const ads = view.topAds as Exclude<typeof view.topAds, 'none_qualify' | null>;
+    expect(ads.map((a) => a.ad)).toEqual([expect.stringMatching(/^Autumn <b>deal<\/b> · #/)]);
+    for (const s of [
+      view.range,
+      view.processedLine,
+      view.changeLine,
+      ...view.categories!.map((x) => `${x.label} — ${x.count} (${x.share})`),
+      `Total hidden: ${view.totalHidden}`,
+      ...ads.map(
+        (a) => `${a.ad} — ${a.platform}: ${a.hidden} hidden of ${a.total} comments, ${a.share}`,
+      ),
+      view.timeSaved,
+    ])
+      expect(text).toContain(s);
   });
 });

@@ -1,8 +1,10 @@
+import { can } from '@feedbouncer/authz';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AlertsNavLink } from '../../../components/alerts/alerts-nav-link';
 import { ApiForm } from '../../../components/api-form';
 import { CreateBrandForm } from '../../../components/create-brand-form';
+import { OrgTimezoneForm } from '../../../components/org-timezone-form';
 import { isUuid } from '../../../lib/ids';
 import { dataOrThrow, requireMe, serverGet, type Role } from '../../../lib/server-api';
 
@@ -17,9 +19,10 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
   const { orgId } = await params;
   if (!isUuid(orgId)) notFound();
   await requireMe(`/orgs/${orgId}`);
-  const org = await serverGet<{ organization: { id: string; name: string }; role: Role }>(
-    `/api/v1/orgs/${orgId}`,
-  );
+  const org = await serverGet<{
+    organization: { id: string; name: string; timezone: string; timezoneSet: boolean };
+    role: Role;
+  }>(`/api/v1/orgs/${orgId}`);
   if (!org.data) notFound();
   const brandList = dataOrThrow(
     await serverGet<{ brands: Brand[] }>(`/api/v1/orgs/${orgId}/brands`),
@@ -31,8 +34,21 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
     <main>
       <h1>{org.data.organization.name}</h1>
       <p>Your role: {org.data.role}</p>
+      {can(role, 'org.update') ? (
+        <OrgTimezoneForm
+          orgId={orgId}
+          timezone={org.data.organization.timezone}
+          timezoneSet={org.data.organization.timezoneSet}
+        />
+      ) : null}
       <p>
         <Link href={`/orgs/${orgId}/comments`}>All comments</Link>
+        {can(role, 'report.read') ? (
+          <>
+            {' · '}
+            <Link href={`/orgs/${orgId}/reports`}>Reports</Link>
+          </>
+        ) : null}
       </p>
       <h2>Brands</h2>
       <ul>

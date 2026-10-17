@@ -4,8 +4,7 @@ import { recordAlertAudit } from '@feedbouncer/alerts';
 import { withTransaction } from '@feedbouncer/db';
 import { open, seal, type KeyProvider } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
-
-export const REPORT_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
+import { REPORT_TOKEN_RE } from './constants.js';
 
 export interface ReportSubscriptionEntry {
   organizationId: string;
