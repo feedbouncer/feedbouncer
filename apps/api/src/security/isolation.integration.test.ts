@@ -167,6 +167,10 @@ beforeAll(async () => {
      VALUES ($1, $2, 'instagram', $3, 'ig acct') RETURNING id`,
     [B.orgId, B.brandId, `17${B.orgId.replace(/\D/g, '').slice(0, 15)}`],
   );
+  const bTag = await api.pool.query(
+    `INSERT INTO tag (organization_id, name, name_key) VALUES ($1, 'B tag', 'b tag') RETURNING id`,
+    [B.orgId],
+  );
   const grants = new PgOAuthGrantStore(api.pool, api.deps.env.encryption);
   const bGrantIds = { facebook: randomUUID(), instagram: randomUUID() };
   for (const platform of ['facebook', 'instagram'] as const) {
@@ -209,6 +213,7 @@ beforeAll(async () => {
     bPolicyId: bPolicy.rows[0].id,
     bPreviewId: bPreview.rows[0].id,
     bConnectionIds: { facebook: bConnectionId, instagram: igConnection.rows[0].id },
+    bTagId: bTag.rows[0].id,
     bGrantIds,
   };
 });
@@ -272,6 +277,13 @@ async function snapshot(orgId: string) {
     classifications: await q(
       'SELECT id, status FROM comment_classification WHERE organization_id = $1 ORDER BY id',
     ),
+    tags: await q('SELECT id, name FROM tag WHERE organization_id = $1 ORDER BY id'),
+    commentTags: await q(
+      'SELECT comment_id, tag_id FROM comment_tag WHERE organization_id = $1 ORDER BY comment_id, tag_id',
+    ),
+    commentDone: await q(
+      'SELECT comment_id FROM comment_done WHERE organization_id = $1 ORDER BY comment_id',
+    ),
     jobs: await q('SELECT id, state FROM job_ledger WHERE organization_id = $1 ORDER BY id'),
     audit: await q(
       `SELECT sequence, action, subject_type, subject_id, actor_user_id FROM audit_event
@@ -288,6 +300,7 @@ describe('A owner cannot reach B', () => {
       expect(beforeB.invitations.length).toBeGreaterThan(0);
       expect(beforeB.audit.length).toBeGreaterThan(0);
       expect(beforeB.grants).toHaveLength(2);
+      expect(beforeB.tags).toHaveLength(1);
       const [method] = c.route.split(' ');
       const r = await api.req(method!, c.url(f), { cookie: f.A.owner.cookie, body: c.body?.(f) });
       expect(r.status).toBe(404);

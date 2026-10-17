@@ -52,6 +52,8 @@ import { DomainsController } from './rules/domains.controller.js';
 import { RulesController } from './rules/rules.controller.js';
 import { RulesService } from './rules/rules.service.js';
 import { OrgController, OrgsListController } from './orgs/orgs.controller.js';
+import { TagsController } from './tags/tags.controller.js';
+import { TagsService } from './tags/tags.service.js';
 import { ReviewModeController } from './review-mode/review-mode.controller.js';
 import { ReviewModeService } from './review-mode/review-mode.service.js';
 import { SuggestionsController } from './review-mode/suggestions.controller.js';
@@ -92,6 +94,7 @@ export class AppModule {
         OAuthCallbackController,
         CommentsController,
         OrgCommentsController,
+        TagsController,
         AdsController,
         RulesController,
         ActionsController,
@@ -120,6 +123,7 @@ export class AppModule {
         ConnectablePlatformPipe,
         CommentsService,
         OrgCommentsService,
+        TagsService,
         AdsService,
         RulesService,
         ActionsService,

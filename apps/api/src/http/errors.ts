@@ -64,7 +64,12 @@ export type ErrorCode =
   | 'policy_run_too_soon'
   | 'policy_not_enabled'
   | 'policy_evaluation_unavailable'
-  | 'service_unavailable';
+  | 'service_unavailable'
+  | 'invalid_tag_name'
+  | 'tag_name_taken'
+  | 'tag_limit_reached'
+  | 'tag_count_changed'
+  | 'unknown_tag';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
@@ -127,6 +132,11 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   policy_not_enabled: 'Enable the policy before applying it to recent comments.',
   policy_evaluation_unavailable: 'Policy checks are turned off in this deployment.',
   service_unavailable: 'Service temporarily unavailable. Try again shortly.',
+  invalid_tag_name: 'Enter a tag name of 1 to 50 characters without control characters.',
+  tag_name_taken: 'A tag with this name already exists.',
+  tag_limit_reached: 'This workspace has the maximum number of tags.',
+  tag_count_changed: 'The number of comments with this tag changed. Confirm again.',
+  unknown_tag: 'A tag no longer exists.',
 };
 
 export interface ErrorIssue {
@@ -156,6 +166,12 @@ export class ApiError extends Error {
       readonly handled?: HandledDetails;
       /** The platform permission a connection lacks, for 409 missing_permission. */
       readonly permission?: string;
+      /** Why a tag name was refused, for 400 invalid_tag_name. */
+      readonly reason?: string;
+      /** The existing tag, for 409 tag_name_taken. */
+      readonly tag?: unknown;
+      /** The current number of comments with the tag, for 409 tag_count_changed. */
+      readonly count?: number;
     },
   ) {
     super(message ?? DEFAULT_MESSAGES[code]);
@@ -172,6 +188,9 @@ export function errorBody(e: ApiError): {
     max?: number;
     handled?: HandledDetails;
     permission?: string;
+    reason?: string;
+    tag?: unknown;
+    count?: number;
   };
 } {
   return { error: { ...e.details, code: e.code, message: e.message } };
