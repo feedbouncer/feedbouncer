@@ -112,7 +112,8 @@ export class FlagSweeper {
     if (rows.length === 0 || rows[0]!.flagged_at.getTime() > cutoff) {
       return { locked: 0, skipped: 0, digest: false };
     }
-    const routed = (await c.query<{ ok: boolean }>(HAS_ACTIVE_ROUTE_SQL, [orgId, brandId])).rows[0]!.ok;
+    const routed = (await c.query<{ ok: boolean }>(HAS_ACTIVE_ROUTE_SQL, [orgId, brandId])).rows[0]!
+      .ok;
     const resolved = rows.filter((r) => !routed || r.status !== 'open');
     const open = routed ? rows.filter((r) => r.status === 'open') : [];
     if (resolved.length > 0) {
