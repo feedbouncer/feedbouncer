@@ -37,7 +37,7 @@ const INSERT_SQL = `
   ON CONFLICT (organization_id, week_start) DO NOTHING
   RETURNING id`;
 
-// Global Constraints › Recipients; the dispatcher re-checks the same four at send time.
+// Recipients are verified owners and admins who have not unsubscribed; the dispatcher re-checks the same four at send time.
 const DELIVERIES_SQL = `
   INSERT INTO weekly_report_delivery (organization_id, report_id, user_id, next_attempt_at)
   SELECT m.organization_id, $2, m.user_id, $3

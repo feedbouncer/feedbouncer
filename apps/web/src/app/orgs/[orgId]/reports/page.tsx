@@ -7,7 +7,7 @@ import { WeeklyReport } from '../../../../components/reports/WeeklyReport';
 import { isUuid } from '../../../../lib/ids';
 import { messageFor } from '../../../../lib/messages';
 import { fetchWeeklyReport, parseWeekParam } from '../../../../lib/reports';
-import { dataOrThrow, requireMe, serverGet, type Role } from '../../../../lib/server-api';
+import { requireMe, serverGet, type Role } from '../../../../lib/server-api';
 
 export default async function WeeklyReportPage({
   params,
@@ -19,10 +19,11 @@ export default async function WeeklyReportPage({
   const { orgId } = await params;
   if (!isUuid(orgId)) notFound();
   await requireMe(`/orgs/${orgId}/reports`);
-  const org = dataOrThrow(
-    await serverGet<{ organization: { name: string }; role: Role }>(`/api/v1/orgs/${orgId}`),
-    'organization',
+  const orgResponse = await serverGet<{ organization: { name: string }; role: Role }>(
+    `/api/v1/orgs/${orgId}`,
   );
+  if (!orgResponse.data) notFound();
+  const org = orgResponse.data;
   const back = (
     <p>
       <Link href={`/orgs/${orgId}`}>Back to organization</Link>

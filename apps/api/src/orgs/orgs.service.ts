@@ -4,10 +4,9 @@ import { withTransaction } from '@feedbouncer/db';
 import { recordAudit } from '../audit/audit.js';
 import { requireVerified, type AuthedUser } from '../auth/session.guard.js';
 import { BRAND_COLUMNS, toBrandDto, type BrandDto, type BrandRow } from '../brands/dto.js';
-import { isKnownZone } from '../brands/brands.service.js';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
-import { isIanaTimeZone } from '../http/validation.js';
+import { isIanaTimeZone, isKnownZone } from '../http/validation.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { lockedActor } from '../tenancy/org-lock.js';
 import { DEPS } from '../tokens.js';
@@ -115,7 +114,7 @@ export class OrgsService {
         await recordAudit(c, { ...audit, action: 'organization.renamed' });
       }
       if (timezone !== undefined) {
-        await recordAudit(c, { ...audit, action: 'org.timezone_updated', details: { timezone } });
+        await recordAudit(c, { ...audit, action: 'organization.timezone_updated', details: { timezone } });
       }
       return toOrgDto(row);
     });

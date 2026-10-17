@@ -6,6 +6,7 @@ import type pg from 'pg';
 import { recordAudit } from '../audit/audit.js';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
+import { isKnownZone } from '../http/validation.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { lockedActor } from '../tenancy/org-lock.js';
 import { DEPS } from '../tokens.js';
@@ -23,12 +24,6 @@ const taken = () =>
 // The role is re-read under the organization lock: the guard's copy may be stale.
 async function lockedWriter(c: pg.PoolClient, ctx: OrgContext): Promise<void> {
   if (!can(await lockedActor(c, ctx), 'brand.write')) throw new ApiError(403, 'forbidden');
-}
-
-// Intl accepts names case-insensitively; date_trunc needs the exact name Postgres knows.
-export async function isKnownZone(c: pg.PoolClient, timezone: string): Promise<boolean> {
-  const known = await c.query('SELECT 1 FROM pg_timezone_names WHERE name = $1', [timezone]);
-  return known.rowCount !== 0;
 }
 
 async function requireKnownZone(c: pg.PoolClient, timezone: string): Promise<void> {

@@ -57,7 +57,7 @@ const CLAIM_SQL = `
    WHERE d.id = due.id
   RETURNING d.id, d.organization_id, d.report_id, d.user_id, d.attempts`;
 
-// The send-time recipient check (Global Constraints › Recipients), scoped to the report's organization.
+// The send-time recipient check (verified owners and admins who have not unsubscribed), scoped to the report's organization.
 const RECIPIENT_SQL = `
   SELECT o.name AS workspace, r.payload, to_char(r.week_start, 'YYYY-MM-DD') AS week_start,
          m.role, u.email, u.email_verified,

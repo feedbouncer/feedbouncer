@@ -9,7 +9,7 @@ import {
 } from '@feedbouncer/reports';
 import type { KeyProvider } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
-import { every } from './alerts.js';
+import { every } from './interval.js';
 
 export interface ReportLoopsDeps {
   readonly pool: ReturnType<typeof createPool>;

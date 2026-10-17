@@ -1,7 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type pg from 'pg';
-import { recordAlertAudit } from '@feedbouncer/alerts';
-import { withTransaction } from '@feedbouncer/db';
+import { recordAuditEvent, withTransaction } from '@feedbouncer/db';
 import { open, seal, type KeyProvider } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
 import { REPORT_TOKEN_RE } from './constants.js';
@@ -142,7 +141,7 @@ export class PgReportSubscriptions {
         WHERE organization_id = $1 AND user_id = $2 AND state IN ('pending', 'retrying')`,
       [orgId, userId],
     );
-    await recordAlertAudit(tx, {
+    await recordAuditEvent(tx, {
       organizationId: orgId,
       actorType: actorUserId === null ? 'system' : 'user',
       actorUserId,
@@ -161,7 +160,7 @@ export class PgReportSubscriptions {
         WHERE organization_id = $1 AND id = $2`,
       [orgId, id, sealed.keyId, sha256(token), sealed.blob],
     );
-    await recordAlertAudit(tx, {
+    await recordAuditEvent(tx, {
       organizationId: orgId,
       actorType: 'user',
       actorUserId: userId,

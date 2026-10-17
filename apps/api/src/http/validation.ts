@@ -1,3 +1,4 @@
+import type pg from 'pg';
 import { z } from 'zod';
 import { ApiError, notFound } from './errors.js';
 
@@ -18,6 +19,12 @@ export function isIanaTimeZone(v: unknown): v is string {
   } catch {
     return false;
   }
+}
+
+// Intl accepts names case-insensitively; date_trunc needs the exact name Postgres knows.
+export async function isKnownZone(c: pg.PoolClient, timezone: string): Promise<boolean> {
+  const known = await c.query('SELECT 1 FROM pg_timezone_names WHERE name = $1', [timezone]);
+  return known.rowCount !== 0;
 }
 
 export const zTimeZone = z.string().refine(isIanaTimeZone);

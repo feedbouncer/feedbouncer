@@ -171,7 +171,7 @@ describe('organizations', () => {
         timezoneSet: true,
       });
       const audit = await api.pool.query(
-        "SELECT actor_user_id, details FROM audit_event WHERE organization_id = $1 AND action = 'org.timezone_updated'",
+        "SELECT actor_user_id, details FROM audit_event WHERE organization_id = $1 AND action = 'organization.timezone_updated'",
         [orgId],
       );
       expect(audit.rows).toEqual([
@@ -183,6 +183,15 @@ describe('organizations', () => {
       const { member, orgId } = await orgWithRoles(api, 'tz-member', shared);
       expect((await patch(orgId, member.cookie, { timezone: 'Europe/Berlin' })).status).toBe(403);
     });
+
+    it.each(['Japan', 'GMT', 'EST5EDT'])(
+      '%s (no region separator) → 400 invalid_timezone',
+      async (timezone) => {
+        const { owner, orgId } = await orgWithRoles(api, `tz-${timezone}`, shared);
+        const r = await patch(orgId, owner.cookie, { timezone });
+        expect([r.status, r.body.error.code]).toEqual([400, 'invalid_timezone']);
+      },
+    );
 
     it("'Mars/Olympus' → 400 invalid_timezone", async () => {
       const { owner, orgId } = await orgWithRoles(api, 'tz-mars', shared);
@@ -215,7 +224,7 @@ describe('organizations', () => {
         'SELECT action FROM audit_event WHERE organization_id = $1 ORDER BY sequence',
         [orgId],
       );
-      expect(audit.rows.map((x) => x.action)).not.toContain('org.timezone_updated');
+      expect(audit.rows.map((x) => x.action)).not.toContain('organization.timezone_updated');
     });
   });
 
