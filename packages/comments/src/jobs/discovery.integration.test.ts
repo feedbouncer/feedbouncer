@@ -75,6 +75,28 @@ const count = async (table: string, s: ConnectionScope = adsScope) =>
       )
     ).rows[0].n,
   );
+const linkCount = async () =>
+  Number(
+    (
+      await pool.query(
+        `SELECT count(*) AS n FROM meta_ad_source
+          WHERE organization_id = $1 AND brand_id = $2 AND unlinked_at IS NULL`,
+        org(adsScope),
+      )
+    ).rows[0].n,
+  );
+const checkOf = async (adId: string) =>
+  (
+    await pool.query<{
+      deleted_at: Date | null;
+      status_checked_at: Date | null;
+      name: string | null;
+    }>(
+      `SELECT deleted_at, status_checked_at, name FROM meta_ad
+        WHERE organization_id = $1 AND brand_id = $2 AND external_id = $3`,
+      [...org(adsScope), adId],
+    )
+  ).rows[0]!;
 const resolutions = async (s: ConnectionScope = adsScope) =>
   (
     await pool.query<{ facebook: string; instagram: string }>(
@@ -298,6 +320,51 @@ describe('ad discovery job', () => {
     expect(await activeOf(adId)).toBe(false);
   });
 
+  it.each(['status', 'gone'] as const)(
+    'an ad deleted on Meta is marked deleted_at after the next complete listing (%s)',
+    async (mode) => {
+      const { adId } = graph.addAd(adAccountId, {
+        name: 'Doomed',
+        storyId: graph.addDarkPost(pageId).postId,
+      });
+      await run(1);
+      expect(await checkOf(adId)).toMatchObject({ name: 'Doomed', deleted_at: null });
+      graph.deleteAd(adId, mode);
+      nowMs += 60_000;
+      expect(await run(2)).toMatchObject({ retired: 1, checked: 1, deleted: 1 });
+      expect(await checkOf(adId)).toMatchObject({
+        name: 'Doomed',
+        deleted_at: new Date(nowMs),
+        status_checked_at: new Date(nowMs),
+      });
+      nowMs += 60_000;
+      expect(await run(3)).toMatchObject({ checked: 0, deleted: 0 });
+    },
+  );
+
+  it('a paused ad is retired but not marked deleted', async () => {
+    const { adId } = graph.addAd(adAccountId, { storyId: graph.addDarkPost(pageId).postId });
+    await run(1);
+    graph.setAdStatus(adId, 'PAUSED');
+    nowMs += 60_000;
+    expect(await run(2)).toMatchObject({ retired: 1, checked: 1, deleted: 0 });
+    expect(await activeOf(adId)).toBe(false);
+    expect(await checkOf(adId)).toMatchObject({
+      deleted_at: null,
+      status_checked_at: new Date(nowMs),
+    });
+  });
+
+  it('a throttled lookup leaves the ad unchecked and the job succeeds', async () => {
+    const { adId } = graph.addAd(adAccountId, { storyId: graph.addDarkPost(pageId).postId });
+    await run(1);
+    graph.setAdStatus(adId, 'PAUSED');
+    nowMs += 60_000;
+    graph.throttleNext(80004, 2, { afterCalls: 1 });
+    expect(await run(2)).toMatchObject({ retired: 1, checked: 0, deleted: 0, complete: true });
+    expect((await checkOf(adId)).status_checked_at).toBeNull();
+  });
+
   it('a page connected only in another tenant yields page_not_connected', async () => {
     const { postId } = graph.addDarkPost(pageId);
     graph.addAd(adAccountId, { storyId: postId });
@@ -326,7 +393,7 @@ describe('ad discovery job', () => {
     await run(1);
     await run(1);
     expect(await count('meta_ad')).toBe(1);
-    expect(await count('meta_ad_source')).toBe(1);
+    expect(await linkCount()).toBe(1);
     expect(await count('source_poll')).toBe(1);
   });
 

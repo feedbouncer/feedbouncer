@@ -5,6 +5,7 @@ import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { PRIVATE_REPLY_WINDOW_MS } from '@feedbouncer/connectors';
 import {
   addAd,
+  deleteAd,
   addAdAccount,
   createAdsState,
   routeAds,
@@ -213,6 +214,10 @@ export class FakeGraph {
 
   removeAds(adAccountId: string): void {
     for (const [id, ad] of this.ads.ads) if (ad.accountId === adAccountId) this.ads.ads.delete(id);
+  }
+
+  deleteAd(adId: string, mode: 'status' | 'gone'): void {
+    deleteAd(this.ads, this.clock(), adId, mode);
   }
 
   setAdStatus(adId: string, status: string): void {

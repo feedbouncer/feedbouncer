@@ -130,6 +130,16 @@ describe('rate budget key', () => {
   });
 });
 
+describe('ConnectionClient.lookupAd', () => {
+  it('unsupported connector -> ConnectorError unsupported', async () => {
+    const c = await runtime.connect(scope);
+    await expect(c.lookupAd('123')).rejects.toMatchObject({
+      kind: 'unsupported',
+      code: 'lookup_ad',
+    });
+  });
+});
+
 describe('ConnectionClient.act', () => {
   it('applies a supported action and offers an undo when the inverse is supported', async () => {
     const c = await runtime.connect(scope);

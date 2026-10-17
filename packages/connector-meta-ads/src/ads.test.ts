@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CallContext } from '@feedbouncer/connectors';
-import { listActiveAds, parseAd } from './ads.js';
+import { listActiveAds, lookupAd, parseAd, parseAdName } from './ads.js';
 import type { MetaAdsConfig } from './config.js';
 
 const base = {
@@ -82,6 +82,12 @@ describe('parseAd', () => {
       skipped: 'invalid_ad',
     });
   });
+  it('parseAd reads name', () => {
+    const r = parseAd({ ...base, name: 'Spring sale', creative: { id: '7' } });
+    expect('skipped' in r ? null : r.ad!.name).toBe('Spring sale');
+    const none = parseAd({ ...base, creative: { id: '7' } });
+    expect('skipped' in none ? null : none.ad!.name).toBeNull();
+  });
   it('active follows effective_status', () => {
     const r = parseAd({ ...base, effective_status: 'PAUSED', creative: { id: '7' } });
     expect('skipped' in r ? null : r.active).toBe(false);
@@ -97,4 +103,23 @@ describe('listActiveAds cursor', () => {
       ).rejects.toMatchObject({ kind: 'permanent', code: 'invalid_cursor' });
     },
   );
+});
+
+describe('parseAdName', () => {
+  it('replaces NUL, caps at 200 code points, nulls blanks and non-strings, keeps RTL', () => {
+    expect(parseAdName('a\u0000b')).toBe('a\ufffdb');
+    expect(Array.from(parseAdName('😀'.repeat(250))!)).toHaveLength(200);
+    expect(parseAdName('   ')).toBeNull();
+    expect(parseAdName(42)).toBeNull();
+    expect(parseAdName('x'.repeat(2001))).toBeNull();
+    expect(parseAdName('  מבצע אביב  ')).toBe('מבצע אביב');
+  });
+});
+
+describe('lookupAd id', () => {
+  it("rejects '1/../me' without a request", async () => {
+    await expect(
+      lookupAd({} as MetaAdsConfig, Date.now, {} as CallContext, { externalId: '1/../me' }),
+    ).rejects.toMatchObject({ kind: 'permanent', code: 'invalid_request' });
+  });
 });

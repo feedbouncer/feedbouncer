@@ -70,7 +70,7 @@ const days = (d: Date, n: number) => new Date(d.getTime() + n * 86_400_000);
 
 function adRow(
   id: string,
-  p: { fb?: string; ig?: string; active?: boolean },
+  p: { fb?: string; ig?: string; active?: boolean; name?: string | null },
   conns: BrandMetaConnections,
 ): DiscoveredAdRow {
   const page = conns.facebook.get('900') ?? null;
@@ -78,6 +78,7 @@ function adRow(
   const active = p.active ?? true;
   return {
     externalId: id,
+    name: p.name ?? null,
     adAccountExternalId: '1001',
     effectiveStatus: active ? 'ACTIVE' : 'PAUSED',
     active,
@@ -457,12 +458,116 @@ describe('PgAdTracking', () => {
       expect.objectContaining({ resumeCursor: 'abc', resumeBoundary: days(at, -2) }),
     ]);
   });
-  it('a changed creative moves the link to the new post', async () => {
+  it('a changed creative moves polling to the new post and keeps the old link', async () => {
     const conns = await tracking.brandMetaConnections(adsA);
     await recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);
     await recordAd(adsA, adRow('5001', { fb: '900_2' }, conns), at);
-    expect(await linksOf('900_1')).toEqual([]);
+    expect(await linksOf('900_1')).toEqual(['5001']);
+    expect(await unlinkedOf('900_1')).toEqual([expect.any(Date)]);
     expect(await linksOf('900_2')).toEqual(['5001']);
+  });
+  const adCols = async (ext: string) =>
+    (
+      await pool.query<{
+        name: string | null;
+        deleted_at: Date | null;
+        status_checked_at: Date | null;
+      }>(
+        `SELECT name, deleted_at, status_checked_at FROM meta_ad
+          WHERE organization_id = $1 AND brand_id = $2 AND ads_connection_id = $3 AND external_id = $4`,
+        [a.organizationId, a.brandId, adsA.connectionId, ext],
+      )
+    ).rows[0]!;
+  const unlinkedOf = async (ext: string) =>
+    (
+      await pool.query<{ unlinked_at: Date | null }>(
+        `SELECT mas.unlinked_at FROM meta_ad_source mas
+           JOIN source s ON s.id = mas.source_id AND s.organization_id = mas.organization_id
+                        AND s.brand_id = mas.brand_id
+          WHERE mas.organization_id = $1 AND mas.brand_id = $2 AND s.external_id = $3`,
+        [a.organizationId, a.brandId, ext],
+      )
+    ).rows.map((r) => r.unlinked_at);
+
+  it('recordAds stores name and keeps it when a later listing omits it', async () => {
+    const conns = await tracking.brandMetaConnections(adsA);
+    await recordAd(adsA, adRow('5001', { name: 'Spring' }, conns), at);
+    expect((await adCols('5001')).name).toBe('Spring');
+    await recordAd(adsA, adRow('5001', { name: null }, conns), at);
+    expect((await adCols('5001')).name).toBe('Spring');
+    await recordAd(adsA, adRow('5001', { name: 'Summer' }, conns), at);
+    expect((await adCols('5001')).name).toBe('Summer');
+  });
+  it('creative change soft-unlinks; DUE_SQL skips unlinked sources', async () => {
+    const conns = await tracking.brandMetaConnections(adsA);
+    await recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);
+    await recordAd(adsA, adRow('5001', { fb: '900_2' }, conns), days(at, 1));
+    expect(await unlinkedOf('900_1')).toEqual([days(at, 1)]);
+    expect(await unlinkedOf('900_2')).toEqual([null]);
+    expect(await linksOf('900_1')).toEqual(['5001']);
+    const due = await tracking.dueSources(fbA, days(at, 2), { graceDays: 7, limit: 10 });
+    expect(due.map((d) => d.sourceExternalId)).toEqual(['900_2']);
+    expect(
+      await tracking.connectionsWithDueSources(days(at, 2), { graceDays: 7, limit: 10 }),
+    ).toHaveLength(1);
+  });
+  it('relinking clears unlinked_at', async () => {
+    const conns = await tracking.brandMetaConnections(adsA);
+    await recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), at);
+    await recordAd(adsA, adRow('5001', { fb: '900_2' }, conns), days(at, 1));
+    await recordAd(adsA, adRow('5001', { fb: '900_1' }, conns), days(at, 2));
+    expect(await unlinkedOf('900_1')).toEqual([null]);
+    expect(await unlinkedOf('900_2')).toEqual([days(at, 2)]);
+  });
+  it('adsToCheck returns retired unchecked ads only', async () => {
+    const conns = await tracking.brandMetaConnections(adsA);
+    await recordAd(adsA, adRow('5001', { active: false }, conns), at);
+    await recordAd(adsA, adRow('5002', {}, conns), at);
+    await recordAd(adsA, adRow('5003', { active: false }, conns), days(at, 1));
+    await recordAd(
+      adsB,
+      adRow('5004', { active: false }, await tracking.brandMetaConnections(adsB)),
+      at,
+    );
+    const todo = await tracking.adsToCheck(adsA, 10);
+    expect(todo.map((x) => x.externalId)).toEqual(['5001', '5003']);
+    expect(await tracking.adsToCheck(adsA, 1)).toHaveLength(1);
+    await tracking.recordAdLookup(adsA, todo[0]!.id, { name: null, deleted: false }, days(at, 2));
+    expect((await tracking.adsToCheck(adsA, 10)).map((x) => x.externalId)).toEqual(['5003']);
+    await recordAd(adsA, adRow('5001', { active: true }, conns), days(at, 3));
+    await recordAd(adsA, adRow('5001', { active: false }, conns), days(at, 4));
+    expect((await tracking.adsToCheck(adsA, 10)).map((x) => x.externalId)).toEqual([
+      '5003',
+      '5001',
+    ]);
+  });
+  it('recordAdLookup deleted sets deleted_at once', async () => {
+    const conns = await tracking.brandMetaConnections(adsA);
+    await recordAd(adsA, adRow('5001', { active: false, name: 'Keep' }, conns), at);
+    const [ad] = await tracking.adsToCheck(adsA, 10);
+    await tracking.recordAdLookup(adsA, ad!.id, { name: null, deleted: true }, days(at, 1));
+    await tracking.recordAdLookup(adsA, ad!.id, { name: 'New', deleted: true }, days(at, 2));
+    expect(await adCols('5001')).toEqual({
+      name: 'New',
+      deleted_at: days(at, 1),
+      status_checked_at: days(at, 2),
+    });
+    expect(await tracking.adsToCheck(adsA, 10)).toEqual([]);
+  });
+  it('recordAdLookup is scoped to its tenant', async () => {
+    const conns = await tracking.brandMetaConnections(adsA);
+    await recordAd(adsA, adRow('5001', { active: false }, conns), at);
+    const [ad] = await tracking.adsToCheck(adsA, 10);
+    await tracking.recordAdLookup(adsB, ad!.id, { name: null, deleted: true }, at);
+    expect((await adCols('5001')).deleted_at).toBeNull();
+  });
+  it('re-listed ad clears deleted_at', async () => {
+    const conns = await tracking.brandMetaConnections(adsA);
+    await recordAd(adsA, adRow('5001', { active: false }, conns), at);
+    const [ad] = await tracking.adsToCheck(adsA, 10);
+    await tracking.recordAdLookup(adsA, ad!.id, { name: null, deleted: true }, days(at, 1));
+    await recordAd(adsA, adRow('5001', {}, conns), days(at, 2));
+    expect((await adCols('5001')).deleted_at).toBeNull();
   });
   it('list(): origin and ads are derived per tenant', async () => {
     await recordAd(

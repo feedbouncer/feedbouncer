@@ -146,6 +146,7 @@ describe('ad source', () => {
       ad: {
         adAccountExternalId: '1001',
         effectiveStatus: 'ACTIVE',
+        name: 'Spring sale',
         placements: [
           {
             platform: 'facebook',
@@ -166,6 +167,8 @@ describe('ad source', () => {
     for (const patch of [
       { adAccountExternalId: 'act_1001' },
       { effectiveStatus: 'active; drop' },
+      { name: '' },
+      { name: '😀'.repeat(201) },
       { placements: [ok.ad.placements[0], { ...ok.ad.placements[0] }] }, // two facebook entries
       {
         placements: [

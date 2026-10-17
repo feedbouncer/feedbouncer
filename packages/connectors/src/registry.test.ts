@@ -106,6 +106,12 @@ describe('validateConnector', () => {
       { ...base(), listRecentSources: async () => ({ items: [], nextCursor: null }) },
       /recentSources/,
     ],
+    ['adLookup flag without method', withCaps({ adLookup: true }), /adLookup/],
+    [
+      'lookupAd method without flag',
+      { ...base(), lookupAd: async () => ({ name: null, deleted: false }) },
+      /adLookup/,
+    ],
     [
       'zero private reply window',
       withCaps({ constraints: { privateReplyWindowMs: 0 } }),

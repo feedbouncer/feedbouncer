@@ -5,7 +5,13 @@
 import * as z from 'zod';
 import { ConnectorError } from './errors.js';
 import { Secret } from '@feedbouncer/service-runtime';
-import { MODERATION_ACTIONS, RESPONSE_KINDS, type NormalizedComment, type Page } from './types.js';
+import {
+  MODERATION_ACTIONS,
+  RESPONSE_KINDS,
+  type AdLookup,
+  type NormalizedComment,
+  type Page,
+} from './types.js';
 
 const NO_CONTROL = /^[^\u0000-\u001f\u007f]+$/;
 export const externalIdSchema = z.string().min(1).max(255).regex(NO_CONTROL);
@@ -58,9 +64,16 @@ const placementSchema = z
       .nullable(),
   })
   .refine((p) => (p.sourceExternalId === null) !== (p.unresolvedReason === null));
+const adNameSchema = z
+  .string()
+  .min(1)
+  .refine((s) => Array.from(s).length <= 200)
+  .nullable();
+const adLookupSchema = z.strictObject({ name: adNameSchema, deleted: z.boolean() });
 const adInfoSchema = z.strictObject({
   adAccountExternalId: digits,
   effectiveStatus: z.string().regex(/^[A-Z_]{1,40}$/),
+  name: adNameSchema,
   placements: z
     .array(placementSchema)
     .length(2)
@@ -134,6 +147,8 @@ export function parseWith<T>(schema: z.ZodType<T>, raw: unknown): T {
   if (!r.success) throw invalid();
   return r.data;
 }
+
+export const parseAdLookup = (raw: unknown): AdLookup => parseWith(adLookupSchema, raw);
 
 export const parseComment = (raw: unknown): NormalizedComment => parseWith(commentSchema, raw);
 

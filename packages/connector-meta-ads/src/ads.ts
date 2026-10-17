@@ -2,20 +2,28 @@
 // reaches a URL, a DB row or a log; one malformed ad never fails the page.
 import {
   ConnectorError,
+  type AdLookup,
   type AdPlacement,
   type AdUnresolvedReason,
   type CallContext,
   type NormalizedSource,
   type Page,
 } from '@feedbouncer/connectors';
-import { adAccountNode, callFor, graphRequest } from '@feedbouncer/connector-facebook';
+import {
+  adAccountNode,
+  callFor,
+  graphErrorCodes,
+  graphRequest,
+} from '@feedbouncer/connector-facebook';
 import * as z from 'zod';
 import type { MetaAdsConfig } from './config.js';
 import { mapAdsError } from './errors.js';
 
 export const AD_FIELDS =
-  'id,account_id,effective_status,updated_time,creative{id,effective_object_story_id,effective_instagram_media_id,instagram_user_id,object_type}';
+  'id,name,account_id,effective_status,updated_time,creative{id,effective_object_story_id,effective_instagram_media_id,instagram_user_id,object_type}';
 
+const LOOKUP_FIELDS = 'id,name,effective_status';
+const NAME_MAX_CODE_POINTS = 200;
 const NUMERIC_ID = /^\d{1,32}$/;
 const STORY_ID = /^\d{1,32}_\d{1,32}$/;
 const STATUS = /^[A-Z_]{1,40}$/;
@@ -28,6 +36,17 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
 const valid = (v: unknown, re: RegExp): string | null =>
   typeof v === 'string' && re.test(v) ? v : null;
 const present = (v: unknown) => v !== undefined && v !== null && v !== '';
+
+const nameSchema = z.string().max(2000);
+
+export function parseAdName(raw: unknown): string | null {
+  const parsed = nameSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  const name = Array.from(parsed.data.replaceAll('\u0000', '\ufffd').trim())
+    .slice(0, NAME_MAX_CODE_POINTS)
+    .join('');
+  return name === '' ? null : name;
+}
 
 const unresolved = (
   platform: AdPlacement['platform'],
@@ -98,6 +117,7 @@ export function parseAd(
     ad: {
       adAccountExternalId: account,
       effectiveStatus: status,
+      name: parseAdName(ad.name),
       placements: [facebook, instagram],
     },
   };
@@ -157,4 +177,28 @@ export async function listActiveAds(
   // Follow the cursor, never `paging.next`: the URL is rebuilt on the allowed host.
   const after = page.data.paging?.next ? page.data.paging.cursors?.after : undefined;
   return { items, nextCursor: after ?? null };
+}
+
+/** A deleted ad is a result, not an error: Graph answers `DELETED` or 100/33 for it. */
+export async function lookupAd(
+  cfg: MetaAdsConfig,
+  nowMs: () => number,
+  ctx: CallContext,
+  req: { externalId: string },
+): Promise<AdLookup> {
+  if (!NUMERIC_ID.test(req.externalId)) throw new ConnectorError('permanent', 'invalid_request');
+  let r;
+  try {
+    r = await graphRequest(callFor(cfg.meta, nowMs, ctx), {
+      method: 'GET',
+      path: [req.externalId],
+      query: { fields: LOOKUP_FIELDS },
+    });
+  } catch (e) {
+    const c = e instanceof ConnectorError ? graphErrorCodes(e) : null;
+    if (c?.code === 100 && c.subcode === 33) return { name: null, deleted: true };
+    throw mapAdsError(e);
+  }
+  const ad = isObj(r.body) ? r.body : {};
+  return { name: parseAdName(ad.name), deleted: ad.effective_status === 'DELETED' };
 }
