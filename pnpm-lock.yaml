@@ -834,24 +834,12 @@ importers:
       '@feedbouncer/actions':
         specifier: workspace:*
         version: link:../actions
-      '@feedbouncer/alerts':
-        specifier: workspace:*
-        version: link:../alerts
       '@feedbouncer/classifier':
         specifier: workspace:*
         version: link:../classifier
       '@feedbouncer/db':
         specifier: workspace:*
         version: link:../db
-      '@feedbouncer/mailer':
-        specifier: workspace:*
-        version: link:../mailer
-      '@feedbouncer/secrets':
-        specifier: workspace:*
-        version: link:../secrets
-      '@feedbouncer/service-runtime':
-        specifier: workspace:*
-        version: link:../service-runtime
       pg:
         specifier: 8.23.1
         version: 8.23.1

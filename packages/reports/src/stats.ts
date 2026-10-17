@@ -52,36 +52,21 @@ export interface WeeklyStats {
 /** Upper bound on candidate ads handed to ranking. */
 const ADS_CANDIDATES = 200;
 
-// $1 org, $2 start, $3 end.
-const TOTALS_SQL = `
+// One statement, so the hide attribution chain runs once and every metric reads one snapshot.
+// $1 org, $2 start, $3 end, $4 previous week start, $5 minimum ad comments, $6 computedAt.
+//
+// ads: a comment counts once per ad even when both its source and its ad source link to that ad.
+// Links count even if since unlinked: the week's data stands. Pre-ordered by hidden share so the
+// cap never drops an ad ranking would pick.
+// incomplete: a connection currently in error or reconnect_required, or one disconnected or flagged
+// for reconnect in [start, computedAt). 'revoked' is a permanent end state, so it counts only
+// through its audit event.
+const STATS_SQL = `
 WITH ${WEEK_COMMENTS_CTES},
 by_brand AS (
   SELECT w.brand_id, count(*)::int AS processed, count(w.bucket)::int AS hidden
     FROM week w
-   GROUP BY w.brand_id)
-SELECT (SELECT count(*)::int FROM week) AS processed,
-       (SELECT count(bucket)::int FROM week) AS hidden,
-       (SELECT COALESCE(json_object_agg(x.bucket, x.n), '{}')
-          FROM (SELECT bucket, count(*)::int AS n FROM week WHERE bucket IS NOT NULL GROUP BY bucket) x
-       ) AS buckets,
-       (SELECT COALESCE(json_agg(json_build_object(
-                 'brandId', b.id, 'name', b.name, 'archived', b.archived_at IS NOT NULL,
-                 'processed', x.processed, 'hidden', x.hidden) ORDER BY b.name, b.id), '[]')
-          FROM by_brand x
-          JOIN brand b ON b.organization_id = $1 AND b.id = x.brand_id) AS brands`;
-
-// $1 org, $2 previous week start, $3 week start.
-const PROCESSED_SQL = `
-SELECT count(*)::int AS processed
-  FROM comment c
- WHERE c.organization_id = $1 AND NOT c.is_own_account
-   AND c.posted_at >= $2 AND c.posted_at < $3 AND ${PROCESSED_COMMENT_SQL}`;
-
-// $1 org, $2 start, $3 end, $4 minimum comments. A comment counts once per ad even when both its
-// source and its ad source link to that ad. Links count even if since unlinked: the week's data
-// stands. Pre-ordered by hidden share so the cap never drops an ad ranking would pick.
-const ADS_SQL = `
-WITH ${WEEK_COMMENTS_CTES},
+   GROUP BY w.brand_id),
 per_ad AS (
   SELECT mas.brand_id, mas.ad_id,
          array_agg(DISTINCT mas.platform ORDER BY mas.platform) AS platforms,
@@ -90,61 +75,80 @@ per_ad AS (
     FROM week w
     JOIN meta_ad_source mas ON mas.organization_id = $1 AND mas.brand_id = w.brand_id
                            AND mas.source_id IN (w.source_id, w.ad_source_id)
-   GROUP BY mas.brand_id, mas.ad_id)
-SELECT ma.id, ma.external_id, ma.name, x.platforms, ma.brand_id, x.hidden, x.total,
-       (ma.deleted_at IS NOT NULL OR ma.effective_status IN ('ARCHIVED', 'DELETED')
-        OR b.archived_at IS NOT NULL) AS archived
-  FROM per_ad x
-  JOIN meta_ad ma ON ma.organization_id = $1 AND ma.brand_id = x.brand_id AND ma.id = x.ad_id
-  JOIN brand b ON b.organization_id = $1 AND b.id = x.brand_id
- WHERE x.total >= $4 AND x.hidden > 0
- ORDER BY x.hidden::numeric / x.total DESC, x.hidden DESC, ma.id
- LIMIT ${ADS_CANDIDATES}`;
+   GROUP BY mas.brand_id, mas.ad_id),
+ads AS (
+  SELECT ma.id, ma.external_id, ma.name, x.platforms, ma.brand_id, x.hidden, x.total,
+         (ma.deleted_at IS NOT NULL OR ma.effective_status IN ('ARCHIVED', 'DELETED')
+          OR b.archived_at IS NOT NULL) AS archived
+    FROM per_ad x
+    JOIN meta_ad ma ON ma.organization_id = $1 AND ma.brand_id = x.brand_id AND ma.id = x.ad_id
+    JOIN brand b ON b.organization_id = $1 AND b.id = x.brand_id
+   WHERE x.total >= $5 AND x.hidden > 0
+   ORDER BY x.hidden::numeric / x.total DESC, x.hidden DESC, ma.id
+   LIMIT ${ADS_CANDIDATES}),
+incomplete AS (
+  SELECT cn.id, COALESCE(cn.display_name, cn.external_account_id) AS name, cn.platform
+    FROM connection cn
+   WHERE cn.organization_id = $1
+     AND (cn.status IN ('error', 'reconnect_required')
+          OR EXISTS (SELECT 1 FROM audit_event e
+                      WHERE e.organization_id = $1 AND e.subject_type = 'connection' AND e.subject_id = cn.id
+                        AND e.action IN ('connection.disconnected', 'connection.reconnect_required')
+                        AND e.created_at >= $2 AND e.created_at < $6)))
+SELECT (SELECT count(*)::int FROM week) AS processed,
+       (SELECT count(bucket)::int FROM week) AS hidden,
+       (SELECT count(*)::int
+          FROM comment c
+         WHERE c.organization_id = $1 AND NOT c.is_own_account
+           AND c.posted_at >= $4 AND c.posted_at < $2 AND ${PROCESSED_COMMENT_SQL}) AS processed_prev,
+       (SELECT COALESCE(json_object_agg(x.bucket, x.n), '{}')
+          FROM (SELECT bucket, count(*)::int AS n FROM week WHERE bucket IS NOT NULL GROUP BY bucket) x
+       ) AS buckets,
+       (SELECT COALESCE(json_agg(json_build_object(
+                 'brandId', b.id, 'name', b.name, 'archived', b.archived_at IS NOT NULL,
+                 'processed', x.processed, 'hidden', x.hidden) ORDER BY b.name, b.id), '[]')
+          FROM by_brand x
+          JOIN brand b ON b.organization_id = $1 AND b.id = x.brand_id) AS brands,
+       (SELECT COALESCE(json_agg(json_build_object(
+                 'adId', a.id, 'externalId', a.external_id, 'name', a.name, 'platforms', a.platforms,
+                 'brandId', a.brand_id, 'archived', a.archived, 'hidden', a.hidden, 'total', a.total)
+                 ORDER BY a.hidden::numeric / a.total DESC, a.hidden DESC, a.id), '[]')
+          FROM ads a) AS ads,
+       (SELECT COALESCE(json_agg(json_build_object(
+                 'connectionId', i.id, 'name', i.name, 'platform', i.platform) ORDER BY i.name, i.id), '[]')
+          FROM incomplete i) AS incomplete_accounts`;
 
-// $1 org, $2 week start, $3 computedAt.
-const INCOMPLETE_SQL = `
-SELECT cn.id, COALESCE(cn.display_name, cn.external_account_id) AS name, cn.platform
-  FROM connection cn
- WHERE cn.organization_id = $1
-   AND (cn.status IN ('revoked', 'error', 'reconnect_required')
-        OR EXISTS (SELECT 1 FROM audit_event e
-                    WHERE e.organization_id = $1 AND e.subject_type = 'connection' AND e.subject_id = cn.id
-                      AND e.action IN ('connection.disconnected', 'connection.reconnect_required')
-                      AND e.created_at >= $2 AND e.created_at < $3))
- ORDER BY name, cn.id`;
-
-interface TotalsRow {
+interface StatsRow {
   processed: number;
   hidden: number;
+  processed_prev: number;
   buckets: Partial<Record<ReportBucket, number>>;
   brands: BrandStat[];
+  ads: AdStat[];
+  incomplete_accounts: WeeklyStats['incompleteAccounts'];
 }
 
-interface AdRow {
-  id: string;
-  external_id: string;
-  name: string | null;
-  platforms: AdStat['platforms'];
-  brand_id: string;
-  hidden: number;
-  total: number;
-  archived: boolean;
-}
-
-/** All queries bind organization_id = orgId on every table and join on (organization_id, brand_id). Never selects comment text. */
+/**
+ * All queries bind organization_id = orgId on every table and join on (organization_id, brand_id).
+ * Never selects comment text. Issues a single statement and manages no transaction, so it reads one
+ * snapshot and runs inside the caller's (e.g. the scheduler's REPEATABLE READ per-org) transaction.
+ */
 export async function computeWeeklyStats(
   c: pg.ClientBase,
   orgId: string,
   p: ReportPeriod,
   now: Date,
 ): Promise<WeeklyStats> {
-  const totals = (await c.query<TotalsRow>(TOTALS_SQL, [orgId, p.start, p.end])).rows[0]!;
-  const prev = await c.query<{ processed: number }>(PROCESSED_SQL, [orgId, p.prevStart, p.start]);
-  const ads = await c.query<AdRow>(ADS_SQL, [orgId, p.start, p.end, TOP_ADS_MIN_COMMENTS]);
-  const incomplete = await c.query<{ id: string; name: string; platform: string }>(
-    INCOMPLETE_SQL,
-    [orgId, p.start, now],
-  );
+  const r = (
+    await c.query<StatsRow>(STATS_SQL, [
+      orgId,
+      p.start,
+      p.end,
+      p.prevStart,
+      TOP_ADS_MIN_COMMENTS,
+      now,
+    ])
+  ).rows[0]!;
   return {
     version: 1,
     organizationId: orgId,
@@ -153,28 +157,15 @@ export async function computeWeeklyStats(
     start: p.start.toISOString(),
     end: p.end.toISOString(),
     computedAt: now.toISOString(),
-    processed: totals.processed,
-    processedPrev: prev.rows[0]!.processed,
-    hidden: totals.hidden,
+    processed: r.processed,
+    processedPrev: r.processed_prev,
+    hidden: r.hidden,
     buckets: REPORT_BUCKETS.flatMap((bucket) => {
-      const count = totals.buckets[bucket] ?? 0;
+      const count = r.buckets[bucket] ?? 0;
       return count > 0 ? [{ bucket, count }] : [];
     }),
-    ads: ads.rows.map((r) => ({
-      adId: r.id,
-      externalId: r.external_id,
-      name: r.name,
-      platforms: r.platforms,
-      brandId: r.brand_id,
-      archived: r.archived,
-      hidden: r.hidden,
-      total: r.total,
-    })),
-    brands: totals.brands,
-    incompleteAccounts: incomplete.rows.map((r) => ({
-      connectionId: r.id,
-      name: r.name,
-      platform: r.platform,
-    })),
+    ads: r.ads,
+    brands: r.brands,
+    incompleteAccounts: r.incomplete_accounts,
   };
 }

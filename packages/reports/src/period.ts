@@ -1,6 +1,5 @@
 import type pg from 'pg';
-
-export const WEEK_START_RE = /^\d{4}-\d{2}-\d{2}$/;
+import { SEND_HOUR_LOCAL } from './constants.js';
 
 export interface ReportPeriod {
   /** Local Monday of the reported week, YYYY-MM-DD. */
@@ -9,7 +8,7 @@ export interface ReportPeriod {
   start: Date;
   end: Date;
   prevStart: Date;
-  /** The instant the report becomes due: Monday 08:00 local after the week ends. */
+  /** The instant the report becomes due: Monday SEND_HOUR_LOCAL:00 local after the week ends. */
   dueAt: Date;
 }
 
@@ -30,7 +29,7 @@ const query = (m: string) => `
          (m - interval '7 days') AT TIME ZONE $1 AS start,
          m AT TIME ZONE $1 AS "end",
          (m - interval '14 days') AT TIME ZONE $1 AS prev_start,
-         (m + interval '8 hours') AT TIME ZONE $1 AS due_at,
+         (m + make_interval(hours => $3)) AT TIME ZONE $1 AS due_at,
          extract(isodow FROM m) = 1 AS monday
     FROM w`;
 
@@ -52,7 +51,7 @@ export async function reportPeriod(
   timezone: string,
   now: Date,
 ): Promise<ReportPeriod> {
-  const { rows } = await c.query<Row>(REPORT_SQL, [timezone, now]);
+  const { rows } = await c.query<Row>(REPORT_SQL, [timezone, now, SEND_HOUR_LOCAL]);
   return toPeriod(timezone, rows[0]!);
 }
 
@@ -62,7 +61,7 @@ export async function periodForWeek(
   timezone: string,
   weekStart: string,
 ): Promise<ReportPeriod | null> {
-  const { rows } = await c.query<Row>(WEEK_SQL, [timezone, weekStart]);
+  const { rows } = await c.query<Row>(WEEK_SQL, [timezone, weekStart, SEND_HOUR_LOCAL]);
   const row = rows[0]!;
   return row.monday ? toPeriod(timezone, row) : null;
 }

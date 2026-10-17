@@ -3,14 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { periodForWeek, type ReportPeriod } from './period.js';
 import { computeWeeklyStats } from './stats.js';
-import {
-  seedAd,
-  seedHide,
-  seedProcessed,
-  seedSource,
-  seedUnhide,
-  setState,
-} from './testing.js';
+import { seedAd, seedHide, seedProcessed, seedSource, seedUnhide, setState } from './testing.js';
 
 let h: Awaited<ReturnType<typeof migratedDb>>;
 let week: ReportPeriod;
@@ -29,7 +22,8 @@ afterAll(async () => {
 });
 
 const fresh = () => seedTenant(h.c, `rs${++n}`, { timezone: 'UTC' });
-const stats = (t: Tenant, p: ReportPeriod = week) => computeWeeklyStats(h.c, t.organizationId, p, NOW);
+const stats = (t: Tenant, p: ReportPeriod = week) =>
+  computeWeeklyStats(h.c, t.organizationId, p, NOW);
 type CommentOpts = Omit<Parameters<typeof seedProcessed>[2], 'postedAt'>;
 const processedAt = (t: Tenant, postedAt: Date, o: CommentOpts = {}) =>
   seedProcessed(h.c, t, { ...o, postedAt });
@@ -252,11 +246,10 @@ describe('computeWeeklyStats', () => {
     for (let i = 0; i < 4; i++) {
       const id = await processedAt(t, MID, { sourceId: t.otherSourceId });
       // Instagram ad comments also carry the ad's own source: still one comment.
-      await h.c.query('UPDATE comment SET ad_source_id = $3 WHERE organization_id = $1 AND id = $2', [
-        t.organizationId,
-        id,
-        t.sourceId,
-      ]);
+      await h.c.query(
+        'UPDATE comment SET ad_source_id = $3 WHERE organization_id = $1 AND id = $2',
+        [t.organizationId, id, t.sourceId],
+      );
     }
     const [ad] = (await stats(t)).ads;
     expect(ad).toMatchObject({ adId, platforms: ['facebook', 'instagram'], hidden: 1, total: 10 });
@@ -318,11 +311,65 @@ describe('computeWeeklyStats', () => {
     await audit(other, 'connection.connected', '2026-10-14T09:00:00Z');
     const later = await connection('Later Five');
     await audit(later, 'connection.reconnect_required', '2026-10-19T09:00:00Z');
+    await connection('Errored Six', 'error');
 
+    const errored = (
+      await h.c.query<{ id: string }>(
+        "SELECT id FROM connection WHERE organization_id = $1 AND display_name = 'Errored Six'",
+        [t.organizationId],
+      )
+    ).rows[0]!.id;
     expect((await stats(t)).incompleteAccounts).toEqual([
+      { connectionId: errored, name: 'Errored Six', platform: 'instagram' },
       { connectionId: flagged, name: 'Insta Two', platform: 'instagram' },
       { connectionId: t.connectionId, name: 'Page One', platform: 'facebook' },
     ]);
+  });
+
+  it('incompleteAccounts: a connection revoked long before the week is not listed; one revoked in the week is, via its audit', async () => {
+    const t = await fresh();
+    const revoked = async (name: string, auditAt: string) => {
+      const id = (
+        await h.c.query<{ id: string }>(
+          `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, display_name, status)
+           VALUES ($1, $2, 'instagram', $3, $4, 'revoked') RETURNING id`,
+          [t.organizationId, t.brandId, `ig-${name}`, name],
+        )
+      ).rows[0]!.id;
+      await h.c.query(
+        `INSERT INTO audit_event (organization_id, brand_id, actor_type, action, subject_type, subject_id, created_at)
+         VALUES ($1, $2, 'user', 'connection.disconnected', 'connection', $3, $4)`,
+        [t.organizationId, t.brandId, id, auditAt],
+      );
+      return id;
+    };
+    await revoked('Gone Long Ago', '2026-03-01T09:00:00Z');
+    const recent = await revoked('Gone This Week', '2026-10-13T09:00:00Z');
+    expect((await stats(t)).incompleteAccounts).toEqual([
+      { connectionId: recent, name: 'Gone This Week', platform: 'instagram' },
+    ]);
+  });
+
+  it("computes from one statement, so it runs inside the caller's REPEATABLE READ transaction on a single snapshot", async () => {
+    const t = await fresh();
+    await seedHide(h.c, t, await processedAt(t, MID), { by: 'classifier', at: MID });
+    await processedAt(t, at('2026-10-07T00:00:00Z'));
+    const query = h.c.query.bind(h.c);
+    let calls = 0;
+    const counting = Object.assign(Object.create(h.c) as typeof h.c, {
+      query: (...args: Parameters<typeof query>) => {
+        calls++;
+        return query(...args);
+      },
+    });
+    await h.c.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    try {
+      const s = await computeWeeklyStats(counting, t.organizationId, week, NOW);
+      expect(s).toMatchObject({ processed: 1, processedPrev: 1, hidden: 1 });
+    } finally {
+      await h.c.query('ROLLBACK');
+    }
+    expect(calls).toBe(1);
   });
 
   it('workspace isolation: org B comments, ads, brands and hides never appear in org A stats, even when B shares external ids', async () => {
@@ -333,9 +380,15 @@ describe('computeWeeklyStats', () => {
     for (let i = 0; i < 12; i++)
       await seedHide(h.c, b, await processedAt(b, MID), { by: 'classifier', at: MID });
     await processedAt(b, at('2026-10-07T00:00:00Z'));
-    await h.c.query("UPDATE connection SET status = 'revoked' WHERE organization_id = $1", [
-      b.organizationId,
-    ]);
+    await h.c.query(
+      "UPDATE connection SET status = 'reconnect_required' WHERE organization_id = $1",
+      [b.organizationId],
+    );
+    await h.c.query(
+      `INSERT INTO audit_event (organization_id, brand_id, actor_type, action, subject_type, subject_id, created_at)
+       VALUES ($1, $2, 'system', 'connection.disconnected', 'connection', $3, $4)`,
+      [b.organizationId, b.brandId, b.connectionId, MID],
+    );
 
     const sa = await stats(a);
     expect(sa).toMatchObject({
@@ -352,7 +405,7 @@ describe('computeWeeklyStats', () => {
     const sb = await stats(b);
     expect(sb).toMatchObject({ processed: 12, processedPrev: 1, hidden: 12 });
     expect(sb.ads).toHaveLength(1);
-    expect(sb.incompleteAccounts.length).toBeGreaterThan(0);
+    expect(sb.incompleteAccounts.map((x) => x.connectionId)).toContain(b.connectionId);
   });
 });
 

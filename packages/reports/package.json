@@ -27,12 +27,8 @@
   },
   "dependencies": {
     "@feedbouncer/actions": "workspace:*",
-    "@feedbouncer/alerts": "workspace:*",
     "@feedbouncer/classifier": "workspace:*",
     "@feedbouncer/db": "workspace:*",
-    "@feedbouncer/mailer": "workspace:*",
-    "@feedbouncer/secrets": "workspace:*",
-    "@feedbouncer/service-runtime": "workspace:*",
     "pg": "8.23.1"
   },
   "devDependencies": {
