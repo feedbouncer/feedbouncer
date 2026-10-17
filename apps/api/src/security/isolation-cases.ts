@@ -31,6 +31,8 @@ export interface IsolationFixture {
   bPreviewId: string;
   /** B's live connection and B owner's pending grant, per account-selection platform. */
   bConnectionIds: Record<'facebook' | 'instagram', string>;
+  /** B's workspace tag. */
+  bTagId: string;
   bGrantIds: Record<'facebook' | 'instagram', string>;
 }
 
@@ -518,6 +520,17 @@ export const CASES: IsolationCase[] = [
     url: (f) => `/api/v1/orgs/${f.A.orgId}/members/${f.B.member.userId}`,
   },
   {
+    route: 'GET /api/v1/orgs/:orgId/role-grants',
+    name: 'list B role grants',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/role-grants`,
+  },
+  {
+    route: 'PUT /api/v1/orgs/:orgId/role-grants',
+    name: 'grant reply in B',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/role-grants`,
+    body: () => ({ role: 'member', capability: 'comment.reply', granted: true }),
+  },
+  {
     route: 'GET /api/v1/orgs/:orgId/invitations',
     name: 'list B invitations',
     url: (f) => `/api/v1/orgs/${f.B.orgId}/invitations`,
@@ -543,6 +556,57 @@ export const CASES: IsolationCase[] = [
     route: 'GET /api/v1/orgs/:orgId/comments/filters',
     name: "read B's comment filters",
     url: (f) => `/api/v1/orgs/${f.B.orgId}/comments/filters`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/comments/:commentId/replies',
+    name: "read B's comment replies",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/comments/${f.bCommentId}/replies`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/comments/:commentId/replies',
+    name: "B's comment replies under A path (IDOR)",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/comments/${f.bCommentId}/replies`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/comments/:commentId/replies',
+    name: "reply to B's comment",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/comments/${f.bCommentId}/replies`,
+    body: () => ({ requestKey: 'iso-reply-1', text: 'pwned' }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/comments/:commentId/replies',
+    name: "reply to B's comment under A path (IDOR)",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/comments/${f.bCommentId}/replies`,
+    body: () => ({ requestKey: 'iso-reply-2', text: 'pwned' }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/comments/triage',
+    name: "mark B's comment done",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/comments/triage`,
+    body: (f) => ({ commentIds: [f.bCommentId], op: { type: 'done' } }),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/tags',
+    name: "list B's tags",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/tags`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/tags',
+    name: 'create a tag in B',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/tags`,
+    body: () => ({ name: 'pwned' }),
+  },
+  {
+    route: 'DELETE /api/v1/orgs/:orgId/tags/:tagId',
+    name: "delete B's tag",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/tags/${f.bTagId}`,
+    body: () => ({ confirmCount: 0 }),
+  },
+  {
+    route: 'DELETE /api/v1/orgs/:orgId/tags/:tagId',
+    name: "delete B's tag under A path (IDOR)",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/tags/${f.bTagId}`,
+    body: () => ({ confirmCount: 0 }),
   },
 ];
 

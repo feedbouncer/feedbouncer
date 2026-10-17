@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { EmptyState } from './empty-state';
 
-const render = (kind: 'no_accounts' | 'no_comments' | 'no_match', canManage = true) =>
+const render = (kind: Parameters<typeof EmptyState>[0]['kind'], canManage = true) =>
   renderToStaticMarkup(<EmptyState kind={kind} orgId="o1" canManage={canManage} />);
 
 describe('EmptyState', () => {
@@ -28,5 +28,14 @@ describe('EmptyState', () => {
     const member = render('no_accounts', false);
     expect(member).toContain('Ask an admin to connect an account.');
     expect(member).not.toContain('<a');
+  });
+
+  it('no_open copy with Show done comments link; no_done copy', () => {
+    const open = render('no_open');
+    expect(open).toContain('<h2>No open comments</h2>');
+    expect(open).toContain('<a href="/orgs/o1/comments?queue=done">Show done comments</a>');
+    const done = render('no_done');
+    expect(done).toContain('<h2>No done comments</h2>');
+    expect(done).not.toContain('Show done comments');
   });
 });

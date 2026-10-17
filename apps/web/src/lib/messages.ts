@@ -57,6 +57,11 @@ const MESSAGES: Record<string, string> = {
   invalid_domain: 'Enter a valid domain name.',
   domain_exists: 'This domain is already in the list.',
   domain_limit_reached: 'This brand has reached the maximum number of own domains.',
+  invalid_tag_name: 'Enter a tag name of 1 to 50 characters without control characters.',
+  tag_name_taken: 'A tag with this name already exists.',
+  tag_limit_reached: 'This workspace has reached its tag limit.',
+  tag_count_changed: 'The number of comments with this tag changed. Confirm again.',
+  unknown_tag: 'A tag was deleted. Reload the page and try again.',
   // Where Facebook sends the browser back after sign-in.
   denied: 'Facebook access was not granted. Nothing was connected.',
   missing_permissions:
@@ -167,6 +172,10 @@ const own = <T>(table: Record<string, T>, key: string): T | undefined =>
 export function messageFor(code: string): string {
   return own(MESSAGES, code) ?? 'Something went wrong.';
 }
+
+/** Whether `code` is a known outcome code, as opposed to an API error code. */
+export const isOutcomeCode = (code: string): boolean =>
+  Object.hasOwn(OUTCOMES, code) || INSTAGRAM_ERROR.test(code);
 
 export function outcomeText(code: string, platform?: string): string {
   const variants = platform !== undefined ? own(PLATFORM_OUTCOMES, platform) : undefined;

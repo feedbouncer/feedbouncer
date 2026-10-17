@@ -8,6 +8,8 @@ import {
   confirmDelete,
   historyText,
   isBusy,
+  POLL_LIMIT,
+  POLL_MS,
   progress,
   progressText,
   reasonText,
@@ -31,10 +33,6 @@ interface ActionView {
   outcomeCode: string | null;
   createdAt: string;
 }
-
-// How often, and how long, to ask the API whether a queued action finished.
-const POLL_MS = 2000;
-const POLL_LIMIT = 30;
 
 const REPLY_COPY: Record<ReplyKind, { label: string; submit: string }> = {
   public_reply: { label: 'Public reply', submit: 'Reply publicly' },

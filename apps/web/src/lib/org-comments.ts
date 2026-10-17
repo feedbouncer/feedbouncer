@@ -1,4 +1,11 @@
-import { CATEGORY_SLUG, COMMENT_STATUSES, LISTABLE_PLATFORMS } from '@feedbouncer/actions/shared';
+import {
+  CATEGORY_SLUG,
+  COMMENT_STATUSES,
+  LISTABLE_PLATFORMS,
+  QUEUES,
+  TAG_IDS_MAX,
+  type Queue,
+} from '@feedbouncer/actions/shared';
 import { platformLabel } from './actions';
 import { CATEGORY_LABEL, type Category } from './classifier';
 import { isUuid } from './ids';
@@ -27,6 +34,56 @@ export interface VisibleCommentDto {
   category: string | null;
   status: string;
   stale: boolean;
+  /** When and by whom the comment was marked done; null while it is open. */
+  done: { at: string; byName: string | null } | null;
+  tags: TagOption[];
+  /** Pending and applied public replies, newest first. Text is for display only. */
+  replies: CommentReplyDto[];
+  replyCount: number;
+  reply: ReplyAvailability;
+}
+
+export interface TagOption {
+  id: string;
+  name: string;
+}
+
+export interface CommentReplyDto {
+  id: string;
+  text: string;
+  status: 'pending' | 'applied';
+  actorType: string;
+  authorName: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+/** Whether the viewer can reply to a comment now, and if not, why. */
+export type ReplyAvailability =
+  | { available: true; maxChars: number }
+  | { available: false; reason: string };
+
+/** A public reply as the replies route returns it. */
+export interface ReplyDto {
+  id: string;
+  status: string;
+  outcomeCode: string | null;
+  text: string;
+  authorName: string | null;
+  actorType: string;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface TagDto extends TagOption {
+  commentCount: number;
+  createdAt: string;
+}
+
+export interface CommentPermissions {
+  reply: boolean;
+  triage: boolean;
+  manageTags: boolean;
 }
 
 export interface AdOptionDto extends VisibleCommentAdDto {
@@ -41,6 +98,7 @@ export interface FilterOptionsDto {
   adsTruncated: boolean;
   categories: string[];
   statuses: readonly string[];
+  tags: TagOption[];
 }
 
 export interface AccountHealthDto {
@@ -58,6 +116,9 @@ export interface OrgCommentFilters {
   ad: string | null;
   category: string | null;
   status: string | null;
+  queue: Queue;
+  /** Tag ids; a comment must have every one. */
+  tags: string[];
 }
 
 export interface Cursor {
@@ -77,6 +138,7 @@ export interface CommentFiltersDto {
   accounts: AccountHealthDto[];
   lastSyncedAt: string | null;
   canManageConnections: boolean;
+  permissions: CommentPermissions;
 }
 
 export const PAGE_SIZE = 50;
@@ -93,6 +155,8 @@ export function parseSearchParams(sp: Params): {
     const v = sp[k];
     return typeof v === 'string' && ok(v) ? v : null;
   };
+  const tag = sp.tag;
+  const tagValues = typeof tag === 'string' ? [tag] : (tag ?? []);
   const before = one('before', (v) => ISO_UTC.test(v) && !Number.isNaN(new Date(v).getTime()));
   const beforeId = one('beforeId', isUuid);
   return {
@@ -101,14 +165,24 @@ export function parseSearchParams(sp: Params): {
       ad: one('ad', (v) => v === 'none' || isUuid(v)),
       category: one('category', (v) => v === '_none' || CATEGORY_SLUG.test(v)),
       status: one('status', (v) => (COMMENT_STATUSES as readonly string[]).includes(v)),
+      queue: (one('queue', (v) => (QUEUES as readonly string[]).includes(v)) ?? 'open') as Queue,
+      tags: [...new Set(tagValues.filter(isUuid).map((v) => v.toLowerCase()))].slice(
+        0,
+        TAG_IDS_MAX,
+      ),
     },
     cursor: before && beforeId ? { before, beforeId } : null,
   };
 }
 
+const SINGLE_FILTERS = ['platform', 'ad', 'category', 'status'] as const;
+
 function query(f: OrgCommentFilters, cursor: Cursor | null | undefined): URLSearchParams {
   const q = new URLSearchParams();
-  for (const [k, v] of Object.entries(f)) if (v) q.set(k, v);
+  for (const k of SINGLE_FILTERS) {
+    const v = f[k];
+    if (v) q.set(k, v);
+  }
   if (cursor) {
     q.set('before', cursor.before);
     q.set('beforeId', cursor.beforeId);
@@ -116,18 +190,27 @@ function query(f: OrgCommentFilters, cursor: Cursor | null | undefined): URLSear
   return q;
 }
 
+/** The API's list query: the queue always, and tags as one comma-separated value. */
 export function apiQuery(f: OrgCommentFilters, cursor: Cursor | null): string {
   const q = query(f, cursor);
+  q.set('queue', f.queue);
+  if (f.tags.length > 0) q.set('tags', f.tags.join(','));
   q.set('limit', String(PAGE_SIZE));
   return q.toString();
 }
 
+/** The page URL, as the filter form submits it: one `tag` per id, the default queue left out. */
 export function pageHref(orgId: string, f: OrgCommentFilters, cursor?: Cursor | null): string {
-  const q = query(f, cursor).toString();
+  const p = query(f, cursor);
+  if (f.queue !== 'open') p.set('queue', f.queue);
+  for (const t of f.tags) p.append('tag', t);
+  const q = p.toString();
   return `/orgs/${orgId}/comments${q ? `?${q}` : ''}`;
 }
 
-export const hasFilters = (f: OrgCommentFilters): boolean => Object.values(f).some(Boolean);
+/** Whether any filter narrows the list; the queue is a view, not a filter. */
+export const hasFilters = (f: OrgCommentFilters): boolean =>
+  SINGLE_FILTERS.some((k) => f[k] !== null) || f.tags.length > 0;
 
 const STATUS_LABEL: Record<string, string> = {
   new: 'New',

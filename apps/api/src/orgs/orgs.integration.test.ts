@@ -152,7 +152,7 @@ describe('organizations', () => {
 
   describe('mutations re-read the actor under the organization lock', () => {
     const ctxFor = (organizationId: string, actorUserId: string, role: OrgContext['role']) =>
-      ({ organizationId, actorUserId, role }) as OrgContext;
+      ({ organizationId, actorUserId, role, grants: [] }) as OrgContext;
     const fail = async (p: Promise<unknown>) => {
       try {
         await p;

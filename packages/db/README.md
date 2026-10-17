@@ -81,7 +81,9 @@ applies the pending migrations on top of `processed_job`, and existing
   - Indexes: `<table>_<cols>_idx`.
   - Triggers: `<table>_<purpose>_trg`.
   - Functions: `fb_<verb>_<noun>()`.
-- Every table has `created_at` and `updated_at` (`timestamptz(3)`), every tenant
+- Every table has `created_at` and `updated_at` (`timestamptz(3)`), except
+  immutable link tables whose rows are only inserted or deleted (`comment_tag`,
+  `comment_done`, `role_grant`), which keep a single event timestamp. Every tenant
   table has `organization_id`, and every foreign key has an index whose first
   column is the pointer column.
 - Never edit a migration that has been applied anywhere. Add a new one.
@@ -116,7 +118,7 @@ and worker wait for the one-shot `migrate` service to finish.
 
 ## Data model
 
-Every table except `processed_job`, `connection_sync` (keyed by `connection_id`), `meta_ad_source`, `meta_ad_listing` and `source_poll` has
+Every table except `processed_job`, `connection_sync` (keyed by `connection_id`), `meta_ad_source`, `meta_ad_listing`, `source_poll`, `comment_tag`, `comment_done` and `role_grant` has
 `id uuid` (`gen_random_uuid()`), `created_at`
 and `updated_at`. Tenant tables carry `organization_id`, brand-scoped tables also
 carry `brand_id`, and each child foreign key includes its parent's scope columns,
@@ -146,6 +148,10 @@ so the database refuses cross-tenant links.
 | `source_poll`       | Comment polling state per source (cursor, high-water mark, schedule). Keyed by `source_id`, no `id`.                                                                                                                                  | org, brand, connection, source         | `source_id`                                 |
 | `rule`              | A brand's moderation rule: conditions, action, mode, priority, `enabled`.                                                                                                                                                             | `organization_id`, `brand_id`          | none                                        |
 | `decision`          | One append-only moderation outcome for a comment, with actor, reason and optional classifier fields.                                                                                                                                  | `organization_id`, `brand_id`          | none (`id`)                                 |
+| `tag`               | A workspace tag. `name` is what people see (1 to 50 characters, trimmed); `name_key` is the case-folded form used for uniqueness.                                                                                                     | `organization_id`                      | `(organization_id, name_key)`               |
+| `comment_tag`       | Puts a tag on a comment. Keyed by `(comment_id, tag_id)`, no `id`.                                                                                                                                                                    | org, brand, comment, tag               | `(comment_id, tag_id)`                      |
+| `comment_done`      | Marks a comment as done, with who and when. Keyed by `comment_id`, no `id`.                                                                                                                                                           | org, brand, comment                    | `comment_id`                                |
+| `role_grant`        | Extra capability granted to a role in an organization. Only `(member, comment.reply)` is allowed. Keyed by `(organization_id, role, capability)`, no `id`.                                                                            | `organization_id`                      | `(organization_id, role, capability)`       |
 | `audit_event`       | Append-only record of significant changes.                                                                                                                                                                                            | `organization_id`, optional brand      | none (`id`)                                 |
 | `job_ledger`        | One row per logical platform job: payload, state, retry counters, lease, effect record, DLQ metadata, and `trace_context` (W3C traceparent, nullable) (packages/jobs).                                                                | org, brand, connection                 | `(organization_id, idempotency_key)`        |
 | `connection_sync`   | Last sync outcome per connection (observability). No secrets or content.                                                                                                                                                              | org, brand, connection                 | `connection_id`                             |
@@ -243,6 +249,24 @@ brand reads newest first without scanning other actions.
 `comment_visible_organization_id_posted_at_idx` on `(organization_id, posted_at DESC, id DESC)`
 covers only `platform_state = 'visible' AND NOT is_own_account` comments, so the
 organization-wide list of visible comments reads newest first.
+
+### Inbox triage
+
+Done and tags exist only in FeedBouncer. Nothing is sent to Facebook or Instagram when a
+comment is marked done or tagged.
+
+Tags belong to the workspace, so one tag can be used on comments of every brand.
+`comment_tag` and `comment_done` carry `organization_id` and `brand_id`, and their foreign
+keys include both, so a comment cannot be linked to a tag of another organization. Deleting a
+comment, a tag or a brand removes the matching rows; deleting a user keeps them and clears the
+actor column.
+
+`comment_tag`, `comment_done` and `role_grant` rows are inserted or deleted, never edited, so
+they keep a single event timestamp (`added_at`, `done_at`, `created_at`) and have no
+`updated_at` trigger.
+
+`role_grant_grantable_check` allows only the `member` role and the `comment.reply`
+capability. Rolling back the migration deletes all tags, done marks and grants.
 
 ### Latest decision per comment
 

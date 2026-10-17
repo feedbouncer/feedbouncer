@@ -40,7 +40,8 @@ export type AuditAction =
   | 'review_mode.ended_early'
   | 'suggestion.approved'
   | 'suggestion.dismissed'
-  | 'suggestion.bulk_requested';
+  | 'suggestion.bulk_requested'
+  | 'org.role_grant_changed';
 
 export interface AuditInput {
   organizationId: string;

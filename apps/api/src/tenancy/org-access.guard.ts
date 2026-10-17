@@ -13,7 +13,10 @@ export interface OrgContext {
   organizationId: string;
   actorUserId: string;
   role: Role;
+  grants: readonly Capability[];
 }
+export const orgCan = (org: OrgContext, cap: Capability): boolean => can(org.role, cap, org.grants);
+
 export interface OrgRequest extends AuthedRequest {
   org: OrgContext;
 }
@@ -37,8 +40,8 @@ export class OrgAccessGuard implements CanActivate {
     const organizationId = parseUuidOr404(params.orgId);
     const m = await findMembership(this.deps.pool, organizationId, req.user.id);
     if (!m) throw notFound();
-    req.org = { organizationId, actorUserId: req.user.id, role: m.role };
-    if (!can(m.role, cap)) throw new ApiError(403, 'forbidden');
+    req.org = { organizationId, actorUserId: req.user.id, role: m.role, grants: m.grants };
+    if (!can(m.role, cap, m.grants)) throw new ApiError(403, 'forbidden');
     return true;
   }
 }

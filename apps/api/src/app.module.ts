@@ -38,6 +38,8 @@ import {
   OrgInvitationsController,
 } from './invitations/invitations.controller.js';
 import { InvitationsService } from './invitations/invitations.service.js';
+import { RoleGrantsController } from './role-grants/role-grants.controller.js';
+import { RoleGrantsService } from './role-grants/role-grants.service.js';
 import { MembersController } from './members/members.controller.js';
 import { MembersService } from './members/members.service.js';
 import { MeController } from './me/me.controller.js';
@@ -50,6 +52,8 @@ import { DomainsController } from './rules/domains.controller.js';
 import { RulesController } from './rules/rules.controller.js';
 import { RulesService } from './rules/rules.service.js';
 import { OrgController, OrgsListController } from './orgs/orgs.controller.js';
+import { TagsController } from './tags/tags.controller.js';
+import { TagsService } from './tags/tags.service.js';
 import { ReviewModeController } from './review-mode/review-mode.controller.js';
 import { ReviewModeService } from './review-mode/review-mode.service.js';
 import { SuggestionsController } from './review-mode/suggestions.controller.js';
@@ -90,6 +94,7 @@ export class AppModule {
         OAuthCallbackController,
         CommentsController,
         OrgCommentsController,
+        TagsController,
         AdsController,
         RulesController,
         ActionsController,
@@ -102,6 +107,7 @@ export class AppModule {
         ClassifierController,
         PoliciesController,
         MembersController,
+        RoleGrantsController,
         OrgInvitationsController,
         InvitationsController,
       ],
@@ -117,6 +123,7 @@ export class AppModule {
         ConnectablePlatformPipe,
         CommentsService,
         OrgCommentsService,
+        TagsService,
         AdsService,
         RulesService,
         ActionsService,
@@ -125,6 +132,7 @@ export class AppModule {
         ClassifierService,
         PoliciesService,
         MembersService,
+        RoleGrantsService,
         InvitationsService,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.

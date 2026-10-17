@@ -4,11 +4,10 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
-import { ACTION_KINDS, EXECUTE_JOB, executeActionJob } from '@feedbouncer/comments';
-import { systemClock } from '@feedbouncer/connectors';
-import type { JobContext } from '@feedbouncer/jobs';
+import { ACTION_KINDS } from '@feedbouncer/comments';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
+import { runExecuteJob } from '../testing/execute.js';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
 
 const SECRET = 'fb-app-secret-0123456789abcdef';
@@ -79,37 +78,6 @@ const base = () => `/api/v1/orgs/${org.orgId}/brands/${org.brandId}`;
 const act = (commentId: string, body: unknown, cookie = org.owner.cookie) =>
   api.req('POST', `${base()}/comments/${commentId}/actions`, { cookie, body });
 const key = () => `rk-${randomUUID()}`;
-
-/** Runs the enqueued execute job for an action the way the worker would. */
-async function runExecuteJob(
-  actionId: string,
-  scope: ConnectionScope,
-  platform: 'facebook' | 'instagram' = 'facebook',
-) {
-  const ledger = await api.pool.query<{ id: string; payload: { actionId: string } }>(
-    `SELECT id, payload FROM job_ledger WHERE job_type = $1 AND payload->>'actionId' = $2`,
-    [EXECUTE_JOB.type, actionId],
-  );
-  expect(ledger.rows).toHaveLength(1);
-  const ctx: JobContext = {
-    scope,
-    platform,
-    jobType: EXECUTE_JOB.type,
-    ledgerId: ledger.rows[0]!.id,
-    attempt: 1,
-    isReplay: false,
-    signal: AbortSignal.timeout(30_000),
-    log: api.deps.log,
-  };
-  const job = executeActionJob({
-    pool: api.pool,
-    runtime: api.deps.connectors!.stack.runtime,
-    log: api.deps.log,
-    producer: api.deps.producer!,
-    clock: systemClock,
-  });
-  return job.handle(ctx, EXECUTE_JOB.payload.parse(ledger.rows[0]!.payload));
-}
 
 beforeAll(async () => {
   graph = new FakeGraph({ appSecret: SECRET, appId: APP_ID });
@@ -198,7 +166,7 @@ describe('comments', () => {
       actorType: 'user',
       actorUserId: org.member.userId,
     });
-    await runExecuteJob(r.body.action.id, page.scope);
+    await runExecuteJob(api, r.body.action.id, page.scope);
     const list = await api.req('GET', `${base()}/comments/${c.id}/actions`, {
       cookie: org.member.cookie,
     });
@@ -593,7 +561,7 @@ describe('comments: instagram platform, media and availability', () => {
     ]);
     expect(Date.parse(pending.body.actions[0].createdAt)).toBeGreaterThanOrEqual(before - 1000);
 
-    await runExecuteJob(r.body.action.id, ig.scope, 'instagram');
+    await runExecuteJob(api, r.body.action.id, ig.scope, 'instagram');
     const applied = await api.req('GET', `${base()}/comments/${c.id}/actions`, {
       cookie: org.member.cookie,
     });
@@ -721,5 +689,80 @@ describe('ad origin', () => {
     expect(organicIds).toContain(organic.id);
     expect(organicIds).not.toContain(onAd.id);
     expect((await get('&origin=x')).status).toBe(400);
+  });
+});
+
+describe('reply permission', () => {
+  const setGrant = async (granted: boolean) => {
+    const r = await api.req('PUT', `/api/v1/orgs/${org.orgId}/role-grants`, {
+      cookie: org.owner.cookie,
+      body: { role: 'member', capability: 'comment.reply', granted },
+    });
+    expect(r.status).toBe(200);
+  };
+
+  it('member without grant: public_reply and private_reply are 403 and store nothing; hide still 202', async () => {
+    const c = await comment(page);
+    const member = org.member.cookie;
+    for (const kind of ['public_reply', 'private_reply'] as const) {
+      const r = await act(c.id, { kind, requestKey: key(), text: 'hi' }, member);
+      expect(r.status).toBe(403);
+      expect(r.body.error.code).toBe('forbidden');
+    }
+    const rows = await api.pool.query('SELECT 1 FROM moderation_action WHERE comment_id = $1', [
+      c.id,
+    ]);
+    expect(rows.rowCount).toBe(0);
+    expect((await act(c.id, { kind: 'hide', requestKey: key() }, member)).status).toBe(202);
+  });
+
+  it('the reply check runs before the comment is loaded: unknown comment is 403, not 404', async () => {
+    const r = await act(
+      randomUUID(),
+      { kind: 'public_reply', requestKey: key(), text: 'hi' },
+      org.member.cookie,
+    );
+    expect(r.status).toBe(403);
+  });
+
+  it('member with grant: public_reply 202; revoked again -> 403', async () => {
+    const c = await comment(page);
+    await setGrant(true);
+    try {
+      const r = await act(
+        c.id,
+        { kind: 'public_reply', requestKey: key(), text: 'thanks' },
+        org.member.cookie,
+      );
+      expect(r.status).toBe(202);
+    } finally {
+      await setGrant(false);
+    }
+    const again = await act(
+      c.id,
+      { kind: 'public_reply', requestKey: key(), text: 'thanks' },
+      org.member.cookie,
+    );
+    expect(again.status).toBe(403);
+  });
+
+  it('list availability shows not_permitted for a member without grant, and not for an admin or a granted member', async () => {
+    const c = await comment(page);
+    const notPermitted = { available: false, reason: 'not_permitted' };
+    const member = (await listed(org, org.member.cookie)).get(c.id)!;
+    expect(member.availability.public_reply).toEqual(notPermitted);
+    expect(member.availability.private_reply).toEqual(notPermitted);
+    expect(member.availability.hide).toEqual({ available: true });
+    expect((await listed(org, org.admin.cookie)).get(c.id)!.availability.public_reply).toEqual({
+      available: true,
+    });
+    await setGrant(true);
+    try {
+      expect((await listed(org, org.member.cookie)).get(c.id)!.availability.public_reply).toEqual({
+        available: true,
+      });
+    } finally {
+      await setGrant(false);
+    }
   });
 });

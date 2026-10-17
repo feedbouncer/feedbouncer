@@ -3,6 +3,7 @@ import {
   codePointLength,
   progress,
   progressText,
+  reasonText,
   rejectionText,
   shownActions,
   type Availability,
@@ -96,6 +97,14 @@ describe('rejectionText', () => {
     expect(rejectionText('text_too_long', undefined)).toBe('Reply is too long for this platform.');
     expect(rejectionText('connection_inactive', 5)).toBe(
       'This connection is not active. Reconnect it and try again.',
+    );
+  });
+});
+
+describe('reasonText', () => {
+  it('explains not_permitted', () => {
+    expect(reasonText('not_permitted', 'facebook')).toBe(
+      "You don't have permission to reply. Ask an owner or admin.",
     );
   });
 });

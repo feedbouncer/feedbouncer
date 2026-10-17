@@ -44,6 +44,14 @@ export function FilterBar({
 }) {
   return (
     <form method="get" action={`/orgs/${orgId}/comments`}>
+      <label>
+        Show{' '}
+        <select name="queue" defaultValue={applied.queue}>
+          <option value="open">Open</option>
+          <option value="done">Done</option>
+          <option value="all">All</option>
+        </select>
+      </label>{' '}
       <Select name="platform" label="Platform" value={applied.platform}>
         {options.platforms.map((p) => (
           <option key={p} value={p}>
@@ -74,13 +82,34 @@ export function FilterBar({
           </option>
         ))}
       </Select>{' '}
+      {options.tags.length > 0 ? (
+        <>
+          <label>
+            Tags{' '}
+            <select
+              name="tag"
+              multiple
+              defaultValue={applied.tags}
+              aria-describedby="tag-filter-hint"
+            >
+              {options.tags.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>{' '}
+          <small id="tag-filter-hint">Comments must have every selected tag.</small>{' '}
+        </>
+      ) : null}
       <button type="submit">Apply</button>
       {hasFilters(applied) ? (
         <>
           {' '}
           <Link href={`/orgs/${orgId}/comments`}>Clear filters</Link>
         </>
-      ) : null}
+      ) : null}{' '}
+      <Link href={`/orgs/${orgId}/tags`}>Manage tags</Link>
       {options.adsTruncated ? <p>Showing the first 500 ads.</p> : null}
     </form>
   );

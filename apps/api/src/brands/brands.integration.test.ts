@@ -132,7 +132,12 @@ describe('brands', () => {
   it('an actor removed after the guard ran gets 404, not 403', async () => {
     const { orgId, admin, brandId } = await orgWithRoles(api, 'gone', shared);
     const svc = new BrandsService(api.deps);
-    const ctx = { organizationId: orgId, actorUserId: admin.userId, role: 'admin' as const };
+    const ctx = {
+      organizationId: orgId,
+      actorUserId: admin.userId,
+      role: 'admin' as const,
+      grants: [],
+    };
     await api.pool.query('DELETE FROM membership WHERE organization_id = $1 AND user_id = $2', [
       orgId,
       admin.userId,

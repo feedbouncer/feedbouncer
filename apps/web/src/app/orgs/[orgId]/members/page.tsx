@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ApiForm } from '../../../../components/api-form';
 import { InviteForm } from '../../../../components/invite-form';
+import { ReplyGrantToggle } from '../../../../components/reply-grant-toggle';
 import { isUuid } from '../../../../lib/ids';
 import { dataOrThrow, requireMe, serverGet, type Role } from '../../../../lib/server-api';
 
@@ -37,6 +38,13 @@ export default async function MembersPage({ params }: { params: Promise<{ orgId:
         'invitations',
       ).invitations
     : [];
+  const grants = dataOrThrow(
+    await serverGet<{ grants: { role: Role; capability: string }[] }>(
+      `/api/v1/orgs/${orgId}/role-grants`,
+    ),
+    'role grants',
+  ).grants;
+  const membersReply = grants.some((g) => g.role === 'member' && g.capability === 'comment.reply');
   const candidates = memberData.members
     .filter((m) => m.userId !== me.user.id)
     .map((m) => ({ value: m.userId, label: m.email }));
@@ -83,6 +91,8 @@ export default async function MembersPage({ params }: { params: Promise<{ orgId:
           );
         })}
       </ul>
+      <h2>Permissions</h2>
+      <ReplyGrantToggle orgId={orgId} granted={membersReply} canChange={manager} />
       <h2>Leave organization</h2>
       <ApiForm
         action={`${base}/members/${me.user.id}`}

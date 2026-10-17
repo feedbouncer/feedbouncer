@@ -242,7 +242,7 @@ export class ModerationActions {
       return refused('not_found');
 
     const existing = await this.#byKey(i.scope, i.requestKey);
-    if (existing) return this.#replay(existing, i, comment);
+    if (existing) return this.#replay(existing, i, comment, text);
 
     const blocked = connectionRefusal(comment.connectionStatus);
     if (blocked) return refused(blocked);
@@ -342,7 +342,7 @@ export class ModerationActions {
       if (isUniqueViolation(err, REQUEST_KEY_UNIQUE)) {
         // A concurrent request with the same key won, or the key is used in another brand.
         const existing = await this.#byKey(i.scope, i.requestKey);
-        return existing ? this.#replay(existing, i, c) : refused('request_key_conflict');
+        return existing ? this.#replay(existing, i, c, text) : refused('request_key_conflict');
       }
       if (isUniqueViolation(err, PRIVATE_REPLY_ONCE))
         return this.#insert(i, c, text, {
@@ -395,11 +395,13 @@ export class ModerationActions {
     { view: existing, reverses }: StoredAction,
     i: Request,
     c: CommentRow,
+    text: string | null,
   ): Promise<RequestActionResult> {
     if (
       existing.commentId !== c.id ||
       existing.kind !== i.kind ||
-      reverses !== (i.reverses ?? null)
+      reverses !== (i.reverses ?? null) ||
+      (REPLY_KINDS.has(i.kind) && existing.replyText !== text)
     )
       return refused('request_key_conflict');
     if (existing.status === 'pending') {

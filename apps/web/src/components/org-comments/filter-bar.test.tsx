@@ -23,8 +23,19 @@ const options: FilterOptionsDto = {
   adsTruncated: false,
   categories: ['spam', 'new_one'],
   statuses: ['new', 'flagged', 'awaiting_action', 'reviewed'],
+  tags: [
+    { id: 't1', name: 'Urgent' },
+    { id: 't2', name: '<b>VIP</b>' },
+  ],
 };
-const none: OrgCommentFilters = { platform: null, ad: null, category: null, status: null };
+const none: OrgCommentFilters = {
+  platform: null,
+  ad: null,
+  category: null,
+  status: null,
+  queue: 'open',
+  tags: [],
+};
 
 const render = (o = options, applied = none) =>
   renderToStaticMarkup(
@@ -54,9 +65,36 @@ describe('FilterBar', () => {
       ad: 'none',
       category: 'spam',
       status: 'new',
+      queue: 'open',
+      tags: [],
     });
     for (const v of ['instagram', 'none', 'spam', 'new'])
       expect(html).toContain(`<option value="${v}" selected="">`);
+  });
+
+  it('Show defaults to Open; Tags multi-select marks applied; Manage tags link', () => {
+    const html = render();
+    expect(html).toContain('>Show');
+    expect(html).toMatch(
+      /<select name="queue">\s*<option value="open" selected="">Open<\/option><option value="done">Done<\/option><option value="all">All<\/option><\/select>/,
+    );
+    expect(render(options, { ...none, queue: 'done' })).toContain(
+      '<option value="done" selected="">Done</option>',
+    );
+    expect(html).toContain('>Tags');
+    expect(html).toMatch(/<select[^>]*name="tag"[^>]*multiple=""/);
+    expect(html).toContain('Comments must have every selected tag.');
+    expect(html).toContain('&lt;b&gt;VIP&lt;/b&gt;');
+    expect(html).not.toContain('<b>');
+    const applied = render(options, { ...none, tags: ['t2'] });
+    expect(applied).toContain('<option value="t2" selected="">');
+    expect(applied).toContain('<option value="t1">Urgent</option>');
+    expect(applied).toContain('Clear filters');
+    expect(html).toContain('<a href="/orgs/o1/tags">Manage tags</a>');
+    // With no tags in the workspace there is nothing to pick, but tags can still be managed.
+    const empty = render({ ...options, tags: [] });
+    expect(empty).not.toContain('name="tag"');
+    expect(empty).toContain('Manage tags');
   });
 
   it('never carries a cursor', () => {

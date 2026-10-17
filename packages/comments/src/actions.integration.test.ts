@@ -265,6 +265,24 @@ describe('ModerationActions.request', () => {
     expect(enqueue).toHaveBeenCalledTimes(1);
   });
 
+  it('same key, same reply text replays; different text conflicts; surrounding spaces are the same text', async () => {
+    const commentId = await seedComment();
+    const requestKey = key();
+    const first = await request(commentId, 'public_reply', { requestKey, text: 'thanks!' });
+    if (first.status !== 'accepted') throw new Error('expected accepted');
+    expect(await request(commentId, 'public_reply', { requestKey, text: 'thanks!' })).toMatchObject(
+      { status: 'accepted', action: { id: first.action.id } },
+    );
+    expect(
+      await request(commentId, 'public_reply', { requestKey, text: '  thanks!\n' }),
+    ).toMatchObject({ status: 'accepted', action: { id: first.action.id } });
+    expect(await request(commentId, 'public_reply', { requestKey, text: 'other words' })).toEqual({
+      status: 'refused',
+      code: 'request_key_conflict',
+    });
+    expect(await rowsFor(commentId)).toHaveLength(1);
+  });
+
   it('hide on an already hidden comment is recorded as noop already_hidden, not enqueued', async () => {
     const commentId = await seedComment({ state: 'hidden' });
     const r = await request(commentId, 'hide');

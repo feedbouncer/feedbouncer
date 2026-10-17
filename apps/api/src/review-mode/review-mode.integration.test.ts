@@ -94,7 +94,7 @@ async function reviewConnection(f: OrgFixture): Promise<string> {
 async function suggest(
   f: OrgFixture,
   connectionId: string,
-  o: { authorId?: string; type?: 'hide' | 'delete' } = {},
+  o: { authorId?: string; type?: 'hide' | 'delete' | 'auto_reply' | 'private_reply' } = {},
 ): Promise<{ suggestionId: string; commentId: string }> {
   const n = ++seq;
   const source = await api.pool.query(
@@ -115,7 +115,13 @@ async function suggest(
     {
       commentId,
       source: { type: 'classifier', ref: randomUUID() },
-      steps: [type === 'hide' ? { type } : { type, confirmIrreversible: true }],
+      steps: [
+        type === 'hide'
+          ? { type }
+          : type === 'delete'
+            ? { type, confirmIrreversible: true }
+            : { type, template: 'Thanks for writing!' },
+      ],
       reason: 'spam',
     },
   );
@@ -386,6 +392,56 @@ describe('suggestion queue and decisions', () => {
       requestKey: `suggestion:${suggestionId}:hide`,
     });
     expect(forged.status).toBe(400);
+  });
+});
+
+describe('reply steps need comment.reply', () => {
+  const status = async (id: string) =>
+    (await api.pool.query('SELECT status FROM action_suggestion WHERE id = $1', [id])).rows[0]
+      .status;
+
+  it('member approving an auto_reply or private_reply suggestion -> 403, suggestion stays pending', async () => {
+    const connectionId = await reviewConnection(org);
+    for (const type of ['auto_reply', 'private_reply'] as const) {
+      const { suggestionId } = await suggest(org, connectionId, { type });
+      const r = await decide(suggestionId, 'approve', org.member, { confirm: true });
+      expect(r.status).toBe(403);
+      expect(r.body.error.code).toBe('forbidden');
+      expect(await status(suggestionId)).toBe('pending');
+      const runs = await api.pool.query('SELECT 1 FROM action_run WHERE suggestion_id = $1', [
+        suggestionId,
+      ]);
+      expect(runs.rowCount).toBe(0);
+    }
+  });
+
+  it('admin approves an auto_reply suggestion; a member can still dismiss it', async () => {
+    const connectionId = await reviewConnection(org);
+    const a = await suggest(org, connectionId, { type: 'auto_reply' });
+    const ok = await decide(a.suggestionId, 'approve', org.admin, { confirm: true });
+    expect(ok.status).toBe(200);
+    expect(ok.body).toMatchObject({ status: 'approved', steps: ['auto_reply'] });
+    const b = await suggest(org, connectionId, { type: 'auto_reply' });
+    expect((await decide(b.suggestionId, 'dismiss', org.member)).status).toBe(200);
+  });
+
+  it('bulk with one reply and one hide suggestion -> hide approved, reply refused forbidden', async () => {
+    const connectionId = await reviewConnection(org);
+    const reply = await suggest(org, connectionId, { type: 'auto_reply' });
+    const hide = await suggest(org, connectionId);
+    const r = await call('POST', `${base(org)}/suggestions/bulk`, org.member, {
+      action: 'approve',
+      ids: [reply.suggestionId, hide.suggestionId],
+      requestKey: `k-${randomUUID()}`,
+      confirm: true,
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.results).toEqual([
+      { id: reply.suggestionId, result: { status: 'refused', code: 'forbidden' } },
+      { id: hide.suggestionId, result: expect.objectContaining({ status: 'approved' }) },
+    ]);
+    expect(await status(reply.suggestionId)).toBe('pending');
+    expect(await status(hide.suggestionId)).toBe('approved');
   });
 });
 

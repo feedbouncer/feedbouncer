@@ -25,6 +25,9 @@ const MATRIX: Record<Capability, Record<Role, boolean>> = {
   'comment.read': { owner: true, admin: true, member: true },
   'rule.read': { owner: true, admin: true, member: true },
   'rule.write': { owner: true, admin: true, member: false },
+  'comment.reply': { owner: true, admin: true, member: false },
+  'comment.triage': { owner: true, admin: true, member: true },
+  'tag.manage': { owner: true, admin: true, member: false },
   'org.update': { owner: true, admin: true, member: false },
   'org.transfer_ownership': { owner: true, admin: false, member: false },
   'org.delete': { owner: true, admin: false, member: false },
@@ -98,5 +101,18 @@ describe('connection.manage', () => {
     expect(can('owner', 'connection.manage')).toBe(true);
     expect(can('admin', 'connection.manage')).toBe(true);
     expect(can('member', 'connection.manage')).toBe(false);
+  });
+});
+
+describe('grantable capabilities', () => {
+  it('a member with a grant can reply; the grant is ignored for admins', () => {
+    expect(can('member', 'comment.reply', ['comment.reply'])).toBe(true);
+    expect(can('admin', 'comment.reply', [])).toBe(true);
+    expect(can('member', 'comment.reply', [])).toBe(false);
+  });
+  it('a granted list cannot elevate a non-grantable capability', () => {
+    expect(can('member', 'rule.write', ['rule.write'])).toBe(false);
+    expect(can('member', 'tag.manage', ['tag.manage'])).toBe(false);
+    expect(can('member', 'comment.reply', ['rule.write'])).toBe(false);
   });
 });

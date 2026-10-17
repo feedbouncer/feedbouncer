@@ -4,6 +4,10 @@
 import { messageFor, outcomeSentence, outcomeText } from './messages';
 import { PLATFORM_COPY, isConnectable } from './platforms';
 
+// How often, and how long, to ask the API whether a queued action finished.
+export const POLL_MS = 2000;
+export const POLL_LIMIT = 30;
+
 export type ActionKind =
   | 'hide'
   | 'unhide'
@@ -52,6 +56,8 @@ export function shownActions(
 
 /** Text for an unavailable action, from the outcome texts. */
 export function reasonText(reason: string, platform: string): string {
+  if (reason === 'not_permitted')
+    return "You don't have permission to reply. Ask an owner or admin.";
   return outcomeSentence(reason, platform);
 }
 

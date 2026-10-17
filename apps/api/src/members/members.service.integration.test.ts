@@ -17,7 +17,7 @@ it('refuses when the actor was demoted after the guard ran', async () => {
   const svc = api.app.get(MembersService);
   await expect(
     svc.changeRole(
-      { organizationId: orgId, actorUserId: admin.userId, role: 'admin' },
+      { organizationId: orgId, actorUserId: admin.userId, role: 'admin', grants: [] },
       member.userId,
       'admin',
     ),
@@ -32,6 +32,9 @@ it('treats an actor removed after the guard ran as a non-member', async () => {
   ]);
   const svc = api.app.get(MembersService);
   await expect(
-    svc.remove({ organizationId: orgId, actorUserId: admin.userId, role: 'admin' }, member.userId),
+    svc.remove(
+      { organizationId: orgId, actorUserId: admin.userId, role: 'admin', grants: [] },
+      member.userId,
+    ),
   ).rejects.toMatchObject({ status: 404 });
 });

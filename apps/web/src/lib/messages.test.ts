@@ -37,6 +37,11 @@ describe('messageFor', () => {
     'invalid_domain',
     'domain_exists',
     'domain_limit_reached',
+    'invalid_tag_name',
+    'tag_name_taken',
+    'tag_limit_reached',
+    'tag_count_changed',
+    'unknown_tag',
   ])('has a specific message for %s', (code) => {
     expect(messageFor(code)).not.toBe(FALLBACK);
   });

@@ -20,7 +20,10 @@ export type Capability =
   | 'comment.read'
   | 'comment.moderate'
   | 'rule.read'
-  | 'rule.write';
+  | 'rule.write'
+  | 'comment.reply'
+  | 'comment.triage'
+  | 'tag.manage';
 
 const ALL: readonly Role[] = ROLES;
 const MANAGERS: readonly Role[] = ['owner', 'admin'];
@@ -42,13 +45,29 @@ const GRANTS: Readonly<Record<Capability, readonly Role[]>> = {
   'comment.moderate': ALL,
   'rule.read': ALL,
   'rule.write': MANAGERS,
+  'comment.reply': MANAGERS,
+  'comment.triage': ALL,
+  'tag.manage': MANAGERS,
   'org.transfer_ownership': OWNERS,
   'org.delete': OWNERS,
 };
 
-export function can(role: Role, cap: Capability): boolean {
-  return GRANTS[cap].includes(role);
+/** Capabilities an organization may additionally grant to a role. */
+export const GRANTABLE: Readonly<Partial<Record<Capability, readonly Role[]>>> = {
+  'comment.reply': ['member'],
+};
+
+export function isGrantable(role: Role, cap: Capability): boolean {
+  return GRANTABLE[cap]?.includes(role) ?? false;
 }
+
+/** `granted`: capabilities this organization granted to `role` (role_grant). Ignored unless GRANTABLE allows it. */
+export function can(role: Role, cap: Capability, granted: readonly Capability[] = []): boolean {
+  return GRANTS[cap].includes(role) || (granted.includes(cap) && isGrantable(role, cap));
+}
+
+export const isCapability = (v: unknown): v is Capability =>
+  typeof v === 'string' && Object.hasOwn(GRANTS, v);
 
 export type Denial = 'forbidden' | 'cannot_act_on_owner' | 'cannot_grant_owner';
 export type Decision = { ok: true } | { ok: false; reason: Denial };
