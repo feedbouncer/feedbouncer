@@ -73,6 +73,7 @@ const CONNECTIONS_SQL = `
 interface StateRow {
   first_live_at: Date | null;
   rollup_seeded_at: Date | null;
+  last_evaluated_at: Date | null;
   episode_id: string | null;
   cooldown_until: Date | null;
   trigger_count: number | null;
@@ -140,7 +141,7 @@ export class SpikeSweeper {
     await c.query("SET LOCAL TimeZone = 'UTC'");
     const s = (
       await c.query<StateRow>(
-        `SELECT s.first_live_at, s.rollup_seeded_at, s.episode_id, s.cooldown_until, s.trigger_count, s.escalated,
+        `SELECT s.first_live_at, s.rollup_seeded_at, s.last_evaluated_at, s.episode_id, s.cooldown_until, s.trigger_count, s.escalated,
                 st.sensitivity, st.min_negative_count, st.cooldown_minutes
            FROM alert_brand_state s
            LEFT JOIN alert_brand_settings st ON st.organization_id = s.organization_id AND st.brand_id = s.brand_id
@@ -160,14 +161,23 @@ export class SpikeSweeper {
       (
         await c.query<{ at: Date | null }>(
           `SELECT min(ingested_at) AS at FROM comment
-            WHERE organization_id = $1 AND brand_id = $2 AND ingest_origin = 'live'`,
+            WHERE organization_id = $1 AND brand_id = $2 AND ingest_origin = 'live'
+              AND NOT is_own_account`,
           [orgId, brandId],
         )
       ).rows[0]!.at;
 
-    const rollupFrom = s.rollup_seeded_at
-      ? new Date(floorHour(t).getTime() - ROLLUP_REFRESH_HOURS * HOUR_MS)
-      : floorHour(t - BASELINE_DAYS * DAY_MS - HOUR_MS);
+    // Refresh from the last evaluation so hours skipped during a gap are rolled up too.
+    const seedFrom = floorHour(t - BASELINE_DAYS * DAY_MS - HOUR_MS);
+    const rollupFrom =
+      s.rollup_seeded_at && s.last_evaluated_at
+        ? new Date(
+            Math.max(
+              seedFrom.getTime(),
+              floorHour(s.last_evaluated_at.getTime()).getTime() - ROLLUP_REFRESH_HOURS * HOUR_MS,
+            ),
+          )
+        : seedFrom;
     await c.query(ROLLUP_SQL, [orgId, brandId, rollupFrom, now]);
 
     const windowStart = new Date(t - SPIKE_WINDOW_MINUTES * MIN_MS);

@@ -93,7 +93,11 @@ const state = (t: Tenant) =>
     .query<{
       last_verdict: string | null;
       next_eval_at: Date;
-    }>('SELECT last_verdict, next_eval_at FROM alert_brand_state WHERE brand_id = $1', [t.brandId])
+      first_live_at: Date | null;
+    }>(
+      'SELECT last_verdict, next_eval_at, first_live_at FROM alert_brand_state WHERE brand_id = $1',
+      [t.brandId],
+    )
     .then((r) => r.rows[0]!);
 
 const negatives = (t: Tenant, count: number, postedAt = at(-5 * MIN)) =>
@@ -210,6 +214,57 @@ describe('SpikeSweeper', () => {
     await sweeper().tick();
     expect(await events(t)).toEqual([]);
     expect((await state(t)).last_verdict).toBe('learning');
+  });
+
+  it('own-account comments do not start the learning clock', async () => {
+    const t = await brand({ background: false });
+    const own = await seedNegativeComments(h.c, t, {
+      count: 1,
+      postedAt: at(-20 * DAY),
+      outcome: 'approve',
+    });
+    await h.c.query('UPDATE comment SET is_own_account = true WHERE id = ANY($1)', [own]);
+    await seedNegativeComments(h.c, t, { count: 5, postedAt: at(-3 * DAY), outcome: 'approve' });
+    await negatives(t, 30);
+    await sweeper().tick();
+    expect(await events(t)).toEqual([]);
+    expect(await state(t)).toMatchObject({ last_verdict: 'learning', first_live_at: at(-3 * DAY) });
+  });
+
+  it('rollup covers the hours between evaluations after a gap', async () => {
+    const t = await brand();
+    expect(await sweeper().tick()).toMatchObject({ evaluated: 1 });
+    for (const hr of [11, 12, 13]) {
+      const postedAt = new Date(`2026-10-17T${hr}:10:00.000Z`);
+      await seedNegativeComments(h.c, t, { count: 200, postedAt });
+      await seedNegativeComments(h.c, t, { count: 300, postedAt, outcome: 'approve' });
+    }
+    // Ten negatives of 100 would be a volume spike against a baseline missing the busy hours.
+    await negatives(t, 10, at(6 * HOUR - 5 * MIN));
+    await seedNegativeComments(h.c, t, {
+      count: 90,
+      postedAt: at(6 * HOUR - 5 * MIN),
+      outcome: 'approve',
+    });
+    expect(await sweeper({ now: at(6 * HOUR) }).tick()).toEqual({
+      evaluated: 1,
+      fired: 0,
+      escalated: 0,
+    });
+    const rows = await h.c.query<{ hour: Date; negatives: number; total: number }>(
+      `SELECT hour, negatives, total FROM alert_negative_hourly
+        WHERE brand_id = $1 AND hour >= '2026-10-17T11:00Z' AND hour < '2026-10-17T14:00Z' ORDER BY hour`,
+      [t.brandId],
+    );
+    expect(rows.rows).toEqual(
+      [11, 12, 13].map((hr) => ({
+        hour: new Date(`2026-10-17T${hr}:00:00.000Z`),
+        negatives: 200,
+        total: 500,
+      })),
+    );
+    expect((await state(t)).last_verdict).toBe('within_baseline');
+    expect(await events(t)).toEqual([]);
   });
 
   it('reprocessing: duplicate decisions for the same comments do not change N', async () => {
