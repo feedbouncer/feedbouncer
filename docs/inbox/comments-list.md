@@ -83,9 +83,10 @@ A moderator replies publicly from the list. Private replies stay on the brand co
   3. `unsupported`: no connector, or the platform has no public reply;
   4. `comment_gone`, or the eligibility code (for example a reply to a nested comment whose parent is hidden or too old);
   5. otherwise available, with the platform's public reply limit.
-- Idempotency: the web app creates one request key per draft and keeps it across a network error or timeout, so a retry replays it. A new key is made when the text is edited, on a 4xx, when the action ends `failed`, `not_eligible` or `noop`, and after `applied`. The same key with the same text returns the same action; the same key with different text is 409 `request_key_conflict`. The job also looks for the account's own reply before posting, so a replay after a lost response does not post twice.
-- Response: 202 when the reply is queued, 200 when the outcome was already known. Only pending and applied replies appear in `replies`; a failed reply is never shown as sent.
-- Errors: 403 `forbidden` (no grant), 404 (missing comment or archived brand), 422 `text_too_long` (with `max`), 422 `unsupported_action`, 409 `connection_needs_reconnect`, `connection_inactive`, `review_mode_active`, `request_key_conflict`.
+- Idempotency: the web app creates one request key per draft and keeps it across a network error or timeout, so a retry replays it. A new key is made when the text is edited, on a 4xx, when the action ends `failed`, `not_eligible` or `noop`, and after `applied`. The same key with the same text returns the existing action (matched on organization, brand and request key); the same key with different text is 409 `request_key_conflict`. If the platform's response is lost, the retrying job first looks for the account's own reply (`findOwnReply`, only on attempt 2 and later), so the reply is not posted twice.
+- Response: 202 when the action is accepted, which includes a replay of a pending, applied or failed action. 200 only when the outcome was recorded without sending anything (`noop` or `not_eligible`).
+- Each list row's `replies` holds only pending and applied replies (the latest 3, plus `replyCount`), so a failed reply is never shown as sent. `GET .../:commentId/replies` returns every attempt (up to 50) with its status, including `failed`.
+- Errors: 400 `invalid_request` (empty text or over the cap), 403 `forbidden` (no grant), 404 (missing comment or archived brand), 404 `platform_not_configured`, 422 `text_too_long` (with `max`), 422 `unsupported_action`, 409 `connection_needs_reconnect`, `connection_inactive`, `review_mode_active`, `request_key_conflict`.
 - Reply text renders only as text, and is never logged or written to audit details.
 
 ### Reply permission
