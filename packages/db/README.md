@@ -81,7 +81,9 @@ applies the pending migrations on top of `processed_job`, and existing
   - Indexes: `<table>_<cols>_idx`.
   - Triggers: `<table>_<purpose>_trg`.
   - Functions: `fb_<verb>_<noun>()`.
-- Every table has `created_at` and `updated_at` (`timestamptz(3)`), every tenant
+- Every table has `created_at` and `updated_at` (`timestamptz(3)`), except
+  immutable link tables whose rows are only inserted or deleted (`comment_tag`,
+  `comment_done`, `role_grant`), which keep a single event timestamp. Every tenant
   table has `organization_id`, and every foreign key has an index whose first
   column is the pointer column.
 - Never edit a migration that has been applied anywhere. Add a new one.
