@@ -78,6 +78,10 @@ export class OrgCommentsService {
       status: q.status ?? null,
       queue: q.queue,
       tagIds: q.tags ?? [],
+      brandId: q.brand ?? null,
+      postedFrom: q.from ? new Date(q.from) : null,
+      postedTo: q.to ? new Date(q.to) : null,
+      signal: q.signal ?? null,
     };
     const f = await this.#read.applicable(orgId, asked);
     const before = q.before && q.beforeId ? { postedAt: new Date(q.before), id: q.beforeId } : null;
@@ -91,6 +95,9 @@ export class OrgCommentsService {
       status: f.status !== null,
       queue: f.queue,
       tags: f.tagIds.length,
+      brand: f.brandId !== null,
+      range: f.postedFrom !== null || f.postedTo !== null,
+      signal: f.signal,
     });
     const registry = this.deps.connectors?.registry;
     const permitted = orgCan(org, 'comment.reply');
@@ -117,6 +124,10 @@ export class OrgCommentsService {
         status: f.status,
         queue: f.queue,
         tags: f.tagIds,
+        brand: f.brandId,
+        from: f.postedFrom && f.postedFrom.toISOString(),
+        to: f.postedTo && f.postedTo.toISOString(),
+        signal: f.signal,
       },
     };
   }

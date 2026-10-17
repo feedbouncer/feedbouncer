@@ -24,6 +24,10 @@ const NONE: OrgCommentFilters = {
   status: null,
   queue: 'open',
   tags: [],
+  brand: null,
+  from: null,
+  to: null,
+  signal: null,
 };
 const ISO = '2026-10-27T10:00:00.000Z';
 
@@ -201,5 +205,37 @@ describe('noticeText', () => {
     expect(noticeText({ ...acct('sync_failing'), displayName: null })).toContain(
       '"Unnamed account"',
     );
+  });
+});
+
+describe('deep-link filters', () => {
+  const FROM = '2026-10-10T10:00:00.000Z';
+  const TO = '2026-10-10T11:00:00.000Z';
+  const LINK = { brand: ID, from: FROM, to: TO, signal: 'negative' } as const;
+
+  it('parseSearchParams/pageHref round-trip brand, from, to, signal; invalid values dropped', () => {
+    const { filters } = parseSearchParams({ ...LINK });
+    expect(filters).toEqual({ ...NONE, ...LINK });
+    const href = pageHref('o1', filters);
+    expect(Object.fromEntries(new URLSearchParams(href.split('?')[1]))).toEqual({ ...LINK });
+    expect(
+      parseSearchParams(Object.fromEntries(new URLSearchParams(href.split('?')[1]))).filters,
+    ).toEqual(filters);
+    const api = Object.fromEntries(new URLSearchParams(apiQuery(filters, null)));
+    expect(api).toMatchObject({ ...LINK, queue: 'open', limit: '50' });
+
+    expect(
+      parseSearchParams({ brand: 'abc', from: '2026-10-10', to: 'x', signal: 'positive' }).filters,
+    ).toEqual(NONE);
+    expect(parseSearchParams({ brand: [ID, ID], signal: ['negative'] }).filters).toEqual(NONE);
+    // A range the API would refuse is dropped as a pair: to before from, or longer than 31 days.
+    expect(parseSearchParams({ from: TO, to: FROM }).filters).toEqual(NONE);
+    expect(parseSearchParams({ from: FROM, to: '2026-11-11T10:00:00.000Z' }).filters).toEqual(NONE);
+    expect(parseSearchParams({ from: FROM }).filters.from).toBe(FROM);
+  });
+
+  it('hasFilters counts them', () => {
+    for (const k of ['brand', 'from', 'to', 'signal'] as const)
+      expect(hasFilters({ ...NONE, [k]: LINK[k] })).toBe(true);
   });
 });

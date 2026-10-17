@@ -1,10 +1,13 @@
 import Link from 'next/link';
+import { Fragment } from 'react';
+import { LocalTime } from '../local-time';
 import { platformLabel } from '../../lib/actions';
 import {
   categoryLabel,
   hasFilters,
   statusLabel,
   type FilterOptionsDto,
+  pageHref,
   type OrgCommentFilters,
 } from '../../lib/org-comments';
 
@@ -35,15 +38,59 @@ export function FilterBar({
   options,
   applied,
   labels,
+  brandName = null,
 }: {
   orgId: string;
   options: FilterOptionsDto;
   applied: OrgCommentFilters;
   /** Option text per ad id. */
   labels: Map<string, string>;
+  /** Name of the applied brand, for the chip. */
+  brandName?: string | null;
 }) {
+  const deepLink = [applied.brand, applied.from, applied.to, applied.signal].some(
+    (v) => v !== null,
+  );
+  const parts: React.ReactNode[] = [];
+  if (applied.signal) parts.push('Negative comments');
+  if (applied.brand) parts.push(brandName ?? 'Brand');
+  if (applied.from || applied.to)
+    parts.push(
+      <>
+        {applied.from ? <LocalTime iso={applied.from} /> : 'Start'}
+        {'–'}
+        {applied.to ? <LocalTime iso={applied.to} /> : 'now'}
+      </>,
+    );
   return (
     <form method="get" action={`/orgs/${orgId}/comments`}>
+      {deepLink ? (
+        <p>
+          <span>
+            {parts.map((p, i) => (
+              <Fragment key={i}>
+                {i > 0 ? ' · ' : null}
+                {p}
+              </Fragment>
+            ))}
+          </span>{' '}
+          <Link
+            aria-label="Remove brand, date range and signal filters"
+            href={pageHref(orgId, {
+              ...applied,
+              brand: null,
+              from: null,
+              to: null,
+              signal: null,
+            })}
+          >
+            ×
+          </Link>
+        </p>
+      ) : null}
+      {(['brand', 'from', 'to', 'signal'] as const).map((k) =>
+        applied[k] ? <input key={k} type="hidden" name={k} value={applied[k]} /> : null,
+      )}
       <label>
         Show{' '}
         <select name="queue" defaultValue={applied.queue}>

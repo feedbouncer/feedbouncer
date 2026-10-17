@@ -12,6 +12,7 @@ import {
   visibleListQuery,
   type VisibleCommentFilter,
 } from './visible-comments.js';
+import { NEGATIVE_COMMENT_SQL } from './negative.js';
 import { seedModerationActionRow, seedSuggestionRow, type Seeded } from './testing.js';
 
 let ctx: Awaited<ReturnType<typeof migratedDb>>;
@@ -40,6 +41,10 @@ const NONE: VisibleCommentFilter = {
   status: null,
   queue: 'all',
   tagIds: [],
+  brandId: null,
+  postedFrom: null,
+  postedTo: null,
+  signal: null,
 };
 const filter = (f: Partial<VisibleCommentFilter> = {}): VisibleCommentFilter => ({ ...NONE, ...f });
 const FIRST = { before: null, limit: 100 };
@@ -584,6 +589,105 @@ describe('PgVisibleComments', () => {
     );
   });
 
+  describe('deep-link filters', () => {
+    const negate = (s: Seeded, o: { outcome?: string; mode?: string } = {}) =>
+      q(
+        `INSERT INTO decision (organization_id, brand_id, comment_id, outcome, mode, actor_type, actor_user_id, reason)
+         VALUES ($1, $2, $3, $4, $5, 'user', $6, 'because')`,
+        [
+          s.t.organizationId,
+          s.t.brandId,
+          s.id,
+          o.outcome ?? 'hide',
+          o.mode ?? 'enforce',
+          s.t.userId,
+        ],
+      );
+
+    it('signal negative returns exactly the visible comments counted by NEGATIVE_COMMENT_SQL for the same brand and range', async () => {
+      const w = await world();
+      const from = new Date(at('10:00'));
+      const to = new Date(at('11:00'));
+      const inRange = [
+        await post(w.fb1, { at: at('10:00') }),
+        await post(w.fb1, { at: at('10:30') }),
+        await post(w.fb1, { at: at('10:59') }),
+      ];
+      for (const s of inRange)
+        await negate(s, { outcome: inRange.indexOf(s) === 2 ? 'flag' : 'hide' });
+      const plain = await post(w.fb1, { at: at('10:15') });
+      await decide(plain, null, 'approve');
+      const suggested = await post(w.fb1, { at: at('10:16') });
+      await negate(suggested, { mode: 'suggest' });
+      const early = await post(w.fb1, { at: at('09:59') });
+      await negate(early);
+      const atTo = await post(w.fb1, { at: at('11:00') });
+      await negate(atTo);
+      const own = await post(w.fb1, { at: at('10:20'), own: true });
+      await negate(own);
+      const hidden = await post(w.fb1, { at: at('10:21'), state: 'hidden' });
+      await negate(hidden);
+      const otherBrand = await post(w.fb2, { at: at('10:30') });
+      await negate(otherBrand);
+
+      const expected = await q<{ id: string }>(
+        `SELECT c.id FROM comment c
+          WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.posted_at >= $3 AND c.posted_at < $4
+            AND c.platform_state = 'visible' AND (${NEGATIVE_COMMENT_SQL})`,
+        [w.orgId, w.fb1.brandId, from, to],
+      );
+      expect(expected.rows).toHaveLength(3);
+      const f = filter({
+        brandId: w.fb1.brandId,
+        postedFrom: from,
+        postedTo: to,
+        signal: 'negative',
+      });
+      const r = await store.list(w.orgId, f, FIRST);
+      expect(ids(r.items).sort()).toEqual(expected.rows.map((x) => x.id).sort());
+      expect(ids(r.items).sort()).toEqual(inRange.map((x) => x.id).sort());
+      expect(r.total).toBe(3);
+      // Without the signal the other in-range comments show up.
+      expect((await store.list(w.orgId, { ...f, signal: null }, FIRST)).total).toBeGreaterThan(3);
+    });
+
+    it('brand filter excludes other brands; org B brand id ignored', async () => {
+      const w = await world();
+      const b = await world();
+      const a1 = await post(w.fb1);
+      await post(w.fb2);
+      await post(b.fb1);
+      const r = await store.list(w.orgId, filter({ brandId: w.fb1.brandId }), FIRST);
+      expect(ids(r.items)).toEqual([a1.id]);
+      expect(r.total).toBe(1);
+      const ap = await store.applicable(w.orgId, filter({ brandId: b.fb1.brandId }));
+      expect(ap.brandId).toBeNull();
+      const archived = await addBrand(w.fb1, 'Gone', true);
+      expect((await store.applicable(w.orgId, filter({ brandId: archived }))).brandId).toBeNull();
+      expect((await store.applicable(w.orgId, filter({ brandId: w.fb1.brandId }))).brandId).toBe(
+        w.fb1.brandId,
+      );
+    });
+
+    it('from/to bound posted_at', async () => {
+      const w = await world();
+      const c8 = await post(w.fb1, { at: at('08:00') });
+      const c9 = await post(w.fb1, { at: at('09:00') });
+      const c10 = await post(w.fb1, { at: at('10:00') });
+      const range = async (f: Partial<VisibleCommentFilter>) =>
+        ids((await store.list(w.orgId, filter(f), FIRST)).items);
+      const d = (hhmm: string) => new Date(at(hhmm));
+      expect(await range({ postedFrom: d('09:00') })).toEqual([c10.id, c9.id]);
+      expect(await range({ postedTo: d('09:00') })).toEqual([c8.id]);
+      expect(await range({ postedFrom: d('08:30'), postedTo: d('10:00') })).toEqual([c9.id]);
+      const ap = await store.applicable(
+        w.orgId,
+        filter({ postedFrom: d('08:30'), signal: 'negative' }),
+      );
+      expect(ap).toMatchObject({ postedFrom: d('08:30'), postedTo: null, signal: 'negative' });
+    });
+  });
+
   describe('account health', () => {
     const sync = (
       t: Tenant,
@@ -710,6 +814,10 @@ describe('PgVisibleComments', () => {
       status: 'new',
       queue: 'all',
       tagIds: [],
+      brandId: null,
+      postedFrom: null,
+      postedTo: null,
+      signal: null,
     });
     expect((await ap({ adId: '00000000-0000-4000-8000-000000000000' })).adId).toBeNull();
   });
