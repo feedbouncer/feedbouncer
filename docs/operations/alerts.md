@@ -85,7 +85,7 @@ To reconnect, open the workspace **Alerts** page, choose **Reconnect** on the ch
 
 ## Email recipients and unsubscribe
 
-Adding an address sends a confirmation email; the address receives nothing else until the link (valid 7 days) is opened. The confirmation and unsubscribe links open pages at `/alerts/confirm?token=...` and `/alerts/unsubscribe?token=...` that ask for one button press before anything changes. Every alert email carries an unsubscribe link and `List-Unsubscribe` headers, including RFC 8058 one-click (`List-Unsubscribe-Post`), so mail clients can unsubscribe in one step without signing in. An unsubscribed address stays listed; an admin can choose **Resend** to send it a new confirmation, and it receives alerts again once confirmed.
+Adding an address sends a confirmation email; the address receives nothing else until the link (valid 7 days) is opened. The confirmation and unsubscribe links open pages at `/alerts/confirm?token=...` and `/alerts/unsubscribe?token=...` that ask for one button press before anything changes. Every alert email carries an unsubscribe link and `List-Unsubscribe` headers, including RFC 8058 one-click (`List-Unsubscribe-Post`), so mail clients can unsubscribe in one step without signing in. An unsubscribed address stays listed and is never mailed again; to reach that person, remove the address and add it again. **Resend** is offered only for addresses still waiting for confirmation (at most once a minute).
 
 ## Known limits
 

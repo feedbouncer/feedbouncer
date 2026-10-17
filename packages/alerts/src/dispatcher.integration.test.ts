@@ -295,6 +295,24 @@ describe('AlertDispatcher', () => {
     expect(mailer.sent).toHaveLength(2);
   });
 
+  it('revoked webhook with email alerts disabled → disconnected but nobody is emailed', async () => {
+    const s = await slackChannel();
+    await spikeEvent([s]);
+    const adminId = (
+      await h.c.query<{ id: string }>('INSERT INTO app_user (email) VALUES ($1) RETURNING id', [
+        `admin-${randomUUID()}@example.test`,
+      ])
+    ).rows[0]!.id;
+    await h.c.query(
+      "INSERT INTO membership (organization_id, user_id, role) VALUES ($1, $2, 'admin')",
+      [t.organizationId, adminId],
+    );
+    replies = [[404, 'no_service']];
+    await dispatcher({ enabled: { slack: true, email: false } }).tick();
+    expect(await channels.get(t.organizationId, s)).toMatchObject({ status: 'disconnected' });
+    expect(mailer.sent).toHaveLength(0);
+  });
+
   it('two deliveries to one Slack channel in one tick → only one sent; second sent ≥ 1 s later', async () => {
     const s = await slackChannel();
     await spikeEvent([s]);

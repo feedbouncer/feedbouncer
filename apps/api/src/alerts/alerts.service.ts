@@ -145,7 +145,10 @@ export class AlertsService {
     this.#requireKind('email');
     const channel = await this.#channels.get(org.organizationId, channelId);
     if (channel?.kind !== 'email' || channel.status !== 'pending_confirmation') throw notFound();
-    await this.limits.consumeEmailSend(channel.email!, ip);
+    if (!(await this.#channels.isResendDue(org.organizationId, channelId, RESEND_MIN_MS))) {
+      throw new ApiError(409, 'too_soon');
+    }
+    await this.limits.consumeEmailSend(normalizeEmail(channel.email!), ip);
     const rotated = await this.#channels.rotateConfirmation(
       org.organizationId,
       channelId,

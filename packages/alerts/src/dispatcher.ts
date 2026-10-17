@@ -58,7 +58,6 @@ interface Claimed {
 }
 
 const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
-const TRANSIENT_SMTP = new Set(['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS']);
 
 function emailFailure(err: unknown): Failure {
   const cause = (err instanceof Error ? err.cause : undefined) as
@@ -74,7 +73,7 @@ function emailFailure(err: unknown): Failure {
   return {
     ok: false,
     kind: 'transient',
-    code: TRANSIENT_SMTP.has(raw) || CODE_RE.test(code) ? code : 'smtp_error',
+    code: CODE_RE.test(code) ? code : 'smtp_error',
   };
 }
 
@@ -411,7 +410,7 @@ export class AlertDispatcher {
 
   private async notifyDisconnected(orgId: string, channelId: string, code: string): Promise<void> {
     const { mailer } = this.d;
-    if (!mailer) return;
+    if (!mailer || !this.d.enabled.email) return;
     try {
       const r = await this.d.pool.query<{ workspace: string; label: string; emails: string[] }>(
         `SELECT o.name AS workspace, ch.label,

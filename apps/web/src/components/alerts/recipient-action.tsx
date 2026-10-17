@@ -18,6 +18,14 @@ export const RECIPIENT_COPY = {
 
 type Kind = keyof typeof RECIPIENT_COPY;
 
+export const RECIPIENT_TOKEN = /^[A-Za-z0-9_-]{43}$/;
+
+function actionUrl(kind: Kind, token: string): `/api/${string}` {
+  return kind === 'confirm'
+    ? '/api/v1/alert-recipients/confirm'
+    : `/api/v1/alert-recipients/unsubscribe?token=${encodeURIComponent(token)}`;
+}
+
 /**
  * Nothing is sent until the button is pressed, so link scanners that only GET the page cannot
  * confirm or unsubscribe anyone. Without script the unsubscribe form still works as the
@@ -31,12 +39,7 @@ export function RecipientAction({ kind, token }: { kind: Kind; token: string }) 
     e.preventDefault();
     setState('busy');
     try {
-      await apiFetch(
-        kind === 'confirm'
-          ? '/api/v1/alert-recipients/confirm'
-          : `/api/v1/alert-recipients/unsubscribe?token=${encodeURIComponent(token)}`,
-        { method: 'POST', body: { token } },
-      );
+      await apiFetch(actionUrl(kind, token), { method: 'POST', body: { token } });
       setState('done');
     } catch (err) {
       setState(err instanceof ApiRequestError && err.status === 404 ? 'invalid' : 'error');
@@ -45,12 +48,8 @@ export function RecipientAction({ kind, token }: { kind: Kind; token: string }) 
 
   if (state === 'done') return <p role="status">{copy.success}</p>;
   if (state === 'invalid') return <p role="alert">{copy.invalid}</p>;
-  const action =
-    kind === 'confirm'
-      ? '/api/v1/alert-recipients/confirm'
-      : `/api/v1/alert-recipients/unsubscribe?token=${encodeURIComponent(token)}`;
   return (
-    <form method="post" action={action} onSubmit={onSubmit}>
+    <form method="post" action={actionUrl(kind, token)} onSubmit={onSubmit}>
       {kind === 'confirm' ? <input type="hidden" name="token" value={token} /> : null}
       {kind === 'unsubscribe' ? (
         <input type="hidden" name="List-Unsubscribe" value="One-Click" />

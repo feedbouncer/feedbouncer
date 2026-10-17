@@ -243,6 +243,17 @@ export class PgAlertChannels {
     }
   }
 
+  /** Read-only twin of the wait enforced by `rotateConfirmation`, so callers can check before spending a budget. */
+  async isResendDue(orgId: string, channelId: string, minIntervalMs: number): Promise<boolean> {
+    const r = await this.pool.query(
+      `SELECT now() - updated_at >= make_interval(secs => $3 / 1000.0) AS due
+         FROM alert_channel
+        WHERE organization_id = $1 AND id = $2 AND kind = 'email' AND status = 'pending_confirmation'`,
+      [orgId, channelId, minIntervalMs],
+    );
+    return r.rows[0]?.due === true;
+  }
+
   /** Replaces the confirm token of a pending address, at most once per `minIntervalMs`. */
   async rotateConfirmation(
     orgId: string,

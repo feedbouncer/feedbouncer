@@ -229,6 +229,13 @@ describe('alerts API', () => {
     });
     expect(soon.status).toBe(409);
     expect(soon.body.error.code).toBe('too_soon');
+    // Refused clicks must not spend the address's hourly email allowance.
+    for (let i = 0; i < 3; i++) {
+      const again = await api.req('POST', `${base()}/${ch.id}/resend-confirmation`, {
+        cookie: org.admin.cookie,
+      });
+      expect(again.status).toBe(409);
+    }
     // The updated_at trigger would overwrite the backdated value.
     await api.pool.query('ALTER TABLE alert_channel DISABLE TRIGGER USER');
     await api.pool.query(
