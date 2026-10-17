@@ -5,6 +5,7 @@ export type AuditAction =
   | 'organization.created'
   | 'organization.renamed'
   | 'organization.ownership_transferred'
+  | 'org.timezone_updated'
   | 'brand.created'
   | 'brand.renamed'
   | 'brand.updated'

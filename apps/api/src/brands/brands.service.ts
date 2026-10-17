@@ -26,7 +26,7 @@ async function lockedWriter(c: pg.PoolClient, ctx: OrgContext): Promise<void> {
 }
 
 // Intl accepts names case-insensitively; date_trunc needs the exact name Postgres knows.
-async function isKnownZone(c: pg.PoolClient, timezone: string): Promise<boolean> {
+export async function isKnownZone(c: pg.PoolClient, timezone: string): Promise<boolean> {
   const known = await c.query('SELECT 1 FROM pg_timezone_names WHERE name = $1', [timezone]);
   return known.rowCount !== 0;
 }

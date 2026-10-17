@@ -75,7 +75,7 @@ Only these `/api/auth/*` paths are reachable; everything else under it is `404`.
 | `GET /api/v1/orgs`                                           | any session                      | `200 { organizations }`                                                                                                         |
 | `POST /api/v1/orgs`                                          | verified email                   | `201 { organization, brand }` (`{ name, brandName? }`)                                                                          |
 | `GET /api/v1/orgs/:orgId`                                    | `org.read`                       | `200 { organization, role }`                                                                                                    |
-| `PATCH /api/v1/orgs/:orgId`                                  | `org.update`                     | `200 { organization }`                                                                                                          |
+| `PATCH /api/v1/orgs/:orgId`                                  | `org.update`                     | `200 { organization }` (`{ name?, timezone? }`; an unknown zone is `400 invalid_timezone`)                                      |
 | `DELETE /api/v1/orgs/:orgId`                                 | `org.delete`                     | `204` (`{ confirmName }`)                                                                                                       |
 | `POST /api/v1/orgs/:orgId/transfer-ownership`                | `org.transfer_ownership`         | `200` (`{ userId, newRoleForSelf }`)                                                                                            |
 | `GET /api/v1/orgs/:orgId/brands`                             | `brand.read`                     | `200 { brands }` (`?includeArchived=true`)                                                                                      |
@@ -129,7 +129,7 @@ Every error has one shape, and the codes are stable:
 
 | Status  | Codes                                                                                                                                       |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 400     | `invalid_request`, `invalid_email`, `invalid_or_expired_token`, `confirmation_mismatch`, `invalid_webhook_url`                              |
+| 400     | `invalid_request`, `invalid_email`, `invalid_or_expired_token`, `confirmation_mismatch`, `invalid_webhook_url`, `invalid_timezone`          |
 | 401     | `unauthenticated`, `invalid_credentials`                                                                                                    |
 | 403     | `forbidden`, `invalid_origin`, `email_not_verified`, `cannot_act_on_owner`, `cannot_grant_owner`, `invitation_email_mismatch`               |
 | 404     | `not_found` (unknown resource, or an organization you are not a member of), `invalid_token` (alert recipient links)                         |

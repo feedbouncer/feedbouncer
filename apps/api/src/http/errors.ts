@@ -76,7 +76,8 @@ export type ErrorCode =
   | 'confirmation_send_failed'
   | 'too_soon'
   | 'unknown_channel'
-  | 'invalid_token';
+  | 'invalid_token'
+  | 'invalid_timezone';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
@@ -98,6 +99,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   cannot_act_on_owner: 'Only an owner can change or remove an owner.',
   cannot_grant_owner: 'Only an owner can grant the owner role.',
   confirmation_mismatch: 'Type the organization name exactly to confirm.',
+  invalid_timezone: 'Choose a valid time zone.',
   brand_name_taken: 'A brand with this name already exists in this organization.',
   brand_archived: 'Archived brands cannot be changed.',
   invitation_email_mismatch: 'This invitation was sent to a different email address.',
