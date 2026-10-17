@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PgOAuthGrantStore } from '@feedbouncer/connectors';
 import { extractFirstUrl } from '@feedbouncer/mailer/testing';
 import { Secret } from '@feedbouncer/service-runtime';
+import { PgAlertChannels } from '@feedbouncer/alerts';
 import { orgWithRoles, startTestApi, type TestApi } from '../testing/harness.js';
 import { CASES, TOKEN_CASES, type IsolationFixture } from './isolation-cases.js';
 
@@ -16,7 +17,11 @@ const FACEBOOK = {
 let api: TestApi;
 let f: IsolationFixture;
 beforeAll(async () => {
-  api = await startTestApi({ facebook: FACEBOOK, instagram: { meta: FACEBOOK } });
+  api = await startTestApi({
+    facebook: FACEBOOK,
+    instagram: { meta: FACEBOOK },
+    alerts: { slack: true, email: true, capPerHour: 30 },
+  });
   const A = await orgWithRoles(api, 'isoA');
   const B = await orgWithRoles(api, 'isoB');
   // Each org has a connection with sync state, so the snapshots prove read routes
@@ -171,6 +176,24 @@ beforeAll(async () => {
     `INSERT INTO tag (organization_id, name, name_key) VALUES ($1, 'B tag', 'b tag') RETURNING id`,
     [B.orgId],
   );
+  const bChannel = await new PgAlertChannels(api.pool, api.deps.env.encryption).createSlack(
+    B.orgId,
+    B.owner.userId,
+    {
+      label: 'b slack',
+      webhookUrl: 'https://hooks.slack.com/services/T0EEEE5555/B0FFFF6666/qrstuvwxyzabcdefghijklmn',
+    },
+  );
+  if (bChannel.status !== 'created') throw new Error('seed channel failed');
+  await api.pool.query(
+    `INSERT INTO alert_brand_settings (organization_id, brand_id) VALUES ($1, $2)`,
+    [B.orgId, B.brandId],
+  );
+  await api.pool.query(
+    `INSERT INTO alert_route (organization_id, brand_id, alert_type, channel_id, enabled, enabled_at)
+     VALUES ($1, $2, 'negative_spike', $3, true, now())`,
+    [B.orgId, B.brandId, bChannel.channel.id],
+  );
   const grants = new PgOAuthGrantStore(api.pool, api.deps.env.encryption);
   const bGrantIds = { facebook: randomUUID(), instagram: randomUUID() };
   for (const platform of ['facebook', 'instagram'] as const) {
@@ -215,6 +238,7 @@ beforeAll(async () => {
     bConnectionIds: { facebook: bConnectionId, instagram: igConnection.rows[0].id },
     bTagId: bTag.rows[0].id,
     bGrantIds,
+    bAlertChannelId: bChannel.channel.id,
   };
 });
 afterAll(() => api.close());
@@ -284,6 +308,18 @@ async function snapshot(orgId: string) {
     commentDone: await q(
       'SELECT comment_id FROM comment_done WHERE organization_id = $1 ORDER BY comment_id',
     ),
+    alertChannels: await q(
+      `SELECT id, kind, label, status, webhook_hint, encrypted_webhook_url, consecutive_failures, updated_at
+         FROM alert_channel WHERE organization_id = $1 ORDER BY id`,
+    ),
+    alertSettings: await q(
+      `SELECT brand_id, sensitivity, min_negative_count, cooldown_minutes, content_mode
+         FROM alert_brand_settings WHERE organization_id = $1 ORDER BY brand_id`,
+    ),
+    alertRoutes: await q(
+      `SELECT brand_id, alert_type, channel_id, enabled FROM alert_route
+        WHERE organization_id = $1 ORDER BY brand_id, alert_type, channel_id`,
+    ),
     jobs: await q('SELECT id, state FROM job_ledger WHERE organization_id = $1 ORDER BY id'),
     audit: await q(
       `SELECT sequence, action, subject_type, subject_id, actor_user_id FROM audit_event
@@ -301,6 +337,8 @@ describe('A owner cannot reach B', () => {
       expect(beforeB.audit.length).toBeGreaterThan(0);
       expect(beforeB.grants).toHaveLength(2);
       expect(beforeB.tags).toHaveLength(1);
+      expect(beforeB.alertChannels).toHaveLength(1);
+      expect(beforeB.alertRoutes).toHaveLength(1);
       const [method] = c.route.split(' ');
       const r = await api.req(method!, c.url(f), { cookie: f.A.owner.cookie, body: c.body?.(f) });
       expect(r.status).toBe(404);

@@ -124,7 +124,7 @@ describe('route inventory', () => {
       });
       if (r.body?.error?.code !== 'invalid_origin') exempt.push(route);
     }
-    expect(exempt.sort()).toEqual(PUBLIC_ROUTES.filter((r) => r.startsWith('POST ')));
+    expect(exempt.sort()).toEqual(PUBLIC_ROUTES.filter((r) => r.startsWith('POST ')).sort());
   });
 
   it('every invitation token route has a cross-organization case', () => {

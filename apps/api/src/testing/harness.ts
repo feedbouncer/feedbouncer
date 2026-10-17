@@ -89,7 +89,7 @@ export interface TestApi {
  */
 export async function startTestApi(
   overrides: Partial<ApiEnv> = {},
-  depsOverrides: Partial<Pick<AppDeps, 'connectors' | 'producer' | 'comments'>> & {
+  depsOverrides: Partial<Pick<AppDeps, 'connectors' | 'producer' | 'comments' | 'alertsFetch'>> & {
     fetch?: typeof fetch;
   } = {},
 ): Promise<TestApi> {

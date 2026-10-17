@@ -23,5 +23,7 @@ export interface AppDeps {
   readonly connectors: { registry: ConnectorRegistry; stack: PgConnectorStack } | null;
   /** Enqueue-only job producer (the worker runs the jobs). Null when Facebook is not configured. */
   readonly producer: JobProducer | null;
+  /** Replaces the network behind the Slack webhook client; tests only. */
+  readonly alertsFetch?: typeof fetch;
   readonly comments: { store: PgCommentStore; actions: ModerationActions } | null;
 }
