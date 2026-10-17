@@ -284,7 +284,7 @@ export class PgAlertChannels {
 
   async confirm(
     token: string,
-  ): Promise<{ status: 'confirmed' | 'already'; organizationId: string } | { status: 'invalid' }> {
+  ): Promise<{ status: 'confirmed'; organizationId: string } | { status: 'invalid' }> {
     return withTransaction(this.pool, async (tx) => {
       const r = await tx.query(
         `UPDATE alert_channel SET status = 'active', confirmed_at = $2,

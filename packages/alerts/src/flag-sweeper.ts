@@ -25,9 +25,19 @@ const COLLECT_SQL = `
   ON CONFLICT (review_item_id) DO NOTHING`;
 
 const DUE_BRANDS_SQL = `
-  SELECT DISTINCT organization_id, brand_id FROM alert_flag_item
+  SELECT organization_id, brand_id FROM alert_flag_item
    WHERE state = 'pending' AND flagged_at <= $1
+   GROUP BY organization_id, brand_id
+   ORDER BY min(flagged_at)
    LIMIT 100`;
+
+const HAS_ACTIVE_ROUTE_SQL = `
+  SELECT EXISTS (
+    SELECT 1 FROM alert_route ar
+      JOIN alert_channel ch ON ch.organization_id = ar.organization_id AND ch.id = ar.channel_id
+      JOIN brand b ON b.organization_id = ar.organization_id AND b.id = ar.brand_id
+     WHERE ar.organization_id = $1 AND ar.brand_id = $2 AND ar.alert_type = 'flagged_item'
+       AND ar.enabled AND ch.status = 'active' AND b.archived_at IS NULL) AS ok`;
 
 const PENDING_SQL = `
   SELECT f.review_item_id, f.flagged_at, ri.status
@@ -102,8 +112,9 @@ export class FlagSweeper {
     if (rows.length === 0 || rows[0]!.flagged_at.getTime() > cutoff) {
       return { locked: 0, skipped: 0, digest: false };
     }
-    const resolved = rows.filter((r) => r.status !== 'open');
-    const open = rows.filter((r) => r.status === 'open');
+    const routed = (await c.query<{ ok: boolean }>(HAS_ACTIVE_ROUTE_SQL, [orgId, brandId])).rows[0]!.ok;
+    const resolved = rows.filter((r) => !routed || r.status !== 'open');
+    const open = routed ? rows.filter((r) => r.status === 'open') : [];
     if (resolved.length > 0) {
       await c.query(MARK_SQL, [
         orgId,

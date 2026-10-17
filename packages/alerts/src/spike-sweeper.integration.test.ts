@@ -149,6 +149,14 @@ describe('SpikeSweeper', () => {
     expect((await state(t)).last_verdict).toBe('below_min');
   });
 
+  it('suggest-mode decisions do not count: 50 suggested hides → no event', async () => {
+    const t = await brand();
+    await seedNegativeComments(h.c, t, { count: 50, postedAt: at(-5 * MIN), mode: 'suggest' });
+    await sweeper().tick();
+    expect(await events(t)).toEqual([]);
+    expect((await state(t)).last_verdict).toBe('below_min');
+  });
+
   it('backfill does not count: 50 recent backfilled negatives → no event', async () => {
     const t = await brand();
     await seedNegativeComments(h.c, t, { count: 50, postedAt: at(-5 * MIN), origin: 'backfill' });

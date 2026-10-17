@@ -140,6 +140,16 @@ describe('FlagSweeper', () => {
     expect(await items(t, 'skipped')).toHaveLength(2);
   });
 
+  it('route disabled before the batch closes → items skipped, no event', async () => {
+    const t = await brand();
+    await seedFlags(h.c, t, { count: 2, createdAt: at(-5 * MIN) });
+    await sweeper(at(-4 * MIN)).tick();
+    await h.c.query('UPDATE alert_route SET enabled = false WHERE brand_id = $1', [t.brandId]);
+    expect(await sweeper().tick()).toEqual({ collected: 0, digests: 0, skipped: 2 });
+    expect(await events(t)).toHaveLength(0);
+    expect(await items(t, 'skipped')).toHaveLength(2);
+  });
+
   it('one of three resolved → digest of 2', async () => {
     const t = await brand();
     const ids = await seedFlags(h.c, t, { count: 3, createdAt: at(-5 * MIN) });

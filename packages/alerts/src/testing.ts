@@ -64,6 +64,7 @@ export async function seedNegativeComments(
     postedAt: Date;
     origin?: 'live' | 'backfill';
     outcome?: 'hide' | 'flag' | 'approve';
+    mode?: 'enforce' | 'suggest';
     ingestedAt?: Date;
   },
 ): Promise<string[]> {
@@ -88,8 +89,8 @@ export async function seedNegativeComments(
   await c.query(
     `INSERT INTO decision (organization_id, brand_id, comment_id, outcome, mode, actor_type, classifier_provider,
        classifier_model, reason)
-     SELECT $1, $2, id, $4, 'enforce', 'classifier', 'test', 'test-model', 'seeded' FROM unnest($3::uuid[]) id`,
-    [tenant.organizationId, tenant.brandId, ids, o.outcome ?? 'hide'],
+     SELECT $1, $2, id, $4, $5, 'classifier', 'test', 'test-model', 'seeded' FROM unnest($3::uuid[]) id`,
+    [tenant.organizationId, tenant.brandId, ids, o.outcome ?? 'hide', o.mode ?? 'enforce'],
   );
   return ids;
 }
