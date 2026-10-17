@@ -170,8 +170,7 @@ describe('alerts API', () => {
     const ch = await addEmail(address);
     const mail = api.mailer.lastTo(address.toLowerCase())!;
     expect(mail.subject).toContain('Confirm FeedBouncer alerts');
-    // The copy puts a full stop right after the link.
-    const url = new URL(extractFirstUrl(mail.text)!.replace(/\.$/, ''));
+    const url = new URL(extractFirstUrl(mail.text)!);
     expect(url.pathname).toBe('/alerts/confirm');
     const token = url.searchParams.get('token')!;
 

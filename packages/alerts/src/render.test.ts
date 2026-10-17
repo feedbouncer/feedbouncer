@@ -245,9 +245,10 @@ describe('fixed messages', () => {
     const link = 'https://app.example.test/alerts/confirm?token=abcdefghijklmnop';
     const e = renderConfirmEmail({ email: 'ops@acme.test', workspaceName: 'Acme\r\nWS', link });
     expect(e.subject).toBe('Confirm FeedBouncer alerts for Acme WS');
-    expect(e.text).toContain(
-      `A workspace admin added ops@acme.test to FeedBouncer alerts for Acme WS. Confirm to start receiving them: ${link}. The link expires in 7 days. If you didn't expect this, ignore this email.`,
+    expect(e.text).toBe(
+      `A workspace admin added ops@acme.test to FeedBouncer alerts for Acme WS. Confirm to start receiving them:\n\n${link}\n\nThe link expires in 7 days. If you didn't expect this, ignore this email.\n`,
     );
+    expect(e.text).not.toContain(`${link}.`);
     expect(e.html).toContain(`href="${link}"`);
   });
 

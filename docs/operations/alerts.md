@@ -62,13 +62,13 @@ Alerts are off until `ALERT_CHANNELS` is set. Set it on **both** the API and the
 | `SMTP_URL`, `MAIL_FROM`            | api, worker | Required for `email`. The worker refuses to start with `email` enabled and no `SMTP_URL`.                            |
 | `PUBLIC_WEB_URL`                   | api, worker | Origin used in every link (view comments, review queue, confirm, unsubscribe). Required whenever alerts are enabled. |
 
-With alerts disabled the worker starts no alert loops and logs one `alerts.disabled` line. The API answers alert writes with `409 alerts_unavailable`, and the alert pages are hidden in the web app.
+With alerts disabled the worker starts no alert loops and logs one `alerts.disabled` line. The API answers alert writes with `409 alerts_unavailable`, and the web app's Alerts pages say that alerts aren't set up on this server and show no forms.
 
 ## Creating a Slack incoming webhook
 
 1. In Slack, open [api.slack.com/apps](https://api.slack.com/apps), create an app for your workspace and enable **Incoming Webhooks**.
 2. Choose **Add New Webhook to Workspace** and pick the channel.
-3. Copy the URL (`https://hooks.slack.com/services/T.../B.../...`) into **Alerts > Add Slack channel** in FeedBouncer.
+3. Copy the URL (`https://hooks.slack.com/services/T.../B.../...`) into **Alerts > Slack channels** (button **Connect Slack**) in FeedBouncer. The Alerts link is on the workspace page and is shown to owners and admins.
 
 The URL is a credential. FeedBouncer stores it encrypted and shows only a short hint such as `T...ABCD/B...WXYZ`. Only `hooks.slack.com` URLs of this exact form are accepted. Slack revokes URLs that leak publicly; if that happens, create a new webhook and reconnect.
 
@@ -81,11 +81,11 @@ The worker and the API (for test sends) need outbound HTTPS to `hooks.slack.com:
 - **Delivery problem.** A send failed. Transient failures (Slack 429 and 5xx, network errors, SMTP 4xx) are retried with backoff at 30 s, 2 min, 10 min, 30 min and 2 h, honoring Slack's `Retry-After` (up to 1 h). Permanent failures (rejected payload, SMTP 5xx) are not retried and the channel shows a delivery problem.
 - **Disconnected.** Slack answered that the webhook no longer exists or is not allowed (for example `no_service`, `invalid_token`, `channel_not_found`, `channel_is_archived`). The channel is switched off, owners and admins are emailed (when email is enabled), and no further messages are sent until it is reconnected.
 
-To reconnect, open **Alerts**, choose **Reconnect** on the channel and paste a new webhook URL. Failure state is cleared and delivery resumes. Use **Send test** to check a channel at any time.
+To reconnect, open the workspace **Alerts** page, choose **Reconnect** on the channel and paste a new webhook URL. Failure state is cleared and delivery resumes. Use **Send test** to check a channel at any time.
 
 ## Email recipients and unsubscribe
 
-Adding an address sends a confirmation email; the address receives nothing else until the link (valid 7 days) is opened. Every alert email carries an unsubscribe link and `List-Unsubscribe` headers, including RFC 8058 one-click (`List-Unsubscribe-Post`), so mail clients can unsubscribe in one step without signing in. An unsubscribed address stays listed and can be re-subscribed by an admin.
+Adding an address sends a confirmation email; the address receives nothing else until the link (valid 7 days) is opened. The confirmation and unsubscribe links open pages at `/alerts/confirm?token=...` and `/alerts/unsubscribe?token=...` that ask for one button press before anything changes. Every alert email carries an unsubscribe link and `List-Unsubscribe` headers, including RFC 8058 one-click (`List-Unsubscribe-Post`), so mail clients can unsubscribe in one step without signing in. An unsubscribed address stays listed; an admin can choose **Resend** to send it a new confirmation, and it receives alerts again once confirmed.
 
 ## Known limits
 

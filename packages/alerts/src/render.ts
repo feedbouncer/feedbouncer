@@ -201,10 +201,15 @@ export function renderEmailTest(r: {
   });
 }
 
-function simple(subject: string, intro: string, cta: { label: string; url: string }): EmailContent {
+function simple(
+  subject: string,
+  intro: string,
+  cta: { label: string; url: string },
+  text: string = `${intro}\n`,
+): EmailContent {
   return {
     subject: headerSafe(subject),
-    text: `${intro}\n`,
+    text,
     html: html(subject, [para(intro), `<p>${anchor(cta.label, cta.url)}</p>`]),
   };
 }
@@ -215,10 +220,14 @@ export function renderConfirmEmail(i: {
   link: string;
 }): EmailContent {
   const ws = line(i.workspaceName);
+  const head = `A workspace admin added ${line(i.email)} to FeedBouncer alerts for ${ws}.`;
+  const tail = `The link expires in 7 days. If you didn't expect this, ignore this email.`;
+  // The link sits on its own line: a trailing full stop could be auto-linked into the token.
   return simple(
     `Confirm FeedBouncer alerts for ${ws}`,
-    `A workspace admin added ${line(i.email)} to FeedBouncer alerts for ${ws}. Confirm to start receiving them: ${i.link}. The link expires in 7 days. If you didn't expect this, ignore this email.`,
+    `${head} Confirm to start receiving them. ${tail}`,
     { label: 'Confirm alerts', url: i.link },
+    `${head} Confirm to start receiving them:\n\n${i.link}\n\n${tail}\n`,
   );
 }
 

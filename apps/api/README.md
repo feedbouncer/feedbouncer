@@ -95,6 +95,26 @@ Only these `/api/auth/*` paths are reachable; everything else under it is `404`.
 
 Invitations expire after 7 days; inviting an address that already has a pending invitation renews it. Creating or renewing an invitation answers `201` with `emailSent: false` when the address's or the client's email budget (see [Rate limits](#rate-limits)) is spent: the invitation is saved but no email goes out, and a renewal then keeps the token of the link that was already emailed. Accepting an invitation as someone who is already a member of the organization keeps their current role (the invitation's role is not applied) and marks the invitation accepted; the audit event `invitation.accepted` records `joined: false`. Sessions last 7 days (sliding), password reset links 1 hour, email confirmation links 24 hours.
 
+### Alerts (session unless noted)
+
+`alert.read` (owners and admins) lists; `alert.manage` (owners and admins) changes. Webhook URLs and tokens are never returned.
+
+| Method and path                                                          | Notes                                                                                                                                            |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/v1/orgs/:orgId/alert-channels`                                 | `alert.read`; `{ availability: { slack, email }, channels }`                                                                                     |
+| `POST /api/v1/orgs/:orgId/alert-channels/slack`                          | `{ label, webhookUrl }` -> `201 { channel }`; `400 invalid_webhook_url`                                                                          |
+| `PUT /api/v1/orgs/:orgId/alert-channels/:channelId/slack`                | `{ webhookUrl }` reconnects the channel -> `200 { channel }`                                                                                     |
+| `POST /api/v1/orgs/:orgId/alert-channels/email`                          | `{ email, label? }` -> `201 { channel }` and a confirmation email; `409 email_taken`                                                             |
+| `POST /api/v1/orgs/:orgId/alert-channels/:channelId/resend-confirmation` | `202`; `409 too_soon` within a minute                                                                                                            |
+| `POST /api/v1/orgs/:orgId/alert-channels/:channelId/test`                | `200 { ok: true }` or `{ ok: false, code }`; rate limited per channel                                                                            |
+| `DELETE /api/v1/orgs/:orgId/alert-channels/:channelId`                   | `204`                                                                                                                                            |
+| `GET /api/v1/orgs/:orgId/brands/:brandId/alerts`                         | `alert.read`; `{ availability, settings, routes, learning, channels, recent }`                                                                   |
+| `PUT /api/v1/orgs/:orgId/brands/:brandId/alerts`                         | `{ settings, routes }` replaces both -> the same view; `422 unknown_channel`                                                                     |
+| `POST /api/v1/alert-recipients/confirm`                                  | No session or origin check. `{ token }` -> `200 { status: "confirmed" }`, or `404 invalid_token`                                                 |
+| `POST /api/v1/alert-recipients/unsubscribe`                              | No session or origin check. `{ token }` or `?token=` (also the RFC 8058 form body `List-Unsubscribe=One-Click`) -> `200`, or `404 invalid_token` |
+
+Creating, reconnecting or enabling a channel kind that `ALERT_CHANNELS` does not list answers `409 alerts_unavailable`. The public recipient routes are limited to 30 requests per minute per client IP. The web app uses `/orgs/:orgId/alerts`, `/orgs/:orgId/brands/:brandId/alerts`, `/alerts/confirm?token=` and `/alerts/unsubscribe?token=`.
+
 ### Health
 
 `GET /livez` and `GET /healthz` (Postgres and Redis); unauthenticated and outside `/api/v1`.
@@ -107,16 +127,17 @@ Every error has one shape, and the codes are stable:
 { "error": { "code": "forbidden", "message": "You do not have permission to do this." } }
 ```
 
-| Status  | Codes                                                                                                                         |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 400     | `invalid_request`, `invalid_email`, `invalid_or_expired_token`, `confirmation_mismatch`                                       |
-| 401     | `unauthenticated`, `invalid_credentials`                                                                                      |
-| 403     | `forbidden`, `invalid_origin`, `email_not_verified`, `cannot_act_on_owner`, `cannot_grant_owner`, `invitation_email_mismatch` |
-| 404     | `not_found` (unknown resource, or an organization you are not a member of)                                                    |
-| 409     | `last_owner`, `sole_owner`, `brand_name_taken`, `brand_archived`, `invitation_not_pending`                                    |
-| 422     | `password_too_short`, `password_too_long`, `weak_password`                                                                    |
-| 429     | `rate_limited`                                                                                                                |
-| 500/503 | `internal_error`, `temporarily_unavailable` (Redis unreachable: rate-limited endpoints fail closed)                           |
+| Status  | Codes                                                                                                                                       |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400     | `invalid_request`, `invalid_email`, `invalid_or_expired_token`, `confirmation_mismatch`, `invalid_webhook_url`                              |
+| 401     | `unauthenticated`, `invalid_credentials`                                                                                                    |
+| 403     | `forbidden`, `invalid_origin`, `email_not_verified`, `cannot_act_on_owner`, `cannot_grant_owner`, `invitation_email_mismatch`               |
+| 404     | `not_found` (unknown resource, or an organization you are not a member of), `invalid_token` (alert recipient links)                         |
+| 409     | `last_owner`, `sole_owner`, `brand_name_taken`, `brand_archived`, `invitation_not_pending`, `alerts_unavailable`, `email_taken`, `too_soon` |
+| 422     | `password_too_short`, `password_too_long`, `weak_password`, `unknown_channel`                                                               |
+| 429     | `rate_limited`                                                                                                                              |
+| 502     | `confirmation_send_failed` (the alert confirmation email could not be sent; use resend)                                                     |
+| 500/503 | `internal_error`, `temporarily_unavailable` (Redis unreachable: rate-limited endpoints fail closed)                                         |
 
 ## Security notes
 
