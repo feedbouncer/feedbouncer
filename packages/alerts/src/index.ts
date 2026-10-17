@@ -11,3 +11,4 @@ export * from './render.js';
 export * from './slack.js';
 export { SpikeSweeper } from './spike-sweeper.js';
 export { FlagSweeper } from './flag-sweeper.js';
+export { AlertDispatcher } from './dispatcher.js';

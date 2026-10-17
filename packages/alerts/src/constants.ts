@@ -12,3 +12,7 @@ export const FLAG_BATCH_SECONDS = 120;
 export const FLAG_DIGEST_MAX = 100;
 export const FLAG_LOOKBACK_HOURS = 24;
 export const SLACK_TIMEOUT_MS = 10_000;
+export const RETRY_DELAYS_MS = [30_000, 120_000, 600_000, 1_800_000, 7_200_000] as const;
+export const RETRY_AFTER_CAP_MS = 3_600_000;
+export const LEASE_MS = 120_000;
+export const SLACK_PACE_MS = 1_000;
