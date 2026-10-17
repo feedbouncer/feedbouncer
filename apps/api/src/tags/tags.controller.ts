@@ -30,7 +30,7 @@ export class TagsController {
   @Get()
   @RequireCapability('comment.read')
   async list(@Req() req: OrgRequest) {
-    return { tags: await this.tags.list(req.org) };
+    return this.tags.list(req.org);
   }
 
   @Post()

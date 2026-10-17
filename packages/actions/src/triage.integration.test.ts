@@ -69,6 +69,10 @@ describe('tags', () => {
     expect(await triage.createTag(t.organizationId, u, 'one too many')).toEqual({
       status: 'limit',
     });
+    const existing = await triage.createTag(t.organizationId, u, 'CAFÉ');
+    expect(existing.status).toBe('taken');
+    if (a.status === 'created' && existing.status === 'taken')
+      expect(existing.tag.id).toBe(a.tag.id);
   });
 
   it('listTags counts comments and never shows org B tags', async () => {
@@ -301,28 +305,38 @@ describe('apply', () => {
     ).rejects.toThrow(TypeError);
   });
 
-  it('concurrent tag delete during bulk add -> unknown_tag per comment, others ok', async () => {
+  it('tag deleted while a bulk add is in flight -> unknown_tag per comment', async () => {
     const t = await fresh();
     const u = await userOf(t);
     const tag = await mkTag(t, 'racy');
-    const other = new PgTriage(pool);
-    const racing = new PgTriage(pool, {
-      beforeItem: async (i) => {
-        if (i === 1) await other.deleteTag(t.organizationId, u, tag.id, 1);
-      },
-    });
     const cs = [await comment(t), await comment(t), await comment(t)];
-    const res = await racing.apply(
-      t.organizationId,
-      u,
-      cs.map((c) => c.id),
-      {
-        type: 'add_tags',
-        tagIds: [tag.id],
-      },
-    );
+    const deleter = await pool.connect();
+    let applying: ReturnType<PgTriage['apply']>;
+    try {
+      await deleter.query('BEGIN');
+      await deleter.query('SELECT 1 FROM tag WHERE id = $1 FOR UPDATE', [tag.id]);
+      applying = triage.apply(
+        t.organizationId,
+        u,
+        cs.map((c) => c.id),
+        { type: 'add_tags', tagIds: [tag.id] },
+      );
+      // The tag check has passed once the first insert is waiting on the tag row lock.
+      for (;;) {
+        const waiting = await q(
+          "SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()",
+        );
+        if (waiting.rowCount) break;
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      await deleter.query('DELETE FROM tag WHERE id = $1', [tag.id]);
+      await deleter.query('COMMIT');
+    } finally {
+      deleter.release();
+    }
+    const res = await applying;
     if (res.status !== 'ok') throw new Error(res.status);
-    expect(res.results.map((r) => r.status)).toEqual(['ok', 'unknown_tag', 'unknown_tag']);
+    expect(res.results.map((r) => r.status)).toEqual(['unknown_tag', 'unknown_tag', 'unknown_tag']);
   });
 
   it('audit details never contain comment body', async () => {

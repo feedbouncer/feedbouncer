@@ -69,10 +69,9 @@ const TAG_COLUMNS = `t.id, t.name, t.created_at,
   (SELECT count(*) FROM comment_tag ct WHERE ct.organization_id = t.organization_id AND ct.tag_id = t.id) AS comment_count`;
 
 export class PgTriage {
-  /** `beforeItem`: test-only hook awaited before each comment of `apply` is processed. */
   constructor(
     private readonly pool: pg.Pool,
-    private readonly opts: { beforeItem?: (index: number) => Promise<void>; log?: Logger } = {},
+    private readonly opts: { log?: Logger } = {},
   ) {}
 
   /** Brand scope of a comment in this org whose brand is not archived; null otherwise. */
@@ -114,6 +113,21 @@ export class PgTriage {
     return withTransaction(this.pool, async (tx) => {
       // Serialize creators per organization so the cap cannot be overshot by racing inserts.
       await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`tag:${orgId}`]);
+      const tagById = async (id: string) =>
+        toTag(
+          (
+            await tx.query<TagRow>(
+              `SELECT ${TAG_COLUMNS} FROM tag t WHERE t.organization_id = $1 AND t.id = $2`,
+              [orgId, id],
+            )
+          ).rows[0]!,
+        );
+      const existing = await tx.query<{ id: string }>(
+        'SELECT id FROM tag WHERE organization_id = $1 AND name_key = $2',
+        [orgId, parsed.key],
+      );
+      if (existing.rows[0])
+        return { status: 'taken' as const, tag: await tagById(existing.rows[0].id) };
       const count = await tx.query<{ n: string }>(
         'SELECT count(*) AS n FROM tag WHERE organization_id = $1',
         [orgId],
@@ -121,24 +135,11 @@ export class PgTriage {
       if (Number(count.rows[0]!.n) >= TAGS_PER_ORG) return { status: 'limit' as const };
       const ins = await tx.query<{ id: string }>(
         `INSERT INTO tag (organization_id, name, name_key, created_by_user_id)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (organization_id, name_key) DO NOTHING RETURNING id`,
+         VALUES ($1, $2, $3, $4) RETURNING id`,
         [orgId, parsed.name, parsed.key, actorUserId],
       );
-      const id =
-        ins.rows[0]?.id ??
-        (
-          await tx.query<{ id: string }>(
-            'SELECT id FROM tag WHERE organization_id = $1 AND name_key = $2',
-            [orgId, parsed.key],
-          )
-        ).rows[0]!.id;
-      const { rows } = await tx.query<TagRow>(
-        `SELECT ${TAG_COLUMNS} FROM tag t WHERE t.organization_id = $1 AND t.id = $2`,
-        [orgId, id],
-      );
-      const tag = toTag(rows[0]!);
-      if (!ins.rows[0]) return { status: 'taken' as const, tag };
+      const id = ins.rows[0]!.id;
+      const tag = await tagById(id);
       await recordAudit(tx, {
         organizationId: orgId,
         actorUserId,
@@ -199,7 +200,7 @@ export class PgTriage {
     op: TriageOp,
   ): Promise<{ status: 'unknown_tags' } | { status: 'ok'; results: TriageItemResult[] }> {
     if (commentIds.length > BULK_MAX) throw new TypeError(`at most ${BULK_MAX} comments`);
-    const tagIds = 'tagIds' in op ? [...new Set(op.tagIds.map((id) => id.toLowerCase()))] : [];
+    const tagIds = 'tagIds' in op ? [...new Set(op.tagIds)] : [];
     if (tagIds.length > TAG_IDS_MAX) throw new TypeError(`at most ${TAG_IDS_MAX} tags`);
 
     if (tagIds.length > 0) {
@@ -215,8 +216,7 @@ export class PgTriage {
     }
 
     const results: TriageItemResult[] = [];
-    for (const [i, commentId] of commentIds.entries()) {
-      await this.opts.beforeItem?.(i);
+    for (const commentId of commentIds) {
       results.push(await this.#applyOne(orgId, actorUserId, commentId, op, tagIds));
     }
     this.opts.log?.info('triage.apply', {

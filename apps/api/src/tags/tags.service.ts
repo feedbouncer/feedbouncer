@@ -3,7 +3,7 @@ import { PgTriage } from '@feedbouncer/actions';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
 import { toTagDto, type TagDto } from '../org-comments/dto.js';
-import type { OrgContext } from '../tenancy/org-access.guard.js';
+import { orgCan, type OrgContext } from '../tenancy/org-access.guard.js';
 import { DEPS } from '../tokens.js';
 
 /** Workspace tags. Tag names are workspace labels shown to members: never log them. */
@@ -15,8 +15,9 @@ export class TagsService {
     this.#triage = new PgTriage(deps.pool, { log: deps.log });
   }
 
-  async list(org: OrgContext): Promise<TagDto[]> {
-    return (await this.#triage.listTags(org.organizationId)).map(toTagDto);
+  async list(org: OrgContext): Promise<{ tags: TagDto[]; canManage: boolean }> {
+    const tags = (await this.#triage.listTags(org.organizationId)).map(toTagDto);
+    return { tags, canManage: orgCan(org, 'tag.manage') };
   }
 
   async create(org: OrgContext, name: string): Promise<TagDto> {

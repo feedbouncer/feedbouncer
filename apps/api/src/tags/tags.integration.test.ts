@@ -61,6 +61,9 @@ describe('tags', () => {
 
     const listed = await api.req('GET', tags(org), { cookie: org.member.cookie });
     expect(listed.status).toBe(200);
+    expect(listed.body.canManage).toBe(false);
+    const listedByAdmin = await api.req('GET', tags(org), { cookie: org.admin.cookie });
+    expect(listedByAdmin.body.canManage).toBe(true);
     expect(listed.body.tags.map((t: { name: string }) => t.name).sort()).toEqual(
       ['Café', '🔥', 'مهم'].sort(),
     );
@@ -78,6 +81,9 @@ describe('tags', () => {
     const over = await create('one more', full.owner.cookie, full);
     expect(over.status).toBe(409);
     expect(over.body.error.code).toBe('tag_limit_reached');
+    const existing = await create('TAG 7', full.owner.cookie, full);
+    expect(existing.status).toBe(409);
+    expect(existing.body.error.code).toBe('tag_name_taken');
   });
 
   it('member can create but cannot delete (403); admin delete with stale count → 409 {count}, with right count → 200 and tag gone from rows', async () => {
