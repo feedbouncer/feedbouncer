@@ -224,4 +224,62 @@ describe('brands', () => {
       });
     });
   });
+
+  it('archiving a brand deletes its alert routes and settings and cancels pending deliveries; other brands untouched', async () => {
+    const { orgId, owner, brandId } = await orgWithRoles(api, 'alert-arch', shared);
+    const other = (
+      await api.req('POST', brandsUrl(orgId), { cookie: owner.cookie, body: { name: 'Other' } })
+    ).body.brand.id as string;
+    const channel = (
+      await api.pool.query<{ id: string }>(
+        `INSERT INTO alert_channel (organization_id, kind, label, status, key_id, email,
+           unsubscribe_key_sha256, encrypted_unsubscribe_token)
+         VALUES ($1, 'email', 'e', 'active', 'k1', 'a@example.test', sha256($2::bytea), '\\x00'::bytea)
+         RETURNING id`,
+        [orgId, randomUUID()],
+      )
+    ).rows[0]!.id;
+    for (const id of [brandId, other]) {
+      await api.pool.query(
+        'INSERT INTO alert_brand_settings (organization_id, brand_id) VALUES ($1, $2)',
+        [orgId, id],
+      );
+      await api.pool.query(
+        `INSERT INTO alert_route (organization_id, brand_id, alert_type, channel_id, enabled, enabled_at)
+         VALUES ($1, $2, 'negative_spike', $3, true, now())`,
+        [orgId, id, channel],
+      );
+      const event = (
+        await api.pool.query<{ id: string }>(
+          `INSERT INTO alert_event (organization_id, brand_id, alert_type, alert_key, status, payload)
+           VALUES ($1, $2, 'negative_spike', $3, 'queued', '{}') RETURNING id`,
+          [orgId, id, `spike:${id}`],
+        )
+      ).rows[0]!.id;
+      await api.pool.query(
+        "INSERT INTO alert_delivery (organization_id, alert_event_id, channel_id, state) VALUES ($1, $2, $3, 'pending')",
+        [orgId, event, channel],
+      );
+    }
+    const archived = await api.req('POST', `${brandsUrl(orgId)}/${brandId}/archive`, {
+      cookie: owner.cookie,
+      body: {},
+    });
+    expect(archived.status).toBe(200);
+    const rows = async (table: string, id: string) =>
+      (await api.pool.query(`SELECT 1 FROM ${table} WHERE brand_id = $1`, [id])).rowCount;
+    expect(await rows('alert_route', brandId)).toBe(0);
+    expect(await rows('alert_brand_settings', brandId)).toBe(0);
+    expect(await rows('alert_route', other)).toBe(1);
+    expect(await rows('alert_brand_settings', other)).toBe(1);
+    const states = await api.pool.query<{ brand_id: string; state: string }>(
+      `SELECT e.brand_id, d.state FROM alert_delivery d JOIN alert_event e ON e.id = d.alert_event_id
+        WHERE e.organization_id = $1`,
+      [orgId],
+    );
+    expect(Object.fromEntries(states.rows.map((r) => [r.brand_id, r.state]))).toEqual({
+      [brandId]: 'cancelled',
+      [other]: 'pending',
+    });
+  });
 });

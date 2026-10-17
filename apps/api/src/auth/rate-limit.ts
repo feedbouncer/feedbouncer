@@ -15,6 +15,10 @@ export interface AuthRateLimits {
   recordLoginSuccess(email: string, ip: string): Promise<void>;
   /** Counts one email-sending request. Throws 429 over the limit, 503 when Redis is unreachable. */
   consumeEmailSend(email: string, ip: string): Promise<void>;
+  /** Counts one alert test send for a channel. Throws 429 over the limit, 503 when Redis is unreachable. */
+  consumeAlertTest(channelId: string): Promise<void>;
+  /** Counts one request to the public alert recipient routes from an IP. Same errors as above. */
+  consumeAlertRecipient(ip: string): Promise<void>;
 }
 
 const h = (s: string) => createHash('sha256').update(s).digest('hex'); // no raw emails in Redis
@@ -33,6 +37,8 @@ export function createAuthRateLimits(redis: Redis, prefix: string): AuthRateLimi
   const loginIp = mk('login_ip', 20, WINDOW, WINDOW);
   const sendAcct = mk('send_acct', 3, 3600);
   const sendIp = mk('send_ip', 20, 3600);
+  const alertTest = mk('alert_test', 5, 60);
+  const alertRecipient = mk('alert_recipient_ip', 30, 60);
 
   const limited = () => new ApiError(429, 'rate_limited');
   const unavailable = () => new ApiError(503, 'temporarily_unavailable');
@@ -69,5 +75,7 @@ export function createAuthRateLimits(redis: Redis, prefix: string): AuthRateLimi
       await consume(sendIp, clientIpKey(ip));
       await consume(sendAcct, h(email));
     },
+    consumeAlertTest: (channelId) => consume(alertTest, channelId),
+    consumeAlertRecipient: (ip) => consume(alertRecipient, clientIpKey(ip)),
   };
 }

@@ -11,6 +11,10 @@ import { SignUpController } from './auth/sign-up.controller.js';
 import { ActionsController } from './actions/actions.controller.js';
 import { ActionsService } from './actions/actions.service.js';
 import { ReviewController } from './actions/review.controller.js';
+import { AlertChannelsController } from './alerts/alert-channels.controller.js';
+import { AlertRecipientsController } from './alerts/alert-recipients.controller.js';
+import { AlertsService } from './alerts/alerts.service.js';
+import { BrandAlertsController } from './alerts/brand-alerts.controller.js';
 import { AdsController } from './ads/ads.controller.js';
 import { AdsService } from './ads/ads.service.js';
 import { BrandsController } from './brands/brands.controller.js';
@@ -110,6 +114,9 @@ export class AppModule {
         RoleGrantsController,
         OrgInvitationsController,
         InvitationsController,
+        AlertChannelsController,
+        BrandAlertsController,
+        AlertRecipientsController,
       ],
       providers: [
         Reflector,
@@ -134,6 +141,7 @@ export class AppModule {
         MembersService,
         RoleGrantsService,
         InvitationsService,
+        AlertsService,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.
         { provide: CONNECTOR_STACK, useValue: deps.connectors?.stack ?? null },

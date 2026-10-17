@@ -48,6 +48,7 @@ pnpm test
 | `packages/observability`       | Structured logs, traces, metrics and connector health                                                        |
 | `packages/rules`               | Moderation rules: matchers, evaluation order, rule store and evaluation job                                  |
 | `packages/actions`             | Moderation actions: step model, execution and review queue                                                   |
+| `packages/alerts`              | Alerts: negative-comment spike detection and delivery to Slack and email                                     |
 | `packages/policies`            | Plain-language custom policies: validation, decisions, model evaluation, previews and runs                   |
 | `packages/placeholder`         | Minimal package used as the template for new packages                                                        |
 | `packages/secrets`             | Envelope encryption for stored credentials and key management                                                |
@@ -117,6 +118,7 @@ All settings live in `.env`, which is git-ignored and copied from `.env.example`
 - **Need psql or a GUI client?** Postgres and Redis are not published by default. To publish them on `127.0.0.1` only, run `docker compose -f compose.yaml -f compose.expose-db.yaml up`, or uncomment `COMPOSE_FILE` in `.env`. Use `POSTGRES_HOST_PORT`/`REDIS_HOST_PORT` if 5432 or 6379 are taken.
 - **Personal tweaks:** copy `compose.override.example.yaml` to `compose.override.yaml`, which is git-ignored and loaded automatically (unless `COMPOSE_FILE` is set).
 - Job queue (queues, retries, dead-letter commands): see [docs/operations/job-queue.md](docs/operations/job-queue.md). To define a job, see [docs/jobs/defining-a-job.md](docs/jobs/defining-a-job.md).
+- Slack and email alerts (spike and flagged-item alerts, `ALERT_CHANNELS`, Slack webhook setup): see [docs/operations/alerts.md](docs/operations/alerts.md).
 - Encryption keys and secret files: see [docs/operations/secrets.md](docs/operations/secrets.md). Back up `FB_ENCRYPTION_KEYS` separately from your database.
 - `FB_BIND_ADDRESS` defaults to `127.0.0.1`, so nothing is reachable from other machines. Change it only if you mean to expose the stack to your network.
 

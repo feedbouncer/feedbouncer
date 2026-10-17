@@ -152,6 +152,9 @@ importers:
       '@feedbouncer/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@feedbouncer/alerts':
+        specifier: workspace:*
+        version: link:../../packages/alerts
       '@feedbouncer/authz':
         specifier: workspace:*
         version: link:../../packages/authz
@@ -302,6 +305,9 @@ importers:
       '@feedbouncer/actions':
         specifier: workspace:*
         version: link:../../packages/actions
+      '@feedbouncer/alerts':
+        specifier: workspace:*
+        version: link:../../packages/alerts
       '@feedbouncer/classifier':
         specifier: workspace:*
         version: link:../../packages/classifier
@@ -425,6 +431,37 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+
+  packages/alerts:
+    dependencies:
+      '@feedbouncer/actions':
+        specifier: workspace:*
+        version: link:../actions
+      '@feedbouncer/connectors':
+        specifier: workspace:*
+        version: link:../connectors
+      '@feedbouncer/db':
+        specifier: workspace:*
+        version: link:../db
+      '@feedbouncer/mailer':
+        specifier: workspace:*
+        version: link:../mailer
+      '@feedbouncer/secrets':
+        specifier: workspace:*
+        version: link:../secrets
+      '@feedbouncer/service-runtime':
+        specifier: workspace:*
+        version: link:../service-runtime
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
 
   packages/authz: {}
 

@@ -137,6 +137,10 @@ describe('GET /orgs/:orgId/comments', () => {
       status: null,
       queue: 'open',
       tags: [],
+      brand: null,
+      from: null,
+      to: null,
+      signal: null,
     });
     expect(idsOf(await get(A, `?ad=${adId}`))).toEqual([ids.fb1, ids.fbOld]);
     expect(idsOf(await get(A, '?ad=none'))).toEqual([ids.fb2, ids.ig1]);
@@ -147,6 +151,38 @@ describe('GET /orgs/:orgId/comments', () => {
     expect(idsOf(both)).toEqual([ids.fb1, ids.fbOld]);
     expect(both.body.total).toBe(2);
     expect(idsOf(await get(A, '?platform=instagram&category=spam'))).toEqual([]);
+  });
+
+  it('spikeLink query string round-trips through the API (applied echoes)', async () => {
+    await api.pool.query(
+      `INSERT INTO decision (organization_id, brand_id, comment_id, outcome, mode, actor_type,
+         classifier_provider, classifier_model, reason)
+       VALUES ($1, $2, $3, 'hide', 'enforce', 'classifier', 'test', 'test-model', 'seeded')`,
+      [A.orgId, A.brandId, ids.ig1],
+    );
+    const from = '2026-10-10T10:00:00.000Z';
+    const to = '2026-10-10T11:00:00.000Z';
+    const r = await get(A, `?queue=all&brand=${A.brandId}&from=${from}&to=${to}&signal=negative`);
+    expect(r.status).toBe(200);
+    expect(idsOf(r)).toEqual([ids.ig1]);
+    expect(r.body.total).toBe(1);
+    expect(r.body.applied).toMatchObject({ brand: A.brandId, from, to, signal: 'negative' });
+    const noSignal = await get(A, `?queue=all&brand=${A.brandId}&from=${from}&to=${to}`);
+    expect(idsOf(noSignal)).toEqual([ids.ig1, ids.fb1, ids.fbOld]);
+    expect(noSignal.body.applied.signal).toBeNull();
+    // The second brand's comment is out of the brand filter; a foreign brand id is ignored.
+    expect(idsOf(await get(A, `?queue=all&brand=${brand2}`))).toEqual([ids.fb2]);
+    const foreign = await get(A, `?queue=all&brand=${B.brandId}`);
+    expect(foreign.body.applied.brand).toBeNull();
+    expect(foreign.body.total).toBe(4);
+    for (const bad of [
+      'brand=nope',
+      `from=${to}&to=${from}`,
+      `from=${from}&to=${from}`,
+      'from=2026-10-10',
+      'signal=positive',
+    ])
+      expect((await get(A, `?${bad}`)).status).toBe(400);
   });
 
   it("ad id from org B in org A's URL is ignored and returns only org A comments", async () => {

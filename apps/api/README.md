@@ -20,6 +20,8 @@ Read and validated at startup by `src/env.ts`; the process refuses to start on a
 | `FB_ENV`                                                              | no              | `development`, `test` or `production`. Default `production`: documented example values (placeholders) are refused. In `development` they only log a warning.                                                                   |
 | `FB_ENCRYPTION_KEYS`                                                  | yes             | Keys that encrypt stored platform tokens: `<key-id>:<base64 of 32 random bytes>`, comma-separated. Generate one with `pnpm secrets keygen`. Never log or commit a real one.                                                    |
 | `FB_ENCRYPTION_ACTIVE_KEY_ID`                                         | yes             | The key id used for new encryption. It must be one of the ids in `FB_ENCRYPTION_KEYS`.                                                                                                                                         |
+| `ALERT_CHANNELS`                                                      | no              | Comma list of `slack`, `email`. Unset means Slack and email alerts are off (writes answer 409 `alerts_unavailable`). Set it on the worker too. Setup: [docs/operations/alerts.md](../../docs/operations/alerts.md).            |
+| `ALERT_MAX_PER_WORKSPACE_PER_HOUR`                                    | no              | Alerts one workspace may trigger per hour, 1 to 1000. Default 30.                                                                                                                                                              |
 | `FACEBOOK_APP_ID`                                                     | no              | Numeric Meta app id. Unset means the Facebook connector, its webhook route and its jobs are off. Setup: [docs/connectors/facebook.md](../../docs/connectors/facebook.md).                                                      |
 | `FACEBOOK_APP_SECRET`, `FACEBOOK_WEBHOOK_VERIFY_TOKEN`                | with the app id | The Meta app secret (at least 16 characters) and the webhook verify token (at least 20). Both accept `_FILE`.                                                                                                                  |
 | `FACEBOOK_GRAPH_API_VERSION`                                          | no              | Graph API version, `vNN.0`. Default `v26.0`.                                                                                                                                                                                   |
@@ -93,6 +95,26 @@ Only these `/api/auth/*` paths are reachable; everything else under it is `404`.
 
 Invitations expire after 7 days; inviting an address that already has a pending invitation renews it. Creating or renewing an invitation answers `201` with `emailSent: false` when the address's or the client's email budget (see [Rate limits](#rate-limits)) is spent: the invitation is saved but no email goes out, and a renewal then keeps the token of the link that was already emailed. Accepting an invitation as someone who is already a member of the organization keeps their current role (the invitation's role is not applied) and marks the invitation accepted; the audit event `invitation.accepted` records `joined: false`. Sessions last 7 days (sliding), password reset links 1 hour, email confirmation links 24 hours.
 
+### Alerts (session unless noted)
+
+`alert.read` (owners and admins) lists; `alert.manage` (owners and admins) changes. Webhook URLs and tokens are never returned.
+
+| Method and path                                                          | Notes                                                                                                                                                         |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/orgs/:orgId/alert-channels`                                 | `alert.read`; `{ availability: { slack, email }, channels }`                                                                                                  |
+| `POST /api/v1/orgs/:orgId/alert-channels/slack`                          | `{ label, webhookUrl }` -> `201 { channel }`; `400 invalid_webhook_url`                                                                                       |
+| `PUT /api/v1/orgs/:orgId/alert-channels/:channelId/slack`                | `{ webhookUrl }` reconnects the channel -> `200 { channel }`                                                                                                  |
+| `POST /api/v1/orgs/:orgId/alert-channels/email`                          | `{ email, label? }` -> `201 { channel }` and a confirmation email; `409 email_taken`                                                                          |
+| `POST /api/v1/orgs/:orgId/alert-channels/:channelId/resend-confirmation` | `202`; only for an address still waiting for confirmation (`404` otherwise, so an unsubscribed address is never mailed again); `409 too_soon` within a minute |
+| `POST /api/v1/orgs/:orgId/alert-channels/:channelId/test`                | `200 { ok: true }` or `{ ok: false, code }`; rate limited per channel                                                                                         |
+| `DELETE /api/v1/orgs/:orgId/alert-channels/:channelId`                   | `204`                                                                                                                                                         |
+| `GET /api/v1/orgs/:orgId/brands/:brandId/alerts`                         | `alert.read`; `{ availability, settings, routes, learning, channels, recent }`                                                                                |
+| `PUT /api/v1/orgs/:orgId/brands/:brandId/alerts`                         | `{ settings, routes }` replaces both -> the same view; `422 unknown_channel`                                                                                  |
+| `POST /api/v1/alert-recipients/confirm`                                  | No session or origin check. `{ token }` -> `200 { status: "confirmed" }`, or `404 invalid_token`                                                              |
+| `POST /api/v1/alert-recipients/unsubscribe`                              | No session or origin check. `{ token }` or `?token=` (also the RFC 8058 form body `List-Unsubscribe=One-Click`) -> `200`, or `404 invalid_token`              |
+
+Creating, reconnecting or enabling a channel kind that `ALERT_CHANNELS` does not list answers `409 alerts_unavailable`. The public recipient routes are limited to 30 requests per minute per client IP. The web app uses `/orgs/:orgId/alerts`, `/orgs/:orgId/brands/:brandId/alerts`, `/alerts/confirm?token=` and `/alerts/unsubscribe?token=`.
+
 ### Health
 
 `GET /livez` and `GET /healthz` (Postgres and Redis); unauthenticated and outside `/api/v1`.
@@ -105,16 +127,17 @@ Every error has one shape, and the codes are stable:
 { "error": { "code": "forbidden", "message": "You do not have permission to do this." } }
 ```
 
-| Status  | Codes                                                                                                                         |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 400     | `invalid_request`, `invalid_email`, `invalid_or_expired_token`, `confirmation_mismatch`                                       |
-| 401     | `unauthenticated`, `invalid_credentials`                                                                                      |
-| 403     | `forbidden`, `invalid_origin`, `email_not_verified`, `cannot_act_on_owner`, `cannot_grant_owner`, `invitation_email_mismatch` |
-| 404     | `not_found` (unknown resource, or an organization you are not a member of)                                                    |
-| 409     | `last_owner`, `sole_owner`, `brand_name_taken`, `brand_archived`, `invitation_not_pending`                                    |
-| 422     | `password_too_short`, `password_too_long`, `weak_password`                                                                    |
-| 429     | `rate_limited`                                                                                                                |
-| 500/503 | `internal_error`, `temporarily_unavailable` (Redis unreachable: rate-limited endpoints fail closed)                           |
+| Status  | Codes                                                                                                                                       |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400     | `invalid_request`, `invalid_email`, `invalid_or_expired_token`, `confirmation_mismatch`, `invalid_webhook_url`                              |
+| 401     | `unauthenticated`, `invalid_credentials`                                                                                                    |
+| 403     | `forbidden`, `invalid_origin`, `email_not_verified`, `cannot_act_on_owner`, `cannot_grant_owner`, `invitation_email_mismatch`               |
+| 404     | `not_found` (unknown resource, or an organization you are not a member of), `invalid_token` (alert recipient links)                         |
+| 409     | `last_owner`, `sole_owner`, `brand_name_taken`, `brand_archived`, `invitation_not_pending`, `alerts_unavailable`, `email_taken`, `too_soon` |
+| 422     | `password_too_short`, `password_too_long`, `weak_password`, `unknown_channel`                                                               |
+| 429     | `rate_limited`                                                                                                                              |
+| 502     | `confirmation_send_failed` (the alert confirmation email could not be sent; use resend)                                                     |
+| 500/503 | `internal_error`, `temporarily_unavailable` (Redis unreachable: rate-limited endpoints fail closed)                                         |
 
 ## Security notes
 
@@ -127,12 +150,12 @@ Every error has one shape, and the codes are stable:
 
 Redis-backed, per 15-minute or 1-hour window:
 
-| Limit                        | Budget                                                 |
-| ---------------------------- | ------------------------------------------------------ |
-| Login attempts per account   | 5 per 15 minutes, then blocked for 15 minutes          |
-| Login attempts per client IP | 20 per 15 minutes, then blocked for 15 minutes         |
-| Emails per address           | 3 per hour (verification, reset, sign-up, invitations) |
-| Emails per client IP         | 20 per hour                                            |
+| Limit                        | Budget                                                                      |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| Login attempts per account   | 5 per 15 minutes, then blocked for 15 minutes                               |
+| Login attempts per client IP | 20 per 15 minutes, then blocked for 15 minutes                              |
+| Emails per address           | 3 per hour (verification, reset, sign-up, invitations, alert confirmations) |
+| Emails per client IP         | 20 per hour                                                                 |
 
 Changing a password or deleting an account counts as a login attempt, once the request body is valid: a request refused for its body (a missing current password, or a new password that is too short or too weak) does not. A successful login clears the account counter. The trade-off: anyone who knows an address can lock that account out of password login for 15 minutes by failing five times; this is accepted over allowing unlimited guessing.
 

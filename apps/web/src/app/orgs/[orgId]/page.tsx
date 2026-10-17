@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { AlertsNavLink } from '../../../components/alerts/alerts-nav-link';
 import { ApiForm } from '../../../components/api-form';
 import { CreateBrandForm } from '../../../components/create-brand-form';
 import { isUuid } from '../../../lib/ids';
@@ -24,7 +25,8 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
     await serverGet<{ brands: Brand[] }>(`/api/v1/orgs/${orgId}/brands`),
     'brands',
   ).brands;
-  const canEdit = org.data.role !== 'member';
+  const role = org.data.role;
+  const canEdit = role !== 'member';
   return (
     <main>
       <h1>{org.data.organization.name}</h1>
@@ -43,7 +45,8 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
                 {' '}
                 <Link href={`/orgs/${orgId}/brands/${b.id}/connections`}>Connections</Link>
               </>
-            ) : null}
+            ) : null}{' '}
+            <AlertsNavLink role={role} href={`/orgs/${orgId}/brands/${b.id}/alerts`} />
             {canEdit ? (
               <>
                 <ApiForm
@@ -86,6 +89,11 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
       ) : null}
       <p>
         <Link href={`/orgs/${orgId}/members`}>Members</Link> ·{' '}
+        {canEdit ? (
+          <>
+            <AlertsNavLink role={role} href={`/orgs/${orgId}/alerts`} /> ·{' '}
+          </>
+        ) : null}
         <Link href="/hidden-today">Hidden today</Link> · <Link href="/account">Account</Link>
       </p>
     </main>

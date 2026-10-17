@@ -35,11 +35,21 @@ const none: OrgCommentFilters = {
   status: null,
   queue: 'open',
   tags: [],
+  brand: null,
+  from: null,
+  to: null,
+  signal: null,
 };
 
-const render = (o = options, applied = none) =>
+const render = (o = options, applied = none, brandName: string | null = null) =>
   renderToStaticMarkup(
-    <FilterBar orgId="o1" options={o} applied={applied} labels={adOptionLabels(o.ads)} />,
+    <FilterBar
+      orgId="o1"
+      options={o}
+      applied={applied}
+      labels={adOptionLabels(o.ads)}
+      brandName={brandName}
+    />,
   );
 
 describe('FilterBar', () => {
@@ -67,6 +77,10 @@ describe('FilterBar', () => {
       status: 'new',
       queue: 'open',
       tags: [],
+      brand: null,
+      from: null,
+      to: null,
+      signal: null,
     });
     for (const v of ['instagram', 'none', 'spam', 'new'])
       expect(html).toContain(`<option value="${v}" selected="">`);
@@ -118,5 +132,49 @@ describe('FilterBar', () => {
   it('notes truncated ad options', () => {
     expect(render()).not.toContain('Showing the first 500 ads.');
     expect(render({ ...options, adsTruncated: true })).toContain('Showing the first 500 ads.');
+  });
+
+  describe('deep-link chip', () => {
+    const BRAND = '3f9a1c52-8d1e-4b6a-9c3f-2a7b5e4d1c60';
+    const link = {
+      ...none,
+      brand: BRAND,
+      from: '2026-10-10T10:00:00.000Z',
+      to: '2026-10-10T11:00:00.000Z',
+      signal: 'negative' as const,
+    };
+
+    it('chip renders and clear link drops the params', () => {
+      const html = render(options, { ...link, status: 'new' }, 'Acme <b>');
+      expect(html).toContain('Negative comments · Acme &lt;b&gt; · ');
+      expect(html).toContain('<time dateTime="2026-10-10T10:00:00.000Z"');
+      expect(html).toContain('2026-10-10 10:00 UTC');
+      expect(html).toContain('2026-10-10 11:00 UTC');
+      expect(html).not.toContain('<b>');
+      const clear = html.match(/<a [^>]*href="([^"]+)"[^>]*>×<\/a>/);
+      expect(clear).not.toBeNull();
+      const href = clear![1]!.replaceAll('&amp;', '&');
+      expect(href).toBe('/orgs/o1/comments?status=new');
+      for (const k of ['brand', 'from', 'to', 'signal']) expect(href).not.toContain(`${k}=`);
+    });
+
+    it('without signal the chip omits the Negative comments prefix; no chip without params', () => {
+      const html = render(options, { ...link, signal: null }, 'Acme');
+      expect(html).toContain('Acme · ');
+      expect(html).not.toContain('Negative comments');
+      expect(render()).not.toContain('×');
+    });
+
+    it('keeps the deep-link params when the form is applied', () => {
+      const html = render(options, link, 'Acme');
+      for (const [k, v] of [
+        ['brand', link.brand],
+        ['from', link.from],
+        ['to', link.to],
+        ['signal', 'negative'],
+      ])
+        expect(html).toContain(`<input type="hidden" name="${k}" value="${v}"`);
+      expect(render()).not.toContain('type="hidden"');
+    });
   });
 });

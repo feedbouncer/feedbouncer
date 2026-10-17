@@ -119,6 +119,11 @@ export interface OrgCommentFilters {
   queue: Queue;
   /** Tag ids; a comment must have every one. */
   tags: string[];
+  /** Deep links from alerts: one brand, a posted-at range (`from` inclusive, `to` exclusive) and a signal. */
+  brand: string | null;
+  from: string | null;
+  to: string | null;
+  signal: 'negative' | null;
 }
 
 export interface Cursor {
@@ -144,6 +149,9 @@ export interface CommentFiltersDto {
 export const PAGE_SIZE = 50;
 const AD_LABEL_MAX = 80;
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
+// The API refuses wider ranges, so they are dropped here instead of failing the page.
+const MAX_RANGE_MS = 31 * 24 * 60 * 60 * 1000;
+const isIsoUtc = (v: string) => ISO_UTC.test(v) && !Number.isNaN(new Date(v).getTime());
 
 type Params = Record<string, string | string[] | undefined>;
 
@@ -157,8 +165,14 @@ export function parseSearchParams(sp: Params): {
   };
   const tag = sp.tag;
   const tagValues = typeof tag === 'string' ? [tag] : (tag ?? []);
-  const before = one('before', (v) => ISO_UTC.test(v) && !Number.isNaN(new Date(v).getTime()));
+  const before = one('before', isIsoUtc);
   const beforeId = one('beforeId', isUuid);
+  let from = one('from', isIsoUtc);
+  let to = one('to', isIsoUtc);
+  if (from && to) {
+    const span = Date.parse(to) - Date.parse(from);
+    if (span <= 0 || span > MAX_RANGE_MS) from = to = null;
+  }
   return {
     filters: {
       platform: one('platform', (v) => (LISTABLE_PLATFORMS as readonly string[]).includes(v)),
@@ -170,12 +184,25 @@ export function parseSearchParams(sp: Params): {
         0,
         TAG_IDS_MAX,
       ),
+      brand: one('brand', isUuid)?.toLowerCase() ?? null,
+      from,
+      to,
+      signal: one('signal', (v) => v === 'negative') as 'negative' | null,
     },
     cursor: before && beforeId ? { before, beforeId } : null,
   };
 }
 
-const SINGLE_FILTERS = ['platform', 'ad', 'category', 'status'] as const;
+const SINGLE_FILTERS = [
+  'platform',
+  'ad',
+  'category',
+  'status',
+  'brand',
+  'from',
+  'to',
+  'signal',
+] as const;
 
 function query(f: OrgCommentFilters, cursor: Cursor | null | undefined): URLSearchParams {
   const q = new URLSearchParams();

@@ -17,6 +17,7 @@ export { CATEGORY_SLUG, COMMENT_STATUSES, LISTABLE_PLATFORMS, type CommentStatus
 export const NO_AD = 'none';
 export const UNCATEGORIZED = '_none';
 
+import { NEGATIVE_COMMENT_SQL } from './negative.js';
 import { type Queue } from './triage-rules.js';
 
 export { QUEUES, type Queue } from './triage-rules.js';
@@ -28,6 +29,12 @@ export interface VisibleCommentFilter {
   status: CommentStatus | null;
   queue: Queue;
   tagIds: string[];
+  brandId: string | null;
+  /** Inclusive lower bound on posted_at. */
+  postedFrom: Date | null;
+  /** Exclusive upper bound on posted_at. */
+  postedTo: Date | null;
+  signal: 'negative' | null;
 }
 export interface VisibleCommentCursor {
   postedAt: Date;
@@ -232,6 +239,10 @@ function whereSql(f: VisibleCommentFilter): { sql: string; values: unknown[] } {
   if (f.status) parts.push(`${STATUS_SQL} = ${bind(f.status)}::text`);
   if (f.queue === 'open') parts.push(`NOT ${DONE_EXISTS_SQL}`);
   else if (f.queue === 'done') parts.push(DONE_EXISTS_SQL);
+  if (f.brandId) parts.push(`c.brand_id = ${bind(f.brandId)}::uuid`);
+  if (f.postedFrom) parts.push(`c.posted_at >= ${bind(f.postedFrom)}::timestamptz`);
+  if (f.postedTo) parts.push(`c.posted_at < ${bind(f.postedTo)}::timestamptz`);
+  if (f.signal === 'negative') parts.push(`(${NEGATIVE_COMMENT_SQL})`);
   for (const tagId of f.tagIds)
     parts.push(`EXISTS (SELECT 1 FROM comment_tag ct
        WHERE ct.organization_id = c.organization_id AND ct.brand_id = c.brand_id
@@ -484,16 +495,36 @@ export class PgVisibleComments {
 
   /** Drops filter values that are not valid for this org, so a stale or foreign value never applies. */
   async applicable(orgId: string, f: VisibleCommentFilter): Promise<VisibleCommentFilter> {
-    const [platformOk, categoryOk, adOk, tagIds] = await Promise.all([
+    const [platformOk, categoryOk, adOk, brandOk, tagIds] = await Promise.all([
       f.platform ? this.platformApplies(orgId, f.platform) : true,
       f.category && f.category !== UNCATEGORIZED ? this.categoryApplies(orgId, f.category) : true,
       f.adId && f.adId !== NO_AD ? this.adApplies(orgId, f.adId) : true,
+      f.brandId ? this.brandApplies(orgId, f.brandId) : true,
       this.tagsApply(orgId, f.tagIds),
     ]);
     const platform = platformOk ? f.platform : null;
     const category = categoryOk ? f.category : null;
     const adId = adOk ? f.adId : null;
-    return { platform, category, status: f.status, adId, queue: f.queue, tagIds };
+    return {
+      platform,
+      category,
+      status: f.status,
+      adId,
+      queue: f.queue,
+      tagIds,
+      brandId: brandOk ? f.brandId : null,
+      postedFrom: f.postedFrom,
+      postedTo: f.postedTo,
+      signal: f.signal,
+    };
+  }
+
+  private async brandApplies(orgId: string, brandId: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      `SELECT 1 FROM brand WHERE organization_id = $1 AND id = $2::uuid AND archived_at IS NULL`,
+      [orgId, brandId],
+    );
+    return rows.length > 0;
   }
 
   private async tagsApply(orgId: string, tagIds: string[]): Promise<string[]> {

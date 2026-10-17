@@ -16,6 +16,7 @@ import {
   type LogLevel,
   type SecretFileSystem,
 } from '@feedbouncer/service-runtime';
+import { parseAlertChannels, readAlertLimits } from '@feedbouncer/alerts';
 import {
   CLASSIFIER_FILE_VARS,
   CLASSIFIER_JOB_SPECS,
@@ -91,8 +92,19 @@ export interface WorkerEnv {
   readonly metaAds: MetaAdsConfig | null;
   /** Cadence of ad discovery and ad comment polling; null exactly when `metaAds` is. */
   readonly adPolling: AdPollingConfig | null;
-  /** Null unless Facebook is configured: only the Facebook connector sends mail or needs the web origin. */
+  /** Null unless Facebook is configured or email alerts are enabled: only they send mail or need the web origin. */
   readonly mail: WorkerMailConfig | null;
+  /** Web origin for links and OAuth redirects; null unless Facebook or any alert channel is enabled. */
+  readonly publicWebUrl: URL | null;
+  /** Which alert channels this deployment offers; both false means the alert loops do not run. */
+  readonly alerts: WorkerAlertsConfig;
+}
+
+export interface WorkerAlertsConfig {
+  readonly slack: boolean;
+  readonly email: boolean;
+  readonly capPerHour: number;
+  readonly emailPerMinute: number;
 }
 
 export interface AdPollingConfig {
@@ -107,12 +119,16 @@ export interface WorkerMailConfig {
   readonly publicWebUrl: URL;
 }
 
-function readMailConfig(env: Env): WorkerMailConfig {
-  const smtpUrl = readUrl(env, 'SMTP_URL', SMTP_PROTOCOLS);
+function readPublicWebUrl(env: Env): URL {
   const publicWebUrl = readUrl(env, 'PUBLIC_WEB_URL', HTTP_PROTOCOLS);
   if (publicWebUrl.pathname !== '/' || publicWebUrl.search || publicWebUrl.hash) {
     throw new EnvError('PUBLIC_WEB_URL must be an origin only, e.g. https://app.example.com');
   }
+  return publicWebUrl;
+}
+
+function readMailConfig(env: Env, publicWebUrl: URL): WorkerMailConfig {
+  const smtpUrl = readUrl(env, 'SMTP_URL', SMTP_PROTOCOLS);
   const mailFrom = readString(env, 'MAIL_FROM', {
     fallback: 'FeedBouncer <no-reply@localhost>',
     maxLength: 200,
@@ -182,9 +198,13 @@ export function loadWorkerEnv(
   const instagram = parseInstagramEnv(env, facebook);
   const metaAds = parseMetaAdsEnv(env, facebook);
   const adPolling = metaAds ? readAdPollingConfig(env) : null;
-  const mail = facebook ? readMailConfig(env) : null;
+  const alerts = { ...parseAlertChannels(env.ALERT_CHANNELS), ...readAlertLimits(env) };
+  const publicWebUrl = facebook || alerts.slack || alerts.email ? readPublicWebUrl(env) : null;
+  const mail =
+    publicWebUrl && (facebook || alerts.email) ? readMailConfig(env, publicWebUrl) : null;
   checkNotPlaceholder(appEnv, 'DATABASE_URL', databaseUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);
+  if (publicWebUrl) checkNotPlaceholder(appEnv, 'PUBLIC_WEB_URL', publicWebUrl.href, opts.warn);
   const jobs = loadJobsConfig(env, { lanes: JOB_LANES, laneDefaults: LANE_DEFAULTS });
   const classifier = loadClassifierConfig(env);
   const classifyLane = jobs.laneConcurrency[CLASSIFIER_LANE] ?? 0;
@@ -218,6 +238,8 @@ export function loadWorkerEnv(
     metaAds,
     adPolling,
     mail,
+    publicWebUrl,
+    alerts,
   };
   // A whole-config dump (JSON, util.inspect) must never carry URL passwords or keys.
   return redactOnSerialize(config, {
@@ -225,10 +247,12 @@ export function loadWorkerEnv(
     concurrency: config.concurrency,
     healthPort: config.healthPort,
     logLevel: config.logLevel,
-    publicWebUrl: mail?.publicWebUrl.origin ?? null,
+    publicWebUrl: publicWebUrl?.origin ?? null,
     facebookEnabled: config.facebook !== null,
     instagramEnabled: config.instagram !== null,
     metaAdsEnabled: config.metaAds !== null,
+    alertSlackEnabled: alerts.slack,
+    alertEmailEnabled: alerts.email,
     activeKeyId: config.encryption.activeKeyId,
     jobQueuePrefix: config.jobs.prefix,
     classifierEnabled: config.classifier.model !== null,

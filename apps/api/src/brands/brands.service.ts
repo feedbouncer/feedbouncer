@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { removeBrandAlerts } from '@feedbouncer/alerts';
 import { can } from '@feedbouncer/authz';
 import { isUniqueViolation, withTransaction } from '@feedbouncer/db';
 import type pg from 'pg';
@@ -152,6 +153,7 @@ export class BrandsService {
         )
       ).rows[0];
       if (updated) {
+        await removeBrandAlerts(c, ctx.organizationId, brandId);
         await recordAudit(c, {
           organizationId: ctx.organizationId,
           brandId,

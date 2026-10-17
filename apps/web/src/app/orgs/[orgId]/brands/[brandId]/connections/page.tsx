@@ -1,3 +1,4 @@
+import { AlertsNavLink } from '../../../../../../components/alerts/alerts-nav-link';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ApiForm } from '../../../../../../components/api-form';
@@ -181,6 +182,11 @@ export default async function ConnectionsPage({
         <Link href={`/orgs/${orgId}/brands/${brandId}/policies`}>Policies</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/classifier`}>Classifier</Link> ·{' '}
         <Link href={`/orgs/${orgId}/brands/${brandId}/domains`}>Own domains</Link> ·{' '}
+        {canManage ? (
+          <>
+            <AlertsNavLink role={org.role} href={`/orgs/${orgId}/brands/${brandId}/alerts`} /> ·{' '}
+          </>
+        ) : null}
         <Link href={`/orgs/${orgId}`}>Back to organization</Link>
       </p>
     </main>

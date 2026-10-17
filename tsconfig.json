@@ -12,6 +12,7 @@
     { "path": "packages/comments" },
     { "path": "packages/rules" },
     { "path": "packages/actions" },
+    { "path": "packages/alerts" },
     { "path": "packages/ai" },
     { "path": "packages/classifier" },
     { "path": "packages/policies" },

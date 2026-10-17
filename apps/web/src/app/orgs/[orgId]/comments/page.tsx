@@ -76,6 +76,7 @@ export default async function OrgCommentsPage({
             options={options}
             applied={applied}
             labels={adOptionLabels(options.ads)}
+            brandName={accounts.find((a) => a.brandId === applied.brand)?.brandName ?? null}
           />
           <p>{totalText(total)}</p>
           {items.length === 0 ? (

@@ -3,6 +3,8 @@ export interface OutboundEmail {
   readonly subject: string;
   readonly text: string;
   readonly html: string;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly messageId?: string;
 }
 
 export interface Mailer {

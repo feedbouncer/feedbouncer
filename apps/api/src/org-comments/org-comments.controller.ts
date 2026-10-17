@@ -36,7 +36,14 @@ const zTagId = zUuid.transform((id) => id.toLowerCase());
 
 // The organization comes only from the path. Well-formed but stale or foreign values are
 // dropped by the service; malformed ones are rejected here.
-const ListQuery = z
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
+const MAX_RANGE_MS = 31 * 24 * 60 * 60 * 1000;
+const zIsoUtc = z
+  .string()
+  .regex(ISO_UTC)
+  .refine((v) => !Number.isNaN(Date.parse(v)));
+
+export const ListQuery = z
   .strictObject({
     platform: z.enum(LISTABLE_PLATFORMS).optional(),
     ad: z.union([zUuid, z.literal('none')]).optional(),
@@ -50,11 +57,20 @@ const ListQuery = z
       .transform((s) => s.split(','))
       .pipe(z.array(zTagId).max(TAG_IDS_MAX))
       .optional(),
+    brand: zUuid.transform((id) => id.toLowerCase()).optional(),
+    from: zIsoUtc.optional(),
+    to: zIsoUtc.optional(),
+    signal: z.enum(['negative']).optional(),
     before: z.iso.datetime({ offset: true }).optional(),
     beforeId: zUuid.optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
-  .refine((q) => (q.before === undefined) === (q.beforeId === undefined));
+  .refine((q) => (q.before === undefined) === (q.beforeId === undefined))
+  .refine((q) => {
+    if (q.from === undefined || q.to === undefined) return true;
+    const span = Date.parse(q.to) - Date.parse(q.from);
+    return span > 0 && span <= MAX_RANGE_MS;
+  });
 
 export type ListQueryDto = z.infer<typeof ListQuery>;
 

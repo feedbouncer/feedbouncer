@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@feedbouncer/actions": "workspace:*",
+    "@feedbouncer/alerts": "workspace:*",
     "@feedbouncer/ai": "workspace:*",
     "@feedbouncer/authz": "workspace:*",
     "@feedbouncer/classifier": "workspace:*",

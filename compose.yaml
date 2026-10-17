@@ -22,6 +22,11 @@ x-secrets-env: &secrets-env
   FB_ENCRYPTION_KEYS: ${FB_ENCRYPTION_KEYS:?FB_ENCRYPTION_KEYS is not set - copy .env.example to .env}
   FB_ENCRYPTION_ACTIVE_KEY_ID: ${FB_ENCRYPTION_ACTIVE_KEY_ID:?FB_ENCRYPTION_ACTIVE_KEY_ID is not set - copy .env.example to .env}
 
+# Slack and email alerts (docs/operations/alerts.md). Empty means off or the default.
+x-alerts-env: &alerts-env
+  ALERT_CHANNELS: ${ALERT_CHANNELS:-}
+  ALERT_MAX_PER_WORKSPACE_PER_HOUR: ${ALERT_MAX_PER_WORKSPACE_PER_HOUR:-}
+
 # Facebook Pages connector (docs/connectors/facebook.md). No defaults: with
 # FACEBOOK_APP_ID empty the connector, its webhook route and its jobs are off.
 # The api and the worker must share the app id and secret.
@@ -148,7 +153,7 @@ services:
       dockerfile: apps/api/Dockerfile
       target: dev
     environment:
-      <<: [*backend-env, *secrets-env, *facebook-env]
+      <<: [*backend-env, *secrets-env, *facebook-env, *alerts-env]
       # tsx watch gets no file events through Docker Desktop bind mounts.
       CHOKIDAR_USEPOLLING: '1'
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is not set - copy .env.example to .env}
@@ -171,6 +176,7 @@ services:
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
       - ./packages/secrets/src:/repo/packages/secrets/src:ro
       - ./packages/actions/src:/repo/packages/actions/src:ro
+      - ./packages/alerts/src:/repo/packages/alerts/src:ro
       - ./packages/ai/src:/repo/packages/ai/src:ro
       - ./packages/classifier/src:/repo/packages/classifier/src:ro
       - ./packages/comments/src:/repo/packages/comments/src:ro
@@ -216,13 +222,14 @@ services:
       dockerfile: apps/worker/Dockerfile
       target: dev
     environment:
-      <<: [*backend-env, *secrets-env, *facebook-env]
+      <<: [*backend-env, *secrets-env, *facebook-env, *alerts-env]
       CHOKIDAR_USEPOLLING: '1'
       # Reconnect notices go to the dev mail sink; links and the OAuth redirect
       # URI are built from PUBLIC_WEB_URL, which must match the api's.
       SMTP_URL: smtp://mailpit:1025
       PUBLIC_WEB_URL: http://localhost:${WEB_HOST_PORT:-3000}
       MAIL_FROM: ${MAIL_FROM:-}
+      ALERT_EMAIL_MAX_PER_MINUTE: ${ALERT_EMAIL_MAX_PER_MINUTE:-}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
       # Empty means "use the default" (see docs/operations/job-queue.md).
       JOB_QUEUE_PREFIX: ${JOB_QUEUE_PREFIX:-}
@@ -259,6 +266,7 @@ services:
     volumes:
       - ./apps/worker/src:/repo/apps/worker/src:ro
       - ./packages/actions/src:/repo/packages/actions/src:ro
+      - ./packages/alerts/src:/repo/packages/alerts/src:ro
       - ./packages/authz/src:/repo/packages/authz/src:ro
       - ./packages/ai/src:/repo/packages/ai/src:ro
       - ./packages/classifier/src:/repo/packages/classifier/src:ro

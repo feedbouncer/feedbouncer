@@ -34,7 +34,21 @@ export interface IsolationFixture {
   /** B's workspace tag. */
   bTagId: string;
   bGrantIds: Record<'facebook' | 'instagram', string>;
+  /** B's Slack alert channel; B's brand also has alert settings and a route to it. */
+  bAlertChannelId: string;
 }
+
+const ALERT_SLACK_URL =
+  'https://hooks.slack.com/services/T0AAAA1111/B0BBBB2222/abcdefghijklmnopqrstuvwx';
+const ALERT_SETTINGS_BODY = {
+  settings: {
+    sensitivity: 'high',
+    minNegativeCount: 5,
+    cooldownMinutes: 60,
+    contentMode: 'counts_only',
+  },
+  routes: [],
+};
 
 export interface IsolationCase {
   /** The route as registered, "METHOD /api/v1/orgs/:orgId/...". */
@@ -608,6 +622,91 @@ export const CASES: IsolationCase[] = [
     url: (f) => `/api/v1/orgs/${f.A.orgId}/tags/${f.bTagId}`,
     body: () => ({ confirmCount: 0 }),
   },
+  {
+    route: 'GET /api/v1/orgs/:orgId/alert-channels',
+    name: "list B's alert channels",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/alert-channels`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/alert-channels/slack',
+    name: 'connect Slack in B',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/alert-channels/slack`,
+    body: () => ({ label: 'pwned', webhookUrl: ALERT_SLACK_URL }),
+  },
+  {
+    route: 'PUT /api/v1/orgs/:orgId/alert-channels/:channelId/slack',
+    name: "reconnect B's channel",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/alert-channels/${f.bAlertChannelId}/slack`,
+    body: () => ({ webhookUrl: ALERT_SLACK_URL }),
+  },
+  {
+    route: 'PUT /api/v1/orgs/:orgId/alert-channels/:channelId/slack',
+    name: "reconnect B's channel under A path (IDOR)",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/alert-channels/${f.bAlertChannelId}/slack`,
+    body: () => ({ webhookUrl: ALERT_SLACK_URL }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/alert-channels/email',
+    name: 'add an email recipient in B',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/alert-channels/email`,
+    body: () => ({ email: 'pwned@x.test' }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/alert-channels/:channelId/resend-confirmation',
+    name: "resend for B's channel",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/alert-channels/${f.bAlertChannelId}/resend-confirmation`,
+    body: () => ({}),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/alert-channels/:channelId/resend-confirmation',
+    name: "resend for B's channel under A path (IDOR)",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/alert-channels/${f.bAlertChannelId}/resend-confirmation`,
+    body: () => ({}),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/alert-channels/:channelId/test',
+    name: "test send to B's channel",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/alert-channels/${f.bAlertChannelId}/test`,
+    body: () => ({}),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/alert-channels/:channelId/test',
+    name: "test send to B's channel under A path (IDOR)",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/alert-channels/${f.bAlertChannelId}/test`,
+    body: () => ({}),
+  },
+  {
+    route: 'DELETE /api/v1/orgs/:orgId/alert-channels/:channelId',
+    name: "delete B's channel",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/alert-channels/${f.bAlertChannelId}`,
+  },
+  {
+    route: 'DELETE /api/v1/orgs/:orgId/alert-channels/:channelId',
+    name: "delete B's channel under A path (IDOR)",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/alert-channels/${f.bAlertChannelId}`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/alerts',
+    name: "read B's brand alerts",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/brands/${f.B.brandId}/alerts`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/alerts',
+    name: 'B brand alerts under A path (IDOR)',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/alerts`,
+  },
+  {
+    route: 'PUT /api/v1/orgs/:orgId/brands/:brandId/alerts',
+    name: "change B's brand alerts",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/brands/${f.B.brandId}/alerts`,
+    body: () => ALERT_SETTINGS_BODY,
+  },
+  {
+    route: 'PUT /api/v1/orgs/:orgId/brands/:brandId/alerts',
+    name: 'change B brand alerts under A path (IDOR)',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/alerts`,
+    body: () => ALERT_SETTINGS_BODY,
+  },
 ];
 
 export interface TokenCase {
@@ -668,6 +767,9 @@ export const PUBLIC_ROUTES = [
   'POST /api/v1/webhooks/facebook',
   'GET /api/v1/webhooks/instagram',
   'POST /api/v1/webhooks/instagram',
+  /** Token-authenticated: the emailed confirm and unsubscribe links. Also exempt from the Origin check. */
+  'POST /api/v1/alert-recipients/confirm',
+  'POST /api/v1/alert-recipients/unsubscribe',
 ];
 
 /** The Better Auth endpoints the /api/auth proxy forwards; everything else is a 404. */

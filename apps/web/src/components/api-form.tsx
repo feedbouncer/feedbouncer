@@ -17,7 +17,7 @@ type Status = { kind: 'idle' | 'busy' | 'ok' | 'error'; text?: string | undefine
 
 export function ApiForm(props: {
   action: `/api/${string}`;
-  method?: 'POST' | 'PATCH' | 'DELETE';
+  method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   fields: Field[];
   submitLabel: string;
   /** Values sent with the fields; a function is called on submit (for browser-only values). */
@@ -25,6 +25,8 @@ export function ApiForm(props: {
   successMessage?: string | ((body: unknown) => string);
   redirectTo?: string;
   refresh?: boolean;
+  /** Clear the inputs after a successful submit (for secrets such as webhook URLs). */
+  resetOnSuccess?: boolean;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
@@ -32,7 +34,8 @@ export function ApiForm(props: {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setStatus({ kind: 'busy' });
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     const extra = props.extraBody;
     const body: Record<string, unknown> = { ...(typeof extra === 'function' ? extra() : extra) };
     for (const f of props.fields) body[f.name] = String(form.get(f.name) ?? '');
@@ -40,6 +43,7 @@ export function ApiForm(props: {
       const res = await apiFetch<unknown>(props.action, { method: props.method ?? 'POST', body });
       const msg = props.successMessage;
       setStatus({ kind: 'ok', text: typeof msg === 'function' ? msg(res) : msg });
+      if (props.resetOnSuccess) formEl.reset();
       if (props.redirectTo) router.push(props.redirectTo);
       else if (props.refresh) router.refresh();
     } catch (err) {

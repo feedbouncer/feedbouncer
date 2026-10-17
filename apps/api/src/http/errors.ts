@@ -69,7 +69,14 @@ export type ErrorCode =
   | 'tag_name_taken'
   | 'tag_limit_reached'
   | 'tag_count_changed'
-  | 'unknown_tag';
+  | 'unknown_tag'
+  | 'invalid_webhook_url'
+  | 'alerts_unavailable'
+  | 'email_taken'
+  | 'confirmation_send_failed'
+  | 'too_soon'
+  | 'unknown_channel'
+  | 'invalid_token';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
@@ -137,6 +144,13 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   tag_limit_reached: 'This workspace has the maximum number of tags.',
   tag_count_changed: 'The number of comments with this tag changed. Confirm again.',
   unknown_tag: 'A tag no longer exists.',
+  invalid_webhook_url: 'Enter a Slack incoming webhook URL (https://hooks.slack.com/services/...).',
+  alerts_unavailable: "Alerts aren't set up on this server.",
+  email_taken: 'This address is already a recipient in this workspace.',
+  confirmation_send_failed: 'The confirmation email could not be sent. Try again shortly.',
+  too_soon: 'A confirmation was sent a moment ago. Try again in a minute.',
+  unknown_channel: 'A selected alert channel no longer exists.',
+  invalid_token: 'This link is invalid or has expired.',
 };
 
 export interface ErrorIssue {

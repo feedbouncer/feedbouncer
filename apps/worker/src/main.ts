@@ -46,6 +46,7 @@ import {
   waitUntil,
   writeStartupConfigError,
 } from '@feedbouncer/service-runtime';
+import { startAlertLoops } from './alerts.js';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
 import { buildConnectorRegistry, buildJobRegistry } from './registries.js';
@@ -127,10 +128,11 @@ try {
   }
 
   const { facebook, mail } = env;
-  // Mail is only configured (and only needed) alongside the Facebook connector.
+  // Mail is only configured (and only needed) alongside the Facebook connector or email alerts.
   const mailer = mail ? createSmtpMailer(mail.smtpUrl, mail.mailFrom) : null;
   let jobs = new JobRegistry();
   let scheduler: PollScheduler | null = null;
+  let alertLoops: ReturnType<typeof startAlertLoops> = null;
   if (facebook && mail && mailer) {
     const stack = buildPgConnectorStack({
       pool,
@@ -252,6 +254,7 @@ try {
   });
 
   onShutdown(async () => {
+    alertLoops?.stop();
     await scheduler?.stop();
     await Promise.all([worker.close(), jobWorkers.close()]);
     await queues.close();
@@ -295,6 +298,13 @@ try {
       .catch((err: unknown) => log.warn('review mode sweep failed', errorFields(err)));
   }, REVIEW_SWEEP_INTERVAL_MS);
   reviewModeSweep.unref();
+  alertLoops = startAlertLoops(
+    {
+      alerts: env.alerts,
+      web: () => env.publicWebUrl!,
+    },
+    { pool, log, keys: env.encryption, mailer },
+  );
 
   worker.run().catch((err: unknown) => {
     log.error('worker stopped', errorFields(err));

@@ -54,6 +54,10 @@ export interface CommentsPageDto {
     status: string | null;
     queue: Queue;
     tags: string[];
+    brand: string | null;
+    from: string | null;
+    to: string | null;
+    signal: 'negative' | null;
   };
 }
 
