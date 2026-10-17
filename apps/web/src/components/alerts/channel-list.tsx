@@ -29,8 +29,7 @@ function ChannelRow({
       <strong>{healthText(c)}</strong>
       {canManage ? (
         <>
-          {c.kind === 'email' &&
-          (c.health === 'pending_confirmation' || c.health === 'unsubscribed') ? (
+          {c.kind === 'email' && c.health === 'pending_confirmation' ? (
             <ApiForm
               action={`${base}/resend-confirmation`}
               fields={[]}

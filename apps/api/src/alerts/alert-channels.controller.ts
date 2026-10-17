@@ -53,17 +53,18 @@ export class AlertChannelsController {
   @RequireCapability('alert.manage')
   createEmail(@Req() req: OrgRequest, @Body() body: unknown) {
     const b = parseBody(EmailCreateBody, body);
-    return this.alerts.createEmail(req.org, {
-      email: b.email,
-      ...(b.label !== undefined && { label: b.label }),
-    });
+    return this.alerts.createEmail(
+      req.org,
+      { email: b.email, ...(b.label !== undefined && { label: b.label }) },
+      req.ip,
+    );
   }
 
   @Post(':channelId/resend-confirmation')
   @HttpCode(202)
   @RequireCapability('alert.manage')
   async resend(@Req() req: OrgRequest, @Param('channelId') channelId: string) {
-    await this.alerts.resendConfirmation(req.org, parseUuidOr404(channelId));
+    await this.alerts.resendConfirmation(req.org, parseUuidOr404(channelId), req.ip);
     return { status: 'sent' };
   }
 

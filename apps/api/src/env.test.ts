@@ -163,13 +163,18 @@ describe('loadApiEnv', () => {
 
   describe('alerts', () => {
     it('is off by default with the default cap', () => {
-      expect(load(base).alerts).toEqual({ slack: false, email: false, capPerHour: 30 });
+      expect(load(base).alerts).toEqual({
+        slack: false,
+        email: false,
+        capPerHour: 30,
+        emailPerMinute: 60,
+      });
     });
     it('reads the channel list and the cap', () => {
       expect(
         load({ ...base, ALERT_CHANNELS: 'slack, email', ALERT_MAX_PER_WORKSPACE_PER_HOUR: '12' })
           .alerts,
-      ).toEqual({ slack: true, email: true, capPerHour: 12 });
+      ).toEqual({ slack: true, email: true, capPerHour: 12, emailPerMinute: 60 });
     });
     it('rejects an unknown channel and an out-of-range cap', () => {
       expect(() => load({ ...base, ALERT_CHANNELS: 'sms' })).toThrow(/ALERT_CHANNELS/);

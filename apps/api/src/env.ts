@@ -87,6 +87,7 @@ export interface ApiEnv {
     readonly slack: boolean;
     readonly email: boolean;
     readonly capPerHour: number;
+    readonly emailPerMinute: number;
   };
 }
 
@@ -138,7 +139,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     health: loadHealthPolicy(env),
     alerts: {
       ...parseAlertChannels(env.ALERT_CHANNELS),
-      capPerHour: readAlertLimits(env).capPerHour,
+      ...readAlertLimits(env),
     },
   };
   // A whole-config dump (JSON, util.inspect) must never carry secrets or URL passwords.

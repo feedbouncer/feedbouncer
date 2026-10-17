@@ -261,29 +261,32 @@ describe('email channels', () => {
     expect(states.rows.map((x) => x.state)).toEqual(['cancelled', 'cancelled', 'sent']);
   });
 
-  it('rotateConfirmation on unsubscribed → pending with a new unsubscribe token; old token invalid', async () => {
+  it('rotateConfirmation refuses other orgs, active and unsubscribed addresses', async () => {
     const r = await email('rot@example.com');
-    expect(await channels.rotateConfirmation(b.organizationId, r.channel.id)).toBeNull();
-    const old = (await channels.openUnsubscribeToken(a.organizationId, r.channel.id))!;
-    await channels.confirm(r.confirmToken);
-    expect(await channels.rotateConfirmation(a.organizationId, r.channel.id)).toBeNull();
-    await channels.unsubscribe(old);
-    const rot = await channels.rotateConfirmation(a.organizationId, r.channel.id);
-    expect(rot?.email).toBe('rot@example.com');
-    expect(await channels.get(a.organizationId, r.channel.id)).toMatchObject({
-      status: 'pending_confirmation',
+    expect(await channels.rotateConfirmation(b.organizationId, r.channel.id, 0)).toEqual({
+      status: 'not_found',
     });
-    const fresh = await channels.openUnsubscribeToken(a.organizationId, r.channel.id);
-    expect(fresh).not.toBe(old);
-    expect(await channels.unsubscribe(old)).toEqual({ status: 'invalid' });
-    expect(await channels.confirm(rot!.confirmToken)).toMatchObject({ status: 'confirmed' });
+    const tok = (await channels.openUnsubscribeToken(a.organizationId, r.channel.id))!;
+    await channels.confirm(r.confirmToken);
+    expect(await channels.rotateConfirmation(a.organizationId, r.channel.id, 0)).toEqual({
+      status: 'not_found',
+    });
+    await channels.unsubscribe(tok);
+    expect(await channels.rotateConfirmation(a.organizationId, r.channel.id, 0)).toEqual({
+      status: 'not_found',
+    });
   });
 
-  it('rotateConfirmation on pending replaces the confirm token and keeps the unsubscribe token', async () => {
+  it('rotateConfirmation on pending replaces the confirm token, keeps the unsubscribe token and waits between sends', async () => {
     const r = await email('pend@example.com');
     const before = await channels.openUnsubscribeToken(a.organizationId, r.channel.id);
-    const rot = await channels.rotateConfirmation(a.organizationId, r.channel.id);
-    expect(rot!.confirmToken).not.toBe(r.confirmToken);
+    expect(await channels.rotateConfirmation(a.organizationId, r.channel.id, 60_000)).toEqual({
+      status: 'too_soon',
+    });
+    const rot = await channels.rotateConfirmation(a.organizationId, r.channel.id, 0);
+    if (rot.status !== 'rotated') throw new Error(rot.status);
+    expect(rot.confirmToken).not.toBe(r.confirmToken);
+    expect(rot.email).toBe('pend@example.com');
     expect(await channels.openUnsubscribeToken(a.organizationId, r.channel.id)).toBe(before);
     expect(await channels.confirm(r.confirmToken)).toEqual({ status: 'invalid' });
   });

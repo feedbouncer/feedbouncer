@@ -15,8 +15,8 @@ export class AlertRecipientsController {
   @Post('confirm')
   @HttpCode(200)
   @RouteConfig({ publicWebhook: true })
-  confirm(@Req() req: FastifyRequest, @Body() body: unknown) {
-    this.alerts.limitPublic(req.ip);
+  async confirm(@Req() req: FastifyRequest, @Body() body: unknown) {
+    await this.alerts.limitPublic(req.ip);
     return this.alerts.confirm(parseBody(TokenBody, body).token);
   }
 }

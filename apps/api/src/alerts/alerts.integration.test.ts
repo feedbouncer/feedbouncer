@@ -35,7 +35,7 @@ let channels: PgAlertChannels;
 
 beforeAll(async () => {
   api = await startTestApi(
-    { alerts: { slack: true, email: true, capPerHour: 30 } },
+    { alerts: { slack: true, email: true, capPerHour: 30, emailPerMinute: 60 } },
     { alertsFetch: fakeSlack },
   );
   const owner = await verifiedUser(api, 'al-owner');
@@ -466,6 +466,34 @@ describe('alerts API', () => {
     expect(put.status).toBe(404);
   });
 
+  it('confirmation mails share the email budget: add/delete/add loops stop at 3 per address', async () => {
+    const address = `loop-${randomUUID().slice(0, 6)}@alerts.test`;
+    const codes: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      const r = await api.req('POST', `${base()}/email`, {
+        cookie: org.admin.cookie,
+        body: { email: address },
+      });
+      codes.push(r.status);
+      if (r.status === 201) {
+        await api.req('DELETE', `${base()}/${r.body.channel.id}`, { cookie: org.admin.cookie });
+      }
+    }
+    expect(codes).toEqual([201, 201, 201, 429]);
+  });
+
+  it('an unsubscribed address cannot be sent another confirmation', async () => {
+    const ch = await addEmail(`unsub-${randomUUID().slice(0, 6)}@alerts.test`);
+    const token = (await channels.openUnsubscribeToken(org.orgId, ch.id))!;
+    await channels.unsubscribe(token);
+    const before = api.mailer.sent.length;
+    const r = await api.req('POST', `${base()}/${ch.id}/resend-confirmation`, {
+      cookie: org.admin.cookie,
+    });
+    expect(r.status).toBe(404);
+    expect(api.mailer.sent.length).toBe(before);
+  });
+
   it('test send is limited to 5 per channel per minute', async () => {
     const ch = await connectSlack('limited');
     const codes: number[] = [];
@@ -525,7 +553,9 @@ describe('alerts API', () => {
 
 describe('alerts unavailable (ALERT_CHANNELS empty)', () => {
   it('GET availability false; POST slack 409 alerts_unavailable; no error log lines', async () => {
-    const off = await startTestApi({ alerts: { slack: false, email: false, capPerHour: 30 } });
+    const off = await startTestApi({
+      alerts: { slack: false, email: false, capPerHour: 30, emailPerMinute: 60 },
+    });
     try {
       const o = await orgWithRoles(off, 'alOff');
       const g = await off.req('GET', `/api/v1/orgs/${o.orgId}/alert-channels`, {

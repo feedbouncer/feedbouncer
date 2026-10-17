@@ -55,10 +55,10 @@ export function BrandAlertSettings(props: {
     // The API replaces the whole route set, so routes for channels not in the matrix are kept.
     // Routes of a kind this server can't send are saved switched off.
     const routes: AlertRouteDto[] = view.routes
-      .filter((r) => !shownIds.has(r.channelId))
+      .filter((r) => !shownIds.has(r.channelId) && kinds.has(r.channelId))
       .map((r) => ({
         ...r,
-        enabled: r.enabled && view.availability[kinds.get(r.channelId) ?? 'slack'],
+        enabled: r.enabled && view.availability[kinds.get(r.channelId)!],
       }));
     for (const c of shown) {
       for (const t of ALERT_TYPES) {

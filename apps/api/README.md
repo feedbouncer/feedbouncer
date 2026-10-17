@@ -99,19 +99,19 @@ Invitations expire after 7 days; inviting an address that already has a pending 
 
 `alert.read` (owners and admins) lists; `alert.manage` (owners and admins) changes. Webhook URLs and tokens are never returned.
 
-| Method and path                                                          | Notes                                                                                                                                            |
-| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GET /api/v1/orgs/:orgId/alert-channels`                                 | `alert.read`; `{ availability: { slack, email }, channels }`                                                                                     |
-| `POST /api/v1/orgs/:orgId/alert-channels/slack`                          | `{ label, webhookUrl }` -> `201 { channel }`; `400 invalid_webhook_url`                                                                          |
-| `PUT /api/v1/orgs/:orgId/alert-channels/:channelId/slack`                | `{ webhookUrl }` reconnects the channel -> `200 { channel }`                                                                                     |
-| `POST /api/v1/orgs/:orgId/alert-channels/email`                          | `{ email, label? }` -> `201 { channel }` and a confirmation email; `409 email_taken`                                                             |
-| `POST /api/v1/orgs/:orgId/alert-channels/:channelId/resend-confirmation` | `202`; `409 too_soon` within a minute                                                                                                            |
-| `POST /api/v1/orgs/:orgId/alert-channels/:channelId/test`                | `200 { ok: true }` or `{ ok: false, code }`; rate limited per channel                                                                            |
-| `DELETE /api/v1/orgs/:orgId/alert-channels/:channelId`                   | `204`                                                                                                                                            |
-| `GET /api/v1/orgs/:orgId/brands/:brandId/alerts`                         | `alert.read`; `{ availability, settings, routes, learning, channels, recent }`                                                                   |
-| `PUT /api/v1/orgs/:orgId/brands/:brandId/alerts`                         | `{ settings, routes }` replaces both -> the same view; `422 unknown_channel`                                                                     |
-| `POST /api/v1/alert-recipients/confirm`                                  | No session or origin check. `{ token }` -> `200 { status: "confirmed" }`, or `404 invalid_token`                                                 |
-| `POST /api/v1/alert-recipients/unsubscribe`                              | No session or origin check. `{ token }` or `?token=` (also the RFC 8058 form body `List-Unsubscribe=One-Click`) -> `200`, or `404 invalid_token` |
+| Method and path                                                          | Notes                                                                                                                                                         |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/orgs/:orgId/alert-channels`                                 | `alert.read`; `{ availability: { slack, email }, channels }`                                                                                                  |
+| `POST /api/v1/orgs/:orgId/alert-channels/slack`                          | `{ label, webhookUrl }` -> `201 { channel }`; `400 invalid_webhook_url`                                                                                       |
+| `PUT /api/v1/orgs/:orgId/alert-channels/:channelId/slack`                | `{ webhookUrl }` reconnects the channel -> `200 { channel }`                                                                                                  |
+| `POST /api/v1/orgs/:orgId/alert-channels/email`                          | `{ email, label? }` -> `201 { channel }` and a confirmation email; `409 email_taken`                                                                          |
+| `POST /api/v1/orgs/:orgId/alert-channels/:channelId/resend-confirmation` | `202`; only for an address still waiting for confirmation (`404` otherwise, so an unsubscribed address is never mailed again); `409 too_soon` within a minute |
+| `POST /api/v1/orgs/:orgId/alert-channels/:channelId/test`                | `200 { ok: true }` or `{ ok: false, code }`; rate limited per channel                                                                                         |
+| `DELETE /api/v1/orgs/:orgId/alert-channels/:channelId`                   | `204`                                                                                                                                                         |
+| `GET /api/v1/orgs/:orgId/brands/:brandId/alerts`                         | `alert.read`; `{ availability, settings, routes, learning, channels, recent }`                                                                                |
+| `PUT /api/v1/orgs/:orgId/brands/:brandId/alerts`                         | `{ settings, routes }` replaces both -> the same view; `422 unknown_channel`                                                                                  |
+| `POST /api/v1/alert-recipients/confirm`                                  | No session or origin check. `{ token }` -> `200 { status: "confirmed" }`, or `404 invalid_token`                                                              |
+| `POST /api/v1/alert-recipients/unsubscribe`                              | No session or origin check. `{ token }` or `?token=` (also the RFC 8058 form body `List-Unsubscribe=One-Click`) -> `200`, or `404 invalid_token`              |
 
 Creating, reconnecting or enabling a channel kind that `ALERT_CHANNELS` does not list answers `409 alerts_unavailable`. The public recipient routes are limited to 30 requests per minute per client IP. The web app uses `/orgs/:orgId/alerts`, `/orgs/:orgId/brands/:brandId/alerts`, `/alerts/confirm?token=` and `/alerts/unsubscribe?token=`.
 
@@ -150,12 +150,12 @@ Every error has one shape, and the codes are stable:
 
 Redis-backed, per 15-minute or 1-hour window:
 
-| Limit                        | Budget                                                 |
-| ---------------------------- | ------------------------------------------------------ |
-| Login attempts per account   | 5 per 15 minutes, then blocked for 15 minutes          |
-| Login attempts per client IP | 20 per 15 minutes, then blocked for 15 minutes         |
-| Emails per address           | 3 per hour (verification, reset, sign-up, invitations) |
-| Emails per client IP         | 20 per hour                                            |
+| Limit                        | Budget                                                                      |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| Login attempts per account   | 5 per 15 minutes, then blocked for 15 minutes                               |
+| Login attempts per client IP | 20 per 15 minutes, then blocked for 15 minutes                              |
+| Emails per address           | 3 per hour (verification, reset, sign-up, invitations, alert confirmations) |
+| Emails per client IP         | 20 per hour                                                                 |
 
 Changing a password or deleting an account counts as a login attempt, once the request body is valid: a request refused for its body (a missing current password, or a new password that is too short or too weak) does not. A successful login clears the account counter. The trade-off: anyone who knows an address can lock that account out of password login for 15 minutes by failing five times; this is accepted over allowing unlimited guessing.
 

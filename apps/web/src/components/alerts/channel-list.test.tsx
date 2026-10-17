@@ -72,7 +72,7 @@ describe('ChannelList', () => {
     expect(html).toContain('Waiting for confirmation');
     expect(html).toContain('Unsubscribed');
     expect(html.match(/Reconnect/g)).toHaveLength(1);
-    expect(html).toContain('Resend');
+    expect(html.match(/Resend/g)).toHaveLength(1);
     expect(html).toContain('Send test');
     expect(html).toContain('Remove');
     expect(html).toContain('Connect Slack');

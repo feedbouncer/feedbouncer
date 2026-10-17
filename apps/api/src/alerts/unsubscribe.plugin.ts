@@ -30,8 +30,8 @@ export function unsubscribeToken(req: FastifyRequest): string {
 export async function registerUnsubscribeRoute(
   fastify: FastifyInstance,
   deps: AppDeps,
+  alerts: AlertsService,
 ): Promise<void> {
-  const alerts = new AlertsService(deps);
   await fastify.register(async (scope) => {
     scope.addContentTypeParser(
       'application/x-www-form-urlencoded',
@@ -55,7 +55,7 @@ export async function registerUnsubscribeRoute(
       url: UNSUBSCRIBE_PATH,
       config: { publicWebhook: true },
       handler: async (req, reply) => {
-        alerts.limitPublic(req.ip);
+        await alerts.limitPublic(req.ip);
         const r = await alerts.unsubscribe(unsubscribeToken(req));
         return reply.status(200).send(r);
       },

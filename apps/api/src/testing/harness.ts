@@ -120,7 +120,7 @@ export async function startTestApi(
     metaAds: null,
     classifier: { id: 'none', model: '', enabled: false },
     policy: { monthlyCallsPerBrand: 20_000, evaluatorConfigured: true },
-    alerts: { slack: false, email: false, capPerHour: 30 },
+    alerts: { slack: false, email: false, capPerHour: 30, emailPerMinute: 60 },
     // A random queue prefix per app keeps tests from sharing BullMQ keys.
     jobs: loadJobsConfig({ JOB_QUEUE_PREFIX: `t${randomUUID().replaceAll('-', '').slice(0, 20)}` }),
     ...overrides,

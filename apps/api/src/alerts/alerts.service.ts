@@ -15,7 +15,9 @@ import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
-import { DEPS } from '../tokens.js';
+import { normalizeEmail } from '../auth/email.js';
+import type { AuthRateLimits } from '../auth/rate-limit.js';
+import { DEPS, RATE_LIMITS } from '../tokens.js';
 import {
   toChannelDto,
   toEventDto,
@@ -25,8 +27,6 @@ import {
 } from './dto.js';
 
 const RESEND_MIN_MS = 60_000;
-const TEST_LIMIT = 5;
-const TEST_WINDOW_MS = 60_000;
 const RECENT_EVENTS = 20;
 
 export interface Availability {
@@ -52,10 +52,11 @@ export class AlertsService {
   readonly #channels: PgAlertChannels;
   readonly #settings: PgAlertSettings;
   readonly #dispatcher: AlertDispatcher;
-  readonly #testHits = new Map<string, number[]>();
-  readonly #publicHits = new Map<string, number[]>();
 
-  constructor(@Inject(DEPS) private readonly deps: AppDeps) {
+  constructor(
+    @Inject(DEPS) private readonly deps: AppDeps,
+    @Inject(RATE_LIMITS) private readonly limits: AuthRateLimits,
+  ) {
     this.#channels = new PgAlertChannels(deps.pool, deps.env.encryption);
     this.#settings = new PgAlertSettings(deps.pool);
     this.#dispatcher = new AlertDispatcher({
@@ -66,7 +67,7 @@ export class AlertsService {
       enabled: this.availability,
       mailer: deps.mailer,
       slackHttp: slackHttp(deps.alertsFetch),
-      emailPerMinute: 60,
+      emailPerMinute: deps.env.alerts.emailPerMinute,
     });
   }
 
@@ -123,8 +124,11 @@ export class AlertsService {
   async createEmail(
     org: OrgContext,
     i: { email: string; label?: string },
+    ip: string,
   ): Promise<{ channel: AlertChannelDto }> {
     this.#requireKind('email');
+    // Before anything is written, so add/delete/add loops spend the address's budget too.
+    await this.limits.consumeEmailSend(normalizeEmail(i.email), ip);
     const r = await this.#channels.createEmail(org.organizationId, org.actorUserId, i);
     if (r.status !== 'created') {
       throw r.status === 'invalid_email'
@@ -136,19 +140,19 @@ export class AlertsService {
     return { channel: toChannelDto(r.channel) };
   }
 
-  async resendConfirmation(org: OrgContext, channelId: string): Promise<void> {
+  /** Only for addresses still waiting for confirmation: an unsubscribed address is never mailed again. */
+  async resendConfirmation(org: OrgContext, channelId: string, ip: string): Promise<void> {
     this.#requireKind('email');
-    const r = await this.deps.pool.query<{ updated_at: Date }>(
-      `SELECT updated_at FROM alert_channel
-        WHERE organization_id = $1 AND id = $2 AND kind = 'email'
-          AND status IN ('pending_confirmation', 'unsubscribed')`,
-      [org.organizationId, channelId],
+    const channel = await this.#channels.get(org.organizationId, channelId);
+    if (channel?.kind !== 'email' || channel.status !== 'pending_confirmation') throw notFound();
+    await this.limits.consumeEmailSend(channel.email!, ip);
+    const rotated = await this.#channels.rotateConfirmation(
+      org.organizationId,
+      channelId,
+      RESEND_MIN_MS,
     );
-    const row = r.rows[0];
-    if (!row) throw notFound();
-    if (Date.now() - row.updated_at.getTime() < RESEND_MIN_MS) throw new ApiError(409, 'too_soon');
-    const rotated = await this.#channels.rotateConfirmation(org.organizationId, channelId);
-    if (!rotated) throw notFound();
+    if (rotated.status === 'not_found') throw notFound();
+    if (rotated.status === 'too_soon') throw new ApiError(409, 'too_soon');
     await this.#sendConfirmation(org.organizationId, rotated.email, rotated.confirmToken);
   }
 
@@ -177,7 +181,7 @@ export class AlertsService {
   ): Promise<{ ok: true } | { ok: false; code: string }> {
     const channel = await this.#channels.get(org.organizationId, channelId);
     if (!channel) throw notFound();
-    this.#hit(this.#testHits, channelId, TEST_LIMIT, TEST_WINDOW_MS);
+    await this.limits.consumeAlertTest(channelId);
     const r = await this.#dispatcher.sendTest(org.organizationId, channelId);
     this.deps.log.info('alerts.test', {
       kind: channel.kind,
@@ -192,24 +196,9 @@ export class AlertsService {
     if (!ok) throw notFound();
   }
 
-  /** In-memory sliding window per key; per process, like the plan's test-send limit. */
-  #hit(store: Map<string, number[]>, key: string, limit: number, windowMs: number): void {
-    const now = Date.now();
-    const hits = (store.get(key) ?? []).filter((t) => now - t < windowMs);
-    if (hits.length >= limit) {
-      store.set(key, hits);
-      throw new ApiError(429, 'rate_limited');
-    }
-    hits.push(now);
-    store.set(key, hits);
-    if (store.size > 10_000) {
-      for (const [k, v] of store) if (v.every((t) => now - t >= windowMs)) store.delete(k);
-    }
-  }
-
-  /** 30 per minute per source IP across the public recipient routes. */
-  limitPublic(ip: string): void {
-    this.#hit(this.#publicHits, ip, 30, 60_000);
+  /** 30 requests per minute per client IP across the public recipient routes. */
+  limitPublic(ip: string): Promise<void> {
+    return this.limits.consumeAlertRecipient(ip);
   }
 
   async confirm(token: string): Promise<{ status: 'confirmed' }> {

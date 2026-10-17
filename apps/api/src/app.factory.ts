@@ -8,6 +8,7 @@ import { registerRequestLog } from './http/request-log.js';
 import { TraceInterceptor } from './http/trace.interceptor.js';
 import { trustProxyHops } from './http/trust-proxy.js';
 import type { AppDeps } from './deps.js';
+import { AlertsService } from './alerts/alerts.service.js';
 import { registerUnsubscribeRoute } from './alerts/unsubscribe.plugin.js';
 import { registerMetaWebhooks } from './webhooks/meta-webhooks.plugin.js';
 
@@ -50,7 +51,7 @@ export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
     reply.header('cache-control', reply.getHeader('cache-control') ?? 'no-store');
   });
   await registerMetaWebhooks(fastify, deps);
-  await registerUnsubscribeRoute(fastify, deps);
+  await registerUnsubscribeRoute(fastify, deps, app.get(AlertsService));
   registerRequestLog(fastify, deps.log, deps.metrics);
   app.useGlobalInterceptors(new TraceInterceptor());
   app.useGlobalFilters(new ApiErrorFilter(deps.log));

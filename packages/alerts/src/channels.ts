@@ -243,42 +243,34 @@ export class PgAlertChannels {
     }
   }
 
+  /** Replaces the confirm token of a pending address, at most once per `minIntervalMs`. */
   async rotateConfirmation(
     orgId: string,
     channelId: string,
-  ): Promise<{ confirmToken: string; email: string } | null> {
+    minIntervalMs: number,
+  ): Promise<
+    | { status: 'rotated'; confirmToken: string; email: string }
+    | { status: 'not_found' }
+    | { status: 'too_soon' }
+  > {
     const confirmToken = newToken();
-    const unsubscribeToken = newToken();
-    const sealed = await this.sealUnsubscribe(orgId, channelId, unsubscribeToken);
     return withTransaction(this.pool, async (tx) => {
       const cur = await tx.query(
-        `SELECT status, email FROM alert_channel
+        `SELECT email, now() - updated_at < make_interval(secs => $3 / 1000.0) AS too_soon
+           FROM alert_channel
           WHERE organization_id = $1 AND id = $2 AND kind = 'email'
-            AND status IN ('pending_confirmation', 'unsubscribed') FOR UPDATE`,
-        [orgId, channelId],
+            AND status = 'pending_confirmation' FOR UPDATE`,
+        [orgId, channelId, minIntervalMs],
       );
       const row = cur.rows[0];
-      if (!row) return null;
-      const resubscribe = row.status === 'unsubscribed';
+      if (!row) return { status: 'not_found' as const };
+      if (row.too_soon) return { status: 'too_soon' as const };
       await tx.query(
-        `UPDATE alert_channel SET status = 'pending_confirmation', confirm_key_sha256 = $3,
-                confirm_expires_at = $4,
-                key_id = CASE WHEN $5 THEN $6 ELSE key_id END,
-                unsubscribe_key_sha256 = CASE WHEN $5 THEN $7 ELSE unsubscribe_key_sha256 END,
-                encrypted_unsubscribe_token = CASE WHEN $5 THEN $8 ELSE encrypted_unsubscribe_token END
+        `UPDATE alert_channel SET confirm_key_sha256 = $3, confirm_expires_at = $4
           WHERE organization_id = $1 AND id = $2`,
-        [
-          orgId,
-          channelId,
-          sha256(confirmToken),
-          new Date(this.now().getTime() + CONFIRM_TTL_MS),
-          resubscribe,
-          sealed.keyId,
-          sha256(unsubscribeToken),
-          sealed.blob,
-        ],
+        [orgId, channelId, sha256(confirmToken), new Date(this.now().getTime() + CONFIRM_TTL_MS)],
       );
-      return { confirmToken, email: row.email as string };
+      return { status: 'rotated' as const, confirmToken, email: row.email as string };
     });
   }
 

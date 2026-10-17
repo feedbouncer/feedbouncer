@@ -20,7 +20,7 @@ beforeAll(async () => {
   api = await startTestApi({
     facebook: FACEBOOK,
     instagram: { meta: FACEBOOK },
-    alerts: { slack: true, email: true, capPerHour: 30 },
+    alerts: { slack: true, email: true, capPerHour: 30, emailPerMinute: 60 },
   });
   const A = await orgWithRoles(api, 'isoA');
   const B = await orgWithRoles(api, 'isoB');
