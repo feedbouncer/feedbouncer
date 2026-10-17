@@ -42,6 +42,22 @@ export type CreateResult =
 
 const HOUR_MS = 3_600_000;
 
+/** The cap notice is workspace-wide: every active channel hears it, whatever its brand routes. */
+async function queueCapDeliveries(
+  c: pg.ClientBase,
+  organizationId: string,
+  eventId: string,
+): Promise<void> {
+  await c.query(
+    `INSERT INTO alert_delivery (organization_id, alert_event_id, channel_id, state)
+     SELECT ch.organization_id, $2, ch.id, 'pending'
+     FROM alert_channel ch
+     WHERE ch.organization_id = $1 AND ch.status = 'active'
+     ON CONFLICT (alert_event_id, channel_id) DO NOTHING`,
+    [organizationId, eventId],
+  );
+}
+
 async function queueDeliveries(
   c: pg.ClientBase,
   organizationId: string,
@@ -127,6 +143,6 @@ export async function createAlertEvent(
       opts.now,
     ],
   );
-  await queueDeliveries(c, org, cap.rows[0]!.id, e.brandId, opts.routeType);
+  await queueCapDeliveries(c, org, cap.rows[0]!.id);
   return { status: 'created', eventId, suppressed: true, deliveries: 0 };
 }

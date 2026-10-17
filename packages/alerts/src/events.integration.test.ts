@@ -148,6 +148,47 @@ describe('createAlertEvent', () => {
     expect(await deliveries(caps[0]!.id)).toBe(2);
   });
 
+  it('tells every active channel in the workspace about the cap, whatever its routes', async () => {
+    const a = await seedTenant(h.c, 'capws');
+    const brandB = (
+      await h.c.query<{ id: string }>(
+        'INSERT INTO brand (organization_id, name) VALUES ($1, $2) RETURNING id',
+        [a.organizationId, 'Brand B'],
+      )
+    ).rows[0]!.id;
+    const b: Tenant = { ...a, brandId: brandB };
+    const routedToB = await seedChannel(h.c, b, 'slack');
+    await enableRoute(h.c, b, 'negative_spike', routedToB);
+    const unrouted = await seedChannel(h.c, a, 'email');
+    const routedToA = await seedChannel(h.c, a, 'slack');
+    await enableRoute(h.c, a, 'negative_spike', routedToA);
+    for (const [kind, status] of [
+      ['email', 'pending_confirmation'],
+      ['email', 'unsubscribed'],
+      ['slack', 'disconnected'],
+    ] as const) {
+      await enableRoute(h.c, a, 'negative_spike', await seedChannel(h.c, a, kind, status));
+    }
+    await make(a, { cap: 1 });
+    expect(await make(a, { cap: 1 })).toMatchObject({ suppressed: true });
+    await make(a, { cap: 1 });
+    const caps = (await capEvents(a.organizationId)).rows;
+    expect(caps).toHaveLength(1);
+    expect(Object.keys(caps[0]!.payload).sort()).toEqual(['cap', 'kind', 'resumesAt']);
+    const row = await h.c.query<{ brand_id: string | null }>(
+      'SELECT brand_id FROM alert_event WHERE id = $1',
+      [caps[0]!.id],
+    );
+    expect(row.rows[0]!.brand_id).toBeNull();
+    const targets = await h.c.query<{ channel_id: string }>(
+      'SELECT channel_id FROM alert_delivery WHERE alert_event_id = $1',
+      [caps[0]!.id],
+    );
+    expect(targets.rows.map((r) => r.channel_id).sort()).toEqual(
+      [routedToB, unrouted, routedToA].sort(),
+    );
+  });
+
   it('counts the cap per organization', async () => {
     const a = await seedTenant(h.c, 'capa');
     const b = await seedTenant(h.c, 'capb');
