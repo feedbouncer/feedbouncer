@@ -33,7 +33,14 @@ afterAll(async () => {
   await ctx.close();
 });
 
-const NONE: VisibleCommentFilter = { platform: null, adId: null, category: null, status: null };
+const NONE: VisibleCommentFilter = {
+  platform: null,
+  adId: null,
+  category: null,
+  status: null,
+  queue: 'all',
+  tagIds: [],
+};
 const filter = (f: Partial<VisibleCommentFilter> = {}): VisibleCommentFilter => ({ ...NONE, ...f });
 const FIRST = { before: null, limit: 100 };
 const q = <T extends pg.QueryResultRow = pg.QueryResultRow>(sql: string, p: unknown[] = []) =>
@@ -179,6 +186,25 @@ const suggestion = async (s: Seeded, status: 'pending' | 'approved' | 'dismissed
       status,
     ]);
 };
+
+const markDone = (s: Seeded, byUser: string | null = s.t.userId) =>
+  q(
+    `INSERT INTO comment_done (organization_id, brand_id, comment_id, done_by_user_id)
+     VALUES ($1, $2, $3, $4)`,
+    [s.t.organizationId, s.t.brandId, s.id, byUser],
+  );
+const addTag = async (orgId: string, name: string): Promise<string> =>
+  (
+    await q<{ id: string }>(
+      `INSERT INTO tag (organization_id, name, name_key) VALUES ($1, $2, lower($2)) RETURNING id`,
+      [orgId, name],
+    )
+  ).rows[0]!.id;
+const tagComment = (s: Seeded, tagId: string) =>
+  q(
+    `INSERT INTO comment_tag (organization_id, brand_id, comment_id, tag_id) VALUES ($1, $2, $3, $4)`,
+    [s.t.organizationId, s.t.brandId, s.id, tagId],
+  );
 
 /** Org A with two brands, Facebook x2, Instagram and a meta_ads connection. */
 async function world() {
@@ -682,8 +708,174 @@ describe('PgVisibleComments', () => {
       category: 'spam',
       platform: 'facebook',
       status: 'new',
+      queue: 'all',
+      tagIds: [],
     });
     expect((await ap({ adId: '00000000-0000-4000-8000-000000000000' })).adId).toBeNull();
+  });
+
+  describe('triage read model', () => {
+    it('queue open excludes done comments from list and count; done shows only them; all shows both', async () => {
+      const w = await world();
+      const open = await post(w.fb1, { at: at('10:00') });
+      const done = await post(w.fb1, { at: at('09:00') });
+      await markDone(done);
+      const run = async (queue: 'open' | 'done' | 'all') => {
+        const r = await store.list(w.orgId, filter({ queue }), FIRST);
+        expect(r.total).toBe(r.items.length);
+        return ids(r.items);
+      };
+      expect(await run('open')).toEqual([open.id]);
+      expect(await run('done')).toEqual([done.id]);
+      expect(await run('all')).toEqual([open.id, done.id]);
+    });
+
+    it('done is independent of hidden: unhiding a done comment keeps it done', async () => {
+      const w = await world();
+      const s = await post(w.fb1);
+      await markDone(s);
+      await q(`UPDATE comment SET platform_state = 'hidden' WHERE id = $1`, [s.id]);
+      expect((await store.list(w.orgId, filter({ queue: 'done' }), FIRST)).total).toBe(0);
+      await q(`UPDATE comment SET platform_state = 'visible' WHERE id = $1`, [s.id]);
+      const r = await store.list(w.orgId, filter({ queue: 'done' }), FIRST);
+      expect(ids(r.items)).toEqual([s.id]);
+      expect(r.items[0]!.done).not.toBeNull();
+    });
+
+    it('tags filter requires all selected tags; combines with platform and status', async () => {
+      const w = await world();
+      const [t1, t2] = [await addTag(w.orgId, 'Refund'), await addTag(w.orgId, 'VIP')];
+      const both = await post(w.fb1, { at: at('10:00') });
+      const onlyOne = await post(w.fb1, { at: at('09:00') });
+      const ig = await post(w.ig, { at: at('08:00') });
+      await tagComment(both, t1);
+      await tagComment(both, t2);
+      await tagComment(onlyOne, t1);
+      await tagComment(ig, t1);
+      await tagComment(ig, t2);
+      await reviewItem(both, 'open');
+      const run = async (f: Partial<VisibleCommentFilter>) => {
+        const r = await store.list(w.orgId, filter(f), FIRST);
+        expect(r.total).toBe(r.items.length);
+        return ids(r.items);
+      };
+      expect(await run({ tagIds: [t1] })).toEqual([both.id, onlyOne.id, ig.id]);
+      expect(await run({ tagIds: [t1, t2] })).toEqual([both.id, ig.id]);
+      expect(await run({ tagIds: [t1, t2], platform: 'instagram' })).toEqual([ig.id]);
+      expect(await run({ tagIds: [t1, t2], status: 'flagged' })).toEqual([both.id]);
+    });
+
+    it('applicable drops an org B tag id and an unknown uuid, de-duplicates and keeps queue', async () => {
+      const a = await world();
+      const b = await world();
+      const tA = await addTag(a.orgId, 'Mine');
+      const tB = await addTag(b.orgId, 'Theirs');
+      const r = await store.applicable(
+        a.orgId,
+        filter({
+          queue: 'done',
+          tagIds: [tA, tB, '00000000-0000-4000-8000-000000000000', tA],
+        }),
+      );
+      expect(r.tagIds).toEqual([tA]);
+      expect(r.queue).toBe('done');
+    });
+
+    it('row has done {at, byName}, tags sorted case-insensitively, the latest 3 replies and replyCount', async () => {
+      const w = await world();
+      await q(`UPDATE app_user SET display_name = 'Dana' WHERE id = $1`, [w.fb1.userId]);
+      const s = await post(w.fb1);
+      await markDone(s);
+      for (const name of ['beta', 'Alpha', 'Charlie'])
+        await tagComment(s, await addTag(w.orgId, name));
+      const mk = async (
+        text: string,
+        createdAt: string,
+        o: { actor?: string; status?: string } = {},
+      ) => {
+        const id = await seedModerationActionRow(ctx.c, s, {
+          kind: 'public_reply',
+          actorType: o.actor ?? 'user',
+          status: o.status ?? 'applied',
+          replyText: text,
+          createdAt,
+        });
+        if ((o.actor ?? 'user') === 'user')
+          await q(`UPDATE moderation_action SET actor_user_id = $2 WHERE id = $1`, [
+            id,
+            w.fb1.userId,
+          ]);
+      };
+      await mk('r1', at('01:00'));
+      await mk('r2', at('02:00'), { actor: 'rule' });
+      await mk('r3', at('03:00'), { status: 'pending' });
+      await mk('r4', at('04:00'));
+      await seedModerationActionRow(ctx.c, s, { kind: 'hide', createdAt: at('05:00') });
+      const row = (await store.list(w.orgId, NONE, FIRST)).items[0]!;
+      expect(row.done).toEqual({ at: expect.any(Date), byName: 'Dana' });
+      expect(row.tags.map((t) => t.name)).toEqual(['Alpha', 'beta', 'Charlie']);
+      expect(row.replyCount).toBe(4);
+      expect(row.replies.map((r) => [r.text, r.status, r.authorName])).toEqual([
+        ['r4', 'applied', 'Dana'],
+        ['r3', 'pending', 'Dana'],
+        ['r2', 'applied', null],
+      ]);
+      expect(row.replies[0]).toMatchObject({ actorType: 'user', createdAt: expect.any(Date) });
+      expect(row.replies[1]!.completedAt).toBeNull();
+      expect(row.replies[0]!.completedAt).toBeInstanceOf(Date);
+      const plain = await post(w.fb1, { at: at('11:00') });
+      const p = (await store.list(w.orgId, NONE, FIRST)).items.find((i) => i.id === plain.id)!;
+      expect(p).toMatchObject({ done: null, tags: [], replies: [], replyCount: 0 });
+    });
+
+    it('a failed reply is not in replies', async () => {
+      const w = await world();
+      const s = await post(w.fb1);
+      await seedModerationActionRow(ctx.c, s, { kind: 'public_reply', status: 'failed' });
+      const row = (await store.list(w.orgId, NONE, FIRST)).items[0]!;
+      expect([row.replies, row.replyCount]).toEqual([[], 0]);
+    });
+
+    it('replyTarget for a reply-to-reply uses the parent platform state', async () => {
+      const w = await world();
+      const top = await post(w.fb1, { at: at('09:00') });
+      const child = await post(w.fb1, { at: at('10:00'), parentId: top.id });
+      await q(`UPDATE comment SET parent_external_id = $2 WHERE id = $1`, [child.id, 'ext-parent']);
+      await q(`UPDATE comment SET platform_state = 'hidden' WHERE id = $1`, [top.id]);
+      const r = await store.list(w.orgId, NONE, FIRST);
+      expect(r.items.map((i) => i.id)).toEqual([child.id]);
+      expect(r.items[0]!.replyTarget).toEqual({
+        connectionStatus: 'active',
+        hasAuthor: true,
+        parentExternalId: 'ext-parent',
+        targetPlatformState: 'hidden',
+      });
+      const plain = await post(w.fb1, { at: at('11:00') });
+      const p = (await store.list(w.orgId, NONE, FIRST)).items.find((i) => i.id === plain.id)!;
+      expect(p.replyTarget).toEqual({
+        connectionStatus: 'active',
+        hasAuthor: true,
+        parentExternalId: null,
+        targetPlatformState: 'visible',
+      });
+    });
+
+    it('org B tags never in options or rows', async () => {
+      const a = await world();
+      const b = await world();
+      const tA = await addTag(a.orgId, 'zeta');
+      const tAa = await addTag(a.orgId, 'Alpha');
+      const tB = await addTag(b.orgId, 'b-only');
+      const sa = await post(a.fb1);
+      await tagComment(sa, tA);
+      expect((await store.options(a.orgId)).tags).toEqual([
+        { id: tAa, name: 'Alpha' },
+        { id: tA, name: 'zeta' },
+      ]);
+      const row = (await store.list(a.orgId, NONE, FIRST)).items[0]!;
+      expect(row.tags).toEqual([{ id: tA, name: 'zeta' }]);
+      expect(JSON.stringify(await store.options(a.orgId))).not.toContain(tB);
+    });
   });
 
   it('adsTruncated when 501 ads have comments', async () => {
@@ -748,7 +940,14 @@ describe('PgVisibleComments', () => {
         WHERE organization_id = $1 AND external_id LIKE 'p-%7'`,
       [w.orgId],
     );
+    await q(
+      `INSERT INTO comment_done (organization_id, brand_id, comment_id, done_by_user_id)
+       SELECT organization_id, brand_id, id, $2 FROM comment
+        WHERE organization_id = $1 AND external_id LIKE 'p-%' AND external_id LIKE '%3'`,
+      [w.orgId, w.fb1.userId],
+    );
     await q('ANALYZE comment');
+    await q('ANALYZE comment_done');
     await q('ANALYZE decision');
     await q('ANALYZE review_item');
 
@@ -770,16 +969,18 @@ describe('PgVisibleComments', () => {
       }
     };
     const page = { before: null, limit: 50 };
-    const first = visibleListQuery(w.orgId, NONE, page);
+    const open = filter({ queue: 'open' });
+    const first = visibleListQuery(w.orgId, open, page);
     const indexed = await explain(first.text, first.values, true);
     expect(indexed.indexes).toContain('comment_visible_organization_id_posted_at_idx');
 
-    for (const f of [NONE, filter({ category: 'spam', status: 'flagged' })]) {
+    for (const f of [open, filter({ queue: 'open', category: 'spam', status: 'flagged' })]) {
       const l = visibleListQuery(w.orgId, f, page);
       const k = visibleCountQuery(w.orgId, f);
       expect((await explain(l.text, l.values)).ms).toBeLessThan(1500);
       expect((await explain(k.text, k.values)).ms).toBeLessThan(1500);
     }
+    expect((await store.list(w.orgId, open, page)).total).toBe(27000);
     expect((await store.list(w.orgId, NONE, page)).total).toBe(30000);
   });
 });

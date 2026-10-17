@@ -27,6 +27,8 @@ export class OrgCommentsService {
       adId: q.ad ?? null,
       category: q.category ?? null,
       status: q.status ?? null,
+      queue: 'all',
+      tagIds: [],
     };
     const f = await this.#read.applicable(orgId, asked);
     const before = q.before && q.beforeId ? { postedAt: new Date(q.before), id: q.beforeId } : null;
