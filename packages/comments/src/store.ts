@@ -74,6 +74,8 @@ const IS_AD_SQL = `(c.ad_source_id IS NOT NULL OR EXISTS (
      WHERE mas.organization_id = c.organization_id AND mas.brand_id = c.brand_id
        AND mas.source_id = c.source_id))`;
 
+export const COMMENT_IS_AD_SQL = IS_AD_SQL;
+
 const ROW_SQL = `
   SELECT c.id, c.connection_id, cn.platform, s.external_id AS source_external_id, c.external_id,
          c.parent_external_id, c.parent_comment_id, a.external_id AS author_external_id,
