@@ -11,3 +11,4 @@ export const ROLLUP_REFRESH_HOURS = 2;
 export const FLAG_BATCH_SECONDS = 120;
 export const FLAG_DIGEST_MAX = 100;
 export const FLAG_LOOKBACK_HOURS = 24;
+export const SLACK_TIMEOUT_MS = 10_000;

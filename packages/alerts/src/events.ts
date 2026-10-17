@@ -20,6 +20,12 @@ export type AlertPayload =
     }
   | { kind: 'flags'; reviewItemIds: string[]; count: number };
 
+export interface CapPayload {
+  kind: 'cap';
+  cap: number;
+  resumesAt: string;
+}
+
 export interface NewAlertEvent {
   organizationId: string;
   brandId: string;
@@ -113,7 +119,11 @@ export async function createAlertEvent(
       `cap:${org}:${hour.toISOString()}`,
       hour,
       opts.now,
-      { kind: 'cap', cap: opts.capPerHour, resumesAt: resumesAt.toISOString() },
+      {
+        kind: 'cap',
+        cap: opts.capPerHour,
+        resumesAt: resumesAt.toISOString(),
+      } satisfies CapPayload,
       opts.now,
     ],
   );
