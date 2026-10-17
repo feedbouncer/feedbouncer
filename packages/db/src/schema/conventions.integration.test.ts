@@ -16,7 +16,13 @@ const NATURAL_KEY_TABLES: Record<string, string> = {
   source_poll: 'PRIMARY KEY (source_id)',
   meta_ad_source: 'PRIMARY KEY (ad_id, source_id)',
   meta_ad_listing: 'PRIMARY KEY (ads_connection_id)',
+  comment_tag: 'PRIMARY KEY (comment_id, tag_id)',
+  comment_done: 'PRIMARY KEY (comment_id)',
+  role_grant: 'PRIMARY KEY (organization_id, role, capability)',
 };
+// Link and grant rows are inserted or deleted, never edited: they keep one event timestamp
+// (added_at, done_at, created_at) instead of created_at/updated_at and have no updated_at trigger.
+const IMMUTABLE_ROW_TABLES = ['comment_tag', 'comment_done', 'role_grant'];
 const GLOBAL_TABLES = [
   'organization',
   'app_user',
@@ -72,7 +78,8 @@ describe('schema conventions', () => {
         FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
        WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND c.relname <> '_prisma_migrations'
        GROUP BY 1`);
-    for (const r of rows) expect(r.ok, r.t).toBe(2);
+    for (const r of rows.filter((r) => !IMMUTABLE_ROW_TABLES.includes(r.t)))
+      expect(r.ok, r.t).toBe(2);
   });
 
   it('every non-system table has a uuid id primary key with a random default', async () => {
@@ -145,7 +152,7 @@ describe('schema conventions', () => {
     const rows = await q<{ t: string }>(`
       SELECT c.relname AS t FROM pg_class c
        WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r'
-         AND c.relname NOT IN ('_prisma_migrations', 'decision', 'audit_event')
+         AND c.relname NOT IN ('_prisma_migrations', 'decision', 'audit_event', ${IMMUTABLE_ROW_TABLES.map((t) => `'${t}'`).join(', ')})
          AND NOT EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = c.oid AND NOT t.tgisinternal
                           AND t.tgfoid = 'fb_set_updated_at'::regproc)`);
     expect(rows).toEqual([]);
