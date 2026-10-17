@@ -106,7 +106,7 @@ describe('tags', () => {
       removedFrom: 1,
     });
     expect(await tagsOn(c1.id)).toEqual([]);
-    const [ev] = await audits(t.organizationId, 'tag.deleted');
+    const ev = (await audits(t.organizationId, 'tag.deleted'))[0]!;
     expect(ev.details).toEqual({ name: 'gone', removedFrom: 1 });
   });
 
