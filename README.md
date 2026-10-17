@@ -48,6 +48,7 @@ pnpm test
 | `packages/observability`       | Structured logs, traces, metrics and connector health                                                        |
 | `packages/rules`               | Moderation rules: matchers, evaluation order, rule store and evaluation job                                  |
 | `packages/actions`             | Moderation actions: step model, execution and review queue                                                   |
+| `packages/alerts`              | Alerts: negative-comment spike detection and delivery to Slack and email                                     |
 | `packages/policies`            | Plain-language custom policies: validation, decisions, model evaluation, previews and runs                   |
 | `packages/placeholder`         | Minimal package used as the template for new packages                                                        |
 | `packages/secrets`             | Envelope encryption for stored credentials and key management                                                |

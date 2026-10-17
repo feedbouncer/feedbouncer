@@ -1,0 +1,10 @@
+export const SPIKE_WINDOW_MINUTES = 60;
+export const SPIKE_EVAL_EVERY_MINUTES = 5;
+export const BASELINE_DAYS = 14;
+export const LEARNING_DAYS = 7;
+export const DEFAULT_BASELINE_PER_HOUR = 2;
+export const SHARE_FLOOR = 0.25;
+export const SHARE_CEILING = 0.9;
+export const SENSITIVITY_MULTIPLIER = { high: 2, medium: 3, low: 5 } as const;
+export const ESCALATION_FACTOR = 2;
+export const ROLLUP_REFRESH_HOURS = 2;
