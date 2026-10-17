@@ -3,7 +3,7 @@ import { headerSafe } from './templates.js';
 import type { Mailer, OutboundEmail } from './mailer.js';
 
 // One bare address: no list separators, display names or quoting that nodemailer would parse.
-const RECIPIENT = /^[^\s@,;<>"]+@[^\s@,;<>"]+$/;
+export const RECIPIENT = /^[^\s@,;<>"]+@[^\s@,;<>"]+$/;
 
 export function createSmtpMailer(smtpUrl: URL, from: string): Mailer & { close(): void } {
   const transport = nodemailer.createTransport(smtpUrl.href);
