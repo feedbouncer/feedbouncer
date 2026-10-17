@@ -9,7 +9,6 @@ import { REPORT_TOKEN_RE } from './constants.js';
 export interface ReportSubscriptionEntry {
   organizationId: string;
   organizationName: string;
-  role: 'owner' | 'admin';
   subscribed: boolean;
 }
 
@@ -73,7 +72,7 @@ export class PgReportSubscriptions {
   /** Orgs where the user is owner or admin; a missing row means subscribed. */
   async listForUser(userId: string): Promise<ReportSubscriptionEntry[]> {
     const r = await this.pool.query<ReportSubscriptionEntry>(
-      `SELECT o.id AS "organizationId", o.name AS "organizationName", m.role,
+      `SELECT o.id AS "organizationId", o.name AS "organizationName",
               s.status IS DISTINCT FROM 'unsubscribed' AS subscribed
          FROM membership m
          JOIN organization o ON o.id = m.organization_id

@@ -185,7 +185,6 @@ describe('report subscriptions', () => {
       {
         organizationId: tn.organizationId,
         organizationName: 'Org rpa',
-        role: 'admin',
         subscribed: true,
       },
     ]);

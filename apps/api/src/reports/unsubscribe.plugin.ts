@@ -1,5 +1,7 @@
 // Public one-click report unsubscribe (see http/one-click-route.ts). Every token, valid or not,
-// gets 200 { status }, so the route cannot tell which tokens exist.
+// gets 200 { status }: 'invalid', 'already' or 'unsubscribed', and nothing else about the
+// subscription. Tokens are 256-bit random and the route is rate-limited per IP, so a valid token
+// cannot be found by guessing.
 import type { FastifyInstance } from 'fastify';
 import type { AppDeps } from '../deps.js';
 import { ApiError } from '../http/errors.js';

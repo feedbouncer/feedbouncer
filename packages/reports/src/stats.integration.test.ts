@@ -2,6 +2,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { periodForWeek, type ReportPeriod } from './period.js';
+import { REPORT_BRANDS_MAX, REPORT_INCOMPLETE_ACCOUNTS_MAX } from './constants.js';
+import { rankTopAds } from './rank.js';
 import { computeWeeklyStats } from './stats.js';
 import { seedAd, seedHide, seedProcessed, seedSource, seedUnhide, setState } from './testing.js';
 
@@ -48,7 +50,9 @@ describe('computeWeeklyStats', () => {
       buckets: [],
       ads: [],
       brands: [],
+      brandCount: 0,
       incompleteAccounts: [],
+      incompleteAccountCount: 0,
     });
   });
 
@@ -406,6 +410,69 @@ describe('computeWeeklyStats', () => {
     expect(sb).toMatchObject({ processed: 12, processedPrev: 1, hidden: 12 });
     expect(sb.ads).toHaveLength(1);
     expect(sb.incompleteAccounts.map((x) => x.connectionId)).toContain(b.connectionId);
+  });
+
+  it('caps brands (top by processed) and incompleteAccounts so a worst-case snapshot fits the payload CHECK', async () => {
+    const t = await fresh();
+    // Every character escapes to six bytes in jsonb text: the largest a name can serialize to.
+    const longName = (i: number, max: number) => `${i}`.padEnd(max, '\u0001');
+    const brand = async (i: number) => {
+      const brandId = (
+        await h.c.query<{ id: string }>(
+          'INSERT INTO brand (organization_id, name) VALUES ($1, $2) RETURNING id',
+          [t.organizationId, longName(i, 200)],
+        )
+      ).rows[0]!.id;
+      const connectionId = (
+        await h.c.query<{ id: string }>(
+          `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, display_name, status)
+           VALUES ($1, $2, 'instagram', $3, $4, 'error') RETURNING id`,
+          [t.organizationId, brandId, `ig-cap-${i}`, longName(i, 500)],
+        )
+      ).rows[0]!.id;
+      const sourceId = (
+        await h.c.query<{ id: string }>(
+          `INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id)
+           VALUES ($1, $2, $3, 'ad_post', $4) RETURNING id`,
+          [t.organizationId, brandId, connectionId, `post-cap-${i}`],
+        )
+      ).rows[0]!.id;
+      return { ...t, brandId, connectionId, sourceId };
+    };
+    const extra = REPORT_BRANDS_MAX + 10;
+    const top = new Set([t.brandId]);
+    for (let i = 0; i < extra; i++) {
+      const b = await brand(i);
+      const busy = i < REPORT_BRANDS_MAX - 1;
+      if (busy) top.add(b.brandId);
+      await many(busy ? 2 : 1, () => processedAt(b, MID));
+    }
+    for (let i = 0; i < 5; i++) {
+      const sourceId = await seedSource(h.c, t);
+      await seedAd(h.c, t, { sourceId, name: longName(i, 200) });
+      for (let k = 0; k < 10; k++) {
+        const id = await processedAt(t, MID, { sourceId });
+        if (k === 0) await seedHide(h.c, t, id, { by: 'rule', at: MID });
+      }
+    }
+
+    const s = await stats(t);
+    s.ads = rankTopAds(s.ads);
+    expect(s.ads).toHaveLength(5);
+    expect(s.brandCount).toBe(extra + 1);
+    expect(s.brands).toHaveLength(REPORT_BRANDS_MAX);
+    expect(new Set(s.brands.map((b) => b.brandId))).toEqual(top);
+    const names = s.brands.map((b) => b.name);
+    expect(names).toEqual([...names].sort());
+    expect(s.processed).toBe(50 + 2 * (REPORT_BRANDS_MAX - 1) + 11);
+    expect(s.incompleteAccountCount).toBe(extra);
+    expect(s.incompleteAccounts).toHaveLength(REPORT_INCOMPLETE_ACCOUNTS_MAX);
+
+    await h.c.query(
+      `INSERT INTO weekly_report (organization_id, week_start, timezone, period_start, period_end, status, payload, computed_at)
+       VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7)`,
+      [t.organizationId, week.weekStart, week.timezone, week.start, week.end, s, NOW],
+    );
   });
 });
 

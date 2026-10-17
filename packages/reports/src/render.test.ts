@@ -59,7 +59,9 @@ const stats = (o: Partial<WeeklyStats> = {}): WeeklyStats => ({
     { brandId: 'b1', name: 'Acme', archived: false, processed: 12000, hidden: 390 },
     { brandId: 'b2', name: 'Old Co', archived: true, processed: 345, hidden: 10 },
   ],
+  brandCount: 2,
   incompleteAccounts: [],
+  incompleteAccountCount: 0,
   ...o,
 });
 
@@ -143,9 +145,30 @@ describe('renderWeeklyEmail', () => {
   });
 
   it('single brand: no By brand section', () => {
-    const e = render(stats({ brands: [stats().brands[0]!] }));
+    const e = render(stats({ brands: [stats().brands[0]!], brandCount: 1 }));
     expect(e.text).not.toContain('By brand');
     expect(e.html).not.toContain('By brand');
+  });
+
+  it('capped snapshot: By brand ends with +k more brands; the incomplete note counts accounts not listed', () => {
+    const e = render(
+      stats({
+        brandCount: 5,
+        incompleteAccounts: Array.from({ length: 5 }, (_, i) => ({
+          connectionId: `c${i}`,
+          name: `Page ${i}`,
+          platform: 'facebook',
+        })),
+        incompleteAccountCount: 12,
+      }),
+    );
+    for (const out of [e.text, htmlText(e.html)]) {
+      expect(out).toContain('Old Co (archived) — 345 processed, 10 hidden');
+      expect(out).toContain('+3 more brands');
+      expect(out).toContain(
+        'these numbers may be incomplete: Page 0, Page 1, Page 2, Page 3, Page 4, +7 more.',
+      );
+    }
   });
 
   it('hostile, duplicate and archived ad names render safely and distinguishably', () => {
@@ -194,6 +217,7 @@ describe('renderWeeklyEmail', () => {
           name: `Page ${i}`,
           platform: 'facebook',
         })),
+        incompleteAccountCount: 7,
       }),
     );
     for (const tag of ['<img', '<script', '<link', '<style', '@import', 'url(']) {

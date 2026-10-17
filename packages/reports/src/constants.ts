@@ -12,3 +12,7 @@ export const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
 export const DASHBOARD_LOOKBACK_WEEKS = 52;
 /** 32 random bytes as base64url. */
 export const REPORT_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
+/** Brands kept in a snapshot (most processed first); with the other caps keeps payloads under 64 KiB. */
+export const REPORT_BRANDS_MAX = 25;
+/** Incomplete accounts named in a snapshot; the rest are only counted. */
+export const REPORT_INCOMPLETE_ACCOUNTS_MAX = 5;

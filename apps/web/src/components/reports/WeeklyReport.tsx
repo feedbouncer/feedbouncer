@@ -95,6 +95,7 @@ export function WeeklyReport({
             {view.brands.map((b, i) => (
               <li key={i}>{`${b.name} — ${b.processed} processed, ${b.hidden} hidden`}</li>
             ))}
+            {view.brandsMore ? <li>{view.brandsMore}</li> : null}
           </ul>
         </section>
       ) : null}

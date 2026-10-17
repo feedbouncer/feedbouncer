@@ -35,7 +35,9 @@ const stats = (o: Partial<WeeklyStats> = {}): WeeklyStats => ({
     { brandId: 'b1', name: 'Shop', archived: false, processed: 12000, hidden: 390 },
     { brandId: 'b2', name: 'Outlet', archived: true, processed: 345, hidden: 10 },
   ],
+  brandCount: 2,
   incompleteAccounts: [],
+  incompleteAccountCount: 0,
   ...o,
 });
 
@@ -78,7 +80,7 @@ describe('WeeklyReport', () => {
   });
 
   it('nothing hidden hides categories and ads', () => {
-    const html = render(stats({ hidden: 0, buckets: [], ads: [], brands: [] }));
+    const html = render(stats({ hidden: 0, buckets: [], ads: [], brands: [], brandCount: 0 }));
     expect(headings(html)).toEqual(['Comments processed', 'Estimated time saved']);
     expect(html).toContain('0 min');
     expect(html).not.toContain('Total hidden');
@@ -90,6 +92,7 @@ describe('WeeklyReport', () => {
       stats({
         ads: [],
         incompleteAccounts: [{ connectionId: 'c1', name: 'Main Page', platform: 'facebook' }],
+        incompleteAccountCount: 1,
       }),
     );
     expect(html).toContain(
@@ -98,6 +101,11 @@ describe('WeeklyReport', () => {
     expect(html).toContain(
       'Some accounts were disconnected during this week, so these numbers may be incomplete: Main Page.',
     );
+  });
+
+  it('a capped brand list ends with how many brands are not shown', () => {
+    expect(render(stats({ brandCount: 4 }))).toContain('<li>+2 more brands</li>');
+    expect(render(stats())).not.toContain('more brands');
   });
 
   it('ad names are text, not HTML', () => {

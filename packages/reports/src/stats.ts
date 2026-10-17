@@ -1,7 +1,11 @@
 // Weekly metrics read model: one snapshot of a workspace's week, shared by the email and the
 // Weekly report page. Every statement binds organization_id = $1 and never reads comment text.
 import type pg from 'pg';
-import { TOP_ADS_MIN_COMMENTS } from './constants.js';
+import {
+  REPORT_BRANDS_MAX,
+  REPORT_INCOMPLETE_ACCOUNTS_MAX,
+  TOP_ADS_MIN_COMMENTS,
+} from './constants.js';
 import type { ReportPeriod } from './period.js';
 import {
   PROCESSED_COMMENT_SQL,
@@ -44,17 +48,25 @@ export interface WeeklyStats {
   buckets: { bucket: ReportBucket; count: number }[];
   /** Every ad with total ≥ TOP_ADS_MIN_COMMENTS and hidden > 0 (at most ADS_CANDIDATES), unranked. */
   ads: AdStat[];
-  /** Brands with processed > 0, by name. */
+  /** The REPORT_BRANDS_MAX brands with the most processed comments (processed > 0), by name. */
   brands: BrandStat[];
+  /** Every brand with processed > 0, including those cut from `brands`. */
+  brandCount: number;
+  /** The first REPORT_INCOMPLETE_ACCOUNTS_MAX by name. */
   incompleteAccounts: { connectionId: string; name: string; platform: string }[];
+  /** Every incomplete account, including those cut from `incompleteAccounts`. */
+  incompleteAccountCount: number;
 }
 
 /** Upper bound on candidate ads handed to ranking. */
 const ADS_CANDIDATES = 200;
 
 // One statement, so the hide attribution chain runs once and every metric reads one snapshot.
-// $1 org, $2 start, $3 end, $4 previous week start, $5 minimum ad comments, $6 computedAt.
+// $1 org, $2 start, $3 end, $4 previous week start, $5 minimum ad comments, $6 computedAt,
+// $7 brands kept, $8 incomplete accounts kept.
 //
+// brands and incomplete accounts are capped (and counted in full) so the snapshot fits
+// weekly_report's 64 KiB payload CHECK however large the workspace.
 // ads: a comment counts once per ad even when both its source and its ad source link to that ad.
 // Links count even if since unlinked: the week's data stands. Pre-ordered by hidden share so the
 // cap never drops an ad ranking would pick.
@@ -105,10 +117,14 @@ SELECT (SELECT count(*)::int FROM week) AS processed,
           FROM (SELECT bucket, count(*)::int AS n FROM week WHERE bucket IS NOT NULL GROUP BY bucket) x
        ) AS buckets,
        (SELECT COALESCE(json_agg(json_build_object(
-                 'brandId', b.id, 'name', b.name, 'archived', b.archived_at IS NOT NULL,
-                 'processed', x.processed, 'hidden', x.hidden) ORDER BY b.name, b.id), '[]')
-          FROM by_brand x
-          JOIN brand b ON b.organization_id = $1 AND b.id = x.brand_id) AS brands,
+                 'brandId', t.id, 'name', t.name, 'archived', t.archived,
+                 'processed', t.processed, 'hidden', t.hidden) ORDER BY t.name, t.id), '[]')
+          FROM (SELECT b.id, b.name, b.archived_at IS NOT NULL AS archived, x.processed, x.hidden
+                  FROM by_brand x
+                  JOIN brand b ON b.organization_id = $1 AND b.id = x.brand_id
+                 ORDER BY x.processed DESC, b.name, b.id
+                 LIMIT $7) t) AS brands,
+       (SELECT count(*)::int FROM by_brand) AS brand_count,
        (SELECT COALESCE(json_agg(json_build_object(
                  'adId', a.id, 'externalId', a.external_id, 'name', a.name, 'platforms', a.platforms,
                  'brandId', a.brand_id, 'archived', a.archived, 'hidden', a.hidden, 'total', a.total)
@@ -116,7 +132,8 @@ SELECT (SELECT count(*)::int FROM week) AS processed,
           FROM ads a) AS ads,
        (SELECT COALESCE(json_agg(json_build_object(
                  'connectionId', i.id, 'name', i.name, 'platform', i.platform) ORDER BY i.name, i.id), '[]')
-          FROM incomplete i) AS incomplete_accounts`;
+          FROM (SELECT * FROM incomplete ORDER BY name, id LIMIT $8) i) AS incomplete_accounts,
+       (SELECT count(*)::int FROM incomplete) AS incomplete_account_count`;
 
 interface StatsRow {
   processed: number;
@@ -124,8 +141,10 @@ interface StatsRow {
   processed_prev: number;
   buckets: Partial<Record<ReportBucket, number>>;
   brands: BrandStat[];
+  brand_count: number;
   ads: AdStat[];
   incomplete_accounts: WeeklyStats['incompleteAccounts'];
+  incomplete_account_count: number;
 }
 
 /**
@@ -147,6 +166,8 @@ export async function computeWeeklyStats(
       p.prevStart,
       TOP_ADS_MIN_COMMENTS,
       now,
+      REPORT_BRANDS_MAX,
+      REPORT_INCOMPLETE_ACCOUNTS_MAX,
     ])
   ).rows[0]!;
   return {
@@ -166,6 +187,8 @@ export async function computeWeeklyStats(
     }),
     ads: r.ads,
     brands: r.brands,
+    brandCount: r.brand_count,
     incompleteAccounts: r.incomplete_accounts,
+    incompleteAccountCount: r.incomplete_account_count,
   };
 }

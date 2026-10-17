@@ -149,13 +149,11 @@ describe('PgReportSubscriptions', () => {
       {
         organizationId: a.organizationId,
         organizationName: 'Org list-a',
-        role: 'owner',
         subscribed: true,
       },
       {
         organizationId: b.organizationId,
         organizationName: 'Org list-b',
-        role: 'admin',
         subscribed: false,
       },
     ]);

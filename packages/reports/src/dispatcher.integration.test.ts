@@ -276,7 +276,7 @@ describe('WeeklyReportDispatcher', () => {
     expect(await delivery(a, x)).toMatchObject({ state: 'failed', last_error_code: 'smtp_550' });
   });
 
-  it('member removed between creation and send → cancelled, nothing sent', async () => {
+  it('member removed between creation and send → the delivery is deleted with the membership, nothing sent', async () => {
     const a = await org('removed-a');
     const b = await org('removed-b');
     const u = await member(a);

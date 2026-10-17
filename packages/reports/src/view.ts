@@ -1,4 +1,8 @@
-import { SECONDS_SAVED_PER_HIDDEN_COMMENT, TOP_ADS_MIN_COMMENTS } from './constants.js';
+import {
+  REPORT_INCOMPLETE_ACCOUNTS_MAX,
+  SECONDS_SAVED_PER_HIDDEN_COMMENT,
+  TOP_ADS_MIN_COMMENTS,
+} from './constants.js';
 import {
   adLabel,
   formatChange,
@@ -38,8 +42,6 @@ export const TOP_ADS_COLUMNS = ['Ad', 'Platform', 'Hidden', 'Comments', 'Hidden 
 export const TOP_ADS_EXPLAINER = `Hidden share = hidden comments ÷ all comments on the ad this week. Ads with fewer than ${TOP_ADS_MIN_COMMENTS} comments are not ranked.`;
 export const NONE_QUALIFY = `No ad had at least ${TOP_ADS_MIN_COMMENTS} comments with hidden ones this week, so there is no ranking.`;
 
-const INCOMPLETE_NAMES_MAX = 5;
-
 /** Display-ready strings: every user-supplied name is sanitized, every number formatted. */
 export interface ReportView {
   workspace: string;
@@ -65,6 +67,8 @@ export interface ReportView {
   timeSavedNote: string;
   /** null unless at least two brands processed comments. */
   brands: { name: string; processed: string; hidden: string }[] | null;
+  /** '+k more brands' when the snapshot kept only the busiest brands, else null. */
+  brandsMore: string | null;
   incomplete: string | null;
 }
 
@@ -82,16 +86,19 @@ function topAds(s: WeeklyStats): ReportView['topAds'] {
   }));
 }
 
-function incomplete(accounts: WeeklyStats['incompleteAccounts']): string | null {
-  if (accounts.length === 0) return null;
-  const names = accounts.slice(0, INCOMPLETE_NAMES_MAX).map((a) => sanitizeName(a.name));
-  const more = accounts.length - names.length;
+function incomplete(s: WeeklyStats): string | null {
+  if (s.incompleteAccountCount === 0) return null;
+  const names = s.incompleteAccounts
+    .slice(0, REPORT_INCOMPLETE_ACCOUNTS_MAX)
+    .map((a) => sanitizeName(a.name));
+  const more = s.incompleteAccountCount - names.length;
   if (more > 0) names.push(`+${formatCount(more)} more`);
   return `Some accounts were disconnected during this week, so these numbers may be incomplete: ${names.join(', ')}.`;
 }
 
 export function buildView(s: WeeklyStats, workspaceName: string): ReportView {
   const brands = s.brands.filter((b) => b.processed > 0);
+  const brandsMore = s.brandCount >= 2 ? s.brandCount - brands.length : 0;
   return {
     workspace: sanitizeName(workspaceName),
     range: formatRange(s.start, s.end, s.timezone),
@@ -110,13 +117,14 @@ export function buildView(s: WeeklyStats, workspaceName: string): ReportView {
     timeSaved: formatDuration(s.hidden * SECONDS_SAVED_PER_HIDDEN_COMMENT),
     timeSavedNote: `Estimate based on about ${SECONDS_SAVED_PER_HIDDEN_COMMENT} seconds of manual review per hidden comment.`,
     brands:
-      brands.length < 2
+      s.brandCount < 2
         ? null
         : brands.map((b) => ({
             name: `${sanitizeName(b.name)}${b.archived ? ' (archived)' : ''}`,
             processed: formatCount(b.processed),
             hidden: formatCount(b.hidden),
           })),
-    incomplete: incomplete(s.incompleteAccounts),
+    brandsMore: brandsMore > 0 ? `+${formatCount(brandsMore)} more brands` : null,
+    incomplete: incomplete(s),
   };
 }

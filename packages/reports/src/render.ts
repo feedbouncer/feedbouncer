@@ -73,6 +73,7 @@ function sections(v: ReportView): Section[] {
   });
   if (v.brands) {
     const rows = v.brands.map((b) => `${b.name} — ${b.processed} processed, ${b.hidden} hidden`);
+    if (v.brandsMore) rows.push(v.brandsMore);
     out.push({
       heading: REPORT_HEADINGS.brands,
       text: rows,
