@@ -17,8 +17,9 @@ export { CATEGORY_SLUG, COMMENT_STATUSES, LISTABLE_PLATFORMS, type CommentStatus
 export const NO_AD = 'none';
 export const UNCATEGORIZED = '_none';
 
-export const QUEUES = ['open', 'done', 'all'] as const;
-export type Queue = (typeof QUEUES)[number];
+import { type Queue } from './triage-rules.js';
+
+export { QUEUES, type Queue } from './triage-rules.js';
 
 export interface VisibleCommentFilter {
   platform: Platform | null;
