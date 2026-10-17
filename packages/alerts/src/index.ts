@@ -10,6 +10,7 @@ export * from './links.js';
 export * from './view.js';
 export * from './render.js';
 export * from './slack.js';
+export * from './email-failure.js';
 export { SpikeSweeper } from './spike-sweeper.js';
 export { FlagSweeper } from './flag-sweeper.js';
 export { AlertDispatcher } from './dispatcher.js';

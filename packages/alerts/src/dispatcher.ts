@@ -4,13 +4,8 @@ import type { SafeHttp } from '@feedbouncer/connectors';
 import type { Mailer } from '@feedbouncer/mailer';
 import { errorFields, type Logger } from '@feedbouncer/service-runtime';
 import type { ChannelKind, PgAlertChannels } from './channels.js';
-import {
-  CODE_RE,
-  LEASE_MS,
-  RETRY_AFTER_CAP_MS,
-  RETRY_DELAYS_MS,
-  SLACK_PACE_MS,
-} from './constants.js';
+import { LEASE_MS, RETRY_AFTER_CAP_MS, RETRY_DELAYS_MS, SLACK_PACE_MS } from './constants.js';
+import { classifyEmailFailure } from './email-failure.js';
 import { settingsLink } from './links.js';
 import {
   renderDisconnectEmail,
@@ -58,24 +53,6 @@ interface Claimed {
 }
 
 const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
-
-function emailFailure(err: unknown): Failure {
-  const cause = (err instanceof Error ? err.cause : undefined) as
-    | { responseCode?: unknown; code?: unknown }
-    | undefined;
-  const rc = typeof cause?.responseCode === 'number' ? cause.responseCode : null;
-  if (rc !== null && rc >= 500 && rc <= 599)
-    return { ok: false, kind: 'invalid', code: `smtp_${rc}` };
-  if (rc !== null && rc >= 400 && rc <= 499)
-    return { ok: false, kind: 'transient', code: `smtp_${rc}` };
-  const raw = typeof cause?.code === 'string' ? cause.code : '';
-  const code = raw.toLowerCase();
-  return {
-    ok: false,
-    kind: 'transient',
-    code: CODE_RE.test(code) ? code : 'smtp_error',
-  };
-}
 
 export class AlertDispatcher {
   private readonly now: () => Date;
@@ -317,7 +294,7 @@ export class AlertDispatcher {
       await this.d.mailer!.send({ ...render(token), to, ...(messageId && { messageId }) });
       return { ok: true };
     } catch (err) {
-      return emailFailure(err);
+      return classifyEmailFailure(err);
     }
   }
 
