@@ -82,7 +82,7 @@ export class AdsService {
                                 AND sp.organization_id = mas.organization_id
                                 AND sp.brand_id = mas.brand_id
             WHERE mas.ad_id = ma.id AND mas.organization_id = ma.organization_id
-              AND mas.brand_id = ma.brand_id) poll ON true
+              AND mas.brand_id = ma.brand_id AND mas.unlinked_at IS NULL) poll ON true
         WHERE ma.organization_id = $1 AND ma.brand_id = $2
           AND ($3::uuid IS NULL OR ma.ads_connection_id = $3)
           AND ($4::timestamptz IS NULL OR (ma.first_discovered_at, ma.id) < ($4::timestamptz, $5::uuid))

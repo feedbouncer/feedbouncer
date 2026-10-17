@@ -74,11 +74,17 @@ export interface AdPlacement {
   readonly sourceExternalId: string | null;
   readonly unresolvedReason: AdUnresolvedReason | null;
 }
+export interface AdLookup {
+  readonly name: string | null;
+  readonly deleted: boolean;
+}
 export interface AdSourceInfo {
   /** Digits only, without the `act_` prefix. */
   readonly adAccountExternalId: string;
   /** Matches `^[A-Z_]{1,40}$`. */
   readonly effectiveStatus: string;
+  /** Ad name as set in Ads Manager, at most 200 code points. */
+  readonly name: string | null;
   /** Exactly one 'facebook' and one 'instagram' entry. */
   readonly placements: readonly AdPlacement[];
 }
@@ -182,6 +188,8 @@ export interface ConnectorCapabilities {
   readonly listSources: boolean;
   /** Implements listRecentSources (own posts/media, newest first). Used by backfill. */
   readonly recentSources: boolean;
+  /** Implements lookupAd (one ad by id: name and deletion). Default false. */
+  readonly adLookup?: boolean;
   readonly ingestion: 'webhook' | 'polling' | 'webhook_and_polling';
   readonly tokens: { readonly refreshable: boolean; readonly rotatesRefreshToken: boolean };
   readonly rateLimit: RateLimitPolicy;

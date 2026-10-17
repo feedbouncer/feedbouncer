@@ -44,6 +44,7 @@ export function validateConnector(c: Connector): void {
   if (k.listSources !== (typeof c.listSources === 'function')) fail('capabilities.listSources');
   if (k.recentSources !== (typeof c.listRecentSources === 'function'))
     fail('capabilities.recentSources');
+  if ((k.adLookup ?? false) !== (typeof c.lookupAd === 'function')) fail('capabilities.adLookup');
   const wantsWebhook = k.ingestion !== 'polling';
   if (wantsWebhook !== (c.webhook !== undefined)) fail('webhook');
   if (k.requiredScopes !== undefined && !k.requiredScopes.every((s) => k.defaultScopes.includes(s)))

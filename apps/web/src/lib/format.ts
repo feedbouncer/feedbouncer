@@ -3,3 +3,8 @@ export function formatUtc(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '' : `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
+
+export function formatExactUtc(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : `${d.toISOString().slice(0, 19).replace('T', ' ')} UTC`;
+}

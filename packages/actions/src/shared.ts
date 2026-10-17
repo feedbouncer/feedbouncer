@@ -2,3 +2,4 @@
 export * from './steps.js';
 export * from './templates.js';
 export * from './suggestion-plan.js';
+export * from './comment-status.js';

@@ -40,6 +40,7 @@ import {
   commentSchema,
   cursorSchema,
   externalIdSchema,
+  parseAdLookup,
   parseComment,
   parsePage,
   recentSourceSchema,
@@ -50,6 +51,7 @@ import type { TokenManager } from './tokens.js';
 import {
   INVERSE_ACTION,
   type ActionRequest,
+  type AdLookup,
   type ActionResult,
   type CommentRef,
   type ConnectorCapabilities,
@@ -68,6 +70,7 @@ import {
 export type ConnectorOperation =
   | 'list_sources'
   | 'list_recent_sources'
+  | 'lookup_ad'
   | 'list_comments'
   | 'list_replies'
   | 'get_comment'
@@ -190,6 +193,7 @@ export class ConnectorRuntime {
 }
 
 const SNAKE_CODE = /^[a-z][a-z0-9_]{0,62}$/;
+const AD_ID = /^\d{1,32}$/;
 const invalidRequest = () => new ConnectorError('permanent', 'invalid_request');
 const errorName = (err: unknown) => (err instanceof Error ? err.name : 'NonError');
 
@@ -239,6 +243,15 @@ export class ConnectionClient {
     return parsePage(
       sourceSchema,
       await this.#call(opts?.priority ?? 'bulk', 'list_sources', (ctx) => op(ctx, { cursor })),
+    );
+  }
+
+  async lookupAd(externalId: string, opts?: ListOptions): Promise<AdLookup> {
+    const op = this.connector.lookupAd?.bind(this.connector);
+    if (!op) throw new ConnectorError('unsupported', 'lookup_ad');
+    if (!AD_ID.test(externalId)) throw invalidRequest();
+    return parseAdLookup(
+      await this.#call(opts?.priority ?? 'bulk', 'lookup_ad', (ctx) => op(ctx, { externalId })),
     );
   }
 

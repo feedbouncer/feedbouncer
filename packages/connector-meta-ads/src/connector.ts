@@ -1,7 +1,7 @@
 import { ConnectorError, systemClock, type Clock, type Connector } from '@feedbouncer/connectors';
 import { buildAuthorizationUrl, exchangeCode } from '@feedbouncer/connector-facebook';
 import { listAdAccounts } from './accounts.js';
-import { listActiveAds } from './ads.js';
+import { listActiveAds, lookupAd } from './ads.js';
 import { META_ADS_SCOPES, type MetaAdsConfig } from './config.js';
 
 const noAction = () => Promise.reject(new ConnectorError('unsupported', 'no_actions'));
@@ -20,6 +20,7 @@ export function createMetaAdsConnector(
       actions: [],
       listSources: true,
       recentSources: false,
+      adLookup: true,
       ingestion: 'polling',
       accountSelection: 'multiple',
       tokens: { refreshable: false, rotatesRefreshToken: false },
@@ -40,6 +41,7 @@ export function createMetaAdsConnector(
     refreshTokens: () => Promise.reject(new ConnectorError('auth_expired', 'not_refreshable')),
     listAccounts: (token, ctx) => listAdAccounts(cfg, now, token, ctx),
     listSources: (ctx, req) => listActiveAds(cfg, now, ctx, req),
+    lookupAd: (ctx, req) => lookupAd(cfg, now, ctx, req),
     listComments: noComments,
     getComment: noComments,
     act: noAction,

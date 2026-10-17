@@ -22,6 +22,7 @@ const MATRIX: Record<Capability, Record<Role, boolean>> = {
   'connection.manage': { owner: true, admin: true, member: false },
   'connection.read': { owner: true, admin: true, member: false },
   'comment.moderate': { owner: true, admin: true, member: true },
+  'comment.read': { owner: true, admin: true, member: true },
   'rule.read': { owner: true, admin: true, member: true },
   'rule.write': { owner: true, admin: true, member: false },
   'org.update': { owner: true, admin: true, member: false },

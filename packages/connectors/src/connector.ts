@@ -2,6 +2,7 @@ import type { Secret } from '@feedbouncer/service-runtime';
 import type { SafeHttp } from './http.js';
 import type {
   ActionRequest,
+  AdLookup,
   CommentRef,
   ConnectorCapabilities,
   NormalizedComment,
@@ -117,6 +118,9 @@ export interface Connector {
   refreshTokens(refreshToken: Secret, ctx: OAuthContext): Promise<TokenSet>;
 
   listSources?(ctx: CallContext, req: { cursor: string | null }): Promise<Page<NormalizedSource>>;
+
+  /** One ad by id. A deleted ad is `deleted: true`, not an error; throttles and auth errors throw. */
+  lookupAd?(ctx: CallContext, req: { externalId: string }): Promise<AdLookup>;
 
   /**
    * The connection's own posts/media, newest first. No item is older than

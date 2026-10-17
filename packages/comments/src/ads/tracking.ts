@@ -7,6 +7,7 @@
 // active or retired within the grace period.
 import type pg from 'pg';
 import { withTransaction } from '@feedbouncer/db';
+import type { AdLookup } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { PgCommentStore } from '../store.js';
 
@@ -27,6 +28,7 @@ export type InstagramResolution =
 
 export interface DiscoveredAdRow {
   externalId: string;
+  name: string | null;
   adAccountExternalId: string;
   effectiveStatus: string;
   active: boolean;
@@ -89,6 +91,7 @@ const DUE_SQL = (at: string, grace: string) => `
                       AND ac.brand_id = ma.brand_id
     WHERE mas.organization_id = sp.organization_id AND mas.brand_id = sp.brand_id
       AND mas.source_id = sp.source_id
+      AND mas.unlinked_at IS NULL
       AND ac.status = 'active'
       AND (ma.active OR ma.inactive_since > ${at} - make_interval(days => ${grace})))`;
 
@@ -152,16 +155,19 @@ export class PgAdTracking {
     ] as const;
     const up = await tx.query<{ id: string }>(
       `INSERT INTO meta_ad (organization_id, brand_id, ads_connection_id, external_id,
-                              ad_account_external_id, effective_status, active, inactive_since,
-                              facebook_source_external_id, instagram_source_external_id,
-                              instagram_account_external_id, facebook_resolution,
-                              instagram_resolution, first_discovered_at, last_discovered_at)
-         SELECT $1, $2, $3, $4, $5, $6, $7, CASE WHEN $7 THEN NULL ELSE $8::timestamptz END,
+                              ad_account_external_id, name, effective_status, active,
+                              inactive_since, facebook_source_external_id,
+                              instagram_source_external_id, instagram_account_external_id,
+                              facebook_resolution, instagram_resolution, first_discovered_at,
+                              last_discovered_at)
+         SELECT $1, $2, $3, $4, $5, $14, $6, $7, CASE WHEN $7 THEN NULL ELSE $8::timestamptz END,
                 $9, $10, $11, $12, $13, $8, $8
            FROM connection
           WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND platform = 'meta_ads'
          ON CONFLICT (ads_connection_id, external_id) DO UPDATE SET
            ad_account_external_id = EXCLUDED.ad_account_external_id,
+           name = COALESCE(EXCLUDED.name, meta_ad.name),
+           deleted_at = NULL,
            effective_status = EXCLUDED.effective_status,
            active = EXCLUDED.active,
            inactive_since = CASE WHEN EXCLUDED.active THEN NULL
@@ -186,6 +192,7 @@ export class PgAdTracking {
         ad.instagram.accountExternalId,
         ad.facebook.resolution,
         ad.instagram.resolution,
+        ad.name,
       ],
     );
     const adId = up.rows[0]?.id;
@@ -211,16 +218,18 @@ export class PgAdTracking {
       );
       await tx.query(
         `INSERT INTO meta_ad_source (organization_id, brand_id, ad_id, source_id, platform)
-           VALUES ($1, $2, $3, $4, $5) ON CONFLICT (ad_id, source_id) DO NOTHING`,
+           VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (ad_id, source_id) DO UPDATE SET unlinked_at = NULL`,
         [adsScope.organizationId, adsScope.brandId, adId, sourceId, p.platform],
       );
     }
-    // The creative changed: drop links to posts the ad no longer shows.
+    // The creative changed: stop polling posts the ad no longer shows. The link stays so
+    // comments already collected there keep their ad.
     await tx.query(
-      `DELETE FROM meta_ad_source
-          WHERE organization_id = $1 AND brand_id = $2 AND ad_id = $3
+      `UPDATE meta_ad_source SET unlinked_at = $5
+          WHERE organization_id = $1 AND brand_id = $2 AND ad_id = $3 AND unlinked_at IS NULL
             AND NOT (source_id = ANY($4::uuid[]))`,
-      [adsScope.organizationId, adsScope.brandId, adId, sourceIds],
+      [adsScope.organizationId, adsScope.brandId, adId, sourceIds, at],
     );
   }
 
@@ -268,6 +277,45 @@ export class PgAdTracking {
       [...ids(adsScope), at, listedSince],
     );
     return r.rowCount ?? 0;
+  }
+
+  /** Retired ads whose status was not looked up since they were retired, oldest first. */
+  async adsToCheck(
+    adsScope: ConnectionScope,
+    limit: number,
+  ): Promise<{ id: string; externalId: string }[]> {
+    const r = await this.pool.query<{ id: string; external_id: string }>(
+      `SELECT id, external_id FROM meta_ad
+        WHERE organization_id = $1 AND brand_id = $2 AND ads_connection_id = $3
+          AND NOT active AND deleted_at IS NULL
+          AND (status_checked_at IS NULL OR status_checked_at < inactive_since)
+        ORDER BY inactive_since, id
+        LIMIT $4`,
+      [...ids(adsScope), limit],
+    );
+    return r.rows.map((x) => ({ id: x.id, externalId: x.external_id }));
+  }
+
+  async recordAdLookup(
+    adsScope: ConnectionScope,
+    adId: string,
+    r: AdLookup,
+    at: Date,
+  ): Promise<void> {
+    await this.pool.query(
+      `UPDATE meta_ad SET status_checked_at = $4, name = COALESCE($5, name),
+              deleted_at = CASE WHEN $6 THEN COALESCE(deleted_at, $4) END, updated_at = now()
+        WHERE organization_id = $1 AND brand_id = $2 AND ads_connection_id = $7 AND id = $3`,
+      [
+        adsScope.organizationId,
+        adsScope.brandId,
+        adId,
+        at,
+        r.name,
+        r.deleted,
+        adsScope.connectionId,
+      ],
+    );
   }
 
   async dueSources(

@@ -36,7 +36,8 @@ export default async function OrgsPage({
       <ul>
         {me.memberships.map((m) => (
           <li key={m.organizationId}>
-            <Link href={`/orgs/${m.organizationId}`}>{m.organizationName}</Link> ({m.role})
+            <Link href={`/orgs/${m.organizationId}`}>{m.organizationName}</Link> ({m.role}){' '}
+            <Link href={`/orgs/${m.organizationId}/comments`}>All comments</Link>
           </li>
         ))}
       </ul>

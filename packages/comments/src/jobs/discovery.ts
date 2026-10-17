@@ -4,11 +4,13 @@
 // A listing may span several jobs (its cursor is saved after every page). Ads
 // the listing did not touch are retired only once it completes.
 import { JobError, type JobDefinition } from '@feedbouncer/jobs';
-import type {
-  Clock,
-  ConnectionDirectory,
-  ConnectorRuntime,
-  NormalizedSource,
+import {
+  ConnectorError,
+  type AdLookup,
+  type Clock,
+  type ConnectionDirectory,
+  type ConnectorRuntime,
+  type NormalizedSource,
 } from '@feedbouncer/connectors';
 import type {
   BrandMetaConnections,
@@ -21,6 +23,12 @@ import { DISCOVERY_JOB, type DiscoveryPayload } from './specs.js';
 
 /** A saved listing cursor older than this is dropped and the listing starts over. */
 const STALE_LISTING_MS = 24 * 3_600_000;
+
+/** Retired ads looked up per run, so a large backlog does not spend the rate budget at once. */
+const LOOKUPS_PER_RUN = 25;
+
+/** Lookup failures that affect the whole connection, so the remaining lookups wait for a later run. */
+const ACCOUNT_WIDE_LOOKUP_ERRORS: readonly string[] = ['rate_limited', 'transient', 'auth_expired'];
 
 const FB_REASONS: readonly string[] = [
   'no_post',
@@ -83,6 +91,7 @@ export function resolveAd(src: NormalizedSource, conns: BrandMetaConnections): D
 
   return {
     externalId: src.externalId,
+    name: info.name,
     adAccountExternalId: info.adAccountExternalId,
     effectiveStatus: info.effectiveStatus,
     active: src.active,
@@ -136,15 +145,33 @@ export function adDiscoveryJob(d: {
 
       const complete = cursor === null;
       let retired = 0;
+      let checked = 0;
+      let deleted = 0;
       if (complete) {
         retired = await d.tracking.retireUnlisted(ctx.scope, startedAt, at);
         await d.tracking.clearListingProgress(ctx.scope);
+        for (const ad of await d.tracking.adsToCheck(ctx.scope, LOOKUPS_PER_RUN)) {
+          let found: AdLookup;
+          try {
+            found = await client.lookupAd(ad.externalId, { priority: 'background' });
+          } catch (e) {
+            if (!(e instanceof ConnectorError)) throw e;
+            if (ACCOUNT_WIDE_LOOKUP_ERRORS.includes(e.kind)) break;
+            // This ad cannot be read: mark it checked so it does not block the others every run.
+            found = { name: null, deleted: false };
+          }
+          await d.tracking.recordAdLookup(ctx.scope, ad.id, found, at);
+          checked += 1;
+          if (found.deleted) deleted += 1;
+        }
       } else ctx.log.info('ads.discovery_partial', { listed });
       for (const [reason, count] of unresolved) ctx.log.info('ads.unresolved', { reason, count });
       return {
         listed,
         linked,
         retired,
+        checked,
+        deleted,
         complete,
         // JobResult is flat: one key per reason.
         ...Object.fromEntries([...unresolved].map(([r, n]) => [`unresolved_${r}`, n])),

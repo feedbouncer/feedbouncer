@@ -17,6 +17,7 @@ export type Capability =
   | 'invitation.read'
   | 'connection.read'
   | 'connection.manage'
+  | 'comment.read'
   | 'comment.moderate'
   | 'rule.read'
   | 'rule.write';
@@ -37,6 +38,7 @@ const GRANTS: Readonly<Record<Capability, readonly Role[]>> = {
   'invitation.read': MANAGERS,
   'connection.read': MANAGERS,
   'connection.manage': MANAGERS,
+  'comment.read': ALL,
   'comment.moderate': ALL,
   'rule.read': ALL,
   'rule.write': MANAGERS,

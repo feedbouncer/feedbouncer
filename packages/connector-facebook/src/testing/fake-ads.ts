@@ -16,11 +16,13 @@ export interface Ad {
   id: string;
   accountId: string;
   status: string;
+  name: string | null;
   updatedAtMs: number;
   creative: Record<string, unknown>;
 }
 
 export interface AddAdOptions {
+  name?: string;
   status?: string;
   storyId?: string | null;
   igMediaId?: string | null;
@@ -33,6 +35,7 @@ export interface AdsState {
   accounts: Map<string, AdAccount>;
   ads: Map<string, Ad>;
   dark: Set<string>;
+  gone: Set<string>;
   revoked: Map<string, number>; // `${userId}:${adAccountId}` -> Graph error code
 }
 
@@ -40,6 +43,7 @@ export const createAdsState = (): AdsState => ({
   accounts: new Map(),
   ads: new Map(),
   dark: new Set(),
+  gone: new Set(),
   revoked: new Map(),
 });
 
@@ -78,6 +82,7 @@ export function addAd(
     id: ids.adId,
     accountId: adAccountId,
     status: o.status ?? 'ACTIVE',
+    name: o.name ?? null,
     updatedAtMs: now,
     creative: o.raw ?? {
       id: ids.creativeId,
@@ -117,12 +122,25 @@ export function setAdCreative(
   ad.updatedAtMs = now;
 }
 
+/** `status`: the ad leaves listings and reads as DELETED by id. `gone`: reading it by id fails 100/33. */
+export function deleteAd(s: AdsState, now: number, adId: string, mode: 'status' | 'gone'): void {
+  const ad = findAd(s, adId);
+  if (mode === 'gone') {
+    s.ads.delete(adId);
+    s.gone.add(adId);
+    return;
+  }
+  ad.status = 'DELETED';
+  ad.updatedAtMs = now;
+}
+
 function findAd(s: AdsState, adId: string): Ad {
   const ad = s.ads.get(adId);
   if (!ad) throw new Error('unknown ad');
   return ad;
 }
 
+const AD_ID_PATH = /^\d{1,32}$/;
 const AD_ACCOUNT_PATH = /^act_(\d{1,32})$/;
 
 function cursorPage<T>(
@@ -147,6 +165,14 @@ export function routeAds(
   who: { kind: 'user' | 'page'; id: string },
 ): Response | null {
   const [first, second] = path;
+  if (path.length === 1 && first !== undefined && AD_ID_PATH.test(first)) {
+    const ad = s.ads.get(first);
+    if (!ad && !s.gone.has(first)) return null;
+    if (method !== 'GET') return host.error(100);
+    if (who.kind !== 'user') return host.error(200);
+    if (!ad || s.accounts.get(ad.accountId)?.userId !== who.id) return host.error(100, 33);
+    return host.reply(200, { id: ad.id, name: ad.name, effective_status: ad.status });
+  }
   const accountId = first === undefined ? undefined : AD_ACCOUNT_PATH.exec(first)?.[1];
   const listing = first === 'me' && second === 'adaccounts';
   if (path.length !== 2 || (!listing && !(accountId && second === 'ads'))) return null;
@@ -187,7 +213,10 @@ export function routeAds(
     }
   }
   const matching = [...s.ads.values()].filter(
-    (a) => a.accountId === account.id && (!statuses || statuses.includes(a.status)),
+    (a) =>
+      a.accountId === account.id &&
+      a.status !== 'DELETED' &&
+      (!statuses || statuses.includes(a.status)),
   );
   const p = cursorPage(matching, query);
   const usage = account.usage
@@ -204,6 +233,7 @@ export function routeAds(
       data: p.slice.map((a) => ({
         id: a.id,
         account_id: a.accountId,
+        name: a.name,
         effective_status: a.status,
         updated_time: host.graphTime(a.updatedAtMs),
         creative: a.creative,

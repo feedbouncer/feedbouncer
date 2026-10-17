@@ -98,6 +98,20 @@ export function formatLocal(iso: string, o: { timeZone?: string; locale?: string
   }).format(d);
 }
 
+/** Full date and time to the second, for a tooltip. */
+export function formatLocalExact(
+  iso: string,
+  o: { timeZone?: string; locale?: string } = {},
+): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat(o.locale, {
+    dateStyle: 'full',
+    timeStyle: 'long',
+    ...(o.timeZone !== undefined && { timeZone: o.timeZone }),
+  }).format(d);
+}
+
 const accountName = (s: ReviewModeStatusDto): string => s.displayName ?? 'Unnamed account';
 
 export function bannerText(s: ReviewModeStatusDto, fmt: (iso: string) => string): string | null {

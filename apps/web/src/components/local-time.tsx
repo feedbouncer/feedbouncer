@@ -1,13 +1,24 @@
 'use client';
 import { Fragment, useEffect, useState } from 'react';
-import { formatUtc } from '../lib/format';
-import { formatLocal } from '../lib/review-mode';
+import { formatExactUtc, formatUtc } from '../lib/format';
+import { formatLocal, formatLocalExact } from '../lib/review-mode';
 
-/** UTC on the server and the first client render (so hydration matches), then the viewer's zone. */
-export function LocalTime({ iso }: { iso: string }) {
+/**
+ * UTC on the server and the first client render (so hydration matches), then the viewer's zone.
+ * `exactTitle` adds a tooltip with the time to the second.
+ */
+export function LocalTime({ iso, exactTitle = false }: { iso: string; exactTitle?: boolean }) {
   const [text, setText] = useState(() => formatUtc(iso));
-  useEffect(() => setText(formatLocal(iso)), [iso]);
-  return <time dateTime={iso}>{text}</time>;
+  const [title, setTitle] = useState(() => formatExactUtc(iso));
+  useEffect(() => {
+    setText(formatLocal(iso));
+    if (exactTitle) setTitle(formatLocalExact(iso));
+  }, [iso, exactTitle]);
+  return (
+    <time dateTime={iso} title={exactTitle ? title : undefined}>
+      {text}
+    </time>
+  );
 }
 
 // Marks where a time goes in built copy, so each sentence stays in one place.

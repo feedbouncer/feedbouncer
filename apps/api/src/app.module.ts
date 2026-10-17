@@ -30,6 +30,8 @@ import { OAuthConnectService } from './connections/oauth-connect.service.js';
 import { HiddenTodayController } from './hidden-today/hidden-today.controller.js';
 import { HiddenTodayService } from './hidden-today/hidden-today.service.js';
 import { MeHiddenTodayController } from './hidden-today/me-hidden-today.controller.js';
+import { OrgCommentsController } from './org-comments/org-comments.controller.js';
+import { OrgCommentsService } from './org-comments/org-comments.service.js';
 import { HealthController } from './http/health.controller.js';
 import {
   InvitationsController,
@@ -87,6 +89,7 @@ export class AppModule {
         OAuthConnectController,
         OAuthCallbackController,
         CommentsController,
+        OrgCommentsController,
         AdsController,
         RulesController,
         ActionsController,
@@ -113,6 +116,7 @@ export class AppModule {
         OAuthConnectService,
         ConnectablePlatformPipe,
         CommentsService,
+        OrgCommentsService,
         AdsService,
         RulesService,
         ActionsService,

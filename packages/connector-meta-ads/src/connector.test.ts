@@ -156,6 +156,44 @@ describe('meta ads connector', () => {
     expect(reportQuota).toHaveBeenCalledWith({ remaining: 1, resetAt: new Date(now() + 60_000) });
   });
 
+  it('validates as an ad-lookup connector', () => {
+    expect(connector.capabilities.adLookup).toBe(true);
+  });
+
+  it('lookupAd reads the name of a live ad', async () => {
+    const { adId } = graph.addAd(adAccountId, { name: 'Spring sale' });
+    await expect(connector.lookupAd!(ctx, { externalId: adId })).resolves.toEqual({
+      name: 'Spring sale',
+      deleted: false,
+    });
+  });
+
+  it('lookupAd DELETED -> deleted true', async () => {
+    const { adId } = graph.addAd(adAccountId, { name: 'Old' });
+    graph.deleteAd(adId, 'status');
+    await expect(connector.lookupAd!(ctx, { externalId: adId })).resolves.toMatchObject({
+      deleted: true,
+    });
+  });
+
+  it('lookupAd 100/33 -> deleted true', async () => {
+    const { adId } = graph.addAd(adAccountId);
+    graph.deleteAd(adId, 'gone');
+    await expect(connector.lookupAd!(ctx, { externalId: adId })).resolves.toEqual({
+      name: null,
+      deleted: true,
+    });
+  });
+
+  it('lookupAd 80004 -> rate_limited ConnectorError', async () => {
+    const { adId } = graph.addAd(adAccountId);
+    graph.throttleNext(80004, 2);
+    await expect(connector.lookupAd!(ctx, { externalId: adId })).rejects.toMatchObject({
+      kind: 'rate_limited',
+      retryAfterMs: 120_000,
+    });
+  });
+
   it('never leaks a Graph error message or token', async () => {
     graph.failNext(1);
     const err: unknown = await connector.listSources!(ctx, { cursor: null }).catch(

@@ -7,6 +7,7 @@ import {
   decide,
   endReviewModeBody,
   formatLocal,
+  formatLocalExact,
   handledText,
   openDecision,
   singleFlight,
@@ -67,6 +68,18 @@ const sent = (f: ReturnType<typeof mockFetch>, i = 0) => ({
 afterEach(() => vi.unstubAllGlobals());
 
 const BASE = '/api/v1/orgs/o/brands/b' as const;
+
+describe('formatLocalExact', () => {
+  it('spells out the full date and time with the zone', () => {
+    const t = formatLocalExact('2026-10-27T10:04:05.000Z', {
+      timeZone: 'Europe/Berlin',
+      locale: 'en-US',
+    });
+    expect(t).toContain('Tuesday, October 27, 2026');
+    expect(t).toContain('11:04:05');
+    expect(formatLocalExact('nope')).toBe('');
+  });
+});
 
 describe('formatLocal', () => {
   it('shows window start and end across Berlin DST', () => {

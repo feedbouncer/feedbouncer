@@ -120,6 +120,46 @@ describe('ads endpoint', () => {
     expect(r.body.nextCursor).toBeNull();
   });
 
+  it('post-unavailable/last-polled ignore unlinked sources', async () => {
+    const fbConnection = await connection(A, 'facebook', '901');
+    const ad = await addAd(A, adsConnectionA, {
+      id: '5100',
+      fb: '901_2',
+      discoveredAt: '2026-10-14T13:00:00Z',
+    });
+    const link = async (
+      post: string,
+      polledAt: string,
+      unlinkedAt: string | null,
+      unavailable: boolean,
+    ) => {
+      const src = await api.pool.query<{ id: string }>(
+        `INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id)
+         VALUES ($1, $2, $3, 'ad_post', $4) RETURNING id`,
+        [A.orgId, A.brandId, fbConnection, post],
+      );
+      await api.pool.query(
+        `INSERT INTO meta_ad_source (organization_id, brand_id, ad_id, source_id, platform, unlinked_at)
+         VALUES ($1, $2, $3, $4, 'facebook', $5)`,
+        [A.orgId, A.brandId, ad, src.rows[0]!.id, unlinkedAt],
+      );
+      await api.pool.query(
+        `INSERT INTO source_poll (source_id, organization_id, brand_id, connection_id,
+                                  last_polled_at, unavailable_since)
+         VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 THEN $5::timestamptz END)`,
+        [src.rows[0]!.id, A.orgId, A.brandId, fbConnection, polledAt, unavailable],
+      );
+    };
+    await link('901_1', '2026-10-14T14:00:00Z', '2026-10-14T13:30:00Z', true);
+    await link('901_2', '2026-10-14T12:00:00Z', null, false);
+    const r = await api.req('GET', adsUrl(A, '?limit=1'), { cookie: A.owner.cookie });
+    expect(r.body.ads[0]).toMatchObject({
+      adId: '5100',
+      lastPolledAt: '2026-10-14T12:00:00.000Z',
+      postUnavailable: false,
+    });
+  });
+
   it('paginates with an opaque cursor; a tampered cursor is 400', async () => {
     for (let i = 0; i < 3; i++)
       await addAd(A, adsConnectionA, {
