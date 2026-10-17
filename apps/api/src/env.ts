@@ -18,6 +18,7 @@ import {
   type LogLevel,
   type SecretFileSystem,
 } from '@feedbouncer/service-runtime';
+import { parseAlertChannels, readAlertLimits } from '@feedbouncer/alerts';
 import {
   FACEBOOK_FILE_VARS,
   parseFacebookEnv,
@@ -81,6 +82,12 @@ export interface ApiEnv {
   readonly policy: ReturnType<typeof loadPolicyLimits>;
   readonly telemetry: TelemetryConfig;
   readonly health: HealthPolicy;
+  /** Which alert channels this deployment offers and the per-workspace hourly alert cap. */
+  readonly alerts: {
+    readonly slack: boolean;
+    readonly email: boolean;
+    readonly capPerHour: number;
+  };
 }
 
 export interface LoadEnvOptions {
@@ -129,6 +136,10 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     policy: loadPolicyLimits(env),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),
+    alerts: {
+      ...parseAlertChannels(env.ALERT_CHANNELS),
+      capPerHour: readAlertLimits(env).capPerHour,
+    },
   };
   // A whole-config dump (JSON, util.inspect) must never carry secrets or URL passwords.
   return redactOnSerialize(config, {
@@ -140,6 +151,8 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     facebookEnabled: config.facebook !== null,
     instagramEnabled: config.instagram !== null,
     metaAdsEnabled: config.metaAds !== null,
+    alertSlackEnabled: config.alerts.slack,
+    alertEmailEnabled: config.alerts.email,
     classifierEnabled: config.classifier.enabled,
     policyEvaluationEnabled: config.policy.evaluatorConfigured,
     jobQueuePrefix: config.jobs.prefix,

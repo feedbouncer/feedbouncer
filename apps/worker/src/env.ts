@@ -16,6 +16,7 @@ import {
   type LogLevel,
   type SecretFileSystem,
 } from '@feedbouncer/service-runtime';
+import { parseAlertChannels, readAlertLimits } from '@feedbouncer/alerts';
 import {
   CLASSIFIER_FILE_VARS,
   CLASSIFIER_JOB_SPECS,
@@ -91,8 +92,17 @@ export interface WorkerEnv {
   readonly metaAds: MetaAdsConfig | null;
   /** Cadence of ad discovery and ad comment polling; null exactly when `metaAds` is. */
   readonly adPolling: AdPollingConfig | null;
-  /** Null unless Facebook is configured: only the Facebook connector sends mail or needs the web origin. */
+  /** Null unless Facebook is configured or email alerts are enabled: only they send mail or need the web origin. */
   readonly mail: WorkerMailConfig | null;
+  /** Which alert channels this deployment offers; both false means the alert loops do not run. */
+  readonly alerts: WorkerAlertsConfig;
+}
+
+export interface WorkerAlertsConfig {
+  readonly slack: boolean;
+  readonly email: boolean;
+  readonly capPerHour: number;
+  readonly emailPerMinute: number;
 }
 
 export interface AdPollingConfig {
@@ -182,7 +192,8 @@ export function loadWorkerEnv(
   const instagram = parseInstagramEnv(env, facebook);
   const metaAds = parseMetaAdsEnv(env, facebook);
   const adPolling = metaAds ? readAdPollingConfig(env) : null;
-  const mail = facebook ? readMailConfig(env) : null;
+  const alerts = { ...parseAlertChannels(env.ALERT_CHANNELS), ...readAlertLimits(env) };
+  const mail = facebook || alerts.email ? readMailConfig(env) : null;
   checkNotPlaceholder(appEnv, 'DATABASE_URL', databaseUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);
   const jobs = loadJobsConfig(env, { lanes: JOB_LANES, laneDefaults: LANE_DEFAULTS });
@@ -218,6 +229,7 @@ export function loadWorkerEnv(
     metaAds,
     adPolling,
     mail,
+    alerts,
   };
   // A whole-config dump (JSON, util.inspect) must never carry URL passwords or keys.
   return redactOnSerialize(config, {
@@ -229,6 +241,8 @@ export function loadWorkerEnv(
     facebookEnabled: config.facebook !== null,
     instagramEnabled: config.instagram !== null,
     metaAdsEnabled: config.metaAds !== null,
+    alertSlackEnabled: alerts.slack,
+    alertEmailEnabled: alerts.email,
     activeKeyId: config.encryption.activeKeyId,
     jobQueuePrefix: config.jobs.prefix,
     classifierEnabled: config.classifier.model !== null,

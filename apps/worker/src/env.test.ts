@@ -239,6 +239,48 @@ describe('loadWorkerEnv', () => {
     });
   });
 
+  describe('alerts', () => {
+    it('is off by default and needs no mail', () => {
+      const env = load(without('SMTP_URL', 'PUBLIC_WEB_URL'));
+      expect(env.alerts).toEqual({
+        slack: false,
+        email: false,
+        capPerHour: 30,
+        emailPerMinute: 60,
+      });
+      expect(env.mail).toBeNull();
+    });
+    it('slack alone needs no mail config', () => {
+      const env = load({ ...without('SMTP_URL', 'PUBLIC_WEB_URL'), ALERT_CHANNELS: 'slack' });
+      expect(env.alerts.slack).toBe(true);
+      expect(env.mail).toBeNull();
+    });
+    it('email alerts read mail config even when facebook is unset', () => {
+      const env = load({ ...base, ALERT_CHANNELS: 'email' });
+      expect(env.facebook).toBeNull();
+      expect(env.mail?.smtpUrl.href).toBe('smtp://mailpit:1025');
+    });
+    it('slack,email without SMTP_URL fails startup', () => {
+      expect(
+        messageOf(() => load({ ...without('SMTP_URL'), ALERT_CHANNELS: 'slack,email' })),
+      ).toMatch(/SMTP_URL/);
+    });
+    it('rejects an unknown channel and an out-of-range limit', () => {
+      expect(() => load({ ...base, ALERT_CHANNELS: 'sms' })).toThrow(/ALERT_CHANNELS/);
+      expect(() => load({ ...base, ALERT_MAX_PER_WORKSPACE_PER_HOUR: '0' })).toThrow(
+        /ALERT_MAX_PER_WORKSPACE_PER_HOUR/,
+      );
+    });
+    it('reads the limits', () => {
+      const env = load({
+        ...base,
+        ALERT_MAX_PER_WORKSPACE_PER_HOUR: '5',
+        ALERT_EMAIL_MAX_PER_MINUTE: '7',
+      });
+      expect(env.alerts).toMatchObject({ capPerHour: 5, emailPerMinute: 7 });
+    });
+  });
+
   describe('facebook, mail and public url', () => {
     it('leaves facebook null when FACEBOOK_APP_ID is unset', () => {
       expect(load(base).facebook).toBeNull();

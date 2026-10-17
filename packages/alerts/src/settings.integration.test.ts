@@ -4,6 +4,7 @@ import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { testKeyring } from '@feedbouncer/secrets/testing';
 import { PgAlertChannels } from './channels.js';
+import { seedChannel, seedFlags } from './testing.js';
 import { DEFAULT_SETTINGS, PgAlertSettings } from './settings.js';
 
 const WEBHOOK = 'https://hooks.slack.com/services/TABC12345/BXYZ98765/sentinelHookSecret1234';
@@ -189,16 +190,75 @@ describe('PgAlertSettings', () => {
     expect(ev.rows.map((x) => x.d).join('')).not.toMatch(/hooks\.slack|@/);
   });
 
-  it('removeBrand deletes settings, routes and state', async () => {
+  it('removeBrand clears the brand alert data and cancels open deliveries, leaving other brands alone', async () => {
+    const seed = async (t: Tenant, channelId: string) => {
+      const [itemId] = await seedFlags(h.c, t, { count: 1, createdAt: new Date() });
+      const [commentId] = (
+        await h.c.query<{ comment_id: string }>(
+          'SELECT comment_id FROM review_item WHERE id = $1',
+          [itemId],
+        )
+      ).rows;
+      await h.c.query(
+        `INSERT INTO alert_flag_item (organization_id, brand_id, review_item_id, comment_id, flagged_at)
+         VALUES ($1, $2, $3, $4, now())`,
+        [t.organizationId, t.brandId, itemId, commentId!.comment_id],
+      );
+      await h.c.query(
+        'INSERT INTO alert_brand_state (organization_id, brand_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [t.organizationId, t.brandId],
+      );
+      await h.c.query(
+        `INSERT INTO alert_negative_hourly (organization_id, brand_id, hour, negatives, total)
+         VALUES ($1, $2, date_trunc('hour', now()), 1, 2)`,
+        [t.organizationId, t.brandId],
+      );
+      const ev = await h.c.query<{ id: string }>(
+        `INSERT INTO alert_event (organization_id, brand_id, alert_type, alert_key, status, payload)
+         VALUES ($1, $2, 'negative_spike', $3, 'queued', '{}') RETURNING id`,
+        [t.organizationId, t.brandId, `k:${t.brandId}`],
+      );
+      for (const state of ['pending', 'retrying', 'sent']) {
+        const ch = await seedChannel(h.c, t, 'email');
+        await h.c.query(
+          'INSERT INTO alert_delivery (organization_id, alert_event_id, channel_id, state) VALUES ($1, $2, $3, $4)',
+          [t.organizationId, ev.rows[0]!.id, ch, state],
+        );
+      }
+      await settings.put(t.organizationId, t.brandId, t.userId, {
+        settings: DEFAULT_SETTINGS,
+        routes: [{ alertType: 'flagged_item', channelId, enabled: true }],
+      });
+    };
+    await seed(a, chA);
+    await seed(b, chB);
     const c = await pool.connect();
     try {
       await settings.removeBrand(c, a.organizationId, a.brandId);
     } finally {
       c.release();
     }
-    for (const t of ['alert_brand_settings', 'alert_route', 'alert_brand_state'])
-      expect(
-        (await h.c.query(`SELECT 1 FROM ${t} WHERE brand_id = $1`, [a.brandId])).rowCount,
-      ).toBe(0);
+    const count = async (t: string, brandId: string) =>
+      (await h.c.query(`SELECT 1 FROM ${t} WHERE brand_id = $1`, [brandId])).rowCount;
+    for (const t of [
+      'alert_brand_settings',
+      'alert_route',
+      'alert_brand_state',
+      'alert_negative_hourly',
+      'alert_flag_item',
+    ]) {
+      expect(await count(t, a.brandId), t).toBe(0);
+      expect(await count(t, b.brandId), t).toBeGreaterThan(0);
+    }
+    const states = async (t: Tenant) =>
+      (
+        await h.c.query<{ state: string }>(
+          `SELECT d.state FROM alert_delivery d JOIN alert_event e ON e.id = d.alert_event_id
+            WHERE e.brand_id = $1 ORDER BY d.state`,
+          [t.brandId],
+        )
+      ).rows.map((r) => r.state);
+    expect(await states(a)).toEqual(['cancelled', 'cancelled', 'sent']);
+    expect(await states(b)).toEqual(['pending', 'retrying', 'sent']);
   });
 });

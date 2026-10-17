@@ -152,11 +152,29 @@ export class PgAlertSettings {
   }
 
   async removeBrand(c: pg.ClientBase, orgId: string, brandId: string): Promise<void> {
-    for (const table of ['alert_route', 'alert_brand_settings', 'alert_brand_state']) {
+    const tables = [
+      'alert_route',
+      'alert_brand_settings',
+      'alert_brand_state',
+      'alert_negative_hourly',
+    ];
+    for (const table of tables) {
       await c.query(`DELETE FROM ${table} WHERE organization_id = $1 AND brand_id = $2`, [
         orgId,
         brandId,
       ]);
     }
+    await c.query(
+      "DELETE FROM alert_flag_item WHERE organization_id = $1 AND brand_id = $2 AND state = 'pending'",
+      [orgId, brandId],
+    );
+    await c.query(
+      `UPDATE alert_delivery d SET state = 'cancelled', lease_until = NULL
+         FROM alert_event e
+        WHERE e.organization_id = d.organization_id AND e.id = d.alert_event_id
+          AND e.organization_id = $1 AND e.brand_id = $2
+          AND d.state IN ('pending', 'retrying')`,
+      [orgId, brandId],
+    );
   }
 }

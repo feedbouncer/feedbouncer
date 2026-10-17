@@ -152,6 +152,9 @@ importers:
       '@feedbouncer/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@feedbouncer/alerts':
+        specifier: workspace:*
+        version: link:../../packages/alerts
       '@feedbouncer/authz':
         specifier: workspace:*
         version: link:../../packages/authz
@@ -302,6 +305,9 @@ importers:
       '@feedbouncer/actions':
         specifier: workspace:*
         version: link:../../packages/actions
+      '@feedbouncer/alerts':
+        specifier: workspace:*
+        version: link:../../packages/alerts
       '@feedbouncer/classifier':
         specifier: workspace:*
         version: link:../../packages/classifier

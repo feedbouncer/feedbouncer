@@ -1,3 +1,4 @@
+export * from './config.js';
 export * from './constants.js';
 export * from './spike.js';
 export * from './audit.js';

@@ -161,6 +161,24 @@ describe('loadApiEnv', () => {
     });
   });
 
+  describe('alerts', () => {
+    it('is off by default with the default cap', () => {
+      expect(load(base).alerts).toEqual({ slack: false, email: false, capPerHour: 30 });
+    });
+    it('reads the channel list and the cap', () => {
+      expect(
+        load({ ...base, ALERT_CHANNELS: 'slack, email', ALERT_MAX_PER_WORKSPACE_PER_HOUR: '12' })
+          .alerts,
+      ).toEqual({ slack: true, email: true, capPerHour: 12 });
+    });
+    it('rejects an unknown channel and an out-of-range cap', () => {
+      expect(() => load({ ...base, ALERT_CHANNELS: 'sms' })).toThrow(/ALERT_CHANNELS/);
+      expect(() => load({ ...base, ALERT_MAX_PER_WORKSPACE_PER_HOUR: '0' })).toThrow(
+        /ALERT_MAX_PER_WORKSPACE_PER_HOUR/,
+      );
+    });
+  });
+
   describe('SMTP_URL', () => {
     it('is required', () => {
       expect(messageOf(() => load(without('SMTP_URL')))).toMatch(/SMTP_URL is not set/);

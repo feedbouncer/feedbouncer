@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@feedbouncer/actions": "workspace:*",
+    "@feedbouncer/alerts": "workspace:*",
     "@feedbouncer/classifier": "workspace:*",
     "@feedbouncer/comments": "workspace:*",
     "@feedbouncer/connector-facebook": "workspace:*",
