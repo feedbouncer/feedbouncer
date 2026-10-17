@@ -9,3 +9,4 @@ export const SCHEDULER_EVERY_MS = 60_000;
 export const DISPATCH_EVERY_MS = 10_000;
 export const SCHEDULER_BATCH = 20;
 export const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
+export const DASHBOARD_LOOKBACK_WEEKS = 52;

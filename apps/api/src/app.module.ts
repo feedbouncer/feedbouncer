@@ -62,6 +62,9 @@ import { ReviewModeController } from './review-mode/review-mode.controller.js';
 import { ReviewModeService } from './review-mode/review-mode.service.js';
 import { SuggestionsController } from './review-mode/suggestions.controller.js';
 import { OrgsService } from './orgs/orgs.service.js';
+import { MeReportsController } from './reports/me-reports.controller.js';
+import { ReportsController } from './reports/reports.controller.js';
+import { ReportsService } from './reports/reports.service.js';
 import { OrgAccessGuard } from './tenancy/org-access.guard.js';
 import {
   ACCOUNT_DELETION,
@@ -117,6 +120,8 @@ export class AppModule {
         AlertChannelsController,
         BrandAlertsController,
         AlertRecipientsController,
+        ReportsController,
+        MeReportsController,
       ],
       providers: [
         Reflector,
@@ -142,6 +147,7 @@ export class AppModule {
         RoleGrantsService,
         InvitationsService,
         AlertsService,
+        ReportsService,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.
         { provide: CONNECTOR_STACK, useValue: deps.connectors?.stack ?? null },

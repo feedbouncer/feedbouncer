@@ -10,6 +10,8 @@ import { trustProxyHops } from './http/trust-proxy.js';
 import type { AppDeps } from './deps.js';
 import { AlertsService } from './alerts/alerts.service.js';
 import { registerUnsubscribeRoute } from './alerts/unsubscribe.plugin.js';
+import { ReportsService } from './reports/reports.service.js';
+import { registerReportUnsubscribeRoute } from './reports/unsubscribe.plugin.js';
 import { registerMetaWebhooks } from './webhooks/meta-webhooks.plugin.js';
 
 export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
@@ -39,7 +41,7 @@ export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
     // "/api"), so matching the raw URL would be bypassable. Safe methods pass.
     // Routing runs before onRequest, so routeOptions.config is the matched
     // route's own. Only signature-verified webhook routes and the token-authenticated
-    // alert recipient routes opt out of the check.
+    // alert recipient and report unsubscribe routes opt out of the check.
     if (req.routeOptions.config?.publicWebhook === true) return;
     if (!isTrustedOrigin(req.method, req.headers, webOrigin)) {
       const e = new ApiError(403, 'invalid_origin');
@@ -52,6 +54,7 @@ export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
   });
   await registerMetaWebhooks(fastify, deps);
   await registerUnsubscribeRoute(fastify, deps, app.get(AlertsService));
+  await registerReportUnsubscribeRoute(fastify, deps, app.get(ReportsService));
   registerRequestLog(fastify, deps.log, deps.metrics);
   app.useGlobalInterceptors(new TraceInterceptor());
   app.useGlobalFilters(new ApiErrorFilter(deps.log));

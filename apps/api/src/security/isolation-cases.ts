@@ -623,6 +623,11 @@ export const CASES: IsolationCase[] = [
     body: () => ({ confirmCount: 0 }),
   },
   {
+    route: 'GET /api/v1/orgs/:orgId/reports/weekly',
+    name: "read B's weekly report",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/reports/weekly`,
+  },
+  {
     route: 'GET /api/v1/orgs/:orgId/alert-channels',
     name: "list B's alert channels",
     url: (f) => `/api/v1/orgs/${f.B.orgId}/alert-channels`,
@@ -750,6 +755,9 @@ export const ACCOUNT_ROUTES = [
   'GET /api/v1/orgs',
   /** Derives its organizations from the caller's memberships; takes no ids. */
   'GET /api/v1/me/hidden-today',
+  /** The caller's own report subscriptions; the PUT checks the caller is an owner or admin of the organization. */
+  'GET /api/v1/me/report-subscriptions',
+  'PUT /api/v1/me/report-subscriptions/:organizationId',
   'POST /api/v1/orgs',
   'POST /api/v1/invitations/lookup',
   'POST /api/v1/invitations/accept',
@@ -770,6 +778,8 @@ export const PUBLIC_ROUTES = [
   /** Token-authenticated: the emailed confirm and unsubscribe links. Also exempt from the Origin check. */
   'POST /api/v1/alert-recipients/confirm',
   'POST /api/v1/alert-recipients/unsubscribe',
+  /** The weekly report's one-click unsubscribe link. */
+  'POST /api/v1/report-subscriptions/unsubscribe',
 ];
 
 /** The Better Auth endpoints the /api/auth proxy forwards; everything else is a 404. */

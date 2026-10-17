@@ -1,6 +1,6 @@
 import { UUID_RE } from '@feedbouncer/alerts';
+import { WEEK_START_RE } from './period.js';
 
-const WEEK_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
 function checked(re: RegExp, v: string, what: string): string {
@@ -9,7 +9,7 @@ function checked(re: RegExp, v: string, what: string): string {
 }
 
 export const dashboardLink = (web: URL, orgId: string, weekStart: string): string =>
-  `${web.origin}/orgs/${checked(UUID_RE, orgId, 'id').toLowerCase()}/reports?week=${checked(WEEK_RE, weekStart, 'week')}`;
+  `${web.origin}/orgs/${checked(UUID_RE, orgId, 'id').toLowerCase()}/reports?week=${checked(WEEK_START_RE, weekStart, 'week')}`;
 
 export const unsubscribePageLink = (web: URL, token: string): string =>
   `${web.origin}/reports/unsubscribe?token=${checked(TOKEN_RE, token, 'token')}`;

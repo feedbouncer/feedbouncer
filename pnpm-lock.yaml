@@ -191,6 +191,9 @@ importers:
       '@feedbouncer/policies':
         specifier: workspace:*
         version: link:../../packages/policies
+      '@feedbouncer/reports':
+        specifier: workspace:*
+        version: link:../../packages/reports
       '@feedbouncer/rules':
         specifier: workspace:*
         version: link:../../packages/rules

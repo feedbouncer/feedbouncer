@@ -1,11 +1,9 @@
-// Public one-click unsubscribe, registered as an encapsulated Fastify scope so the
-// RFC 8058 form parser (`List-Unsubscribe=One-Click`) exists for this route only:
-// every other route keeps JSON as its single body type. The route is
-// token-authenticated and, like the other recipient routes, skips the Origin check.
-import type { FastifyError, FastifyInstance, FastifyRequest } from 'fastify';
-import { errorFields } from '@feedbouncer/service-runtime';
+// Public one-click alert unsubscribe (see http/one-click-route.ts). Like the other recipient
+// routes, it skips the Origin check.
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AppDeps } from '../deps.js';
-import { ApiError, errorBody } from '../http/errors.js';
+import { ApiError } from '../http/errors.js';
+import { registerOneClickRoute } from '../http/one-click-route.js';
 import { parseBody } from '../http/validation.js';
 import { AlertsService } from './alerts.service.js';
 import { TOKEN_RE, TokenBody } from './dto.js';
@@ -27,38 +25,17 @@ export function unsubscribeToken(req: FastifyRequest): string {
   return query;
 }
 
-export async function registerUnsubscribeRoute(
+export function registerUnsubscribeRoute(
   fastify: FastifyInstance,
   deps: AppDeps,
   alerts: AlertsService,
 ): Promise<void> {
-  await fastify.register(async (scope) => {
-    scope.addContentTypeParser(
-      'application/x-www-form-urlencoded',
-      { parseAs: 'string', bodyLimit: 1024 },
-      (_req, body, done) => done(null, Object.fromEntries(new URLSearchParams(body as string))),
-    );
-    // Outside Nest's exception filter: map errors here, never echoing error text.
-    scope.setErrorHandler((err: FastifyError | ApiError, _req, reply) => {
-      let e: ApiError;
-      if (err instanceof ApiError) e = err;
-      else if (err.statusCode !== undefined && err.statusCode >= 400 && err.statusCode < 500) {
-        e = new ApiError(err.statusCode === 415 ? 415 : 400, 'invalid_request');
-      } else {
-        deps.log.error('alert unsubscribe failed', errorFields(err));
-        e = new ApiError(500, 'internal_error');
-      }
-      return reply.status(e.status).header('cache-control', 'no-store').send(errorBody(e));
-    });
-    scope.route({
-      method: 'POST',
-      url: UNSUBSCRIBE_PATH,
-      config: { publicWebhook: true },
-      handler: async (req, reply) => {
-        await alerts.limitPublic(req.ip);
-        const r = await alerts.unsubscribe(unsubscribeToken(req));
-        return reply.status(200).send(r);
-      },
-    });
+  return registerOneClickRoute(fastify, deps, {
+    url: UNSUBSCRIBE_PATH,
+    failure: 'alert unsubscribe failed',
+    handler: async (req) => {
+      await alerts.limitPublic(req.ip);
+      return alerts.unsubscribe(unsubscribeToken(req));
+    },
   });
 }

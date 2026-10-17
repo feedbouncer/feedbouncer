@@ -31,6 +31,7 @@
     "@feedbouncer/mailer": "workspace:*",
     "@feedbouncer/observability": "workspace:*",
     "@feedbouncer/policies": "workspace:*",
+    "@feedbouncer/reports": "workspace:*",
     "@feedbouncer/rules": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",

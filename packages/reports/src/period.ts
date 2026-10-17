@@ -1,6 +1,9 @@
 import type pg from 'pg';
 import { SEND_HOUR_LOCAL } from './constants.js';
 
+/** The shape of a week key (a local Monday); periodForWeek checks the day. */
+export const WEEK_START_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 export interface ReportPeriod {
   /** Local Monday of the reported week, YYYY-MM-DD. */
   weekStart: string;

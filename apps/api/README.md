@@ -115,6 +115,17 @@ Invitations expire after 7 days; inviting an address that already has a pending 
 
 Creating, reconnecting or enabling a channel kind that `ALERT_CHANNELS` does not list answers `409 alerts_unavailable`. The public recipient routes are limited to 30 requests per minute per client IP. The web app uses `/orgs/:orgId/alerts`, `/orgs/:orgId/brands/:brandId/alerts`, `/alerts/confirm?token=` and `/alerts/unsubscribe?token=`.
 
+### Weekly reports (session unless noted)
+
+| Method and path                                 | Notes                                                                                                                                                                                                     |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/orgs/:orgId/reports/weekly`        | `report.read` (owners and admins); `?week=YYYY-MM-DD` (a local Monday, default the last complete week, at most 52 weeks back, else `400 invalid_week`) -> `{ weekStart, timezone, source, stats, weeks }` |
+| `GET /api/v1/me/report-subscriptions`           | `{ subscriptions }`: one per organization where the caller is an owner or admin                                                                                                                           |
+| `PUT /api/v1/me/report-subscriptions/:orgId`    | `{ subscribed }` -> `204`; `404` unless the caller is an owner or admin of the organization. Resubscribing rotates the unsubscribe link                                                                   |
+| `POST /api/v1/report-subscriptions/unsubscribe` | No session or origin check. `?token=` with an empty body or the RFC 8058 form body `List-Unsubscribe=One-Click` -> `200 { status: "unsubscribed" \| "already" \| "invalid" }`, whatever the token         |
+
+`source` is `snapshot` (the stored payload of the emailed report) when the week has one, otherwise `live`: computed in one read-only snapshot as of the week's send time (or now, if earlier). The unsubscribe route shares the 30 requests per minute per client IP of the alert recipient routes. The web app uses `/orgs/:orgId/reports?week=`, `/reports/unsubscribe?token=` and `/account#email-reports`.
+
 ### Health
 
 `GET /livez` and `GET /healthz` (Postgres and Redis); unauthenticated and outside `/api/v1`.
@@ -127,17 +138,17 @@ Every error has one shape, and the codes are stable:
 { "error": { "code": "forbidden", "message": "You do not have permission to do this." } }
 ```
 
-| Status  | Codes                                                                                                                                       |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 400     | `invalid_request`, `invalid_email`, `invalid_or_expired_token`, `confirmation_mismatch`, `invalid_webhook_url`, `invalid_timezone`          |
-| 401     | `unauthenticated`, `invalid_credentials`                                                                                                    |
-| 403     | `forbidden`, `invalid_origin`, `email_not_verified`, `cannot_act_on_owner`, `cannot_grant_owner`, `invitation_email_mismatch`               |
-| 404     | `not_found` (unknown resource, or an organization you are not a member of), `invalid_token` (alert recipient links)                         |
-| 409     | `last_owner`, `sole_owner`, `brand_name_taken`, `brand_archived`, `invitation_not_pending`, `alerts_unavailable`, `email_taken`, `too_soon` |
-| 422     | `password_too_short`, `password_too_long`, `weak_password`, `unknown_channel`                                                               |
-| 429     | `rate_limited`                                                                                                                              |
-| 502     | `confirmation_send_failed` (the alert confirmation email could not be sent; use resend)                                                     |
-| 500/503 | `internal_error`, `temporarily_unavailable` (Redis unreachable: rate-limited endpoints fail closed)                                         |
+| Status  | Codes                                                                                                                                              |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400     | `invalid_request`, `invalid_email`, `invalid_or_expired_token`, `confirmation_mismatch`, `invalid_webhook_url`, `invalid_timezone`, `invalid_week` |
+| 401     | `unauthenticated`, `invalid_credentials`                                                                                                           |
+| 403     | `forbidden`, `invalid_origin`, `email_not_verified`, `cannot_act_on_owner`, `cannot_grant_owner`, `invitation_email_mismatch`                      |
+| 404     | `not_found` (unknown resource, or an organization you are not a member of), `invalid_token` (alert recipient links)                                |
+| 409     | `last_owner`, `sole_owner`, `brand_name_taken`, `brand_archived`, `invitation_not_pending`, `alerts_unavailable`, `email_taken`, `too_soon`        |
+| 422     | `password_too_short`, `password_too_long`, `weak_password`, `unknown_channel`                                                                      |
+| 429     | `rate_limited`                                                                                                                                     |
+| 502     | `confirmation_send_failed` (the alert confirmation email could not be sent; use resend)                                                            |
+| 500/503 | `internal_error`, `temporarily_unavailable` (Redis unreachable: rate-limited endpoints fail closed)                                                |
 
 ## Security notes
 
