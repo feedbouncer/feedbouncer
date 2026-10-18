@@ -10,7 +10,7 @@ describe('generateApiKey', () => {
   it('is unique per call and hashes the secret part only', () => {
     const a = generateApiKey();
     expect(generateApiKey().publicId).not.toBe(a.publicId);
-    const secret = a.token.reveal().split('_')[2]!;
+    const secret = a.token.reveal().slice('fbk_'.length + 17);
     expect(a.secretSha256.equals(createHash('sha256').update(secret).digest())).toBe(true);
   });
 });
@@ -24,7 +24,8 @@ describe('parseApiKey', () => {
   });
 
   const good = generateApiKey().token.reveal();
-  const [, id, secret] = good.split('_') as [string, string, string];
+  const id = good.slice(4, 20);
+  const secret = good.slice(21);
   it.each([
     ['empty', ''],
     ['bearer prefix', 'Bearer x'],
