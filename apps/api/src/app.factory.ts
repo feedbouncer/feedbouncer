@@ -35,14 +35,24 @@ export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
   const fastify = app.getHttpAdapter().getInstance();
   fastify.removeContentTypeParser('text/plain');
 
+  // The /v1 routes authenticate by bearer key and never read cookies, so the
+  // browser Origin check does not apply. Marked here, before Nest registers any
+  // route, so a new controller cannot forget it.
+  fastify.addHook('onRoute', (opts) => {
+    if (!opts.url.startsWith('/v1/')) return;
+    opts.config = { ...opts.config, publicApi: true };
+  });
+
   const webOrigin = deps.env.publicWebUrl.origin;
   fastify.addHook('onRequest', async (req, reply) => {
     // Every request, not a path prefix: Fastify decodes paths ("/%61pi" is
     // "/api"), so matching the raw URL would be bypassable. Safe methods pass.
     // Routing runs before onRequest, so routeOptions.config is the matched
-    // route's own. Only signature-verified webhook routes and the token-authenticated
-    // alert recipient and report unsubscribe routes opt out of the check.
-    if (req.routeOptions.config?.publicWebhook === true) return;
+    // route's own. Only signature-verified webhook routes, the token-authenticated
+    // alert recipient and report unsubscribe routes and the bearer-key /v1 routes
+    // opt out of the check.
+    const config = req.routeOptions.config;
+    if (config?.publicWebhook === true || config?.publicApi === true) return;
     if (!isTrustedOrigin(req.method, req.headers, webOrigin)) {
       const e = new ApiError(403, 'invalid_origin');
       return reply.status(e.status).header('cache-control', 'no-store').send(errorBody(e));

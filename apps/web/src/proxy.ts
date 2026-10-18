@@ -14,4 +14,4 @@ export function proxy(request: NextRequest): NextResponse {
   return NextResponse.next({ request: { headers } });
 }
 
-export const config = { matcher: ['/api/auth/:path*', '/api/v1/:path*'] };
+export const config = { matcher: ['/api/auth/:path*', '/api/v1/:path*', '/v1/:path*'] };

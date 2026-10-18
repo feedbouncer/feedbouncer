@@ -25,6 +25,6 @@ describe('proxy', () => {
   });
 
   it('runs for the proxied API paths', () => {
-    expect(config.matcher).toEqual(['/api/auth/:path*', '/api/v1/:path*']);
+    expect(config.matcher).toEqual(['/api/auth/:path*', '/api/v1/:path*', '/v1/:path*']);
   });
 });

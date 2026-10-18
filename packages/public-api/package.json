@@ -23,7 +23,8 @@
   "dependencies": {
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/node": "24.13.6",

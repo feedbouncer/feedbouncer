@@ -7,8 +7,8 @@ const pollMs = Number(process.env.WEB_WATCH_POLL_MS ?? 0);
 const config: NextConfig = {
   poweredByHeader: false,
   agentRules: false,
-  // /api/auth/* and /api/v1/* are forwarded to the API by route handlers
-  // (src/app/api/*/[...path]), not rewrites: see src/lib/api-proxy.ts.
+  // /api/auth/*, /api/v1/* and /v1/* are forwarded to the API by route handlers
+  // (src/app/api/*/[...path] and src/app/v1/[...path]), not rewrites: see src/lib/api-proxy.ts.
   async headers() {
     return [
       {

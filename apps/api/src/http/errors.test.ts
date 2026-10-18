@@ -53,6 +53,16 @@ describe('ApiError', () => {
   });
 });
 
+describe('ApiError headers', () => {
+  it('are sent with the error response', () => {
+    const { sent } = run(
+      new ApiError(429, 'rate_limited', undefined, undefined, { 'retry-after': '7' }),
+    );
+    expect(sent.headers).toMatchObject({ 'retry-after': '7', 'cache-control': 'no-store' });
+    expect(sent.body).toEqual({ error: { code: 'rate_limited', message: expect.any(String) } });
+  });
+});
+
 describe('ApiError details', () => {
   it('are merged into the envelope next to code and message', () => {
     const e = new ApiError(422, 'text_too_long', undefined, { max: 2200 });

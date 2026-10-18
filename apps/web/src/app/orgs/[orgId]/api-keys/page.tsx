@@ -20,9 +20,8 @@ export default async function ApiKeysPage({ params }: { params: Promise<{ orgId:
     <main>
       <h1>API keys</h1>
       <p>
-        API keys let your own tools call the FeedBouncer API for this workspace. Read-only keys can
-        read comments and flagged items. Read and write keys can also hide comments and manage
-        webhooks.
+        API keys let your own tools call the FeedBouncer API for this workspace. Read keys can read
+        your data through the API; write keys can also make changes.
       </p>
       <ApiKeyManager orgId={orgId} items={items} />
       <p>

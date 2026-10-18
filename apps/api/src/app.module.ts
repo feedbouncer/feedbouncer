@@ -7,6 +7,9 @@ import { createAuth, type AuthHooks } from './auth/auth.js';
 import { AuthProxyController } from './auth/auth-proxy.controller.js';
 import { createAuthEmails, type AuthEmails } from './auth/emails.js';
 import { createAuthRateLimits } from './auth/rate-limit.js';
+import { ApiKeyGuard } from './public-api/api-key.guard.js';
+import { OpenApiController } from './public-api/openapi.controller.js';
+import { createPublicApiLimits } from './public-api/rate-limit.js';
 import { SessionGuard } from './auth/session.guard.js';
 import { SignUpController } from './auth/sign-up.controller.js';
 import { ActionsController } from './actions/actions.controller.js';
@@ -79,6 +82,7 @@ import {
   CONNECTOR_STACK,
   DEPS,
   JOB_PRODUCER,
+  PUBLIC_API_LIMITS,
   RATE_LIMITS,
 } from './tokens.js';
 import type { AppDeps } from './deps.js';
@@ -127,6 +131,8 @@ export class AppModule {
         ReportsController,
         MeReportsController,
         ApiKeysController,
+        OpenApiController,
+        ...(deps.extraControllers ?? []),
       ],
       providers: [
         Reflector,
@@ -154,6 +160,7 @@ export class AppModule {
         AlertsService,
         ReportsService,
         ApiKeysService,
+        ApiKeyGuard,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.
         { provide: CONNECTOR_STACK, useValue: deps.connectors?.stack ?? null },
@@ -171,6 +178,12 @@ export class AppModule {
           provide: RATE_LIMITS,
           inject: [DEPS],
           useFactory: (d: AppDeps) => createAuthRateLimits(d.redis, d.redisKeyPrefix),
+        },
+        {
+          provide: PUBLIC_API_LIMITS,
+          inject: [DEPS],
+          useFactory: (d: AppDeps) =>
+            createPublicApiLimits(d.redis, d.redisKeyPrefix, d.env.publicApiRateLimitPerMinute),
         },
         {
           provide: ACCOUNT_DELETION,

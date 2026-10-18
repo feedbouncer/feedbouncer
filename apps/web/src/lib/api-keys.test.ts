@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ApiRequestError } from './api-client';
 import {
   accessText,
   apiKeyErrorText,
+  copyToken,
   lastUsedText,
   revokeConfirmText,
   statusText,
@@ -31,5 +32,20 @@ describe('api key text', () => {
       ),
     ).toBe('An active API key already uses this name.');
     expect(apiKeyErrorText(new TypeError('x'))).toBe('Something went wrong.');
+  });
+});
+
+describe('copyToken', () => {
+  it('confirms a successful copy', async () => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    await expect(copyToken(write, 'fbk_x')).resolves.toBe('Copied.');
+    expect(write).toHaveBeenCalledWith('fbk_x');
+  });
+
+  it('asks for a manual copy when the clipboard rejects', async () => {
+    const write = vi.fn().mockRejectedValue(new DOMException('denied', 'NotAllowedError'));
+    await expect(copyToken(write, 'fbk_x')).resolves.toBe(
+      'Copy failed. Select and copy the key manually.',
+    );
   });
 });

@@ -1,4 +1,4 @@
-// Forwards the browser-facing /api/auth/* and /api/v1/* paths to the API.
+// Forwards the browser-facing /api/auth/*, /api/v1/* and public /v1/* paths to the API.
 //
 // The API's per-IP rate limits read the client address from X-Forwarded-For
 // (TRUST_PROXY_HOPS=1: this server is the one trusted hop). A next.config
@@ -10,7 +10,7 @@
 // is forwarded here.
 import { isIP } from 'node:net';
 
-const PREFIXES = ['/api/auth/', '/api/v1/'];
+const PREFIXES = ['/api/auth/', '/api/v1/', '/v1/'];
 const TIMEOUT_MS = 30_000;
 
 // Never forwarded upstream: hop-by-hop headers, anything that claims a client

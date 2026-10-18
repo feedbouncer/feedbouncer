@@ -6,6 +6,7 @@ import {
   ACCESS_OPTIONS,
   accessText,
   apiKeyErrorText,
+  copyToken,
   lastUsedText,
   revokeConfirmText,
   statusText,
@@ -19,6 +20,7 @@ export function ApiKeyManager({ orgId, items }: { orgId: string; items: ApiKeyDt
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [copyNote, setCopyNote] = useState<string | null>(null);
   const base = `/api/v1/orgs/${orgId}/api-keys` as const;
 
   async function run(action: () => Promise<void>) {
@@ -44,6 +46,7 @@ export function ApiKeyManager({ orgId, items }: { orgId: string; items: ApiKeyDt
         body: { name: String(data.get('name') ?? ''), scope: String(data.get('scope') ?? '') },
       });
       setToken(created.token);
+      setCopyNote(null);
       form.reset();
     });
   }
@@ -81,10 +84,16 @@ export function ApiKeyManager({ orgId, items }: { orgId: string; items: ApiKeyDt
           <p>Copy this key now. You won&apos;t be able to see it again.</p>
           <p>
             <code>{token}</code>{' '}
-            <button type="button" onClick={() => void navigator.clipboard.writeText(token)}>
+            <button
+              type="button"
+              onClick={() =>
+                void copyToken((t) => navigator.clipboard.writeText(t), token).then(setCopyNote)
+              }
+            >
               Copy
             </button>
           </p>
+          {copyNote ? <p>{copyNote}</p> : null}
         </section>
       ) : null}
       <table>

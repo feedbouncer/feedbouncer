@@ -85,6 +85,8 @@ export interface ApiEnv {
   readonly classifier: { readonly id: string; readonly model: string; readonly enabled: boolean };
   /** Policy checks: the monthly call budget and whether the deployment has an evaluation model. */
   readonly policy: ReturnType<typeof loadPolicyLimits>;
+  /** Requests per minute allowed to each API key of the public /v1 API. */
+  readonly publicApiRateLimitPerMinute: number;
   readonly telemetry: TelemetryConfig;
   readonly health: HealthPolicy;
   /** Which alert channels this deployment offers and the per-workspace hourly alert cap. */
@@ -166,6 +168,11 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     jobs: loadJobsConfig(env),
     classifier: describeClassifierProvider(env),
     policy: loadPolicyLimits(env),
+    publicApiRateLimitPerMinute: readInt(env, 'PUBLIC_API_RATE_LIMIT_PER_MINUTE', {
+      min: 1,
+      max: 10_000,
+      fallback: 60,
+    }),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),
     alerts: {
@@ -177,6 +184,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
   return redactOnSerialize(config, {
     appEnv,
     port: config.port,
+    publicApiRateLimitPerMinute: config.publicApiRateLimitPerMinute,
     logLevel: config.logLevel,
     publicWebUrl: publicWebUrl.origin,
     trustProxyHops: config.trustProxyHops,

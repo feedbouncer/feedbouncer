@@ -161,6 +161,22 @@ describe('loadApiEnv', () => {
     });
   });
 
+  describe('public API rate limit', () => {
+    it('defaults to 60 requests per minute per key', () => {
+      expect(load(base).publicApiRateLimitPerMinute).toBe(60);
+    });
+    it('reads the limit and rejects values outside 1-10000', () => {
+      expect(
+        load({ ...base, PUBLIC_API_RATE_LIMIT_PER_MINUTE: '600' }).publicApiRateLimitPerMinute,
+      ).toBe(600);
+      for (const bad of ['0', '10001', 'abc', '1.5']) {
+        expect(() => load({ ...base, PUBLIC_API_RATE_LIMIT_PER_MINUTE: bad })).toThrow(
+          /PUBLIC_API_RATE_LIMIT_PER_MINUTE/,
+        );
+      }
+    });
+  });
+
   describe('alerts', () => {
     it('is off by default with the default cap', () => {
       expect(load(base).alerts).toEqual({

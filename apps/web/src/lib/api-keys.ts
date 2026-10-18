@@ -34,3 +34,15 @@ export const revokeConfirmText = (name: string): string =>
 
 export const apiKeyErrorText = (err: unknown): string =>
   err instanceof ApiRequestError ? err.message : 'Something went wrong.';
+
+export async function copyToken(
+  write: (text: string) => Promise<void>,
+  token: string,
+): Promise<string> {
+  try {
+    await write(token);
+    return 'Copied.';
+  } catch {
+    return 'Copy failed. Select and copy the key manually.';
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FeedBouncer API",
+    "version": "1.0.0",
+    "description": "Authenticate with `Authorization: Bearer <api key>`. Error codes may be added over time and are never renamed."
+  },
+  "paths": {
+    "/v1/openapi.json": {
+      "get": {
+        "operationId": "getOpenApi",
+        "summary": "The OpenAPI 3.1 description of this API",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_request",
+                  "invalid_cursor",
+                  "unauthenticated",
+                  "insufficient_scope",
+                  "not_found",
+                  "rate_limited",
+                  "temporarily_unavailable",
+                  "internal_error",
+                  "idempotency_key_reused",
+                  "idempotency_request_in_progress",
+                  "invalid_idempotency_key"
+                ],
+                "description": "Stable machine-readable code. New codes may be added; none is renamed."
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "apiKey": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
