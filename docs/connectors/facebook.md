@@ -273,6 +273,12 @@ reconnects from the Connections page; waiting work is replayed on success.
 Reconnect with a person who still manages the Page and grants all six
 permissions.
 
+**Connecting ends with "Facebook didn't finish connecting" (`provider_error`).**
+Facebook returned an error that was not the person cancelling. During the
+private beta the usual cause is that the Facebook account has not accepted the
+FeedBouncer tester invitation (developers.facebook.com/requests). Accept it
+and connect again. Provider error text is never logged or shown.
+
 **Comments arrive late or not at all.**
 
 - Check connector health for `rate_limited`, and the histogram

@@ -37,6 +37,9 @@ describe('callbackPath', () => {
     expect(callbackPath(FB, actor, { ok: false, reason: 'platform_error' })).toBe(
       `${connections}?error=platform_error`,
     );
+    expect(callbackPath(FB, actor, { ok: false, reason: 'provider_error' })).toBe(
+      `${connections}?error=provider_error`,
+    );
     expect(callbackPath(FB, actor, { ok: false, reason: 'rejected' })).toBe(
       '/orgs?error=oauth_rejected',
     );

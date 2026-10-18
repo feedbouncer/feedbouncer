@@ -116,7 +116,9 @@ describe('accountNotes', () => {
         { ...IG, eligible: false, ineligibleReason: 'insufficient_page_role' },
         'instagram',
       ),
-    ).toEqual(['You need full control or moderation access to this Page']);
+    ).toEqual([
+      'You need full control of this Page, or Facebook access with the Moderate task. Ask a Page admin to grant it in Meta Business Suite → Settings → Page access, then connect again.',
+    ]);
     expect(
       accountNotes({ ...IG, limitations: ['messaging_permission_missing'] }, 'instagram'),
     ).toEqual(["Private replies won't be available (messaging permission not granted)"]);

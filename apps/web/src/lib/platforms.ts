@@ -29,7 +29,7 @@ export const PLATFORM_COPY: Record<ConnectablePlatform, PlatformCopy> = {
     deleteConfirm: 'Delete this comment on Facebook? This cannot be undone.',
     pickerIntro: 'Choose the Facebook Pages to connect.',
     noEligible:
-      'You do not have a role that can moderate any of these Pages. Ask a Page admin for full control or moderation access, then connect again.',
+      'You do not have a role that can moderate any of these Pages. Ask a Page admin to give you full control or Facebook access with the Moderate task in Meta Business Suite → Settings → Page access, then connect again.',
   },
   instagram: {
     label: 'Instagram',

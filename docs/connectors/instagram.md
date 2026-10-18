@@ -324,6 +324,12 @@ owners are emailed once per transition. Actions pause and their jobs wait. An
 owner or admin reconnects from the Connections page with a person who still
 manages the Page and grants the required permissions; waiting work is replayed.
 
+**Connecting ends with "Facebook didn't finish connecting" (`provider_error`).**
+Facebook returned an error that was not the person cancelling. During the
+private beta the usual cause is that the Facebook account has not accepted the
+FeedBouncer tester invitation (developers.facebook.com/requests). Accept it
+and connect again.
+
 **An action ended as `instagram_error_<code>_<subcode>`.** Instagram refused
 with an error the connector does not recognize; the numbers are Graph's `code`
 and `error_subcode`. `instagram_account_restricted` means Instagram has

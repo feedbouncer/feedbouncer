@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ApiForm } from '../../../../../../components/api-form';
 import { ConnectButton } from '../../../../../../components/connect-button';
+import { ConnectChecklist } from '../../../../../../components/connect-checklist';
 import { ReviewModeBanner } from '../../../../../../components/review-mode/review-mode-banner';
 import { backfillText, type BackfillViewDto } from '../../../../../../lib/backfill-text';
 import { formatUtc } from '../../../../../../lib/format';
@@ -39,6 +40,7 @@ const STATUS_LABEL: Record<Connection['status'], string> = {
 const ERROR_CODES: ReadonlySet<string> = new Set([
   'missing_permissions',
   'denied',
+  'provider_error',
   'platform_error',
   'account_mismatch',
   'connection_inactive',
@@ -164,10 +166,7 @@ export default async function ConnectionsPage({
           {hasPageOrInstagram && !hasAdAccount ? (
             <p>Connect your ad account to moderate comments on your ads.</p>
           ) : null}
-          <p>
-            While the FeedBouncer Meta app is in review, only people with a role on the app can
-            connect Pages and Instagram accounts.
-          </p>
+          <ConnectChecklist />
         </>
       ) : (
         <p>Only owners and admins can view and manage connections.</p>

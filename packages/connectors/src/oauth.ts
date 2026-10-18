@@ -77,6 +77,8 @@ export type OAuthCompletion =
       readonly reason:
         | 'rejected'
         | 'denied'
+        /** The provider reported an error other than the user cancelling. */
+        | 'provider_error'
         | 'account_mismatch'
         | 'platform_error'
         /**
@@ -233,8 +235,12 @@ export class OAuthFlow {
     const ids = { organizationId: actor.organizationId, brandId: actor.brandId, platform };
     // code is null here only when the provider reported an error
     if (query.error !== undefined || code === null) {
-      this.d.log.info('oauth authorization denied by user', ids);
-      return { ok: false, reason: 'denied' };
+      if (query.error_reason === 'user_denied') {
+        this.d.log.info('oauth authorization denied by user', ids);
+        return { ok: false, reason: 'denied' };
+      }
+      this.d.log.info('oauth provider error', ids);
+      return { ok: false, reason: 'provider_error' };
     }
 
     const connector = this.d.registry.require(platform);

@@ -228,6 +228,7 @@ describe('OAuthFlow.complete', () => {
       await flow.complete(alice, 'youtube', {
         state: stateOf(authorizationUrl),
         error: 'access_denied',
+        error_reason: 'user_denied',
       }),
     ).toEqual({ ok: false, reason: 'denied' });
     expect(states.size()).toBe(0);
@@ -462,10 +463,16 @@ describe('OAuthFlow.complete', () => {
     });
   });
 
-  it('a provider error is reported as denied even without a code', async () => {
+  it('a user denial is reported as denied even without a code', async () => {
     const { authorizationUrl } = await flow.start(alice, 'youtube');
     const state = stateOf(authorizationUrl);
-    expect(await flow.complete(alice, 'youtube', { state, error: 'access_denied' })).toEqual({
+    expect(
+      await flow.complete(alice, 'youtube', {
+        state,
+        error: 'access_denied',
+        error_reason: 'user_denied',
+      }),
+    ).toEqual({
       ok: false,
       reason: 'denied',
     });
@@ -473,6 +480,50 @@ describe('OAuthFlow.complete', () => {
       ok: false,
       reason: 'rejected',
     });
+  });
+
+  it('provider error with error_reason=user_denied -> denied', async () => {
+    const { authorizationUrl } = await flow.start(alice, 'youtube');
+    const state = stateOf(authorizationUrl);
+    expect(
+      await flow.complete(alice, 'youtube', {
+        state,
+        error: 'access_denied',
+        error_reason: 'user_denied',
+      }),
+    ).toEqual({ ok: false, reason: 'denied' });
+  });
+
+  it('provider error with any other reason -> provider_error', async () => {
+    const { authorizationUrl } = await flow.start(alice, 'youtube');
+    const state = stateOf(authorizationUrl);
+    expect(
+      await flow.complete(alice, 'youtube', {
+        state,
+        error: 'access_denied',
+        error_reason: 'other',
+      }),
+    ).toEqual({ ok: false, reason: 'provider_error' });
+  });
+
+  it('provider error without error_reason -> provider_error', async () => {
+    const { authorizationUrl } = await flow.start(alice, 'youtube');
+    const state = stateOf(authorizationUrl);
+    expect(await flow.complete(alice, 'youtube', { state, error: 'access_denied' })).toEqual({
+      ok: false,
+      reason: 'provider_error',
+    });
+  });
+
+  it('provider error text is not logged', async () => {
+    const { authorizationUrl } = await flow.start(alice, 'youtube');
+    await flow.complete(alice, 'youtube', {
+      state: stateOf(authorizationUrl),
+      error: 'access_denied',
+      error_description: 'DESCRIPTION-SENTINEL',
+    });
+    expect(lines.join('\n')).not.toContain('DESCRIPTION-SENTINEL');
+    expect(lines.join('\n')).toContain('oauth provider error');
   });
 
   it('refuses a non-manager completing a callback', async () => {

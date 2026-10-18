@@ -190,3 +190,15 @@ describe('outcomeSentence', () => {
     );
   });
 });
+
+describe('connect failures', () => {
+  it('names the tester invitation for provider_error', () => {
+    expect(messageFor('provider_error')).toContain('tester invitation');
+    expect(messageFor('provider_error')).toContain('connect again');
+  });
+
+  it('tells the user to reconnect for refresh and credential failures', () => {
+    expect(statusReasonText('oauth_refresh_rejected')).toContain('Reconnect');
+    expect(statusReasonText('credential_decrypt_failed')).toContain('Reconnect');
+  });
+});
