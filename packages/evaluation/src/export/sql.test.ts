@@ -8,7 +8,8 @@ describe('export SQL', () => {
     for (const [name, sql] of entries) {
       const wheres = [...sql.matchAll(/\bWHERE\s+([^\n]*)/g)].map((m) => m[1]!);
       expect(wheres.length, name).toBeGreaterThan(0);
-      for (const w of wheres) expect(w, name).toMatch(/^(\w+\.)?organization_id = ANY\(\$1::uuid\[\]\)/);
+      for (const w of wheres)
+        expect(w, name).toMatch(/^(\w+\.)?organization_id = ANY\(\$1::uuid\[\]\)/);
       expect(sql, name).not.toMatch(/\$\{/);
     }
   });

@@ -72,7 +72,11 @@ describe('exportRun', () => {
     const polled = aRows[0]!;
     const keyFor = (type: string, externalRef: string) =>
       deriveIdempotencyKey({
-        scope: { organizationId: ta.organizationId, brandId: ta.brandId, connectionId: ta.connectionId },
+        scope: {
+          organizationId: ta.organizationId,
+          brandId: ta.brandId,
+          connectionId: ta.connectionId,
+        },
         platform: 'facebook',
         type,
         externalRef,
@@ -195,7 +199,11 @@ describe('exportRun', () => {
     const o = await opts({ organizationIds: [t.organizationId] });
     const manifest = await exportRun(pool, o);
     expect(RunManifest.parse(manifest)).toEqual(manifest);
-    expect((await readdir(o.out)).sort()).toEqual(['items.jsonl', 'label-sheet.csv', 'manifest.json']);
+    expect((await readdir(o.out)).sort()).toEqual([
+      'items.jsonl',
+      'label-sheet.csv',
+      'manifest.json',
+    ]);
     const files = {
       items: await readFile(join(o.out, 'items.jsonl'), 'utf8'),
       manifest: await readFile(join(o.out, 'manifest.json'), 'utf8'),
@@ -347,8 +355,8 @@ describe('exportRun', () => {
     expect(b.deliveryMs).toBe(2000);
     expect(b.ingestQueueMs).toBeGreaterThanOrEqual(0);
     expect(b.hideQueueMs).toBeGreaterThanOrEqual(0);
-    expect(b.deliveryMs! + b.ingestQueueMs! + b.processingMs! + b.hideQueueMs! + b.hideCallMs!).toBe(
-      item.timing!.totalMs,
-    );
+    expect(
+      b.deliveryMs! + b.ingestQueueMs! + b.processingMs! + b.hideQueueMs! + b.hideCallMs!,
+    ).toBe(item.timing!.totalMs);
   });
 });

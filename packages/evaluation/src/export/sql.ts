@@ -296,7 +296,10 @@ export async function ruleKinds(
   ruleIds: readonly string[],
 ): Promise<Map<string, string>> {
   if (ruleIds.length === 0) return new Map();
-  const r = await pool.query<{ id: string; kind: string | null }>(TENANT_SQL.rules, [orgs, ruleIds]);
+  const r = await pool.query<{ id: string; kind: string | null }>(TENANT_SQL.rules, [
+    orgs,
+    ruleIds,
+  ]);
   return new Map(r.rows.filter((x) => x.kind !== null).map((x) => [x.id, x.kind!]));
 }
 

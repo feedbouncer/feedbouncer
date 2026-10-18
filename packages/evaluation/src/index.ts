@@ -8,3 +8,6 @@ export * from './measures/hides.js';
 export * from './measures/timing.js';
 export * from './measures/meta.js';
 export * from './measures/cost.js';
+export { buildReport, type EvaluationReport } from './report/build.js';
+export { renderMarkdown } from './report/render-md.js';
+export { escapeMd, stableJson } from './report/escape.js';

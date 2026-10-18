@@ -166,7 +166,9 @@ describe('deriveItem', () => {
   });
 
   it('a webhook ledger row created after ingestion does not make the comment webhook', () => {
-    const it2b = derive(facts({ ingestLedger: ledger({ createdAt: at(5), firstClaimedAt: at(6) }) }));
+    const it2b = derive(
+      facts({ ingestLedger: ledger({ createdAt: at(5), firstClaimedAt: at(6) }) }),
+    );
     expect(it2b.channel).toBe('poll');
   });
 
@@ -331,7 +333,9 @@ describe('deriveItem', () => {
   it('10. a manual user hide without a suggestion key is not a FeedBouncer hide', () => {
     const it10 = derive(
       facts({
-        actions: [action({ id: 'm1', createdAt: at(9), actorType: 'user', requestKey: 'manual:1' })],
+        actions: [
+          action({ id: 'm1', createdAt: at(9), actorType: 'user', requestKey: 'manual:1' }),
+        ],
         decisions: [],
       }),
     );
@@ -390,9 +394,7 @@ describe('deriveItem', () => {
     const it12b = derive(
       facts({
         platformState: 'visible',
-        actions: [
-          action({ id: 'a1', createdAt: at(9), status: 'noop', outcomeCode: 'not_found' }),
-        ],
+        actions: [action({ id: 'a1', createdAt: at(9), status: 'noop', outcomeCode: 'not_found' })],
       }),
     );
     expect(it12b.outcome).toBe('not_hidden');
@@ -415,7 +417,9 @@ describe('deriveItem', () => {
   it('retried is set from exec ledger counters', () => {
     const it13c = derive(
       facts({
-        execLedgers: new Map([['a1', ledger({ createdAt: at(9), firstClaimedAt: at(10), crashes: 1 })]]),
+        execLedgers: new Map([
+          ['a1', ledger({ createdAt: at(9), firstClaimedAt: at(10), crashes: 1 })],
+        ]),
       }),
     );
     expect(it13c.timing?.retried).toBe(true);

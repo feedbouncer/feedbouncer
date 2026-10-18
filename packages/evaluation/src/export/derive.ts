@@ -202,13 +202,18 @@ function modelCallsOf(f: CommentFacts): EvalItem['modelCalls'] {
     outputTokens: x.outputTokens,
     cacheReadTokens: x.cacheReadTokens,
   });
-  for (const c of [...f.classifications].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())) {
+  for (const c of [...f.classifications].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  )) {
     const called =
       (c.status === 'classified' && !c.scoresReused && c.provider !== 'builtin') ||
       (c.status === 'unclassified' && !NO_CALL_CODES.has(c.unclassifiedReason ?? ''));
-    if (called) calls.push({ stage: 'classifier', model: modelId(c.provider, c.model), ...usage(c) });
+    if (called)
+      calls.push({ stage: 'classifier', model: modelId(c.provider, c.model), ...usage(c) });
   }
-  for (const p of [...f.policyEvals].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())) {
+  for (const p of [...f.policyEvals].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  )) {
     const called =
       (p.status === 'evaluated' && p.provider !== 'builtin') ||
       (p.status === 'failed' && !NO_CALL_CODES.has(p.failureCode ?? ''));
@@ -274,7 +279,8 @@ export function deriveItem(
     language: languageOf(f),
     judgedVersionAvailable,
     ruleDecided:
-      f.ruleEvals.some((r) => r.status === 'decided') || f.classifications.some((c) => c.ruleDecided),
+      f.ruleEvals.some((r) => r.status === 'decided') ||
+      f.classifications.some((c) => c.ruleDecided),
     outcome: removal ? 'hidden' : hideFailed ? 'hide_failed' : 'not_hidden',
     removalKind: removal ? (removal.kind as 'hide' | 'delete') : null,
     removalNoop: removal?.status === 'noop',

@@ -73,11 +73,7 @@ export async function exportRunWithSalt(
 
     // Ledger rows are looked up by computed key: the ingest key per comment, and the exec key
     // per hide/delete action.
-    const keyOf = (
-      c: (typeof page)[number],
-      type: string,
-      externalRef: string,
-    ): string =>
+    const keyOf = (c: (typeof page)[number], type: string, externalRef: string): string =>
       deriveIdempotencyKey({
         scope: {
           organizationId: c.organizationId,
@@ -154,7 +150,8 @@ export async function exportRunWithSalt(
       items.push(item);
       if (item.outcome === 'hidden' && c.postedAt.getTime() < retentionCutoff)
         timingUnavailableBeforeRetention++;
-      for (const x of facts.classifications) if (x.promptVersion) promptVersions.add(x.promptVersion);
+      for (const x of facts.classifications)
+        if (x.promptVersion) promptVersions.add(x.promptVersion);
       for (const x of facts.policyEvals) if (x.promptVersion) promptVersions.add(x.promptVersion);
       if (item.judgedVersionAvailable)
         sheet.set(item.item, { item: item.item, platform: c.platform, text: c.body });
