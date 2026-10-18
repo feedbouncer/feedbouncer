@@ -126,7 +126,8 @@ replies report as not eligible.
   separate review step for them is not confirmed; check in the submission.
 - **Status of this deployment:** App Review has not been completed for the
   reference configuration. Treat the connector as development-mode until your
-  own app is approved.
+  own app is approved. Private beta partners: see the
+  [partner guide](../beta/partner-guide.md).
 
 ## How it works
 

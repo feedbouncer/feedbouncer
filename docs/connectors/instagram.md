@@ -156,7 +156,8 @@ it: `ads_read` is requested only on the separate ad account connection.
   private replies depends on V2 above.
 - **Status of this deployment:** App Review has not been completed for the
   reference configuration. Treat the connector as development-mode until your
-  own app is approved.
+  own app is approved. Private beta partners: see the
+  [partner guide](../beta/partner-guide.md).
 
 ## How it works
 
@@ -309,8 +310,8 @@ Known platform limits the code applies:
 ## Data retention
 
 Stored comments and the action history are kept after a connection is
-disconnected. Tokens are deleted. How this lines up with the data-deletion
-page is an open question.
+disconnected. Tokens are deleted. To remove an organization's data
+entirely, see [data-deletion.md](../operations/data-deletion.md).
 
 ## Troubleshooting
 
