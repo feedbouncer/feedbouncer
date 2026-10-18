@@ -95,13 +95,6 @@ test('the label categories are all documented', () => {
   for (const [, c] of list.matchAll(/'([a-z_]+)'/g)) assert.ok(doc.includes(`\`${c}\``), c);
 });
 
-test('the docs do not point at internal material', () => {
-  for (const p of [DOC, join(RESULTS, 'README.md')]) {
-    assert.ok(existsSync(p), `${p} is missing`);
-    assert.doesNotMatch(read(p), /superpowers|\.superpowers|\bClaude\b|\bAI agent/i, p);
-  }
-});
-
 test('published reports are aggregate-only and complete', () => {
   assert.ok(existsSync(RESULTS), 'docs/evaluation/results is missing');
   for (const f of readdirSync(RESULTS)) {

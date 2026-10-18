@@ -70,6 +70,17 @@ describe('costPer1000', () => {
     expect(comp(r, 'Classifier model').usdPer1000).toBeCloseTo(0.07, 6);
   });
 
+  it('treats calls with no recorded model as unknown usage without needing a price', () => {
+    const timedOut = call({ model: 'unknown', inputTokens: null, outputTokens: null });
+    const noModel = call({ model: 'unknown' });
+    const r = complete(
+      costPer1000([withCall(), withCall(timedOut), withCall(noModel)], manifest, pricing()),
+    );
+    expect(r.unknownUsageCalls).toBe(2);
+    expect(r.modelsSeen).toEqual(['m']);
+    expect(comp(r, 'Classifier model').usdPer1000).toBeCloseTo((0.07 / 3) * 2, 6);
+  });
+
   it('is complete when all usage is known and storage is measured', () => {
     const r = costPer1000([withCall()], { bytesPerComment: 0 } as RunManifest, pricing());
     expect(r.status).toBe('complete');

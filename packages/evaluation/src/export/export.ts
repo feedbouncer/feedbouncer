@@ -8,6 +8,7 @@ import type { EvalItem, RunManifest } from '../schema.js';
 import { deriveItem, pseudonymiser, type CommentFacts, type LedgerFact } from './derive.js';
 import { samplePermutation } from './sample.js';
 import {
+  PAGE_SIZE,
   brandsInOrgs,
   bytesPerComment,
   commentsPage,
@@ -87,10 +88,26 @@ export async function exportRunWithSalt(
     const ingestKey = new Map<string, string>();
     const execKeys = new Map<string, string>(); // action id -> key
     for (const c of page) {
-      ingestKey.set(c.id, keyOf(c, INGEST_JOB.type, `${c.externalId}:created`));
+      ingestKey.set(
+        c.id,
+        keyOf(
+          c,
+          INGEST_JOB.type,
+          INGEST_JOB.externalRef({
+            sourceExternalId: '',
+            commentExternalId: c.externalId,
+            event: 'created',
+            platformEventSec: 1,
+            changeId: '',
+          }),
+        ),
+      );
       for (const a of rel.actions.get(c.id) ?? [])
         if (a.kind === 'hide' || a.kind === 'delete')
-          execKeys.set(a.id, keyOf(c, EXECUTE_JOB.type, `action:${a.id}`));
+          execKeys.set(
+            a.id,
+            keyOf(c, EXECUTE_JOB.type, EXECUTE_JOB.externalRef({ actionId: a.id })),
+          );
     }
     const ledgers = await ledgersByKey(pool, o.organizationIds, [
       ...ingestKey.values(),
@@ -99,14 +116,7 @@ export async function exportRunWithSalt(
     const ledgerFact = (key: string | undefined): LedgerFact | null => {
       const h = key ? ledgers.get(key) : undefined;
       if (!h) return null;
-      const fact: LedgerFact = {
-        createdAt: h.createdAt,
-        firstClaimedAt: h.firstClaimedAt,
-        failures: h.failures,
-        crashes: h.crashes,
-        deferrals: h.deferrals,
-      };
-      return fact;
+      return h;
     };
 
     for (const c of page) {
@@ -159,7 +169,7 @@ export async function exportRunWithSalt(
 
     const last = page[page.length - 1]!;
     cursor = { postedAtKey: last.postedAtKey, id: last.id };
-    if (page.length < 1000) break;
+    if (page.length < PAGE_SIZE) break;
   }
 
   items.sort((a, b) => (a.item < b.item ? -1 : a.item > b.item ? 1 : 0));

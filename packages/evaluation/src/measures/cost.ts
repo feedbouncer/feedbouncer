@@ -36,6 +36,7 @@ export class MissingPriceError extends InputError {
   }
 }
 
+const UNKNOWN_MODEL = 'unknown';
 const DECIMALS = 1e6;
 const round = (x: number) => Math.round(x * DECIMALS) / DECIMALS;
 
@@ -74,19 +75,19 @@ export function costPer1000(
   const mix = mixOf(items);
   if (!pricing) return { status: 'no_pricing', mix };
 
-  // Token count times USD per MTok is micro-dollars, so sums stay exact for decimal prices.
+  // Token count times USD per MTok is micro-dollars.
   const micro = { classifier: 0, policy: 0 };
   const models = new Set<string>();
   let unknownUsageCalls = 0;
   for (const it of items) {
     for (const c of it.modelCalls) {
-      const price = pricing.models[c.model];
-      if (!price) throw new MissingPriceError(c.model);
-      models.add(c.model);
-      if (c.inputTokens === null || c.outputTokens === null) {
+      if (c.model === UNKNOWN_MODEL || c.inputTokens === null || c.outputTokens === null) {
         unknownUsageCalls += 1;
         continue;
       }
+      const price = pricing.models[c.model];
+      if (!price) throw new MissingPriceError(c.model);
+      models.add(c.model);
       const cached = Math.min(c.cacheReadTokens ?? 0, c.inputTokens);
       micro[c.stage] +=
         (c.inputTokens - cached) * price.inputPerMTok +
