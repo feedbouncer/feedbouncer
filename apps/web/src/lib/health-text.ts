@@ -9,14 +9,18 @@ export interface HealthTextInput {
 function statusText(h: HealthTextInput): string | null {
   switch (h.status) {
     case 'healthy':
+    case 'disabled':
+    case 'needs_reconnection':
       return null;
     case 'pending_first_sync':
       return 'Waiting for the first comments.';
     case 'degraded':
       if (h.lastErrorCode === 'rate_limited' || h.lastErrorCode === 'budget_exhausted')
         return 'Processing delayed: Meta asked FeedBouncer to slow down. New comments are queued and will be checked; none are dropped.';
-      if (h.reason === 'ingest_lag')
-        return `Processing delayed by about ${Math.ceil(h.ingestLagSeconds / 60)} minutes.`;
+      if (h.reason === 'ingest_lag') {
+        const minutes = Math.max(1, Math.ceil(h.ingestLagSeconds / 60));
+        return `Processing delayed by about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`;
+      }
       if (h.reason === 'sync_stale' || h.reason === 'recent_failures')
         return "FeedBouncer is having trouble reaching this account. We're retrying.";
   }

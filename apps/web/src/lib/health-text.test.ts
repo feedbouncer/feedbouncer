@@ -21,6 +21,14 @@ describe('healthText', () => {
     expect(h({ ingestLagSeconds: 1200 })).toBe('Processing delayed by about 20 minutes.');
     expect(h({ ingestLagSeconds: 1201 })).toBe('Processing delayed by about 21 minutes.');
   });
+  it('says "1 minute" in the singular', () =>
+    expect(h({ ingestLagSeconds: 30 })).toBe('Processing delayed by about 1 minute.'));
+  it.each(['disabled', 'needs_reconnection'])('shows nothing for %s', (status) =>
+    expect(h({ status, reason: 'connection_error' })).toBeNull());
+  it('still reports failed imports on a disabled connection', () =>
+    expect(h({ status: 'disabled', reason: 'connection_error', failedImports: 2 })).toBe(
+      "2 comments couldn't be imported. FeedBouncer support has been notified.",
+    ));
   it.each(['sync_stale', 'recent_failures'])('says it is retrying (%s)', (reason) =>
     expect(h({ reason })).toBe(
       "FeedBouncer is having trouble reaching this account. We're retrying.",
