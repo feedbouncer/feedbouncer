@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
-import { INGEST_JOB } from '@feedbouncer/comments';
 import { PgJobLedger } from '@feedbouncer/jobs';
 import { loadHealthPolicy } from './policy.js';
 import { HEALTH_SQL, PgHealthReader } from './pg-reader.js';
@@ -100,7 +99,7 @@ describe('PgHealthReader', () => {
           t.organizationId,
           t.brandId,
           o.connectionId ?? t.connectionId,
-          o.type ?? INGEST_JOB.type,
+          o.type ?? 'comment_ingest',
           String(++seq),
           state,
           'retries_exhausted',

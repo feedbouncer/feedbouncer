@@ -1,9 +1,9 @@
+import { normalizeAddress } from '@feedbouncer/mailer/address';
+
 export interface BetaConfig {
   feedbackUrl: string | null;
   supportEmail: string | null;
 }
-
-const EMAIL = /^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/i;
 
 function httpsUrl(raw: string | undefined): string | null {
   if (!raw) return null;
@@ -18,9 +18,8 @@ function httpsUrl(raw: string | undefined): string | null {
 export function readBetaConfig(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): BetaConfig {
-  const email = env.BETA_SUPPORT_EMAIL;
   return {
     feedbackUrl: httpsUrl(env.BETA_FEEDBACK_URL),
-    supportEmail: email && EMAIL.test(email) ? email : null,
+    supportEmail: normalizeAddress(env.BETA_SUPPORT_EMAIL),
   };
 }

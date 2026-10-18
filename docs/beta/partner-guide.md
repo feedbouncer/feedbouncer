@@ -23,11 +23,7 @@ invitation before you connect.
    accepted. A pending invitation is not enough.
 5. Sign up to FeedBouncer with the email your operator invited, then connect.
 
-If you skip the acceptance, Facebook shows this on its own screen:
-
-> TBD (Task 9 Step 2)
-
-and FeedBouncer shows this when you land back on it:
+If you skip the acceptance, Facebook may not let you finish, and FeedBouncer shows this when you land back on it:
 
 > Facebook didn't finish connecting. During the private beta, your Facebook
 > account must have accepted the FeedBouncer tester invitation

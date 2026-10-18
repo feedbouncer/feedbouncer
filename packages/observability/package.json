@@ -26,7 +26,6 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
-    "@feedbouncer/comments": "workspace:*",
     "@feedbouncer/connectors": "workspace:*",
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/jobs": "workspace:*",

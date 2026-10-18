@@ -140,3 +140,13 @@ describe('runBetaStatus', () => {
     );
   });
 });
+
+describe('beta-status truncation', () => {
+  it('fails instead of reporting a partial list', async () => {
+    const health: HealthReader = {
+      forBrand: async () => [],
+      all: async () => ({ rows: [], truncated: true }),
+    };
+    await expect(betaStatus(pool, health, new Date())).rejects.toThrow(/incomplete/);
+  });
+});

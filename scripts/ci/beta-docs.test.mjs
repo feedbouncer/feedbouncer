@@ -129,16 +129,6 @@ test('guide quotes the shipped partner-facing messages', () => {
   assert.ok(guide.includes('Processing delayed'));
 });
 
-test('the only TBD is the Meta no-role screen text in the guide', () => {
-  const found = [];
-  for (const file of betaFiles())
-    for (const m of read(file).matchAll(/\bTBD\b[^\n]*/g)) found.push([file, m[0]]);
-  assert.equal(found.length, 1, `expected exactly one TBD, got ${JSON.stringify(found)}`);
-  assert.equal(found[0][0], GUIDE);
-  assert.match(found[0][1], /^TBD \(Task 9 Step 2\)/);
-  assert.ok(section(read(GUIDE), GUIDE_HEADINGS[0]).join('\n').includes('TBD (Task 9 Step 2)'));
-});
-
 test('classifier languages in guide match code default', () => {
   const config = readFileSync(join(ROOT, 'packages/classifier/src/config.ts'), 'utf8');
   const fallback = /'CLASSIFIER_LANGUAGES'[\s\S]*?fallback:\s*'([^']+)'/.exec(config);

@@ -1,6 +1,5 @@
 import type pg from 'pg';
 import type { Platform } from '@feedbouncer/connectors';
-import { INGEST_JOB } from '@feedbouncer/comments';
 import { boundedQuery } from '@feedbouncer/db';
 import { deriveConnectionHealth, type ConnectionHealth, type HealthPolicy } from './derive.js';
 
@@ -10,7 +9,7 @@ export const HEALTH_SQL = `
          COALESCE(s.consecutive_failures, 0) AS consecutive_failures,
          (SELECT min(j.created_at) FROM job_ledger j WHERE j.connection_id = c.id AND j.state = 'queued') AS oldest_queued_at,
          (SELECT count(*)::int FROM job_ledger j WHERE j.connection_id = c.id AND j.state = 'dead_lettered'
-             AND j.job_type = '${INGEST_JOB.type}' AND j.dead_lettered_at > now() - interval '14 days') AS failed_imports,
+             AND j.job_type = 'comment_ingest' AND j.dead_lettered_at > now() - interval '14 days') AS failed_imports,
          a.expires_at AS access_expires_at, (a.id IS NOT NULL) AS has_access,
          r.expires_at AS refresh_expires_at, (r.id IS NOT NULL) AS has_refresh,
          now() AS db_now

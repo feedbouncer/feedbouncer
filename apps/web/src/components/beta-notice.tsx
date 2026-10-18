@@ -1,6 +1,9 @@
+import { connection } from 'next/server';
 import { readBetaConfig } from '../lib/beta';
 
-export function BetaNotice() {
+// Reads the environment per request, so the notice follows runtime configuration.
+export async function BetaNotice() {
+  await connection();
   const { feedbackUrl, supportEmail } = readBetaConfig();
   if (!feedbackUrl && !supportEmail) return null;
   return (

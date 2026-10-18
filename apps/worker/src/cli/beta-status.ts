@@ -63,7 +63,9 @@ export async function betaStatus(
   health: HealthReader,
   now: Date,
 ): Promise<BetaStatusRow[]> {
-  const { rows } = await health.all(MAX_CONNECTIONS);
+  const { rows, truncated } = await health.all(MAX_CONNECTIONS);
+  if (truncated)
+    throw new Error(`more than ${MAX_CONNECTIONS} connections; report would be incomplete`);
   const ids = rows.map((r) => r.connectionId);
   const since = new Date(now.getTime() - DAY_MS);
   const settled = new Date(now.getTime() - SETTLE_MS);

@@ -16,6 +16,8 @@ const AUDIT_ACTION = {
  * disconnect). The nonce is the connection id plus the audit sequence of the
  * event that caused it: unique per (re)connect or disconnect, and stable across
  * retries, so a repeated request deduplicates. False when there is no such event.
+ * An operator re-queue passes `idempotencyKey` to get a job of its own instead of
+ * deduplicating against the original, possibly dead-lettered, one.
  */
 export async function enqueueLifecycle(
   pool: pg.Pool,
@@ -23,6 +25,7 @@ export async function enqueueLifecycle(
   scope: ConnectionScope,
   platform: Platform,
   op: 'setup' | 'teardown',
+  idempotencyKey?: string,
 ): Promise<boolean> {
   const r = await pool.query<{ sequence: string | null }>(
     `SELECT max(sequence)::text AS sequence FROM audit_event
@@ -37,6 +40,7 @@ export async function enqueueLifecycle(
     platform,
     type: LIFECYCLE_JOB.type,
     payload: { op, nonce: `${scope.connectionId}:${sequence}` },
+    ...(idempotencyKey !== undefined && { idempotencyKey }),
   });
   return true;
 }

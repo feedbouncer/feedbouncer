@@ -1,4 +1,4 @@
-import { isPlatform, type ConnectorRegistry, type Platform } from '@feedbouncer/connectors';
+import { isPlatform, type Platform } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import {
   injectTraceparent,
@@ -34,7 +34,8 @@ export type EnqueueResult =
 export interface ProducerDeps {
   ledger: PgJobLedger;
   jobs: JobRegistry;
-  connectors: ConnectorRegistry;
+  /** Only used to check that the platform is registered. */
+  connectors: { get(platform: Platform): unknown };
   queues: QueueSet;
   metrics: JobMetrics;
   dedupWindowMs: number;

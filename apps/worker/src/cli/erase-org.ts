@@ -149,7 +149,10 @@ export function operatorDisconnect(ctx: OpsContext): EraseOrgDeps['disconnect'] 
       scope,
       null,
     );
-    if (revoked) await enqueueLifecycle(pool, ctx.producer(), scope, rec.platform, 'teardown');
+    if (revoked) {
+      const retryKey = `erase-org:${scope.connectionId}:${Date.now()}`;
+      await enqueueLifecycle(pool, ctx.producer(), scope, rec.platform, 'teardown', retryKey);
+    }
   };
 }
 
