@@ -377,6 +377,61 @@ describe('comment_classify', () => {
     expect(actions.request).not.toHaveBeenCalled();
   });
 
+  it('classified row stores tokens; reused row stores nulls; invalid_output row stores tokens from the error', async () => {
+    const usage = { inputTokens: 80, outputTokens: 40, cacheReadTokens: 16 };
+    const tokens = (id: string) =>
+      one(
+        `SELECT input_tokens, output_tokens, cache_read_tokens FROM comment_classification
+         WHERE comment_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [id],
+      );
+    const c = await seedComment('maybe spam');
+    await evaluateRules(c, 'no_match');
+    const p = new FakeProvider([{ ...S({ spam: 0.7 }), usage }]);
+    await job(p).handle(ctx(c, 1), payload(c));
+    expect(await tokens(c.id)).toEqual({
+      input_tokens: 80,
+      output_tokens: 40,
+      cache_read_tokens: 16,
+    });
+    await job(p).handle(ctx(c, 1), { ...payload(c), trigger: `rerun:${randomUUID()}` });
+    expect(p.calls).toBe(1);
+    expect(await tokens(c.id)).toEqual({
+      input_tokens: null,
+      output_tokens: null,
+      cache_read_tokens: null,
+    });
+
+    const d = await seedComment('weird output');
+    await evaluateRules(d, 'no_match');
+    const bad = new FakeProvider([
+      new ProviderError('invalid_output', true, {
+        inputTokens: 50,
+        outputTokens: 200,
+        cacheReadTokens: null,
+      }),
+    ]);
+    expect(await job(bad).handle(ctx(d, 3), payload(d))).toMatchObject({ result: 'unclassified' });
+    expect(await tokens(d.id)).toEqual({
+      input_tokens: 50,
+      output_tokens: 200,
+      cache_read_tokens: null,
+    });
+  });
+
+  it('classification row records whether earlier attempts failed before it was written', async () => {
+    const retried = (id: string) =>
+      one(`SELECT retried FROM comment_classification WHERE comment_id = $1`, [id]);
+    const first = await seedComment('maybe spam');
+    await evaluateRules(first, 'no_match');
+    await job(new FakeProvider([S({ spam: 0.7 })])).handle(ctx(first, 1), payload(first));
+    expect(await retried(first.id)).toEqual({ retried: false });
+    const second = await seedComment('maybe spam too');
+    await evaluateRules(second, 'no_match');
+    await job(new FakeProvider([S({ spam: 0.7 })])).handle(ctx(second, 2), payload(second));
+    expect(await retried(second.id)).toEqual({ retried: true });
+  });
+
   it('duplicate deliveries classify once and request the action once', async () => {
     const c = await seedComment('click this link');
     await evaluateRules(c, 'no_match');

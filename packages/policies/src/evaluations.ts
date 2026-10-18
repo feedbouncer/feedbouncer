@@ -3,6 +3,7 @@
 // matches and decision are written in the same transaction, only by the insert
 // that won. Every statement filters on organization_id AND brand_id.
 import type pg from 'pg';
+import type { ModelUsage } from '@feedbouncer/ai';
 import { withTransaction } from '@feedbouncer/db';
 import type { BrandScope } from '@feedbouncer/rules';
 import type { ConnectionScope } from '@feedbouncer/secrets';
@@ -21,14 +22,19 @@ interface Base {
   sha: Buffer;
   triggerKey: string;
   reviewMode?: boolean;
+  /** Earlier attempts failed with a retryable error, so their token usage is not recorded. */
+  retried?: boolean;
 }
 export type EvaluationRecord =
   | (Base & { status: 'skipped'; skipReason: SkipReason; ruleEvaluationId: string | null })
   | (Base & {
       status: 'failed';
       failureCode: FailureCode;
+      provider: string;
+      model: string;
       ruleEvaluationId: string;
       checkedRevisionIds: readonly string[];
+      usage: ModelUsage | null;
     })
   | (Base & {
       status: 'evaluated';
@@ -41,6 +47,7 @@ export type EvaluationRecord =
       lowSignal: boolean;
       decision: PolicyDecision;
       reason: string;
+      usage: ModelUsage | null;
     });
 
 export interface EvaluationRow {
@@ -60,6 +67,8 @@ export interface EvaluationView {
   status: EvaluationStatus;
   skipReason: SkipReason | null;
   failureCode: FailureCode | null;
+  provider: string | null;
+  model: string | null;
   outcome: PolicyAction | null;
   createdAt: Date;
   checkedCount: number;
@@ -133,6 +142,8 @@ export class PgPolicyEvaluationStore {
    */
   async record(scope: ConnectionScope, r: EvaluationRecord): Promise<EvaluationRow | null> {
     const ev = r.status === 'evaluated' ? r : null;
+    const usage = r.status === 'skipped' ? null : r.usage;
+    const called = r.status === 'skipped' ? null : r;
     const winner = ev?.decision.winner ?? null;
     const outcome = ev?.decision.outcome ?? null;
     if ((outcome === null) !== (winner === null))
@@ -143,10 +154,11 @@ export class PgPolicyEvaluationStore {
                                         trigger_key, rule_evaluation_id, status, skip_reason, failure_code,
                                         provider, model, prompt_version, checked_revision_ids,
                                         input_truncated, low_signal, outcome, winning_revision_id,
-                                        review_mode)
+                                        review_mode, input_tokens, output_tokens, cache_read_tokens, retried)
          SELECT c.organization_id, c.brand_id, c.connection_id, c.id, $5::bytea, $6::text, $7::uuid,
                 $8::text, $9::text, $10::text, $11::text, $12::text, $13::text, $14::uuid[],
-                $15::boolean, $16::boolean, $17::text, $18::uuid, $19::boolean
+                $15::boolean, $16::boolean, $17::text, $18::uuid, $19::boolean,
+                $20::integer, $21::integer, $22::integer, $23::boolean
            FROM comment c
           WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3 AND c.id = $4
          ON CONFLICT (comment_id, body_sha256, trigger_key) DO NOTHING
@@ -162,8 +174,8 @@ export class PgPolicyEvaluationStore {
           r.status,
           r.status === 'skipped' ? r.skipReason : null,
           r.status === 'failed' ? r.failureCode : null,
-          ev?.provider ?? null,
-          ev?.model ?? null,
+          called?.provider ?? null,
+          called?.model ?? null,
           ev?.promptVersion ?? null,
           r.status === 'skipped' ? [] : [...r.checkedRevisionIds],
           ev?.inputTruncated ?? null,
@@ -171,6 +183,10 @@ export class PgPolicyEvaluationStore {
           outcome,
           winner?.revisionId ?? null,
           r.reviewMode ?? false,
+          usage?.inputTokens ?? null,
+          usage?.outputTokens ?? null,
+          usage?.cacheReadTokens ?? null,
+          r.retried ?? false,
         ],
       );
       const row = rows[0];
@@ -277,12 +293,14 @@ export class PgPolicyEvaluationStore {
       status: EvaluationStatus;
       skip_reason: SkipReason | null;
       failure_code: FailureCode | null;
+      provider: string | null;
+      model: string | null;
       outcome: PolicyAction | null;
       created_at: Date;
       checked_count: number;
       trigger_key: string;
     }>(
-      `SELECT id, status, skip_reason, failure_code, outcome, created_at,
+      `SELECT id, status, skip_reason, failure_code, provider, model, outcome, created_at,
               cardinality(checked_revision_ids) AS checked_count, trigger_key
          FROM policy_evaluation
         WHERE organization_id = $1 AND brand_id = $2 AND comment_id = $3
@@ -318,6 +336,8 @@ export class PgPolicyEvaluationStore {
       status: e.status,
       skipReason: e.skip_reason,
       failureCode: e.failure_code,
+      provider: e.provider,
+      model: e.model,
       outcome: e.outcome,
       createdAt: e.created_at,
       checkedCount: e.checked_count,

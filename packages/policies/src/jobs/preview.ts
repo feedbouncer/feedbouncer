@@ -70,7 +70,7 @@ export function policyPreviewJob(d: PreviewDeps): JobDefinition<PolicyPreviewPay
             }
             verdict = (
               await d.evaluator.evaluate(input, [{ key: 'p1', text: pv.text }], ctx.signal)
-            ).p1!;
+            ).verdicts.p1!;
           } catch (e) {
             const err = mapProviderError(e);
             if (err.retryable && ctx.attempt < MAX_POLICY_PROVIDER_ATTEMPTS) {

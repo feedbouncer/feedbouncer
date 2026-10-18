@@ -50,6 +50,7 @@ pnpm test
 | `packages/actions`             | Moderation actions: step model, execution and review queue                                                   |
 | `packages/alerts`              | Alerts: negative-comment spike detection and delivery to Slack and email                                     |
 | `packages/reports`             | Weekly email report: metrics, scheduling, rendering, delivery and unsubscribe links                          |
+| `packages/evaluation`          | Evaluation runs: false-hide rate, time to hide and cost per 1,000 comments from exported items and labels    |
 | `packages/policies`            | Plain-language custom policies: validation, decisions, model evaluation, previews and runs                   |
 | `packages/placeholder`         | Minimal package used as the template for new packages                                                        |
 | `packages/secrets`             | Envelope encryption for stored credentials and key management                                                |
@@ -121,6 +122,7 @@ All settings live in `.env`, which is git-ignored and copied from `.env.example`
 - Job queue (queues, retries, dead-letter commands): see [docs/operations/job-queue.md](docs/operations/job-queue.md). To define a job, see [docs/jobs/defining-a-job.md](docs/jobs/defining-a-job.md).
 - Slack and email alerts (spike and flagged-item alerts, `ALERT_CHANNELS`, Slack webhook setup): see [docs/operations/alerts.md](docs/operations/alerts.md).
 - Weekly email report (`WEEKLY_REPORTS`, when reports are sent, inspecting deliveries): see [docs/operations/weekly-report.md](docs/operations/weekly-report.md).
+- Measuring false hides, time to hide, missed comments and cost (method, procedure, limits): see [docs/evaluation/hide-metrics.md](docs/evaluation/hide-metrics.md).
 - Encryption keys and secret files: see [docs/operations/secrets.md](docs/operations/secrets.md). Back up `FB_ENCRYPTION_KEYS` separately from your database.
 - `FB_BIND_ADDRESS` defaults to `127.0.0.1`, so nothing is reachable from other machines. Change it only if you mean to expose the stack to your network.
 

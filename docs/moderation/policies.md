@@ -184,6 +184,8 @@ comments are never opened.
   ("possible match, flagged for review instead of hide").
 - Preview results: comment id, answer, proposed action and reason, for 7 days.
 - Usage: a count of model calls per brand per month.
+- Token counts reported by the provider are stored per evaluation, and are null
+  when the provider doesn't report them.
 
 The model's own text, the prompt and copies of comments are never stored.
 Comment excerpts are read from the comment itself when shown. Logs carry ids,

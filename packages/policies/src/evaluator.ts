@@ -1,6 +1,12 @@
 import { generateText, Output, type LanguageModel } from 'ai';
 import { z } from 'zod';
-import { ProviderError, mapProviderError, type PreparedInput } from '@feedbouncer/ai';
+import {
+  ProviderError,
+  mapProviderError,
+  toModelUsage,
+  type ModelUsage,
+  type PreparedInput,
+} from '@feedbouncer/ai';
 import { MAX_ENABLED_POLICIES_PER_BRAND, POLICY_VERDICTS, type PolicyVerdict } from './types.js';
 
 /** Bump when the prompt or output schema changes. */
@@ -29,7 +35,7 @@ export interface PolicyEvaluator {
     input: PreparedInput,
     policies: readonly { key: string; text: string }[],
     signal: AbortSignal,
-  ): Promise<Readonly<Record<string, PolicyVerdict>>>;
+  ): Promise<{ verdicts: Readonly<Record<string, PolicyVerdict>>; usage: ModelUsage }>;
 }
 
 const verdict = z.enum(POLICY_VERDICTS);
@@ -86,6 +92,7 @@ export class LlmPolicyEvaluator implements PolicyEvaluator {
     }
     const schema = verdictSchema(keys);
     let output: unknown;
+    let usage: ModelUsage;
     try {
       const r = await generateText({
         model: this.o.model,
@@ -99,11 +106,12 @@ export class LlmPolicyEvaluator implements PolicyEvaluator {
         abortSignal: signal,
       });
       output = r.output;
+      usage = toModelUsage(r.usage);
     } catch (e) {
       throw mapProviderError(e);
     }
     const parsed = schema.safeParse(output);
-    if (!parsed.success) throw new ProviderError('invalid_output', true);
-    return parsed.data.results as Readonly<Record<string, PolicyVerdict>>;
+    if (!parsed.success) throw new ProviderError('invalid_output', true, usage);
+    return { verdicts: parsed.data.results as Readonly<Record<string, PolicyVerdict>>, usage };
   }
 }

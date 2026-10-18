@@ -42,13 +42,15 @@ const insertClassified = (over: Record<string, unknown> = {}) => {
     sha: sha(1),
     trigger: 'ingest',
     scores: SCORES,
+    tokens: [null, null, null],
     ...over,
   };
   return ctx.c.query<{ id: string }>(
     `INSERT INTO comment_classification (organization_id, brand_id, connection_id, comment_id, body_sha256, trigger_key, status,
-       provider, model, prompt_version, scores, language, language_supported, input_chars, policy)
-     VALUES ($1,$2,$3,$4,$5,$6,'classified','openai','m','clf-v1',$7::jsonb,'en',true,5,$8::jsonb) RETURNING id`,
-    [v.org, v.brand, v.conn, v.comment, v.sha, v.trigger, v.scores, POLICY],
+       provider, model, prompt_version, scores, language, language_supported, input_chars, policy,
+       input_tokens, output_tokens, cache_read_tokens)
+     VALUES ($1,$2,$3,$4,$5,$6,'classified','openai','m','clf-v1',$7::jsonb,'en',true,5,$8::jsonb,$9,$10,$11) RETURNING id`,
+    [v.org, v.brand, v.conn, v.comment, v.sha, v.trigger, v.scores, POLICY, ...v.tokens],
   );
 };
 
@@ -152,5 +154,16 @@ describe('classifier schema', () => {
       );
     await ins(7);
     await expect(ins(31)).rejects.toThrow(/classifier_run_days_check/);
+  });
+  it('comment_classification: token columns are nullable and reject negatives', async () => {
+    await insertClassified({ sha: sha(9), tokens: [0, 0, 0] });
+    const cols = ['input_tokens', 'output_tokens', 'cache_read_tokens'];
+    for (const [i, col] of cols.entries()) {
+      const tokens: Array<number | null> = [null, null, null];
+      tokens[i] = -1;
+      await expect(insertClassified({ sha: sha(10 + i), tokens })).rejects.toThrow(
+        new RegExp(`comment_classification_${col}_check`),
+      );
+    }
   });
 });

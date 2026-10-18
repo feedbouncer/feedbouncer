@@ -259,6 +259,10 @@ jobs:
         run: pnpm turbo run build --filter=@feedbouncer/comments...
       - name: Comment store and ingest job integration tests
         run: pnpm --filter @feedbouncer/comments test:integration
+      - name: Build evaluation and dependencies
+        run: pnpm turbo run build --filter=@feedbouncer/evaluation...
+      - name: Evaluation integration tests
+        run: pnpm --filter @feedbouncer/evaluation test:integration
 
   compose-smoke:
     name: Compose smoke

@@ -27,6 +27,7 @@
     "@feedbouncer/connector-meta-ads": "workspace:*",
     "@feedbouncer/connectors": "workspace:*",
     "@feedbouncer/db": "workspace:*",
+    "@feedbouncer/evaluation": "workspace:*",
     "@feedbouncer/jobs": "workspace:*",
     "@feedbouncer/mailer": "workspace:*",
     "@feedbouncer/observability": "workspace:*",

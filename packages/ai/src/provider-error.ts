@@ -1,4 +1,5 @@
 import { APICallError, NoObjectGeneratedError } from 'ai';
+import { toModelUsage, type ModelUsage } from './usage.js';
 
 export type ProviderErrorCode =
   | 'timeout'
@@ -15,6 +16,7 @@ export class ProviderError extends Error {
   constructor(
     readonly code: ProviderErrorCode,
     readonly retryable: boolean,
+    readonly usage: ModelUsage | null = null,
   ) {
     super(`provider error: ${code}`);
   }
@@ -22,7 +24,8 @@ export class ProviderError extends Error {
 
 export function mapProviderError(e: unknown): ProviderError {
   if (e instanceof ProviderError) return e;
-  if (NoObjectGeneratedError.isInstance(e)) return new ProviderError('invalid_output', true);
+  if (NoObjectGeneratedError.isInstance(e))
+    return new ProviderError('invalid_output', true, toModelUsage(e.usage));
   if (APICallError.isInstance(e)) {
     const s = e.statusCode;
     if (s === 401 || s === 403) return new ProviderError('auth', false);

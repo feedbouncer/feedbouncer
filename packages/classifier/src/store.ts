@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import type { PreparedInput } from '@feedbouncer/ai';
+import type { ModelUsage, PreparedInput } from '@feedbouncer/ai';
 import { withTransaction } from '@feedbouncer/db';
 import type { BrandScope, RuleAction } from '@feedbouncer/rules';
 import type { ConnectionScope } from '@feedbouncer/secrets';
@@ -24,13 +24,18 @@ interface Base {
   sha: Buffer;
   triggerKey: string;
   reviewMode?: boolean;
+  /** Earlier attempts failed with a retryable error, so their token usage is not recorded. */
+  retried?: boolean;
 }
 export type ClassificationRecord =
   | (Base & { status: 'skipped'; skipReason: ClassificationSkipReason; inputChars: number })
   | (Base & {
       status: 'unclassified';
       unclassifiedReason: UnclassifiedReason;
+      provider: string;
+      model: string;
       input: PreparedInput;
+      usage: ModelUsage | null;
     })
   | (Base & {
       status: 'classified';
@@ -42,6 +47,7 @@ export type ClassificationRecord =
       languageSupported: boolean;
       input: PreparedInput;
       scoresReused: boolean;
+      usage: ModelUsage | null;
       ruleEvaluationId: string;
       ruleDecided: boolean;
       policy: ThresholdPolicy;
@@ -123,9 +129,9 @@ const INSERT_CLASSIFICATION = `
 INSERT INTO comment_classification (organization_id, brand_id, connection_id, comment_id, body_sha256, trigger_key, status,
   skip_reason, unclassified_reason, provider, model, prompt_version, scores, language, language_supported, low_signal,
   truncated, input_chars, scores_reused, rule_evaluation_id, rule_decided, policy, outcome, triggers, downgraded,
-  review_mode)
+  review_mode, input_tokens, output_tokens, cache_read_tokens, retried)
 SELECT c.organization_id, c.brand_id, c.connection_id, c.id, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15,
-  $16, $17, $18, $19, $20, $21, $22::jsonb, $23, $24::jsonb, $25, $26
+  $16, $17, $18, $19, $20, $21, $22::jsonb, $23, $24::jsonb, $25, $26, $27, $28, $29, $30
 FROM comment c
 WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3 AND c.id = $4
 ON CONFLICT (comment_id, body_sha256, trigger_key) DO NOTHING
@@ -158,7 +164,9 @@ export class PgClassificationStore {
   /** Null when the insert race was lost or the comment is not in this connection's scope. */
   async record(scope: ConnectionScope, r: ClassificationRecord): Promise<ClassificationRow | null> {
     const classified = r.status === 'classified' ? r : null;
+    const called = r.status === 'skipped' ? null : r;
     const input = r.status === 'skipped' ? null : (r.input ?? null);
+    const usage = r.status === 'skipped' ? null : r.usage;
     const outcome = classified && !classified.ruleDecided ? classified.verdict.outcome : null;
     if (outcome !== null && !classified?.verdict.primary)
       throw new Error('classification outcome has no primary trigger');
@@ -172,8 +180,8 @@ export class PgClassificationStore {
       r.status,
       r.status === 'skipped' ? r.skipReason : null,
       r.status === 'unclassified' ? r.unclassifiedReason : null,
-      classified?.provider ?? null,
-      classified?.model ?? null,
+      called?.provider ?? null,
+      called?.model ?? null,
       classified?.promptVersion ?? null,
       classified ? JSON.stringify(roundScores(classified.scores)) : null,
       classified?.language ?? null,
@@ -189,6 +197,10 @@ export class PgClassificationStore {
       JSON.stringify(classified?.verdict.triggers ?? []),
       classified?.verdict.downgraded ?? null,
       r.reviewMode ?? false,
+      usage?.inputTokens ?? null,
+      usage?.outputTokens ?? null,
+      usage?.cacheReadTokens ?? null,
+      r.retried ?? false,
     ];
     return withTransaction(this.pool, async (c) => {
       const ins = await c.query<DbRow>(INSERT_CLASSIFICATION, values);

@@ -69,6 +69,7 @@ function evaluated(
     model: 'gpt-x',
     promptVersion: 'pol-v1',
     checkedRevisionIds: [p1.revisionId, p2.revisionId],
+    usage: null,
     inputTruncated: false,
     lowSignal: false,
     decision: { outcome: winner?.effectiveAction ?? null, winner, matches },
@@ -187,8 +188,11 @@ describe('PgPolicyEvaluationStore', () => {
       triggerKey: 'ingest',
       status: 'failed',
       failureCode: 'unavailable',
+      provider: 'openai',
+      model: 'gpt-test',
       ruleEvaluationId: f.ruleEvaluationId,
       checkedRevisionIds: [p1.revisionId, p2.revisionId],
+      usage: null,
     });
     expect(failed).toMatchObject({
       status: 'failed',
@@ -202,8 +206,8 @@ describe('PgPolicyEvaluationStore', () => {
       [failed!.id],
     );
     expect(fr.rows[0]).toEqual({
-      provider: null,
-      model: null,
+      provider: 'openai',
+      model: 'gpt-test',
       checked_revision_ids: [p1.revisionId, p2.revisionId],
     });
     expect(await decisionsFor(f.commentId)).toEqual([]);
@@ -310,8 +314,11 @@ describe('PgPolicyEvaluationStore', () => {
       triggerKey: 'ingest',
       status: 'failed',
       failureCode: 'timeout',
+      provider: 'openai',
+      model: 'gpt-test',
       ruleEvaluationId: c.ruleEvaluationId,
       checkedRevisionIds: [p1.revisionId],
+      usage: null,
     });
     const m1 = match(p1, 'low', 'flag');
     const m2 = match(p2, 'low', 'flag');
@@ -323,6 +330,8 @@ describe('PgPolicyEvaluationStore', () => {
       skipReason: null,
       failureCode: null,
       outcome: 'flag',
+      provider: 'openai',
+      model: 'gpt-x',
       createdAt: expect.any(Date),
       checkedCount: 2,
       triggerKey: expect.stringMatching(/^run:/),

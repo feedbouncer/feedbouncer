@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ProviderError, type PreparedInput } from '@feedbouncer/ai';
+import { ProviderError, type ModelUsage, type PreparedInput } from '@feedbouncer/ai';
 import type { CategoryScores } from './types.js';
 
 const score = z.number().min(0).max(1).refine(Number.isFinite);
@@ -22,6 +22,8 @@ export const rawClassificationSchema = z.strictObject({
 export interface RawClassification {
   scores: CategoryScores;
   language: string;
+  /** Set by the provider after parsing; absent for reused and builtin scores. */
+  usage?: ModelUsage;
 }
 
 export interface ClassifierProvider {

@@ -52,10 +52,12 @@ describe('organization.timezone', () => {
       expect((await runPrisma(['migrate', 'deploy'], db.url)).code).toBe(0);
       const k = await db.client();
       try {
-        expect(await rollbackLatest(k, DEFAULT_MIGRATIONS_DIR)).toEqual({
-          status: 'rolled_back',
-          migration: MIGRATION,
-        });
+        const dirs = await listMigrationDirs(DEFAULT_MIGRATIONS_DIR);
+        for (const m of dirs.slice(dirs.indexOf(MIGRATION)).reverse())
+          expect(await rollbackLatest(k, DEFAULT_MIGRATIONS_DIR)).toEqual({
+            status: 'rolled_back',
+            migration: m,
+          });
         const brand = (orgId: string, tz: string | null, at: string, archived = false) =>
           k.query(
             `INSERT INTO brand (organization_id, name, timezone, timezone_set_at, created_at, archived_at)

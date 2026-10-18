@@ -8,6 +8,8 @@ export type Pool = ReturnType<typeof createPool>;
 export interface OpsContext {
   readonly log: Logger;
   readonly env: Env;
+  /** Where the operator ran pnpm from; `pnpm ops` itself runs in apps/worker. */
+  readonly cwd: string;
   readonly out: (line: string) => void;
   pool(): Pool;
   producer(): JobProducer;

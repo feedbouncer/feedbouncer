@@ -110,9 +110,25 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
         scoresReused = true;
       } else {
         if (d.provider.id === 'none')
-          return { ...base, status: 'unclassified', unclassifiedReason: 'disabled', input };
+          return {
+            ...base,
+            status: 'unclassified',
+            unclassifiedReason: 'disabled',
+            provider,
+            model,
+            input,
+            usage: null,
+          };
         if (now() - p.requestedAt > d.maxWaitMs)
-          return { ...base, status: 'unclassified', unclassifiedReason: 'queue_timeout', input };
+          return {
+            ...base,
+            status: 'unclassified',
+            unclassifiedReason: 'queue_timeout',
+            provider,
+            model,
+            input,
+            usage: null,
+          };
         const lease = await d.slots.acquire(brand.brandId);
         if (!lease) throw new JobDeferral('classifier_brand_busy', BRAND_BUSY_RETRY_MS);
         try {
@@ -126,7 +142,15 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
             code: err.code,
             attempt: ctx.attempt,
           });
-          return { ...base, status: 'unclassified', unclassifiedReason: err.code, input };
+          return {
+            ...base,
+            status: 'unclassified',
+            unclassifiedReason: err.code,
+            provider,
+            model,
+            input,
+            usage: err.usage,
+          };
         } finally {
           await lease
             .release()
@@ -172,6 +196,7 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
       languageSupported,
       input,
       scoresReused,
+      usage: scoresReused || input.empty ? null : (raw.usage ?? null),
       ruleEvaluationId: ruleEval.id,
       // Thresholds apply only when the rules found nothing; any other status leaves the decision to them.
       ruleDecided: ruleEval.status !== 'no_match',
@@ -277,8 +302,11 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
         const rec = await classifyOnce(ctx, p, row, sha, brand);
         const reviewMode = await d.reviewMode.isActive(ctx.scope);
         c =
-          (await d.classifications.record(ctx.scope, { ...rec, reviewMode })) ??
-          (await d.classifications.find(brand, row.id, sha, p.trigger));
+          (await d.classifications.record(ctx.scope, {
+            ...rec,
+            reviewMode,
+            retried: ctx.attempt > 1,
+          })) ?? (await d.classifications.find(brand, row.id, sha, p.trigger));
         if (!c) throw new JobError('retryable', 'classification_not_visible');
       }
       return act(ctx, brand, row, c);

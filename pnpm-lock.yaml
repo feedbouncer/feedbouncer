@@ -335,6 +335,9 @@ importers:
       '@feedbouncer/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@feedbouncer/evaluation':
+        specifier: workspace:*
+        version: link:../../packages/evaluation
       '@feedbouncer/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
@@ -681,6 +684,40 @@ importers:
       prisma:
         specifier: 7.10.0
         version: 7.10.0(@types/node@24.13.6)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+
+  packages/evaluation:
+    dependencies:
+      '@feedbouncer/comments':
+        specifier: workspace:*
+        version: link:../comments
+      '@feedbouncer/db':
+        specifier: workspace:*
+        version: link:../db
+      '@feedbouncer/jobs':
+        specifier: workspace:*
+        version: link:../jobs
+      '@feedbouncer/rules':
+        specifier: workspace:*
+        version: link:../rules
+      csv-parse:
+        specifier: 7.0.3
+        version: 7.0.3
+      csv-stringify:
+        specifier: 6.9.0
+        version: 6.9.0
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
 
   packages/jobs:
     dependencies:
@@ -2421,6 +2458,12 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
+  csv-parse@7.0.3:
+    resolution: {integrity: sha512-YFd3QM/yo17vH91L1IOZuvl09zM0zEEtdfTcOCKWcMdM++MNaQSyp09slXyFCLaPXvHstQFx/xC8myiFHSMUvw==}
+
+  csv-stringify@6.9.0:
+    resolution: {integrity: sha512-6b3e29CILFfSQ2nDRuZMRROzQOpPuJ+s8zPB5H7eK5ncXBbFOyVuRLU5Sx/zAUmVri3Ly49GyC8NEme4SVSAbA==}
 
   d3-array@3.2.1:
     resolution: {integrity: sha512-gUY/qeHq/yNqqoCKNq4vtpFLdoCdvyNpWoC/KNjhGbhDuQpAM9sIQQKkXSNpXa9h5KySs/gzm7R88WkUutgwWQ==}
@@ -4841,6 +4884,10 @@ snapshots:
       which: 2.0.2
 
   csstype@3.2.3: {}
+
+  csv-parse@7.0.3: {}
+
+  csv-stringify@6.9.0: {}
 
   d3-array@3.2.1:
     dependencies:

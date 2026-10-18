@@ -164,7 +164,7 @@ so the database refuses cross-tenant links.
 | `weekly_report`          | One computed report per workspace week (`queued`, `skipped_quiet`, `missed`). `week_start` is a Monday; `payload` is a JSON object of at most 64 KiB.                                                                                            | org                                    | `(organization_id, week_start)`             |
 | `weekly_report_delivery` | One email of a report to a member: state, attempts (0 to 6), lease and error code. No payload or secrets.                                                                                                                                        | org, report, user                      | `(report_id, user_id)`                      |
 | `audit_event`            | Append-only record of significant changes.                                                                                                                                                                                                       | `organization_id`, optional brand      | none (`id`)                                 |
-| `job_ledger`             | One row per logical platform job: payload, state, retry counters, lease, effect record, DLQ metadata, and `trace_context` (W3C traceparent, nullable) (packages/jobs).                                                                           | org, brand, connection                 | `(organization_id, idempotency_key)`        |
+| `job_ledger`             | One row per logical platform job: payload, state, retry counters, lease, effect record, DLQ metadata, `trace_context` (W3C traceparent, nullable), and `first_claimed_at`/`last_claimed_at` (nullable, both set or both NULL) (packages/jobs).   | org, brand, connection                 | `(organization_id, idempotency_key)`        |
 | `connection_sync`        | Last sync outcome per connection (observability). No secrets or content.                                                                                                                                                                         | org, brand, connection                 | `connection_id`                             |
 | `processed_job`          | Idempotency ledger for background jobs (system table, no tenant).                                                                                                                                                                                | none                                   | `(queue, job_id)`                           |
 
@@ -222,6 +222,11 @@ what it would have done and waits for a person.
 `review_mode boolean` (default `false`): whether review mode applied when the
 evaluation ran. `rule_evaluation.also_matched_rule_ids uuid[]` lists the other
 rules that matched beside the winner (at most 50).
+
+`comment_classification` and `policy_evaluation` each have nullable
+`input_tokens`, `output_tokens` and `cache_read_tokens integer` columns (each
+`>= 0`): the token counts the provider reported for that evaluation. They are
+NULL when the provider reports none, and for reused scores and built-in results.
 
 `action_suggestion` is what automation would have done to one comment. Status is
 `pending`, `approved`, `dismissed`, `expired`, `not_applicable` or `withdrawn`;

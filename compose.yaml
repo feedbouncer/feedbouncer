@@ -282,6 +282,7 @@ services:
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
       - ./packages/observability/src:/repo/packages/observability/src:ro
       - ./packages/policies/src:/repo/packages/policies/src:ro
+      - ./packages/evaluation/src:/repo/packages/evaluation/src:ro
       - ./packages/reports/src:/repo/packages/reports/src:ro
       - ./packages/rules/src:/repo/packages/rules/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro

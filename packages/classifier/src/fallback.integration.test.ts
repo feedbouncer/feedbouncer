@@ -73,6 +73,7 @@ async function seedClassified(
     languageSupported: true,
     input,
     scoresReused: false,
+    usage: null,
     ruleEvaluationId: ev.rows[0]!.id,
     ruleDecided: false,
     policy,

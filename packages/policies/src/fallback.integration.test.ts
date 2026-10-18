@@ -85,6 +85,7 @@ async function seedEvaluated(t: Tenant, action: PolicyAction = 'hide') {
     model: 'gpt-test',
     promptVersion: 'pol-v1',
     checkedRevisionIds: [active.revisionId],
+    usage: null,
     inputTruncated: false,
     lowSignal: false,
     decision,

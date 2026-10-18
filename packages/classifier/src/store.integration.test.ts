@@ -114,6 +114,7 @@ async function classified(
     languageSupported: true,
     input,
     scoresReused: false,
+    usage: null,
     ruleEvaluationId: await ruleEvaluation(t, c.id, hash, triggerKey),
     ruleDecided: o.ruleDecided ?? false,
     policy: DEFAULT_THRESHOLDS,
@@ -239,6 +240,9 @@ describe('PgClassificationStore', () => {
       sha: sha(c.body),
       triggerKey: 'ingest',
       status: 'unclassified',
+      usage: null,
+      provider: 'openai',
+      model: 'gpt-test',
       unclassifiedReason: 'timeout',
       input: prepareInput(c.body),
     });
@@ -246,7 +250,8 @@ describe('PgClassificationStore', () => {
       status: 'unclassified',
       outcome: null,
       scores: null,
-      provider: null,
+      provider: 'openai',
+      model: 'gpt-test',
       triggers: [],
     });
     expect((await decisions(c.id)).rows).toHaveLength(0);
@@ -326,6 +331,9 @@ describe('PgClassificationStore', () => {
       sha: sha(c.body),
       triggerKey: 'ingest',
       status: 'unclassified',
+      usage: null,
+      provider: 'openai',
+      model: 'gpt-test',
       unclassifiedReason: 'unavailable',
       input: prepareInput(c.body),
     });
@@ -588,6 +596,9 @@ describe('PgClassificationStore', () => {
       sha: sha(unc.body),
       triggerKey: 'ingest',
       status: 'unclassified',
+      usage: null,
+      provider: 'openai',
+      model: 'gpt-test',
       unclassifiedReason: 'timeout',
       input: prepareInput(unc.body),
     });

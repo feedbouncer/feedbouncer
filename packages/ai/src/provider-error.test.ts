@@ -1,4 +1,4 @@
-import { APICallError } from 'ai';
+import { APICallError, NoObjectGeneratedError } from 'ai';
 import { describe, expect, it } from 'vitest';
 import { mapProviderError } from './provider-error.js';
 
@@ -30,5 +30,21 @@ describe('mapProviderError', () => {
       code: 'unavailable',
       retryable: true,
     });
+  });
+  it('keeps usage from NoObjectGeneratedError', () => {
+    const e = mapProviderError(
+      new NoObjectGeneratedError({
+        message: 'x',
+        response: { id: 'r', timestamp: new Date(), modelId: 'm' },
+        usage: { inputTokens: 50, outputTokens: 200 } as never,
+        finishReason: 'length',
+      }),
+    );
+    expect(e.code).toBe('invalid_output');
+    expect(e.usage).toEqual({ inputTokens: 50, outputTokens: 200, cacheReadTokens: null });
+  });
+  it('other mappings carry no usage', () => {
+    expect(mapProviderError(new Error('boom')).usage).toBeNull();
+    expect(mapProviderError(api(500)).usage).toBeNull();
   });
 });

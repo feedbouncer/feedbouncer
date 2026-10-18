@@ -117,6 +117,49 @@ describe('claim / complete', () => {
   });
 });
 
+describe('claim timestamps', () => {
+  const claimTimes = async (id: string) =>
+    (
+      await pool.query<{ first: Date; last: Date; created: Date }>(
+        'SELECT first_claimed_at AS first, last_claimed_at AS last, created_at AS created FROM job_ledger WHERE id = $1',
+        [id],
+      )
+    ).rows[0]!;
+  it('sets first_claimed_at and last_claimed_at on the first claim', async () => {
+    const id = await add();
+    expect((await claimTimes(id)).first).toBeNull();
+    await claimed(id);
+    const { first, last, created } = await claimTimes(id);
+    expect(first.getTime()).toBe(last.getTime());
+    expect(first.getTime()).toBeGreaterThanOrEqual(created.getTime());
+  });
+  it('keeps first_claimed_at and advances last_claimed_at on a retried claim', async () => {
+    const id = await add();
+    await claimed(id);
+    const before = await claimTimes(id);
+    await sleep(10);
+    await ledger.recordRetry(id, 'w1', { kind: 'retryable', code: 'timeout' }, 0);
+    await claimed(id);
+    const after = await claimTimes(id);
+    expect(after.first.getTime()).toBe(before.first.getTime());
+    expect(after.last.getTime()).toBeGreaterThan(after.first.getTime());
+  });
+  it('keeps first_claimed_at on a lease takeover claim', async () => {
+    const id = await add();
+    await claimed(id);
+    const before = await claimTimes(id);
+    await pool.query(
+      `UPDATE job_ledger SET lease_expires_at = now() - interval '1 second' WHERE id = $1`,
+      [id],
+    );
+    await sleep(10);
+    await claimed(id, 'w2');
+    const after = await claimTimes(id);
+    expect(after.first.getTime()).toBe(before.first.getTime());
+    expect(after.last.getTime()).toBeGreaterThan(before.last.getTime());
+  });
+});
+
 describe('failure bookkeeping and DLQ', () => {
   it('records retries and deferrals separately', async () => {
     const id = await add();
