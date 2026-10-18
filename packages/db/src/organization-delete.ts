@@ -27,9 +27,7 @@ export async function deleteOrganization(
   );
   if (!org.rows[0]) return 'not_found';
   if (org.rows[0].name !== confirmName) return 'confirmation_mismatch';
-  await c.query('SELECT 1 FROM connection WHERE organization_id = $1 FOR UPDATE', [
-    organizationId,
-  ]);
+  await c.query('SELECT 1 FROM connection WHERE organization_id = $1 FOR UPDATE', [organizationId]);
   const { rows } = await c.query<{ active: boolean }>(
     `SELECT EXISTS (SELECT 1 FROM connection WHERE organization_id = $1 AND status <> 'revoked')
          OR EXISTS (SELECT 1 FROM connection_secret s JOIN connection c ON c.id = s.connection_id

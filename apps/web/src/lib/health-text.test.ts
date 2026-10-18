@@ -24,7 +24,8 @@ describe('healthText', () => {
   it('says "1 minute" in the singular', () =>
     expect(h({ ingestLagSeconds: 30 })).toBe('Processing delayed by about 1 minute.'));
   it.each(['disabled', 'needs_reconnection'])('shows nothing for %s', (status) =>
-    expect(h({ status, reason: 'connection_error' })).toBeNull());
+    expect(h({ status, reason: 'connection_error' })).toBeNull(),
+  );
   it('still reports failed imports on a disabled connection', () =>
     expect(h({ status: 'disabled', reason: 'connection_error', failedImports: 2 })).toBe(
       "2 comments couldn't be imported. FeedBouncer support has been notified.",
