@@ -1,10 +1,19 @@
-import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { MAX_INPUT_FILE_BYTES, RUN_SCHEMA_VERSION } from './constants.js';
-import { InputError, readRun } from './io.js';
+import { UsageError } from '@feedbouncer/jobs';
+import { parse } from 'csv-parse/sync';
+import {
+  InputError,
+  LABEL_SHEET_COLUMNS,
+  createRunDir,
+  labelSheetCsv,
+  readRun,
+  writeRunFile,
+} from './io.js';
 
 const ID1 = 'i_0000000000000001';
 const ID2 = 'i_0000000000000002';
@@ -195,5 +204,41 @@ describe('readRun', () => {
     expect(err).toBeInstanceOf(InputError);
     expect(err.message).toContain('line 1');
     expect(err.message).not.toContain('SECRET');
+  });
+});
+
+describe('run writers', () => {
+  const sheetRows = [
+    { item: ID1, platform: 'facebook', text: '=1+1' },
+    { item: ID2, platform: 'instagram', text: '@cmd, "quoted"' },
+  ];
+
+  it('label sheet escapes formulas', () => {
+    const csv = labelSheetCsv(sheetRows);
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    const records = parse(csv, { bom: true }) as string[][];
+    expect(records[1]).toEqual([ID1, 'facebook', "'=1+1", '', '', '', '', '']);
+    expect(records[2]![2]).toBe(`'@cmd, "quoted"`);
+  });
+
+  it('label sheet has no outcome columns', () => {
+    const records = parse(labelSheetCsv(sheetRows), { bom: true }) as string[][];
+    expect(records[0]!.join(',')).toBe('item,platform,text,labeller,verdict,category,role,note');
+    expect(LABEL_SHEET_COLUMNS.join(',')).toBe(
+      'item,platform,text,labeller,verdict,category,role,note',
+    );
+  });
+
+  it('out dir is 0700, files 0600, existing dir refused', async () => {
+    const parent = await mkdtemp(join(tmpdir(), 'eval-out-'));
+    const dir = join(parent, 'run');
+    await createRunDir(dir);
+    expect((await stat(dir)).mode & 0o777).toBe(0o700);
+    await writeRunFile(dir, 'items.jsonl', 'x\n');
+    expect((await stat(join(dir, 'items.jsonl'))).mode & 0o777).toBe(0o600);
+    expect(await readFile(join(dir, 'items.jsonl'), 'utf8')).toBe('x\n');
+    await expect(writeRunFile(dir, 'items.jsonl', 'y')).rejects.toMatchObject({ code: 'EEXIST' });
+    await expect(createRunDir(dir)).rejects.toBeInstanceOf(UsageError);
+    await expect(createRunDir(join(parent, 'missing', 'run'))).rejects.toBeInstanceOf(UsageError);
   });
 });

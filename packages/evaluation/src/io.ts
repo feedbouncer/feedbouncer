@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile, readdir } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse } from 'csv-parse/sync';
+import { stringify } from 'csv-stringify/sync';
+import { UsageError } from '@feedbouncer/jobs';
 import type { ZodType } from 'zod';
 import { MAX_CSV_RECORD_BYTES, MAX_INPUT_FILE_BYTES } from './constants.js';
 import { EvalItem, LabelRow, MetaConfig, MetaRow, Pricing, RunManifest } from './schema.js';
@@ -205,4 +207,57 @@ export async function readRun(dir: string): Promise<RunInputs> {
     .sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
 
   return { manifest, items, labels, meta, metaConfig, pricing, inputDigests };
+}
+
+// ---- Write side (the export) ----
+
+/** The label sheet's columns, in order. No outcome, decider, language or channel: labelling is blind. */
+export const LABEL_SHEET_COLUMNS = [
+  'item',
+  'platform',
+  'text',
+  'labeller',
+  'verdict',
+  'category',
+  'role',
+  'note',
+] as const;
+
+export type LabelSheetRow = { item: string; platform: string; text: string };
+
+/** CSV with a UTF-8 BOM for Excel; cells starting with =, +, -, @ (and kin) are quoted with '. */
+export function labelSheetCsv(rows: readonly LabelSheetRow[]): string {
+  const records = rows.map((r) => ({
+    item: r.item,
+    platform: r.platform,
+    text: r.text,
+    labeller: '',
+    verdict: '',
+    category: '',
+    role: '',
+    note: '',
+  }));
+  return stringify(records, {
+    header: true,
+    columns: [...LABEL_SHEET_COLUMNS],
+    escape_formulas: true,
+    bom: true,
+  });
+}
+
+/** Creates the run directory (mode 0700). The parent must exist; an existing directory is refused. */
+export async function createRunDir(dir: string): Promise<void> {
+  try {
+    await mkdir(dir, { mode: 0o700 });
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') throw new UsageError('output directory already exists');
+    if (code === 'ENOENT') throw new UsageError('output parent directory does not exist');
+    throw e;
+  }
+}
+
+/** Writes a new file (mode 0600) into the run directory; never overwrites. */
+export async function writeRunFile(dir: string, name: string, data: string): Promise<void> {
+  await writeFile(join(dir, name), data, { flag: 'wx', mode: 0o600 });
 }

@@ -3,3 +3,4 @@ export * from './schema.js';
 export * from './stats.js';
 export * from './io.js';
 export * from './ground-truth.js';
+export { exportRun, type ExportOptions } from './export/export.js';
