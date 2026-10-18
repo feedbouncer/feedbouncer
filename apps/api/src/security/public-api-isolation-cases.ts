@@ -7,12 +7,17 @@ export interface PublicIsolationFixture {
   aWriteToken: string;
   bCommentId: string;
   bReviewItemId: string;
+  aEndpointId: string;
+  bEndpointId: string;
+  bDeliveryId: string;
 }
 
 export interface PublicApiCase {
   /** The route as documented, "METHOD /v1/path/{param}". */
   route: `${'GET' | 'POST' | 'PATCH' | 'DELETE'} /v1/${string}`;
   url: (f: PublicIsolationFixture) => string;
+  /** Tells apart several cases of one route. */
+  label?: string;
   body?: (f: PublicIsolationFixture) => unknown;
 }
 
@@ -27,5 +32,37 @@ export const PUBLIC_API_CASES: readonly PublicApiCase[] = [
   {
     route: 'POST /v1/comments/{id}/unhide',
     url: (f) => `/v1/comments/${f.bCommentId}/unhide`,
+  },
+  { route: 'GET /v1/webhook-endpoints/{id}', url: (f) => `/v1/webhook-endpoints/${f.bEndpointId}` },
+  {
+    route: 'PATCH /v1/webhook-endpoints/{id}',
+    url: (f) => `/v1/webhook-endpoints/${f.bEndpointId}`,
+    body: () => ({ description: 'taken over' }),
+  },
+  {
+    route: 'DELETE /v1/webhook-endpoints/{id}',
+    url: (f) => `/v1/webhook-endpoints/${f.bEndpointId}`,
+  },
+  {
+    route: 'POST /v1/webhook-endpoints/{id}/rotate-secret',
+    url: (f) => `/v1/webhook-endpoints/${f.bEndpointId}/rotate-secret`,
+  },
+  {
+    route: 'POST /v1/webhook-endpoints/{id}/test',
+    url: (f) => `/v1/webhook-endpoints/${f.bEndpointId}/test`,
+  },
+  {
+    route: 'GET /v1/webhook-endpoints/{id}/deliveries',
+    url: (f) => `/v1/webhook-endpoints/${f.bEndpointId}/deliveries`,
+  },
+  {
+    route: 'POST /v1/webhook-endpoints/{id}/deliveries/{deliveryId}/redeliver',
+    label: "B's delivery under B's endpoint",
+    url: (f) => `/v1/webhook-endpoints/${f.bEndpointId}/deliveries/${f.bDeliveryId}/redeliver`,
+  },
+  {
+    route: 'POST /v1/webhook-endpoints/{id}/deliveries/{deliveryId}/redeliver',
+    label: "B's delivery under A's endpoint",
+    url: (f) => `/v1/webhook-endpoints/${f.aEndpointId}/deliveries/${f.bDeliveryId}/redeliver`,
   },
 ];

@@ -3,7 +3,7 @@ import type pg from 'pg';
 export interface AuditEventInput {
   organizationId: string;
   brandId?: string | null;
-  actorType: 'user' | 'system';
+  actorType: 'user' | 'system' | 'api_key';
   actorUserId?: string | null;
   action: string;
   subjectType: string;

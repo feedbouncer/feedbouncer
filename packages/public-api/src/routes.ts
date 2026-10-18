@@ -4,6 +4,12 @@ import type { ApiKeyScope } from './keys/token.js';
 import { CommentResource } from './resources/comment.js';
 import { FlaggedItemResource } from './resources/flagged-item.js';
 import { pageOf } from './resources/page.js';
+import {
+  DELIVERY_STATUSES,
+  WEBHOOK_EVENT_TYPES,
+  WebhookDeliveryResource,
+  WebhookEndpointResource,
+} from './resources/webhook.js';
 
 /** Codes may be added, never renamed: integrations match on them. */
 export const PUBLIC_ERROR_CODES = [
@@ -20,6 +26,10 @@ export const PUBLIC_ERROR_CODES = [
   'invalid_idempotency_key',
   'connection_inactive',
   'unsupported_action',
+  'invalid_webhook_url',
+  'webhook_endpoint_limit_reached',
+  'webhook_endpoint_disabled',
+  'webhook_event_unavailable',
 ] as const;
 export type PublicErrorCode = (typeof PUBLIC_ERROR_CODES)[number];
 
@@ -32,8 +42,12 @@ export const PUBLIC_ERROR_STATUS: Readonly<Record<PublicErrorCode, number>> = {
   not_found: 404,
   idempotency_request_in_progress: 409,
   connection_inactive: 409,
+  webhook_endpoint_limit_reached: 409,
+  webhook_endpoint_disabled: 409,
+  webhook_event_unavailable: 409,
   idempotency_key_reused: 422,
   unsupported_action: 422,
+  invalid_webhook_url: 422,
   rate_limited: 429,
   internal_error: 500,
   temporarily_unavailable: 503,
@@ -81,6 +95,56 @@ export const ListFlaggedItemsQuery = z.strictObject({
   cursor: z.string().max(512).optional(),
 });
 
+const eventTypes = z
+  .array(z.enum(WEBHOOK_EVENT_TYPES))
+  .min(1)
+  .refine((types) => new Set(types).size === types.length, 'Event types must be unique.')
+  .meta({ description: 'The events this endpoint receives. At least one, without repeats.' });
+const webhookUrl = z.string().max(2048).meta({
+  description:
+    'An `https://` URL on port 443 that resolves to public addresses only, at most 2048 characters.',
+});
+const description = z.string().max(500);
+
+export const CreateWebhookEndpointBody = z
+  .strictObject({ url: webhookUrl, description: description.optional(), eventTypes })
+  .meta({ id: 'CreateWebhookEndpointRequest' });
+
+export const UpdateWebhookEndpointBody = z
+  .strictObject({
+    url: webhookUrl.optional(),
+    description: description.nullable().optional(),
+    eventTypes: eventTypes.optional(),
+    status: z.enum(['active', 'disabled']).optional().meta({
+      description: 'Setting `active` on a disabled endpoint resets its failure count.',
+    }),
+  })
+  .meta({ id: 'UpdateWebhookEndpointRequest' });
+
+const SIGNING_SECRET = 'The signing secret. It is shown once and cannot be retrieved again.';
+
+export const WebhookEndpointCreated = z
+  .object({
+    endpoint: WebhookEndpointResource,
+    secret: z.string().meta({ description: SIGNING_SECRET }),
+  })
+  .meta({ id: 'WebhookEndpointCreated' });
+
+export const WebhookSecretRotation = z
+  .object({
+    secret: z.string().meta({ description: SIGNING_SECRET }),
+    previousSecretExpiresAt: z.iso.datetime().meta({
+      description: 'Until then deliveries are signed with the old secret as well.',
+    }),
+  })
+  .meta({ id: 'WebhookSecretRotation' });
+
+export const ListWebhookDeliveriesQuery = z.strictObject({
+  status: z.enum(DELIVERY_STATUSES).optional(),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+  cursor: z.string().max(512).optional(),
+});
+
 const ACTION_STATUSES = ['pending', 'applied', 'noop', 'not_eligible', 'failed'] as const;
 
 export const ModerationResult = z
@@ -118,6 +182,133 @@ const moderationSpec = (kind: 'hide' | 'unhide'): RouteSpec => ({
     'invalid_idempotency_key',
   ],
 });
+
+const IDEMPOTENCY_ERRORS = [
+  'idempotency_key_reused',
+  'idempotency_request_in_progress',
+  'invalid_idempotency_key',
+] as const;
+
+function webhookEndpointSpecs(): readonly RouteSpec[] {
+  const endpointParams = z.object({ id: z.uuid() });
+  const base = { scope: 'write', idempotent: false } as const;
+  return [
+    {
+      ...base,
+      id: 'listWebhookEndpoints',
+      method: 'GET',
+      path: '/v1/webhook-endpoints',
+      summary: 'List webhook endpoints',
+      responses: { 200: pageOf(WebhookEndpointResource, 'WebhookEndpointPage') },
+      errors: [],
+    },
+    {
+      ...base,
+      id: 'createWebhookEndpoint',
+      method: 'POST',
+      path: '/v1/webhook-endpoints',
+      summary: 'Create a webhook endpoint; the signing secret is returned once',
+      idempotent: true,
+      body: CreateWebhookEndpointBody,
+      responses: { 201: WebhookEndpointCreated },
+      errors: [
+        'invalid_request',
+        'invalid_webhook_url',
+        'webhook_endpoint_limit_reached',
+        ...IDEMPOTENCY_ERRORS,
+      ],
+    },
+    {
+      ...base,
+      id: 'getWebhookEndpoint',
+      method: 'GET',
+      path: '/v1/webhook-endpoints/{id}',
+      summary: 'Fetch one webhook endpoint',
+      params: endpointParams,
+      responses: { 200: WebhookEndpointResource },
+      errors: ['not_found'],
+    },
+    {
+      ...base,
+      id: 'updateWebhookEndpoint',
+      method: 'PATCH',
+      path: '/v1/webhook-endpoints/{id}',
+      summary: 'Change, disable or re-enable a webhook endpoint',
+      idempotent: true,
+      params: endpointParams,
+      body: UpdateWebhookEndpointBody,
+      responses: { 200: WebhookEndpointResource },
+      errors: ['invalid_request', 'not_found', 'invalid_webhook_url', ...IDEMPOTENCY_ERRORS],
+    },
+    {
+      ...base,
+      id: 'deleteWebhookEndpoint',
+      method: 'DELETE',
+      path: '/v1/webhook-endpoints/{id}',
+      summary: 'Delete a webhook endpoint and its delivery history',
+      params: endpointParams,
+      responses: { 204: null },
+      errors: ['not_found'],
+    },
+    {
+      ...base,
+      id: 'rotateWebhookSecret',
+      method: 'POST',
+      path: '/v1/webhook-endpoints/{id}/rotate-secret',
+      summary: 'Issue a new signing secret; the old one keeps signing for 24 hours',
+      idempotent: true,
+      params: endpointParams,
+      body: z.strictObject({}),
+      bodyOptional: true,
+      responses: { 200: WebhookSecretRotation },
+      errors: ['invalid_request', 'not_found', ...IDEMPOTENCY_ERRORS],
+    },
+    {
+      ...base,
+      id: 'testWebhookEndpoint',
+      method: 'POST',
+      path: '/v1/webhook-endpoints/{id}/test',
+      summary: 'Send a `webhook.test` event to the endpoint',
+      idempotent: true,
+      params: endpointParams,
+      body: z.strictObject({}),
+      bodyOptional: true,
+      responses: { 202: WebhookDeliveryResource },
+      errors: ['invalid_request', 'not_found', 'webhook_endpoint_disabled', ...IDEMPOTENCY_ERRORS],
+    },
+    {
+      ...base,
+      id: 'listWebhookDeliveries',
+      method: 'GET',
+      path: '/v1/webhook-endpoints/{id}/deliveries',
+      summary: 'List the deliveries of an endpoint, newest first',
+      params: endpointParams,
+      query: ListWebhookDeliveriesQuery,
+      responses: { 200: pageOf(WebhookDeliveryResource, 'WebhookDeliveryPage') },
+      errors: ['invalid_request', 'invalid_cursor', 'not_found'],
+    },
+    {
+      ...base,
+      id: 'redeliverWebhookDelivery',
+      method: 'POST',
+      path: '/v1/webhook-endpoints/{id}/deliveries/{deliveryId}/redeliver',
+      summary:
+        'Send the event of a finished delivery again. Answers 409 `invalid_request` while the delivery is still being attempted',
+      idempotent: true,
+      params: z.object({ id: z.uuid(), deliveryId: z.uuid() }),
+      body: z.strictObject({}),
+      bodyOptional: true,
+      responses: { 202: WebhookDeliveryResource },
+      errors: [
+        'invalid_request',
+        'not_found',
+        'webhook_endpoint_disabled',
+        'webhook_event_unavailable',
+        ...IDEMPOTENCY_ERRORS,
+      ],
+    },
+  ];
+}
 
 export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
   {
@@ -176,6 +367,7 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     responses: { 200: FlaggedItemResource },
     errors: ['not_found'],
   },
+  ...webhookEndpointSpecs(),
 ];
 
 export function routeSpec(id: string): RouteSpec {

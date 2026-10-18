@@ -88,9 +88,30 @@ describe('buildOpenApiDocument', () => {
     for (const { path, op } of operations(doc)) {
       if (path === '/v1/openapi.json') continue;
       expect(op.responses['429']?.headers).toHaveProperty('Retry-After');
-      expect(op.responses['201']?.headers ?? op.responses['200']?.headers).toHaveProperty(
-        'X-RateLimit-Remaining',
-      );
+      const success = Object.entries(op.responses).find(([status]) => status.startsWith('2'))![1];
+      expect(success.headers).toHaveProperty('X-RateLimit-Remaining');
+    }
+  });
+
+  it('documents each event payload under the top-level webhooks map', () => {
+    const ids: Record<string, string> = {
+      'comment.received': 'CommentReceivedEvent',
+      'comment.hidden': 'CommentHiddenEvent',
+      'item.flagged': 'ItemFlaggedEvent',
+      'webhook.test': 'WebhookTestEvent',
+    };
+    expect(Object.keys(doc.webhooks)).toEqual(Object.keys(ids));
+    for (const [type, id] of Object.entries(ids)) {
+      expect(doc.components.schemas).toHaveProperty(id);
+      expect(doc.webhooks[type]).toMatchObject({
+        post: {
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { $ref: `#/components/schemas/${id}` } } },
+          },
+          responses: { '2XX': { description: expect.any(String) as string } },
+        },
+      });
     }
   });
 

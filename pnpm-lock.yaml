@@ -206,6 +206,9 @@ importers:
       '@feedbouncer/service-runtime':
         specifier: workspace:*
         version: link:../../packages/service-runtime
+      '@feedbouncer/webhooks':
+        specifier: workspace:*
+        version: link:../../packages/webhooks
       '@nestjs/common':
         specifier: 12.1.2
         version: 12.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -1026,19 +1029,37 @@ importers:
 
   packages/webhooks:
     dependencies:
+      '@feedbouncer/db':
+        specifier: workspace:*
+        version: link:../db
+      '@feedbouncer/public-api':
+        specifier: workspace:*
+        version: link:../public-api
+      '@feedbouncer/secrets':
+        specifier: workspace:*
+        version: link:../secrets
       '@feedbouncer/service-runtime':
         specifier: workspace:*
         version: link:../service-runtime
       ipaddr.js:
         specifier: 2.5.0
         version: 2.5.0
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
       undici:
         specifier: 8.12.2
         version: 8.12.2
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
     devDependencies:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
       standardwebhooks:
         specifier: 1.1.1
         version: 1.1.1

@@ -21,12 +21,18 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
+    "@feedbouncer/db": "workspace:*",
+    "@feedbouncer/public-api": "workspace:*",
+    "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
     "ipaddr.js": "2.5.0",
-    "undici": "8.12.2"
+    "pg": "8.23.1",
+    "undici": "8.12.2",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/node": "24.13.6",
+    "@types/pg": "8.23.1",
     "standardwebhooks": "1.1.1"
   }
 }

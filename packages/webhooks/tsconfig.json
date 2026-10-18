@@ -2,5 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "outDir": "dist", "rootDir": "src", "types": ["node"] },
   "include": ["src"],
-  "references": [{ "path": "../service-runtime/tsconfig.build.json" }]
+  "references": [
+    { "path": "../service-runtime/tsconfig.build.json" },
+    { "path": "../db/tsconfig.build.json" },
+    { "path": "../secrets/tsconfig.build.json" },
+    { "path": "../public-api/tsconfig.build.json" }
+  ]
 }

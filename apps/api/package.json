@@ -37,6 +37,7 @@
     "@feedbouncer/rules": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
+    "@feedbouncer/webhooks": "workspace:*",
     "@nestjs/common": "12.1.2",
     "@nestjs/core": "12.1.2",
     "@nestjs/platform-fastify": "12.1.2",

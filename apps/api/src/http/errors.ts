@@ -85,7 +85,10 @@ export type ErrorCode =
   | 'insufficient_scope'
   | 'idempotency_key_reused'
   | 'idempotency_request_in_progress'
-  | 'invalid_idempotency_key';
+  | 'invalid_idempotency_key'
+  | 'webhook_endpoint_limit_reached'
+  | 'webhook_endpoint_disabled'
+  | 'webhook_event_unavailable';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
@@ -172,6 +175,10 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   idempotency_request_in_progress: 'A request with this Idempotency-Key is still being processed.',
   invalid_idempotency_key:
     'The Idempotency-Key must be 1 to 128 characters of letters, digits and . _ : -.',
+  webhook_endpoint_limit_reached:
+    'This workspace already has 10 webhook endpoints. Delete one to create another.',
+  webhook_endpoint_disabled: 'This webhook endpoint is disabled. Re-enable it first.',
+  webhook_event_unavailable: 'The comment of this event is no longer available.',
 };
 
 export interface ErrorIssue {

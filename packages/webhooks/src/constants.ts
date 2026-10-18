@@ -1,5 +1,4 @@
-export const WEBHOOK_EVENT_TYPES = ['comment.received', 'comment.hidden', 'item.flagged'] as const;
-export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
+export { WEBHOOK_EVENT_TYPES, type WebhookEventType } from '@feedbouncer/public-api';
 
 export const RETRY_DELAYS_SECONDS = [60, 300, 1800, 7200, 21600, 43200] as const;
 export const MAX_ATTEMPTS = 7;

@@ -177,6 +177,29 @@ describe('loadApiEnv', () => {
     });
   });
 
+  describe('webhook destinations', () => {
+    it('allows no private network by default', () => {
+      expect(load(base).webhookAllowedPrivateCidrs).toEqual([]);
+      expect(
+        load({ ...base, WEBHOOK_ALLOWED_PRIVATE_CIDRS: ' ' }).webhookAllowedPrivateCidrs,
+      ).toEqual([]);
+    });
+    it('reads a comma-separated CIDR list', () => {
+      expect(
+        load({ ...base, WEBHOOK_ALLOWED_PRIVATE_CIDRS: '10.0.0.0/8, fd00::/8' })
+          .webhookAllowedPrivateCidrs,
+      ).toEqual(['10.0.0.0/8', 'fd00::/8']);
+    });
+    it.each(['10.0.0.0', '10.0.0.0/33', 'nope', '10.0.0.0/8,,x'])(
+      'fails startup on the bad entry in %s',
+      (bad) => {
+        expect(() => load({ ...base, WEBHOOK_ALLOWED_PRIVATE_CIDRS: bad })).toThrow(
+          /WEBHOOK_ALLOWED_PRIVATE_CIDRS/,
+        );
+      },
+    );
+  });
+
   describe('alerts', () => {
     it('is off by default with the default cap', () => {
       expect(load(base).alerts).toEqual({

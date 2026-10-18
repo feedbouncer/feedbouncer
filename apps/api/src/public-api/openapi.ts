@@ -7,6 +7,7 @@ import {
   type PublicErrorCode,
   type RouteSpec,
 } from '@feedbouncer/public-api';
+import { WEBHOOK_PAYLOAD_SCHEMAS } from '@feedbouncer/webhooks';
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonObject = { [key: string]: Json };
@@ -15,6 +16,7 @@ export type OpenApiDocument = {
   openapi: '3.1.0';
   info: JsonObject;
   paths: Record<string, JsonObject>;
+  webhooks: Record<string, JsonObject>;
   components: {
     schemas: Record<string, Json>;
     securitySchemes: Record<string, Json>;
@@ -188,6 +190,28 @@ function operation(spec: RouteSpec, schemas: SchemaCollector): JsonObject {
   };
 }
 
+/** Each event type is a callback the API makes to a registered endpoint. */
+function webhookOperations(schemas: SchemaCollector): Record<string, JsonObject> {
+  return Object.fromEntries(
+    Object.entries(WEBHOOK_PAYLOAD_SCHEMAS).map(([type, payload]) => [
+      type,
+      {
+        post: {
+          operationId: `receive_${type.replace('.', '_')}`,
+          summary: `Delivery of a \`${type}\` event`,
+          description:
+            'Signed with Standard Webhooks: verify `webhook-id`, `webhook-timestamp` and `webhook-signature` against the endpoint signing secret. Any 2xx response within 10 seconds counts as delivered.',
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: schemas.convert(payload, 'output') } },
+          },
+          responses: { '2XX': { description: 'The event was received.' } },
+        },
+      },
+    ]),
+  );
+}
+
 export function buildOpenApiDocument(
   specs: readonly RouteSpec[] = PUBLIC_ROUTE_SPECS,
 ): OpenApiDocument {
@@ -205,6 +229,7 @@ export function buildOpenApiDocument(
         'Authenticate with `Authorization: Bearer <api key>`. Error codes may be added over time and are never renamed.',
     },
     paths,
+    webhooks: webhookOperations(schemas),
     components: {
       schemas: { Error: ERROR_SCHEMA, ...schemas.schemas },
       securitySchemes: { apiKey: { type: 'http', scheme: 'bearer' } },

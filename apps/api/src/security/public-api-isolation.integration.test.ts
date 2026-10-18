@@ -11,6 +11,16 @@ beforeAll(async () => {
   const A = await orgWithRoles(api, 'pisoA');
   const B = await orgWithRoles(api, 'pisoB');
   const { scope } = await api.seedFacebookConnection(B);
+  const endpoint = async (orgId: string) =>
+    (
+      await api.pool.query(
+        `INSERT INTO webhook_endpoint (organization_id, url, event_types, signing_key_id, encrypted_signing_secret)
+         VALUES ($1, 'https://93.184.216.34/hook', ARRAY['item.flagged'], 'k1', '\\x01') RETURNING id`,
+        [orgId],
+      )
+    ).rows[0].id as string;
+  const aEndpointId = await endpoint(A.orgId);
+  const bEndpointId = await endpoint(B.orgId);
   const source = await api.pool.query(
     `INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id)
      VALUES ($1, $2, $3, 'organic_post', '1_2') RETURNING id`,
@@ -26,6 +36,9 @@ beforeAll(async () => {
      VALUES ($1, $2, $3, $4, 'user') RETURNING id`,
     [B.orgId, scope.brandId, scope.connectionId, comment.rows[0].id],
   );
+  const delivery = await api.pool.query(`SELECT id FROM webhook_delivery WHERE endpoint_id = $1`, [
+    bEndpointId,
+  ]);
   const key = await new PgApiKeys(api.pool).create(A.orgId, A.owner.userId, {
     name: 'writer',
     scope: 'write',
@@ -36,6 +49,9 @@ beforeAll(async () => {
     aWriteToken: key.token.reveal(),
     bCommentId: comment.rows[0].id,
     bReviewItemId: review.rows[0].id,
+    aEndpointId,
+    bEndpointId,
+    bDeliveryId: delivery.rows[0].id,
   };
 });
 afterAll(() => api.close());
@@ -57,6 +73,12 @@ async function snapshot(orgId: string) {
     ),
     idempotency: await q('SELECT id FROM api_idempotency_record WHERE organization_id = $1'),
     jobs: await q('SELECT id, state FROM job_ledger WHERE organization_id = $1 ORDER BY id'),
+    webhookEndpoints: await q(
+      'SELECT id, description, status, updated_at, encrypted_signing_secret FROM webhook_endpoint WHERE organization_id = $1 ORDER BY id',
+    ),
+    webhookDeliveries: await q(
+      'SELECT id, kind, status FROM webhook_delivery WHERE organization_id = $1 ORDER BY id',
+    ),
     audit: await q(
       'SELECT sequence, action, subject_id FROM audit_event WHERE organization_id = $1 ORDER BY sequence',
     ),
@@ -76,10 +98,11 @@ describe('public API tenant isolation', () => {
   });
 
   for (const c of PUBLIC_API_CASES) {
-    it(`${c.route} on B's ids with A's write key -> 404, B unchanged`, async () => {
+    it(`${c.route}${c.label ? ` (${c.label})` : ''} on B's ids with A's write key -> 404, B unchanged`, async () => {
       const before = await snapshot(f.B.orgId);
       expect(before.comments.length).toBeGreaterThan(0);
       expect(before.reviewItems.length).toBeGreaterThan(0);
+      expect(before.webhookDeliveries.length).toBeGreaterThan(0);
       const [method] = c.route.split(' ');
       const r = await api.req(method!, c.url(f), {
         body: c.body?.(f),

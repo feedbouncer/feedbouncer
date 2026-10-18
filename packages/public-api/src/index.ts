@@ -7,6 +7,7 @@ export * from './cursor.js';
 export * from './resources/comment.js';
 export * from './resources/flagged-item.js';
 export * from './resources/page.js';
+export * from './resources/webhook.js';
 export * from './queries/comments.js';
 export * from './queries/flagged-items.js';
 export * from './idempotency.js';

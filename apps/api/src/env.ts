@@ -29,6 +29,7 @@ import { parseMetaAdsEnv, type MetaAdsConfig } from '@feedbouncer/connector-meta
 import { parseInstagramEnv, type InstagramConfig } from '@feedbouncer/connector-instagram';
 import { describeClassifierProvider } from '@feedbouncer/classifier';
 import { loadPolicyLimits } from '@feedbouncer/policies';
+import { readAllowedPrivateCidrs } from '@feedbouncer/webhooks';
 import { loadJobsConfig, type JobsConfig } from '@feedbouncer/jobs';
 import {
   loadHealthPolicy,
@@ -87,6 +88,8 @@ export interface ApiEnv {
   readonly policy: ReturnType<typeof loadPolicyLimits>;
   /** Requests per minute allowed to each API key of the public /v1 API. */
   readonly publicApiRateLimitPerMinute: number;
+  /** Private networks, besides public addresses, that webhook endpoints may point at. Empty by default. */
+  readonly webhookAllowedPrivateCidrs: readonly string[];
   readonly telemetry: TelemetryConfig;
   readonly health: HealthPolicy;
   /** Which alert channels this deployment offers and the per-workspace hourly alert cap. */
@@ -173,6 +176,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
       max: 10_000,
       fallback: 60,
     }),
+    webhookAllowedPrivateCidrs: readAllowedPrivateCidrs(env),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),
     alerts: {
