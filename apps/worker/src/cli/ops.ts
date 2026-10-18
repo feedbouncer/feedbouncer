@@ -1,5 +1,5 @@
 import { LIFECYCLE_JOB, enqueueOnly } from '@feedbouncer/comments';
-import { isPlatform } from '@feedbouncer/connectors';
+import { isPlatform, type ConnectorRegistry } from '@feedbouncer/connectors';
 import { createPool } from '@feedbouncer/db';
 import {
   JobMetrics,
@@ -70,7 +70,9 @@ async function main(argv: readonly string[]): Promise<number> {
       ledger: new PgJobLedger(pool()),
       jobs,
       // No connector runs in this process; enqueueing only needs the platform to be known.
-      connectors: { get: (platform) => (isPlatform(platform) ? platform : undefined) },
+      connectors: {
+        get: (platform: string) => (isPlatform(platform) ? platform : undefined),
+      } as unknown as Pick<ConnectorRegistry, 'get'>,
       queues,
       metrics: new JobMetrics(silent),
       dedupWindowMs: config.dedupWindowMs,

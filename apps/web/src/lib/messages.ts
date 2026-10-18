@@ -18,7 +18,7 @@ const MESSAGES: Record<string, string> = {
   cannot_grant_owner: 'Only an owner can grant the owner role.',
   confirmation_mismatch: 'Type the organization name exactly to confirm.',
   connections_active:
-    'Disconnect every account first. Once FeedBouncer has removed its access (usually within a minute), you can delete the organization.',
+    'Disconnect every account first. Once FeedBouncer has removed its access (usually within a minute), you can delete the organization. If this message is still showing after several minutes, contact support and we will finish the removal.',
   brand_name_taken: 'A brand with this name already exists in this organization.',
   brand_archived: 'Archived brands cannot be changed.',
   invitation_email_mismatch: 'This invitation was sent to a different email address.',

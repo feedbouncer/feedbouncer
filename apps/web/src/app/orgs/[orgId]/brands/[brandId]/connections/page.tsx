@@ -1,6 +1,6 @@
 import { AlertsNavLink } from '../../../../../../components/alerts/alerts-nav-link';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, unstable_rethrow } from 'next/navigation';
 import { ApiForm } from '../../../../../../components/api-form';
 import { ConnectButton } from '../../../../../../components/connect-button';
 import { ConnectChecklist } from '../../../../../../components/connect-checklist';
@@ -62,7 +62,8 @@ async function loadHealthNotes(orgId: string, brandId: string): Promise<Map<stri
       if (text) notes.set(h.connectionId, text);
     }
     return notes;
-  } catch {
+  } catch (err) {
+    unstable_rethrow(err);
     return new Map();
   }
 }
