@@ -1,0 +1,10 @@
+DROP TRIGGER review_item_webhook_flagged_trg ON review_item;
+DROP FUNCTION fb_emit_item_flagged();
+DROP TRIGGER moderation_action_webhook_hidden_trg ON moderation_action;
+DROP FUNCTION fb_emit_comment_hidden();
+DROP TRIGGER comment_webhook_received_trg ON comment;
+DROP FUNCTION fb_emit_comment_received();
+DROP FUNCTION fb_enqueue_webhook_event(uuid, uuid, text, text, uuid, uuid, uuid, timestamptz);
+DROP TABLE webhook_delivery;
+DROP TABLE webhook_event;
+DROP TABLE webhook_endpoint;

@@ -55,6 +55,8 @@ const ALLOWED_CREDENTIAL_COLUMNS: Record<string, string> = {
     'Reference to the api_key row that made the request, not a credential',
   'api_idempotency_record.api_key_id':
     'Reference to the api_key row the record is scoped to, not a credential',
+  'webhook_endpoint.created_by_api_key_id':
+    'Reference to the api_key row that created the endpoint, not a credential',
 };
 
 describe('schema conventions', () => {

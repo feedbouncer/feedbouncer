@@ -25,6 +25,7 @@ export const ENVELOPE_KINDS = [
   'alert_slack_webhook',
   'alert_unsubscribe_token',
   'report_unsubscribe_token',
+  'webhook_endpoint_secret',
 ] as const;
 export type EnvelopeKind = (typeof ENVELOPE_KINDS)[number];
 
