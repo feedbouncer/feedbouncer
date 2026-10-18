@@ -8,6 +8,7 @@ import { AuthProxyController } from './auth/auth-proxy.controller.js';
 import { createAuthEmails, type AuthEmails } from './auth/emails.js';
 import { createAuthRateLimits } from './auth/rate-limit.js';
 import { ApiKeyGuard } from './public-api/api-key.guard.js';
+import { PublicCommentsController } from './public-api/comments.controller.js';
 import { OpenApiController } from './public-api/openapi.controller.js';
 import { createPublicApiLimits } from './public-api/rate-limit.js';
 import { SessionGuard } from './auth/session.guard.js';
@@ -132,6 +133,7 @@ export class AppModule {
         MeReportsController,
         ApiKeysController,
         OpenApiController,
+        PublicCommentsController,
         ...(deps.extraControllers ?? []),
       ],
       providers: [

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import type { ApiKeyScope } from './keys/token.js';
+import { CommentResource } from './resources/comment.js';
+import { pageOf } from './resources/page.js';
 
 /** Codes may be added, never renamed: integrations match on them. */
 export const PUBLIC_ERROR_CODES = [
@@ -51,6 +53,17 @@ export interface RouteSpec {
   readonly errors: readonly PublicErrorCode[];
 }
 
+const timestamp = z.iso.datetime({ offset: true });
+
+export const ListCommentsQuery = z.strictObject({
+  status: z.enum(['visible', 'hidden', 'flagged']).optional(),
+  brandId: z.uuid().optional(),
+  postedFrom: timestamp.optional().meta({ description: 'Inclusive. ISO 8601 with an offset.' }),
+  postedTo: timestamp.optional().meta({ description: 'Exclusive. ISO 8601 with an offset.' }),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().max(512).optional(),
+});
+
 export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
   {
     id: 'getOpenApi',
@@ -61,6 +74,28 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     idempotent: false,
     responses: { 200: z.record(z.string(), z.unknown()) },
     errors: [],
+  },
+  {
+    id: 'listComments',
+    method: 'GET',
+    path: '/v1/comments',
+    scope: 'read',
+    summary: 'List comments, newest first',
+    query: ListCommentsQuery,
+    idempotent: false,
+    responses: { 200: pageOf(CommentResource, 'CommentPage') },
+    errors: ['invalid_request', 'invalid_cursor'],
+  },
+  {
+    id: 'getComment',
+    method: 'GET',
+    path: '/v1/comments/{id}',
+    scope: 'read',
+    summary: 'Fetch one comment',
+    params: z.object({ id: z.uuid() }),
+    idempotent: false,
+    responses: { 200: CommentResource },
+    errors: ['not_found'],
   },
 ];
 
