@@ -302,8 +302,11 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
         const rec = await classifyOnce(ctx, p, row, sha, brand);
         const reviewMode = await d.reviewMode.isActive(ctx.scope);
         c =
-          (await d.classifications.record(ctx.scope, { ...rec, reviewMode })) ??
-          (await d.classifications.find(brand, row.id, sha, p.trigger));
+          (await d.classifications.record(ctx.scope, {
+            ...rec,
+            reviewMode,
+            retried: ctx.attempt > 1,
+          })) ?? (await d.classifications.find(brand, row.id, sha, p.trigger));
         if (!c) throw new JobError('retryable', 'classification_not_visible');
       }
       return act(ctx, brand, row, c);

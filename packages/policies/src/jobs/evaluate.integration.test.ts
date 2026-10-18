@@ -651,6 +651,17 @@ describe('policy_evaluate', () => {
     });
   });
 
+  it('policy_evaluation row records whether earlier attempts failed before it was written', async () => {
+    const { t } = await brand();
+    evaluator.evaluate.mockResolvedValue({ verdicts: { p1: 'no_match' }, usage: UNKNOWN_USAGE });
+    const first = await seed(t, { ruleStatus: 'no_match' });
+    await job.handle(ctx(first, 1), payload(first));
+    expect(await evaluationFor(first)).toMatchObject({ retried: false });
+    const second = await seed(t, { ruleStatus: 'no_match' });
+    await job.handle(ctx(second, 2), payload(second));
+    expect(await evaluationFor(second)).toMatchObject({ retried: true });
+  });
+
   it('deleted upstream: not actioned', async () => {
     const { t } = await brand();
     const c = await seed(t, { ruleStatus: 'no_match', platformState: 'deleted' });

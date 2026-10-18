@@ -37,6 +37,7 @@ export type ClassificationFact = {
   inputTokens: number | null;
   outputTokens: number | null;
   cacheReadTokens: number | null;
+  retried: boolean;
 };
 
 export type PolicyEvalFact = {
@@ -50,6 +51,7 @@ export type PolicyEvalFact = {
   inputTokens: number | null;
   outputTokens: number | null;
   cacheReadTokens: number | null;
+  retried: boolean;
 };
 
 export type DecisionFact = {
@@ -217,6 +219,7 @@ function modelCallsOf(f: CommentFacts): EvalItem['modelCalls'] {
     inputTokens: x.inputTokens,
     outputTokens: x.outputTokens,
     cacheReadTokens: x.cacheReadTokens,
+    retried: x.retried,
   });
   for (const c of [...f.classifications].sort(
     (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),

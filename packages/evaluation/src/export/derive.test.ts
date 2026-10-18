@@ -52,6 +52,7 @@ const classification = (o: Partial<ClassificationFact> = {}): ClassificationFact
   inputTokens: 90,
   outputTokens: 10,
   cacheReadTokens: 0,
+  retried: false,
   ...o,
 });
 
@@ -66,6 +67,7 @@ const policyEval = (o: Partial<PolicyEvalFact> = {}): PolicyEvalFact => ({
   inputTokens: 50,
   outputTokens: 5,
   cacheReadTokens: null,
+  retried: false,
   ...o,
 });
 
@@ -500,6 +502,7 @@ describe('deriveItem', () => {
         inputTokens: 90,
         outputTokens: 10,
         cacheReadTokens: 0,
+        retried: false,
       },
       {
         stage: 'classifier',
@@ -507,6 +510,7 @@ describe('deriveItem', () => {
         inputTokens: null,
         outputTokens: null,
         cacheReadTokens: null,
+        retried: false,
       },
       {
         stage: 'policy',
@@ -514,8 +518,21 @@ describe('deriveItem', () => {
         inputTokens: 50,
         outputTokens: 5,
         cacheReadTokens: null,
+        retried: false,
       },
     ]);
+  });
+
+  it('carries the retried flag of each model call', () => {
+    const calls = derive(
+      facts({
+        classifications: [classification({ retried: true })],
+        policyEvals: [
+          policyEval({ status: 'failed', failureCode: 'invalid_output', retried: true }),
+        ],
+      }),
+    ).modelCalls;
+    expect(calls.map((c) => c.retried)).toEqual([true, true]);
   });
 
   it('language falls back to und and cohort is review if any evaluation was in review mode', () => {

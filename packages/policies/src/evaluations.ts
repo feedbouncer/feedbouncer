@@ -22,6 +22,8 @@ interface Base {
   sha: Buffer;
   triggerKey: string;
   reviewMode?: boolean;
+  /** Earlier attempts failed with a retryable error, so their token usage is not recorded. */
+  retried?: boolean;
 }
 export type EvaluationRecord =
   | (Base & { status: 'skipped'; skipReason: SkipReason; ruleEvaluationId: string | null })
@@ -152,11 +154,11 @@ export class PgPolicyEvaluationStore {
                                         trigger_key, rule_evaluation_id, status, skip_reason, failure_code,
                                         provider, model, prompt_version, checked_revision_ids,
                                         input_truncated, low_signal, outcome, winning_revision_id,
-                                        review_mode, input_tokens, output_tokens, cache_read_tokens)
+                                        review_mode, input_tokens, output_tokens, cache_read_tokens, retried)
          SELECT c.organization_id, c.brand_id, c.connection_id, c.id, $5::bytea, $6::text, $7::uuid,
                 $8::text, $9::text, $10::text, $11::text, $12::text, $13::text, $14::uuid[],
                 $15::boolean, $16::boolean, $17::text, $18::uuid, $19::boolean,
-                $20::integer, $21::integer, $22::integer
+                $20::integer, $21::integer, $22::integer, $23::boolean
            FROM comment c
           WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3 AND c.id = $4
          ON CONFLICT (comment_id, body_sha256, trigger_key) DO NOTHING
@@ -184,6 +186,7 @@ export class PgPolicyEvaluationStore {
           usage?.inputTokens ?? null,
           usage?.outputTokens ?? null,
           usage?.cacheReadTokens ?? null,
+          r.retried ?? false,
         ],
       );
       const row = rows[0];

@@ -255,8 +255,11 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
         if (rec === 'no_policies') return { result: 'no_policies' };
         const reviewMode = await d.reviewMode.isActive(ctx.scope);
         ev =
-          (await d.evaluations.record(ctx.scope, { ...rec, reviewMode })) ??
-          (await d.evaluations.find(brand, row.id, sha, p.trigger));
+          (await d.evaluations.record(ctx.scope, {
+            ...rec,
+            reviewMode,
+            retried: ctx.attempt > 1,
+          })) ?? (await d.evaluations.find(brand, row.id, sha, p.trigger));
         if (!ev) throw new JobError('retryable', 'policy_evaluation_not_visible');
       }
       return act(ctx, brand, row, ev);

@@ -115,7 +115,7 @@ The label sheet's own columns are `item`, `platform`, `text`, `labeller`, `verdi
 
 ### Token columns
 
-FeedBouncer records the input, output and cache-read token counts of each classifier and policy model call (`input_tokens`, `output_tokens`, `cache_read_tokens`) so cost can be computed from real usage. Calls from before this recording, and calls that timed out (providers do not report usage for them), have no counts; they are listed as "calls with unknown usage" and make the cost a lower bound.
+FeedBouncer records the input, output and cache-read token counts of each classifier and policy model call (`input_tokens`, `output_tokens`, `cache_read_tokens`) so cost can be computed from real usage. Calls from before this recording, and calls that timed out (providers do not report usage for them), have no counts; they are listed as "calls with unknown usage" and make the cost a lower bound. A call that succeeded or failed for good only after earlier attempts failed with a retryable error is also counted as unknown usage: only the final attempt is recorded (`retried`), so the tokens spent on the earlier attempts are missing. Its recorded counts are still priced, and the cost is marked partial.
 
 ## Labelling guide
 
@@ -204,6 +204,7 @@ The Graph API is listed as an `other` line at 0 because Meta does not meter it. 
 - Time to hide excludes comments FeedBouncer saw only through backfill.
 - Platform posting times have 1-second resolution, so very short times are approximate.
 - Token usage for timed-out model calls is not reported by providers, so model cost is then a lower bound.
+- Only the last attempt of a retried model call is recorded, so calls per comment and model cost are lower bounds when retries happened; the report counts those calls as unknown usage.
 - Job records are purged after the retention window (`JOB_DEDUP_WINDOW_DAYS`, default 30). Export within that window; hides older than it have a total time but no segment breakdown, and the report says how many.
 - Timing and token records exist only from the version that added them onward. Earlier comments have a total time at best, and calls without token counts.
 - Edited comments whose hidden version is lost are excluded from the label-based measures (see Judged version).

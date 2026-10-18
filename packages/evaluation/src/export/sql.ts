@@ -48,13 +48,13 @@ export const TENANT_SQL = {
   classifications: `
     SELECT comment_id, created_at, status, unclassified_reason, provider, model, prompt_version,
            scores_reused, rule_decided, language, review_mode, input_tokens, output_tokens,
-           cache_read_tokens
+           cache_read_tokens, retried
       FROM comment_classification
      WHERE organization_id = ANY($1::uuid[]) AND comment_id = ANY($2::uuid[])`,
 
   policyEvaluations: `
     SELECT comment_id, created_at, status, failure_code, provider, model, prompt_version,
-           review_mode, input_tokens, output_tokens, cache_read_tokens
+           review_mode, input_tokens, output_tokens, cache_read_tokens, retried
       FROM policy_evaluation
      WHERE organization_id = ANY($1::uuid[]) AND comment_id = ANY($2::uuid[])`,
 
@@ -229,6 +229,7 @@ export async function relatedRows(
       input_tokens: number | null;
       output_tokens: number | null;
       cache_read_tokens: number | null;
+      retried: boolean;
     }>(TENANT_SQL.classifications, p),
     pool.query<{
       comment_id: string;
@@ -242,6 +243,7 @@ export async function relatedRows(
       input_tokens: number | null;
       output_tokens: number | null;
       cache_read_tokens: number | null;
+      retried: boolean;
     }>(TENANT_SQL.policyEvaluations, p),
     pool.query<{
       comment_id: string;
@@ -302,6 +304,7 @@ export async function relatedRows(
         inputTokens: num(x.input_tokens),
         outputTokens: num(x.output_tokens),
         cacheReadTokens: num(x.cache_read_tokens),
+        retried: x.retried,
       })),
     ),
     policyEvals: group(
@@ -317,6 +320,7 @@ export async function relatedRows(
         inputTokens: num(x.input_tokens),
         outputTokens: num(x.output_tokens),
         cacheReadTokens: num(x.cache_read_tokens),
+        retried: x.retried,
       })),
     ),
     decisions: group(

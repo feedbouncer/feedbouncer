@@ -23,7 +23,14 @@ const item = {
     breakdown: { deliveryMs: 1, ingestQueueMs: 2, processingMs: 3, hideQueueMs: 2, hideCallMs: 2 },
   },
   modelCalls: [
-    { stage: 'classifier', model: 'p:m', inputTokens: 1, outputTokens: 2, cacheReadTokens: null },
+    {
+      stage: 'classifier',
+      model: 'p:m',
+      inputTokens: 1,
+      outputTokens: 2,
+      cacheReadTokens: null,
+      retried: false,
+    },
   ],
 };
 

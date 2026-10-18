@@ -55,6 +55,7 @@ export const EvalItem = z.strictObject({
       inputTokens: nonNegInt.nullable(),
       outputTokens: nonNegInt.nullable(),
       cacheReadTokens: nonNegInt.nullable(),
+      retried: z.boolean(),
     }),
   ),
 });

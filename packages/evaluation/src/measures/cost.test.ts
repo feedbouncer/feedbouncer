@@ -20,6 +20,7 @@ const call = (over = {}) => ({
   inputTokens: 1000,
   outputTokens: 100,
   cacheReadTokens: 0,
+  retried: false,
   ...over,
 });
 const withCall = (c = call()) => item({ modelCalls: [c] });
@@ -68,6 +69,14 @@ describe('costPer1000', () => {
     expect(r.unknownUsageCalls).toBe(1);
     expect(r.status).toBe('partial');
     expect(comp(r, 'Classifier model').usdPer1000).toBeCloseTo(0.07, 6);
+  });
+
+  it('prices a retried call at its final usage and counts it as unknown usage', () => {
+    const fullBytes = { bytesPerComment: 100 } as RunManifest;
+    const r = complete(costPer1000([withCall(call({ retried: true }))], fullBytes, pricing()));
+    expect(r.unknownUsageCalls).toBe(1);
+    expect(r.status).toBe('partial');
+    expect(comp(r, 'Classifier model').usdPer1000).toBeCloseTo(0.14, 6);
   });
 
   it('treats calls with no recorded model as unknown usage without needing a price', () => {

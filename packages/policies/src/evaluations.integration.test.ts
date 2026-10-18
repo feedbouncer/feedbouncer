@@ -330,6 +330,8 @@ describe('PgPolicyEvaluationStore', () => {
       skipReason: null,
       failureCode: null,
       outcome: 'flag',
+      provider: 'openai',
+      model: 'gpt-x',
       createdAt: expect.any(Date),
       checkedCount: 2,
       triggerKey: expect.stringMatching(/^run:/),

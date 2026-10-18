@@ -24,6 +24,8 @@ interface Base {
   sha: Buffer;
   triggerKey: string;
   reviewMode?: boolean;
+  /** Earlier attempts failed with a retryable error, so their token usage is not recorded. */
+  retried?: boolean;
 }
 export type ClassificationRecord =
   | (Base & { status: 'skipped'; skipReason: ClassificationSkipReason; inputChars: number })
@@ -127,9 +129,9 @@ const INSERT_CLASSIFICATION = `
 INSERT INTO comment_classification (organization_id, brand_id, connection_id, comment_id, body_sha256, trigger_key, status,
   skip_reason, unclassified_reason, provider, model, prompt_version, scores, language, language_supported, low_signal,
   truncated, input_chars, scores_reused, rule_evaluation_id, rule_decided, policy, outcome, triggers, downgraded,
-  review_mode, input_tokens, output_tokens, cache_read_tokens)
+  review_mode, input_tokens, output_tokens, cache_read_tokens, retried)
 SELECT c.organization_id, c.brand_id, c.connection_id, c.id, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15,
-  $16, $17, $18, $19, $20, $21, $22::jsonb, $23, $24::jsonb, $25, $26, $27, $28, $29
+  $16, $17, $18, $19, $20, $21, $22::jsonb, $23, $24::jsonb, $25, $26, $27, $28, $29, $30
 FROM comment c
 WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3 AND c.id = $4
 ON CONFLICT (comment_id, body_sha256, trigger_key) DO NOTHING
@@ -198,6 +200,7 @@ export class PgClassificationStore {
       usage?.inputTokens ?? null,
       usage?.outputTokens ?? null,
       usage?.cacheReadTokens ?? null,
+      r.retried ?? false,
     ];
     return withTransaction(this.pool, async (c) => {
       const ins = await c.query<DbRow>(INSERT_CLASSIFICATION, values);

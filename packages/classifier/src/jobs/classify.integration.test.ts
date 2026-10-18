@@ -419,6 +419,19 @@ describe('comment_classify', () => {
     });
   });
 
+  it('classification row records whether earlier attempts failed before it was written', async () => {
+    const retried = (id: string) =>
+      one(`SELECT retried FROM comment_classification WHERE comment_id = $1`, [id]);
+    const first = await seedComment('maybe spam');
+    await evaluateRules(first, 'no_match');
+    await job(new FakeProvider([S({ spam: 0.7 })])).handle(ctx(first, 1), payload(first));
+    expect(await retried(first.id)).toEqual({ retried: false });
+    const second = await seedComment('maybe spam too');
+    await evaluateRules(second, 'no_match');
+    await job(new FakeProvider([S({ spam: 0.7 })])).handle(ctx(second, 2), payload(second));
+    expect(await retried(second.id)).toEqual({ retried: true });
+  });
+
   it('duplicate deliveries classify once and request the action once', async () => {
     const c = await seedComment('click this link');
     await evaluateRules(c, 'no_match');

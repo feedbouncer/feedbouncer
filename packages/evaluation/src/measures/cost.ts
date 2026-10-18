@@ -81,8 +81,10 @@ export function costPer1000(
   let unknownUsageCalls = 0;
   for (const it of items) {
     for (const c of it.modelCalls) {
+      // A retried call also spent tokens on earlier attempts that were never recorded.
+      if (c.retried) unknownUsageCalls += 1;
       if (c.model === UNKNOWN_MODEL || c.inputTokens === null || c.outputTokens === null) {
-        unknownUsageCalls += 1;
+        if (!c.retried) unknownUsageCalls += 1;
         continue;
       }
       const price = pricing.models[c.model];
