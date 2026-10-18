@@ -12,6 +12,7 @@ export * from './eligibility.js';
 export * from './jobs/execute.js';
 export * from './hooks.js';
 export * from './jobs/lifecycle.js';
+export * from './disconnect.js';
 export * from './webhook-router.js';
 export * from './reconnect-notifier.js';
 export * from './scheduler.js';

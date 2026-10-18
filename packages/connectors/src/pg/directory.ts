@@ -247,7 +247,7 @@ export class PgConnectionDirectory implements ConnectionDirectory {
     return found;
   }
 
-  async disconnect(scope: ConnectionScope, actorUserId: string): Promise<boolean> {
+  async disconnect(scope: ConnectionScope, actorUserId: string | null): Promise<boolean> {
     return withTransaction(this.pool, async (c) => {
       const r = await c.query<{ platform: string }>(
         `UPDATE connection SET status = 'revoked', status_reason = 'user_disconnected'
@@ -259,7 +259,8 @@ export class PgConnectionDirectory implements ConnectionDirectory {
       if (r.rowCount !== 1) return false;
       await c.query(
         `INSERT INTO audit_event (organization_id, brand_id, actor_type, actor_user_id, action, subject_type, subject_id, details)
-         VALUES ($1, $2, 'user', $4, 'connection.disconnected', 'connection', $3, jsonb_build_object('platform', $5::text))`,
+         VALUES ($1, $2, CASE WHEN $4::uuid IS NULL THEN 'system' ELSE 'user' END, $4,
+                 'connection.disconnected', 'connection', $3, jsonb_build_object('platform', $5::text))`,
         [scope.organizationId, scope.brandId, scope.connectionId, actorUserId, r.rows[0]!.platform],
       );
       return true;

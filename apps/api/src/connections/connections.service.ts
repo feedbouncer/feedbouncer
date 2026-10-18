@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PgSuggestionStore } from '@feedbouncer/actions';
-import type { PgBackfillStore } from '@feedbouncer/comments';
+import { enqueueLifecycle, revokeConnection, type PgBackfillStore } from '@feedbouncer/comments';
 import {
   systemClock,
   type Platform,
@@ -8,7 +8,6 @@ import {
   type ReviewMode,
 } from '@feedbouncer/connectors';
 import type { JobProducer } from '@feedbouncer/jobs';
-import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
 import { parseUuidOr404 } from '../http/validation.js';
@@ -16,7 +15,6 @@ import { requireBrand, type BrandScope } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { BACKFILL_STORE, CONNECTOR_STACK, DEPS, JOB_PRODUCER } from '../tokens.js';
 import { toReviewModeStatusDto, type ReviewModeStatusDto } from '../review-mode/dto.js';
-import { enqueueLifecycle } from './lifecycle.js';
 
 export type ConnectionViewStatus =
   | 'connected'
@@ -182,17 +180,17 @@ export class ConnectionsService {
     const scope = { ...brand, connectionId: parseUuidOr404(connectionId) };
     const rec = await this.stack.directory.load(scope);
     if (!rec) throw notFound();
-    const disconnected = await this.stack.directory.disconnect(scope, org.actorUserId);
-    if (!disconnected && !(await this.isUserDisconnected(scope))) return;
-    try {
-      await this.backfill.cancel(scope, new Date());
-    } catch (err) {
-      // The runtime refuses a revoked connection, so platform calls stop anyway.
-      this.deps.log.warn('backfill cancel failed', {
-        connectionId: scope.connectionId,
-        errorName: err instanceof Error ? err.name : 'NonError',
-      });
-    }
+    const revoked = await revokeConnection(
+      {
+        pool: this.deps.pool,
+        directory: this.stack.directory,
+        backfill: this.backfill,
+        log: this.deps.log,
+      },
+      scope,
+      org.actorUserId,
+    );
+    if (!revoked) return;
     try {
       await enqueueLifecycle(this.deps.pool, this.producer, scope, rec.platform, 'teardown');
     } catch (err) {
@@ -202,15 +200,5 @@ export class ConnectionsService {
       });
       throw new ApiError(503, 'service_unavailable');
     }
-  }
-
-  private async isUserDisconnected(scope: ConnectionScope): Promise<boolean> {
-    const r = await this.deps.pool.query<{ status: string; status_reason: string | null }>(
-      `SELECT status, status_reason FROM connection
-        WHERE id = $3 AND organization_id = $1 AND brand_id = $2`,
-      [scope.organizationId, scope.brandId, scope.connectionId],
-    );
-    const row = r.rows[0];
-    return row?.status === 'revoked' && row.status_reason === 'user_disconnected';
   }
 }

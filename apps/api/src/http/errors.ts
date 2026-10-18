@@ -25,6 +25,7 @@ export type ErrorCode =
   | 'cannot_act_on_owner'
   | 'cannot_grant_owner'
   | 'confirmation_mismatch'
+  | 'connections_active'
   | 'brand_name_taken'
   | 'brand_archived'
   | 'invitation_email_mismatch'
@@ -100,6 +101,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   cannot_act_on_owner: 'Only an owner can change or remove an owner.',
   cannot_grant_owner: 'Only an owner can grant the owner role.',
   confirmation_mismatch: 'Type the organization name exactly to confirm.',
+  connections_active:
+    'Disconnect every account first. Once FeedBouncer has removed its access (usually within a minute), you can delete the organization.',
   invalid_timezone: 'Choose a valid time zone.',
   invalid_week: 'Choose a past week from the last year.',
   brand_name_taken: 'A brand with this name already exists in this organization.',

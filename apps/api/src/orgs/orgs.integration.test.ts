@@ -150,6 +150,58 @@ describe('organizations', () => {
     expect(still.rows[0].name).toBe('del400 Org');
   });
 
+  describe('delete requires platform access to be removed first', () => {
+    // Smallest well-formed envelope v1 for key id "k1" (the table CHECK rejects anything else).
+    const envelope = Buffer.concat([
+      Buffer.from([1, 2]),
+      Buffer.from('k1'),
+      Buffer.from([0, 1]),
+      Buffer.alloc(1 + 12 + 16 + 1),
+    ]);
+    const connected = async (label: string, status: 'active' | 'revoked', secret: boolean) => {
+      const f = await orgWithRoles(api, label, shared);
+      const conn = await api.pool.query<{ id: string }>(
+        `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, status)
+         VALUES ($1, $2, 'facebook', $3, $4) RETURNING id`,
+        [f.orgId, f.brandId, `page-${randomUUID()}`, status],
+      );
+      if (secret)
+        await api.pool.query(
+          `INSERT INTO connection_secret (organization_id, brand_id, connection_id, kind, key_id, encrypted_value)
+           VALUES ($1, $2, $3, 'access_token', 'k1', $4)`,
+          [f.orgId, f.brandId, conn.rows[0]!.id, envelope],
+        );
+      return f;
+    };
+    const del = (f: OrgFixture, label: string) =>
+      api.req('DELETE', `/api/v1/orgs/${f.orgId}`, {
+        cookie: f.owner.cookie,
+        body: { confirmName: `${label} Org` },
+      });
+    const exists = async (orgId: string) =>
+      (await api.pool.query('SELECT 1 FROM organization WHERE id = $1', [orgId])).rowCount;
+
+    it('delete refused with connections_active while a connection is active', async () => {
+      const f = await connected('del-active', 'active', true);
+      const r = await del(f, 'del-active');
+      expect([r.status, r.body.error.code]).toEqual([409, 'connections_active']);
+      expect(await exists(f.orgId)).toBe(1);
+    });
+
+    it('delete refused while a revoked connection still has connection_secret rows', async () => {
+      const f = await connected('del-secret', 'revoked', true);
+      const r = await del(f, 'del-secret');
+      expect([r.status, r.body.error.code]).toEqual([409, 'connections_active']);
+      expect(await exists(f.orgId)).toBe(1);
+    });
+
+    it('delete succeeds once all connections are revoked and secrets are gone', async () => {
+      const f = await connected('del-clean', 'revoked', false);
+      expect((await del(f, 'del-clean')).status).toBe(204);
+      expect(await exists(f.orgId)).toBe(0);
+    });
+  });
+
   describe('workspace timezone', () => {
     const patch = (orgId: string, cookie: string, body: unknown) =>
       api.req('PATCH', `/api/v1/orgs/${orgId}`, { cookie, body });

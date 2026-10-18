@@ -14,7 +14,7 @@ import {
   type PgConnectorStack,
   type Platform,
 } from '@feedbouncer/connectors';
-import type { PgBackfillStore } from '@feedbouncer/comments';
+import { enqueueLifecycle, type PgBackfillStore } from '@feedbouncer/comments';
 import type { JobProducer } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { AppDeps } from '../deps.js';
@@ -23,7 +23,6 @@ import { requireBrand } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { BACKFILL_STORE, CONNECTOR_STACK, DEPS, JOB_PRODUCER } from '../tokens.js';
 import { requestBackfill } from './backfill.js';
-import { enqueueLifecycle } from './lifecycle.js';
 
 /**
  * A web-app path for a callback outcome. Built from ids, fixed codes and the

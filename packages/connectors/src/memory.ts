@@ -187,7 +187,7 @@ export class MemoryConnectionDirectory implements ConnectionDirectory {
     }
     return found;
   }
-  async disconnect(scope: ConnectionScope, actorUserId: string): Promise<boolean> {
+  async disconnect(scope: ConnectionScope, actorUserId: string | null): Promise<boolean> {
     void actorUserId; // the Pg adapter audits the actor; memory keeps no audit trail
     const row = this.#rows.get(scope.connectionId);
     if (
