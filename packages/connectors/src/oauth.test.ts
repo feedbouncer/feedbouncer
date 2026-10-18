@@ -16,9 +16,9 @@ let now = Date.parse('2026-10-12T10:00:00Z');
 const alice = { userId: 'alice', organizationId: 'o1', brandId: 'b1' };
 const exchange = vi.fn();
 
-function stubConnector(): Connector {
+function stubConnector(platform: Connector['platform'] = 'youtube'): Connector {
   return {
-    platform: 'youtube',
+    platform,
     capabilities: {
       actions: ['hide'],
       listSources: false,
@@ -79,6 +79,7 @@ function makeFlow(registry: ConnectorRegistry): OAuthFlow {
 function stubRegistry(): ConnectorRegistry {
   const registry = new ConnectorRegistry();
   registry.register(stubConnector());
+  registry.register(stubConnector('facebook'));
   return registry;
 }
 
@@ -228,6 +229,7 @@ describe('OAuthFlow.complete', () => {
       await flow.complete(alice, 'youtube', {
         state: stateOf(authorizationUrl),
         error: 'access_denied',
+        error_reason: 'user_denied',
       }),
     ).toEqual({ ok: false, reason: 'denied' });
     expect(states.size()).toBe(0);
@@ -462,10 +464,16 @@ describe('OAuthFlow.complete', () => {
     });
   });
 
-  it('a provider error is reported as denied even without a code', async () => {
+  it('a user denial is reported as denied even without a code', async () => {
     const { authorizationUrl } = await flow.start(alice, 'youtube');
     const state = stateOf(authorizationUrl);
-    expect(await flow.complete(alice, 'youtube', { state, error: 'access_denied' })).toEqual({
+    expect(
+      await flow.complete(alice, 'youtube', {
+        state,
+        error: 'access_denied',
+        error_reason: 'user_denied',
+      }),
+    ).toEqual({
       ok: false,
       reason: 'denied',
     });
@@ -473,6 +481,59 @@ describe('OAuthFlow.complete', () => {
       ok: false,
       reason: 'rejected',
     });
+  });
+
+  it('provider error with error_reason=user_denied -> denied', async () => {
+    const { authorizationUrl } = await flow.start(alice, 'youtube');
+    const state = stateOf(authorizationUrl);
+    expect(
+      await flow.complete(alice, 'youtube', {
+        state,
+        error: 'access_denied',
+        error_reason: 'user_denied',
+      }),
+    ).toEqual({ ok: false, reason: 'denied' });
+  });
+
+  it('a Facebook error with any other reason -> provider_error', async () => {
+    const { authorizationUrl } = await flow.start(alice, 'facebook');
+    const state = stateOf(authorizationUrl);
+    expect(
+      await flow.complete(alice, 'facebook', {
+        state,
+        error: 'access_denied',
+        error_reason: 'other',
+      }),
+    ).toEqual({ ok: false, reason: 'provider_error' });
+  });
+
+  it('a Facebook error without error_reason -> provider_error', async () => {
+    const { authorizationUrl } = await flow.start(alice, 'facebook');
+    const state = stateOf(authorizationUrl);
+    expect(await flow.complete(alice, 'facebook', { state, error: 'access_denied' })).toEqual({
+      ok: false,
+      reason: 'provider_error',
+    });
+  });
+
+  it('a YouTube cancel (plain access_denied) -> denied', async () => {
+    const { authorizationUrl } = await flow.start(alice, 'youtube');
+    const state = stateOf(authorizationUrl);
+    expect(await flow.complete(alice, 'youtube', { state, error: 'access_denied' })).toEqual({
+      ok: false,
+      reason: 'denied',
+    });
+  });
+
+  it('provider error text is not logged', async () => {
+    const { authorizationUrl } = await flow.start(alice, 'facebook');
+    await flow.complete(alice, 'facebook', {
+      state: stateOf(authorizationUrl),
+      error: 'access_denied',
+      error_description: 'DESCRIPTION-SENTINEL',
+    });
+    expect(lines.join('\n')).not.toContain('DESCRIPTION-SENTINEL');
+    expect(lines.join('\n')).toContain('oauth provider error');
   });
 
   it('refuses a non-manager completing a callback', async () => {

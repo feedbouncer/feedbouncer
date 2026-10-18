@@ -17,6 +17,8 @@ const MESSAGES: Record<string, string> = {
   cannot_act_on_owner: 'Only an owner can change or remove an owner.',
   cannot_grant_owner: 'Only an owner can grant the owner role.',
   confirmation_mismatch: 'Type the organization name exactly to confirm.',
+  connections_active:
+    'Disconnect every account first. Once FeedBouncer has removed its access (usually within a minute), you can delete the organization. If this message is still showing after several minutes, contact support and we will finish the removal.',
   brand_name_taken: 'A brand with this name already exists in this organization.',
   brand_archived: 'Archived brands cannot be changed.',
   invitation_email_mismatch: 'This invitation was sent to a different email address.',
@@ -71,9 +73,12 @@ const MESSAGES: Record<string, string> = {
   invalid_timezone: 'Choose a valid time zone.',
   invalid_week: 'Choose a past week from the last year.',
   // Where Facebook sends the browser back after sign-in.
-  denied: 'Facebook access was not granted. Nothing was connected.',
+  denied:
+    'You cancelled the Facebook permission screen, so nothing was connected. Connect again and choose Continue.',
+  provider_error:
+    "Facebook didn't finish connecting. During the private beta, your Facebook account must have accepted the FeedBouncer tester invitation (developers.facebook.com/requests) before you connect. Accept it, then connect again.",
   missing_permissions:
-    'FeedBouncer needs every permission below to moderate your Page. Nothing was connected.',
+    'FeedBouncer needs every permission below to moderate your Page. Nothing was connected. Choose Edit access on the Facebook screen and turn every permission on.',
   account_mismatch:
     'You signed in to a different Facebook account than the one this connection uses.',
   oauth_rejected: 'This sign-in could not be used. Connect again.',
@@ -151,6 +156,7 @@ const INSTAGRAM_ERROR = /^instagram_error_(\d{1,10})_(\d{1,10})$/;
 const STATUS_REASONS: Record<string, string> = {
   oauth_not_refreshable: 'Access was lost or expired. Reconnect to resume moderation.',
   oauth_access_rejected: 'Access was lost or expired. Reconnect to resume moderation.',
+  oauth_refresh_rejected: 'Access was lost or expired. Reconnect to resume moderation.',
   setup_not_queued:
     'The connection was saved but setup could not be started. Reconnect to finish connecting.',
   page_role_lost: 'You no longer have a moderator role on this Page.',
@@ -205,6 +211,8 @@ export function outcomeSentence(code: string, platform?: string): string {
 
 export function statusReasonText(code: string | null): string | null {
   if (code === null) return null;
+  if (code.startsWith('credential_'))
+    return "FeedBouncer couldn't use the stored access. Reconnect to resume moderation.";
   return own(STATUS_REASONS, code) ?? 'This connection needs attention.';
 }
 

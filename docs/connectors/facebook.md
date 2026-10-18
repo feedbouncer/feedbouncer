@@ -126,7 +126,8 @@ replies report as not eligible.
   separate review step for them is not confirmed; check in the submission.
 - **Status of this deployment:** App Review has not been completed for the
   reference configuration. Treat the connector as development-mode until your
-  own app is approved.
+  own app is approved. Private beta partners: see the
+  [partner guide](../beta/partner-guide.md).
 
 ## How it works
 
@@ -272,6 +273,12 @@ email once per transition. Actions pause and their jobs wait. An owner or admin
 reconnects from the Connections page; waiting work is replayed on success.
 Reconnect with a person who still manages the Page and grants all six
 permissions.
+
+**Connecting ends with "Facebook didn't finish connecting" (`provider_error`).**
+Facebook returned an error that was not the person cancelling. During the
+private beta the usual cause is that the Facebook account has not accepted the
+FeedBouncer tester invitation (developers.facebook.com/requests). Accept it
+and connect again. Provider error text is never logged or shown.
 
 **Comments arrive late or not at all.**
 

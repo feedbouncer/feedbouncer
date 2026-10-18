@@ -2,6 +2,7 @@ import {
   renderAccountExists,
   renderInvitation,
   renderPasswordReset,
+  renderSignupClosed,
   renderVerifyEmail,
   type Mailer,
   type OutboundEmail,
@@ -12,13 +13,19 @@ export interface AuthEmails {
   verify(to: string, url: string): void;
   passwordReset(to: string, url: string): void;
   accountExists(to: string): void;
+  signupClosed(to: string): void;
   invitation(
     to: string,
     p: { organizationName: string; inviterName: string | null; role: string; token: string },
   ): void;
 }
 
-export function createAuthEmails(mailer: Mailer, log: Logger, webOrigin: string): AuthEmails {
+export function createAuthEmails(
+  mailer: Mailer,
+  log: Logger,
+  webOrigin: string,
+  supportEmail: string | null = null,
+): AuthEmails {
   // Fire-and-forget: response timing must not depend on whether an email is
   // sent, and an SMTP outage must not fail auth flows. Never log the message,
   // its recipient or its URL (the URL carries a token).
@@ -35,6 +42,7 @@ export function createAuthEmails(mailer: Mailer, log: Logger, webOrigin: string)
         to,
         ...renderAccountExists(`${webOrigin}/login`, `${webOrigin}/forgot-password`),
       }),
+    signupClosed: (to) => fire('signup_closed', { to, ...renderSignupClosed({ supportEmail }) }),
     invitation: (to, p) =>
       fire('invitation', {
         to,

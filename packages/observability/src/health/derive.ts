@@ -51,6 +51,8 @@ export interface ConnectionFacts {
   readonly hasAccessToken: boolean;
   readonly refreshTokenExpiresAt: Date | null;
   readonly hasRefreshToken: boolean;
+  /** Ingest jobs dead-lettered in the last 14 days. */
+  readonly failedImports: number;
 }
 
 export interface ConnectionHealth {
@@ -66,6 +68,7 @@ export interface ConnectionHealth {
   readonly consecutiveFailures: number;
   readonly stalenessMs: number | null;
   readonly ingestLagMs: number;
+  readonly failedImports: number;
 }
 
 const age = (t: Date | null, now: Date): number | null =>
@@ -97,6 +100,7 @@ export function deriveConnectionHealth(
     consecutiveFailures: f.consecutiveFailures,
     stalenessMs,
     ingestLagMs,
+    failedImports: f.failedImports,
   });
   const expired = (t: Date | null) => t !== null && t.getTime() <= now.getTime();
 

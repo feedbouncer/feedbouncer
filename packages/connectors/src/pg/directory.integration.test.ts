@@ -178,3 +178,26 @@ describe('PgConnectionDirectory.activate review mode', () => {
     expect((await columns(scope.connectionId)).review_mode_started_at).toBeNull();
   });
 });
+
+describe('PgConnectionDirectory.disconnect', () => {
+  it('audits a user actor, or the system when an operator disconnects', async () => {
+    const byUser = await pending();
+    const byOperator = await pending();
+    expect(await dir.disconnect(byUser, t.userId)).toBe(true);
+    expect(await dir.disconnect(byOperator, null)).toBe(true);
+    const actor = async (id: string) =>
+      (
+        await h.c.query(
+          `SELECT actor_type, actor_user_id FROM audit_event
+            WHERE subject_id = $1 AND action = 'connection.disconnected'`,
+          [id],
+        )
+      ).rows;
+    expect(await actor(byUser.connectionId)).toEqual([
+      { actor_type: 'user', actor_user_id: t.userId },
+    ]);
+    expect(await actor(byOperator.connectionId)).toEqual([
+      { actor_type: 'system', actor_user_id: null },
+    ]);
+  });
+});

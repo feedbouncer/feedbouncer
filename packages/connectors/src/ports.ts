@@ -72,8 +72,11 @@ export interface ConnectionDirectory {
     platform: Platform,
     externalAccountIds: readonly string[],
   ): Promise<ReadonlyMap<string, ConnectionRecord>>;
-  /** Marks revoked/user_disconnected and audits; false if already user_disconnected or not in scope. */
-  disconnect(scope: ConnectionScope, actorUserId: string): Promise<boolean>;
+  /**
+   * Marks revoked/user_disconnected and audits; false if already user_disconnected or not in scope.
+   * A null actor is an operator, audited as the system.
+   */
+  disconnect(scope: ConnectionScope, actorUserId: string | null): Promise<boolean>;
 }
 /** Thrown by `upsertPending` when the account is already live in another workspace. */
 export class ConnectionTakenError extends Error {

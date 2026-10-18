@@ -24,10 +24,13 @@ const base: ConnectionFacts = {
   hasAccessToken: true,
   refreshTokenExpiresAt: null,
   hasRefreshToken: true,
+  failedImports: 0,
 };
 const d = (f: Partial<ConnectionFacts>) => deriveConnectionHealth({ ...base, ...f }, policy, NOW);
 
 describe('deriveConnectionHealth', () => {
+  it('copies failedImports without changing the status', () =>
+    expect(d({ failedImports: 4 })).toMatchObject({ status: 'healthy', failedImports: 4 }));
   it('healthy when recently synced', () =>
     expect(d({})).toMatchObject({ status: 'healthy', stalenessMs: 5 * 60_000, ingestLagMs: 0 }));
   it('an idle but syncing connector is healthy (no queued work, recent success)', () =>

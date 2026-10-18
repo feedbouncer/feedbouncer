@@ -34,7 +34,8 @@ export type EnqueueResult =
 export interface ProducerDeps {
   ledger: PgJobLedger;
   jobs: JobRegistry;
-  connectors: ConnectorRegistry;
+  /** Only used to check that the platform is registered. */
+  connectors: Pick<ConnectorRegistry, 'get'>;
   queues: QueueSet;
   metrics: JobMetrics;
   dedupWindowMs: number;

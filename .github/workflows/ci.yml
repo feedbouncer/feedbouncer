@@ -239,6 +239,10 @@ jobs:
         run: pnpm turbo run build --filter=@feedbouncer/api...
       - name: API integration tests (auth, tenancy, isolation)
         run: pnpm --filter @feedbouncer/api test:integration
+      - name: Build the worker and its dependencies
+        run: pnpm turbo run build --filter=@feedbouncer/worker...
+      - name: Worker operator command integration tests
+        run: pnpm --filter @feedbouncer/worker test:integration
       - name: Build connectors and dependencies
         run: pnpm turbo run build --filter=@feedbouncer/connectors...
       - name: Connector framework integration tests (Postgres + Redis conformance, isolation)

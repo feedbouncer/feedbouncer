@@ -19,9 +19,10 @@ export const headerSafe = (s: string, max = 150): string =>
     .trim()
     .slice(0, max);
 
-function page(title: string, paragraphs: string[], cta: { label: string; url: string }): string {
+function page(title: string, paragraphs: string[], cta?: { label: string; url: string }): string {
   const ps = paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('');
-  return `<!doctype html><html><body><h1>${escapeHtml(title)}</h1>${ps}<p><a href="${escapeHtml(cta.url)}">${escapeHtml(cta.label)}</a></p></body></html>`;
+  const link = cta ? `<p><a href="${escapeHtml(cta.url)}">${escapeHtml(cta.label)}</a></p>` : '';
+  return `<!doctype html><html><body><h1>${escapeHtml(title)}</h1>${ps}${link}</body></html>`;
 }
 
 export function renderVerifyEmail(url: string): Body {
@@ -54,6 +55,20 @@ export function renderAccountExists(loginUrl: string, resetUrl: string): Body {
       label: 'Log in',
       url: loginUrl,
     }),
+  };
+}
+
+export function renderSignupClosed(p: { supportEmail: string | null }): Body {
+  const intro =
+    'Someone tried to create a FeedBouncer account with this email, but FeedBouncer is in private beta and sign-up is by invitation only. No account was created.';
+  const contact = p.supportEmail
+    ? `To ask for access, write to ${headerSafe(p.supportEmail)}.`
+    : '';
+  const paragraphs = contact ? [intro, contact] : [intro];
+  return {
+    subject: 'FeedBouncer is in private beta',
+    text: `${paragraphs.join('\n\n')}\n`,
+    html: page('FeedBouncer is in private beta', paragraphs),
   };
 }
 

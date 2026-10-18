@@ -394,6 +394,11 @@ In practice:
 - Deleting an organization removes everything under it, including decisions,
   rules and audit events. Deleting a brand removes its connections, content,
   rules and decisions, but its audit events stay with `brand_id = NULL`.
+- Deleting an organization requires teardown first: every connection revoked and
+  its `connection_secret` rows gone (the cascade would otherwise drop the
+  credentials while the platform still has webhook subscriptions).
+  `deleteOrganization` refuses with `connections_active` otherwise; the API
+  delete and `pnpm ops erase-org` both go through it.
 - Rules cited by decisions cannot be deleted directly. The check is deferred so
   a brand or organization delete can remove rules and decisions together. Retire
   a rule with `enabled = false`.

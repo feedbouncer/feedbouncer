@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { can, type Role } from '@feedbouncer/authz';
-import { withTransaction } from '@feedbouncer/db';
+import { deleteOrganization, withTransaction } from '@feedbouncer/db';
 import { recordAudit } from '../audit/audit.js';
 import { requireVerified, type AuthedUser } from '../auth/session.guard.js';
 import { BRAND_COLUMNS, toBrandDto, type BrandDto, type BrandRow } from '../brands/dto.js';
@@ -128,12 +128,11 @@ export class OrgsService {
     await withTransaction(this.deps.pool, async (c) => {
       // The role is re-read under the lock: the guard's copy may be stale.
       if (!can(await lockedActor(c, ctx), 'org.delete')) throw new ApiError(403, 'forbidden');
-      const { rows } = await c.query<{ name: string }>(
-        'SELECT name FROM organization WHERE id = $1',
-        [ctx.organizationId],
-      );
-      if (rows[0]?.name !== confirmName.trim()) throw new ApiError(400, 'confirmation_mismatch');
-      await c.query('DELETE FROM organization WHERE id = $1', [ctx.organizationId]);
+      const result = await deleteOrganization(c, ctx.organizationId, confirmName.trim());
+      if (result === 'not_found') throw notFound();
+      if (result === 'confirmation_mismatch') throw new ApiError(400, 'confirmation_mismatch');
+      // Disconnecting queues the platform teardown; the org can go once it has finished.
+      if (result === 'connections_active') throw new ApiError(409, 'connections_active');
     });
     this.deps.log.info('organization deleted', {
       organizationId: ctx.organizationId,

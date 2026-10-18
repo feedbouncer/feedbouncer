@@ -21,7 +21,9 @@
     "OTEL_SDK_DISABLED",
     "WORKER_CONCURRENCY",
     "API_INTERNAL_URL",
-    "WEB_WATCH_POLL_MS"
+    "WEB_WATCH_POLL_MS",
+    "BETA_FEEDBACK_URL",
+    "BETA_SUPPORT_EMAIL"
   ],
   "tasks": {
     "build": {

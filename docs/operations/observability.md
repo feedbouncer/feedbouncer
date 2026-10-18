@@ -361,11 +361,15 @@ organization's brand both return `404` with the same body. A member gets `403`, 
       "lastErrorAt": "2026-10-12T08:55:12.000Z",
       "consecutiveFailures": 3,
       "stalenessSeconds": 3300,
-      "ingestLagSeconds": 0
+      "ingestLagSeconds": 0,
+      "failedImports": 0
     }
   ]
 }
 ```
+
+`failedImports` counts the connection's comment-ingest jobs dead-lettered in the last 14
+days; it never changes `status`.
 
 `reason` is limited to a fixed vocabulary: `ok`, `pending_first_sync`, `recent_failures`,
 `sync_stale`, `ingest_lag`, `token_expired`, `paused`, `revoked`,
@@ -451,3 +455,13 @@ reconciliation polling exists.
   absent and not stale. `/metrics` still answers `200` with process and counter metrics,
   and `feedbouncer_telemetry_collect_errors_total{collector}` increases.
 - Gauge queries are bounded: a scrape waits at most about 5 seconds for the database.
+
+## Beta status report
+
+`pnpm ops beta-status [--json]` prints one row per connection: health, last successful sync,
+comments ingested and evaluated in the last 24 hours (backfilled comments excluded),
+`unevaluated`, `failedImports` and `queuedJobs`. `unevaluated` counts live comments ingested
+between 10 minutes and 14 days ago, not deleted, that have no rule evaluation; it must be 0.
+Output holds ids only, no organization or brand names. The exit code is 2 when any row has
+`unevaluated > 0`, `failedImports > 0` or health `needs_reconnection`. Errors exit 1 (or 2 for bad usage), so a daily cron should alert on any
+non-zero exit.

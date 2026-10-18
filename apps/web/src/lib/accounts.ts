@@ -14,7 +14,8 @@ export interface PickerAccount {
 
 const INELIGIBLE: Record<string, string> = {
   no_linked_instagram_account: 'No Instagram professional account is linked to this Page',
-  insufficient_page_role: 'You need full control or moderation access to this Page',
+  insufficient_page_role:
+    'You need full control of this Page, or Facebook access with the Moderate task. Ask a Page admin to grant it in Meta Business Suite → Settings → Page access, then connect again.',
   ad_account_disabled: 'This ad account is disabled in Meta',
   ad_account_unsettled: 'This ad account has an unsettled balance',
   ad_account_closed: 'This ad account is closed',

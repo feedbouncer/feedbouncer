@@ -1,10 +1,12 @@
 import { AlertsNavLink } from '../../../../../../components/alerts/alerts-nav-link';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, unstable_rethrow } from 'next/navigation';
 import { ApiForm } from '../../../../../../components/api-form';
 import { ConnectButton } from '../../../../../../components/connect-button';
+import { ConnectChecklist } from '../../../../../../components/connect-checklist';
 import { ReviewModeBanner } from '../../../../../../components/review-mode/review-mode-banner';
 import { backfillText, type BackfillViewDto } from '../../../../../../lib/backfill-text';
+import { healthText } from '../../../../../../lib/health-text';
 import { formatUtc } from '../../../../../../lib/format';
 import { isUuid } from '../../../../../../lib/ids';
 import { messageFor, statusReasonText } from '../../../../../../lib/messages';
@@ -39,11 +41,32 @@ const STATUS_LABEL: Record<Connection['status'], string> = {
 const ERROR_CODES: ReadonlySet<string> = new Set([
   'missing_permissions',
   'denied',
+  'provider_error',
   'platform_error',
   'account_mismatch',
   'connection_inactive',
   'oauth_rejected',
 ]);
+
+type HealthView = Parameters<typeof healthText>[0] & { connectionId: string };
+
+// Health is a nicety: if it cannot be loaded the page renders without it.
+async function loadHealthNotes(orgId: string, brandId: string): Promise<Map<string, string>> {
+  try {
+    const r = await serverGet<{ connections: HealthView[] }>(
+      `/api/v1/orgs/${orgId}/brands/${brandId}/connections/health`,
+    );
+    const notes = new Map<string, string>();
+    for (const h of r.data?.connections ?? []) {
+      const text = healthText(h);
+      if (text) notes.set(h.connectionId, text);
+    }
+    return notes;
+  } catch (err) {
+    unstable_rethrow(err);
+    return new Map();
+  }
+}
 
 const platformLabel = (p: string): string => (isConnectable(p) ? PLATFORM_COPY[p].label : p);
 
@@ -73,6 +96,7 @@ export default async function ConnectionsPage({
         'connections',
       ).connections
     : [];
+  const healthNotes = canManage ? await loadHealthNotes(orgId, brandId) : new Map<string, string>();
   const hasPageOrInstagram = connections.some(
     (c) => c.platform === 'facebook' || c.platform === 'instagram',
   );
@@ -126,6 +150,7 @@ export default async function ConnectionsPage({
                       <td>
                         {STATUS_LABEL[c.status]}
                         {reason ? <p>{reason}</p> : null}
+                        {healthNotes.get(c.id) ? <p>{healthNotes.get(c.id)}</p> : null}
                       </td>
                       <td>{backfillText(c.backfill, formatUtc)}</td>
                       <td>
@@ -164,10 +189,7 @@ export default async function ConnectionsPage({
           {hasPageOrInstagram && !hasAdAccount ? (
             <p>Connect your ad account to moderate comments on your ads.</p>
           ) : null}
-          <p>
-            While the FeedBouncer Meta app is in review, only people with a role on the app can
-            connect Pages and Instagram accounts.
-          </p>
+          <ConnectChecklist />
         </>
       ) : (
         <p>Only owners and admins can view and manage connections.</p>

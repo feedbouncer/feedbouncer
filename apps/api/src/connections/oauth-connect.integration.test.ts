@@ -236,11 +236,20 @@ describe('facebook connect flow', () => {
     const denied = await authorize(org, org.owner);
     const d = await call(
       'GET',
-      `/api/v1/oauth/facebook/callback?error=access_denied&state=${denied.searchParams.get('state')}`,
+      `/api/v1/oauth/facebook/callback?error=access_denied&error_reason=user_denied&state=${denied.searchParams.get('state')}`,
       org.owner,
     );
     expect(d.headers.location).toBe(
       `${WEB}/orgs/${org.orgId}/brands/${org.brandId}/connections?error=denied`,
+    );
+    const refused = await authorize(org, org.owner);
+    const r = await call(
+      'GET',
+      `/api/v1/oauth/facebook/callback?error=access_denied&state=${refused.searchParams.get('state')}`,
+      org.owner,
+    );
+    expect(r.headers.location).toBe(
+      `${WEB}/orgs/${org.orgId}/brands/${org.brandId}/connections?error=provider_error`,
     );
     const failing = await authorize(org, org.owner);
     const consent = graph.consent(failing, fbUserId);

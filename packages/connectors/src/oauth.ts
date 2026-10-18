@@ -77,6 +77,8 @@ export type OAuthCompletion =
       readonly reason:
         | 'rejected'
         | 'denied'
+        /** The provider reported an error other than the user cancelling. */
+        | 'provider_error'
         | 'account_mismatch'
         | 'platform_error'
         /**
@@ -150,6 +152,9 @@ const result = (
   wasReconnectRequired,
   reviewMode,
 });
+
+/** Meta marks a cancelled consent screen with error_reason=user_denied; other providers do not. */
+const META_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>(['facebook', 'instagram']);
 
 export class OAuthFlow {
   constructor(private readonly d: OAuthFlowDeps) {}
@@ -233,8 +238,12 @@ export class OAuthFlow {
     const ids = { organizationId: actor.organizationId, brandId: actor.brandId, platform };
     // code is null here only when the provider reported an error
     if (query.error !== undefined || code === null) {
-      this.d.log.info('oauth authorization denied by user', ids);
-      return { ok: false, reason: 'denied' };
+      if (!META_PLATFORMS.has(platform) || query.error_reason === 'user_denied') {
+        this.d.log.info('oauth authorization denied by user', ids);
+        return { ok: false, reason: 'denied' };
+      }
+      this.d.log.info('oauth provider error', ids);
+      return { ok: false, reason: 'provider_error' };
     }
 
     const connector = this.d.registry.require(platform);

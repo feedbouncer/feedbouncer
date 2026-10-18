@@ -16,6 +16,7 @@ export interface ConnectionHealthView {
   consecutiveFailures: number;
   stalenessSeconds: number | null;
   ingestLagSeconds: number;
+  failedImports: number;
 }
 
 // Anything outside the health vocabulary (a stored free-form reason) is not echoed.
@@ -52,6 +53,7 @@ export class ConnectionHealthService {
       consecutiveFailures: h.consecutiveFailures,
       stalenessSeconds: h.stalenessMs === null ? null : Math.floor(h.stalenessMs / 1000),
       ingestLagSeconds: Math.floor(h.ingestLagMs / 1000),
+      failedImports: h.failedImports,
     }));
   }
 }

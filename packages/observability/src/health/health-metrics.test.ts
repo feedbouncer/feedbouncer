@@ -18,6 +18,7 @@ const h = (over: Partial<ConnectionHealth>): ConnectionHealth => ({
   consecutiveFailures: 0,
   stalenessMs: 30_000,
   ingestLagMs: 0,
+  failedImports: 0,
   ...over,
 });
 
