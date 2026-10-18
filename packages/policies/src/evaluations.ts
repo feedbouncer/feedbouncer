@@ -65,6 +65,8 @@ export interface EvaluationView {
   status: EvaluationStatus;
   skipReason: SkipReason | null;
   failureCode: FailureCode | null;
+  provider: string | null;
+  model: string | null;
   outcome: PolicyAction | null;
   createdAt: Date;
   checkedCount: number;
@@ -288,12 +290,14 @@ export class PgPolicyEvaluationStore {
       status: EvaluationStatus;
       skip_reason: SkipReason | null;
       failure_code: FailureCode | null;
+      provider: string | null;
+      model: string | null;
       outcome: PolicyAction | null;
       created_at: Date;
       checked_count: number;
       trigger_key: string;
     }>(
-      `SELECT id, status, skip_reason, failure_code, outcome, created_at,
+      `SELECT id, status, skip_reason, failure_code, provider, model, outcome, created_at,
               cardinality(checked_revision_ids) AS checked_count, trigger_key
          FROM policy_evaluation
         WHERE organization_id = $1 AND brand_id = $2 AND comment_id = $3
@@ -329,6 +333,8 @@ export class PgPolicyEvaluationStore {
       status: e.status,
       skipReason: e.skip_reason,
       failureCode: e.failure_code,
+      provider: e.provider,
+      model: e.model,
       outcome: e.outcome,
       createdAt: e.created_at,
       checkedCount: e.checked_count,
