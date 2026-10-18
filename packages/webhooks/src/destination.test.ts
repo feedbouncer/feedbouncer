@@ -26,6 +26,9 @@ describe('checkUrlSyntax', () => {
     ['https://localhost/', 'host_not_allowed'],
     ['https://a.localhost/', 'host_not_allowed'],
     ['https://a.localhost./', 'host_not_allowed'],
+    ['https://a.localhost../', 'host_not_allowed'],
+    ['https://intranet../', 'host_not_allowed'],
+    [`https://example.com/${' '.repeat(800)}x`, 'too_long'],
     ['not a url', 'invalid'],
     [`https://example.com/${'a'.repeat(2030)}`, 'too_long'],
   ])('rejects %s with %s', (u, reason) => {
@@ -50,6 +53,20 @@ describe('isAllowedAddress', () => {
     expect(isAllowedAddress('11.1.2.3', ['10.0.0.0/8'])).toBe(true);
     expect(isAllowedAddress('192.168.1.1', ['10.0.0.0/8'])).toBe(false);
     expect(isAllowedAddress('garbage', [])).toBe(false);
+  });
+});
+
+describe('invalid allowed cidrs', () => {
+  it('fail loudly instead of being skipped', async () => {
+    expect(() =>
+      checkUrlSyntax('https://example.com/', { allowedPrivateCidrs: ['nope'] }),
+    ).toThrow();
+    await expect(
+      validateWebhookUrl('https://example.com/', {
+        resolve: async () => ['1.1.1.1'],
+        allowedPrivateCidrs: ['nope'],
+      }),
+    ).rejects.toThrow();
   });
 });
 

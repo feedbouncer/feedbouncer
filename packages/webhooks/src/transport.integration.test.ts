@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import dns from 'node:dns';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createGuardedTransport } from './transport.js';
+import { buildGuardedTransport, createGuardedTransport } from './transport.js';
 
 const run = promisify(execFile);
 let dir: string;
@@ -28,11 +28,7 @@ const toLoopback = ((host: string, opts: unknown, cb: (...a: unknown[]) => void)
   return dns.lookup(host, opts as never, cb as never);
 }) as unknown as typeof dns.lookup;
 
-const target = () => {
-  const url = new URL('https://receiver.test/hook');
-  url.port = String(port);
-  return url;
-};
+const target = () => new URL('https://receiver.test/hook');
 
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), 'wh-'));
@@ -80,12 +76,15 @@ const reset = () => {
 // The transport sees a URL with a non-443 port only in tests, so pass it through a
 // transport that is otherwise identical to production.
 const make = (o: Record<string, unknown> = {}) =>
-  createGuardedTransport({
-    allowedPrivateCidrs: ['127.0.0.0/8'],
-    lookup: toLoopback,
-    ca: cert,
-    ...o,
-  });
+  buildGuardedTransport(
+    {
+      allowedPrivateCidrs: ['127.0.0.0/8'],
+      lookup: toLoopback,
+      ca: cert,
+      ...o,
+    },
+    { dialPort: port },
+  );
 const send = (t: ReturnType<typeof make>, url = target()) =>
   t.send({ url, headers: { 'content-type': 'application/json' }, body: '{}' });
 
@@ -161,7 +160,14 @@ describe('guarded transport', () => {
         code: 'blocked_destination',
       });
     }
+  });
+
+  it('refuses a non-443 port without connecting', async () => {
+    reset();
+    const r = await send(make(), new URL('https://receiver.test:8443/'));
+    expect(r).toMatchObject({ ok: false, status: null, code: 'blocked_destination' });
     expect(connections).toBe(0);
+    expect(() => createGuardedTransport({ allowedPrivateCidrs: ['bad'] })).toThrow();
   });
 
   it('reports unresolvable names as dns_error', async () => {

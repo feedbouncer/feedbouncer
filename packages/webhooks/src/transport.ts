@@ -1,7 +1,7 @@
 import dns from 'node:dns';
 import { Agent, fetch } from 'undici';
 import { DELIVERY_TIMEOUT_MS } from './constants.js';
-import { checkUrlSyntax, isAllowedAddress } from './destination.js';
+import { checkSyntax, compileAddressPolicy } from './destination.js';
 
 export type DeliveryErrorCode =
   | 'timeout'
@@ -22,9 +22,9 @@ export interface WebhookTransport {
 
 const BLOCKED = 'FB_BLOCKED_DESTINATION';
 const TLS_CODES =
-  /^(CERT_|ERR_TLS_)|^(UNABLE_TO_VERIFY_LEAF_SIGNATURE|DEPTH_ZERO_SELF_SIGNED_CERT|SELF_SIGNED_CERT_IN_CHAIN)$/;
+  /^(CERT_|ERR_TLS_|ERR_SSL_)|^(UNABLE_TO_GET_ISSUER_CERT(_LOCALLY)?|UNABLE_TO_VERIFY_LEAF_SIGNATURE|DEPTH_ZERO_SELF_SIGNED_CERT|SELF_SIGNED_CERT_IN_CHAIN)$/;
 
-function classify(err: unknown): DeliveryErrorCode {
+export function classifyError(err: unknown): DeliveryErrorCode {
   const e = err as { name?: string; cause?: { code?: string; name?: string } };
   const code = e.cause?.code ?? '';
   if (code === BLOCKED) return 'blocked_destination';
@@ -43,12 +43,24 @@ function classify(err: unknown): DeliveryErrorCode {
   return 'connection_error';
 }
 
-export function createGuardedTransport(o: {
+interface TransportOptions {
   allowedPrivateCidrs: readonly string[];
   lookup?: typeof dns.lookup;
   ca?: string;
   timeoutMs?: number;
-}): WebhookTransport {
+}
+
+export function createGuardedTransport(o: TransportOptions): WebhookTransport {
+  return buildGuardedTransport(o);
+}
+
+// Not exported from the package index. `dialPort` lets tests reach a local server while the
+// policy (including port 443) is still enforced on the URL as given.
+export function buildGuardedTransport(
+  o: TransportOptions,
+  testOnly?: { dialPort: number },
+): WebhookTransport {
+  const isAllowed = compileAddressPolicy(o.allowedPrivateCidrs);
   const timeoutMs = o.timeoutMs ?? DELIVERY_TIMEOUT_MS;
   const baseLookup = o.lookup ?? dns.lookup;
 
@@ -63,10 +75,7 @@ export function createGuardedTransport(o: {
       (err: unknown, addresses: unknown) => {
         if (err) return callback(err);
         const list = addresses as dns.LookupAddress[];
-        if (
-          list.length === 0 ||
-          !list.every((a) => isAllowedAddress(a.address, o.allowedPrivateCidrs))
-        ) {
+        if (list.length === 0 || !list.every((a) => isAllowed(a.address))) {
           return callback(
             Object.assign(new Error('destination address not allowed'), { code: BLOCKED }),
           );
@@ -87,15 +96,14 @@ export function createGuardedTransport(o: {
     async send({ url, headers, body }) {
       const started = Date.now();
       const elapsed = () => Date.now() - started;
-      const syntax = checkUrlSyntax(url.href, {
-        allowedPrivateCidrs: o.allowedPrivateCidrs,
-        anyPort: true,
-      });
+      const syntax = checkSyntax(url.href, isAllowed);
       if (!syntax.ok) {
         return { ok: false, status: null, code: 'blocked_destination', durationMs: elapsed() };
       }
+      const target = new URL(syntax.url);
+      if (testOnly) target.port = String(testOnly.dialPort);
       try {
-        const res = await fetch(syntax.url, {
+        const res = await fetch(target, {
           method: 'POST',
           headers,
           body,
@@ -110,7 +118,7 @@ export function createGuardedTransport(o: {
         const code = res.status >= 300 && res.status < 400 ? 'redirect' : 'http_status';
         return { ok: false, status: res.status, code, durationMs };
       } catch (err) {
-        return { ok: false, status: null, code: classify(err), durationMs: elapsed() };
+        return { ok: false, status: null, code: classifyError(err), durationMs: elapsed() };
       }
     },
   };
