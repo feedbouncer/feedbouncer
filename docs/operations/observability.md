@@ -463,4 +463,5 @@ comments ingested and evaluated in the last 24 hours (backfilled comments exclud
 `unevaluated`, `failedImports` and `queuedJobs`. `unevaluated` counts live comments ingested
 between 10 minutes and 14 days ago, not deleted, that have no rule evaluation; it must be 0.
 Output holds ids only, no organization or brand names. The exit code is 2 when any row has
-`unevaluated > 0`, `failedImports > 0` or health `needs_reconnection`, so a daily cron can alert on it.
+`unevaluated > 0`, `failedImports > 0` or health `needs_reconnection`. Errors exit 1 (or 2 for bad usage), so a daily cron should alert on any
+non-zero exit.

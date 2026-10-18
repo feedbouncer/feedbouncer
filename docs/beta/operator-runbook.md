@@ -29,7 +29,7 @@ comments are not counted.
 
 It exits with code 2 when any connection needs attention: an unevaluated
 comment older than 10 minutes, a failed import, or a connection that needs
-reconnecting. On exit code 2:
+reconnecting. Alert on any non-zero exit, since failures exit 1 or 2. On exit code 2:
 
 1. Rows with `needs_reconnection`: the owners were emailed once. Ask the partner
    to reconnect from the Connections page.

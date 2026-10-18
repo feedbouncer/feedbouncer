@@ -182,7 +182,7 @@ describe('organizations', () => {
       (await api.pool.query('SELECT 1 FROM organization WHERE id = $1', [orgId])).rowCount;
 
     it('delete refused with connections_active while a connection is active', async () => {
-      const f = await connected('del-active', 'active', true);
+      const f = await connected('del-active', 'active', false);
       const r = await del(f, 'del-active');
       expect([r.status, r.body.error.code]).toEqual([409, 'connections_active']);
       expect(await exists(f.orgId)).toBe(1);

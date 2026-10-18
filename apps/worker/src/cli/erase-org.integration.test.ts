@@ -117,6 +117,15 @@ describe('eraseOrg', () => {
     expect(await userExists(f.userId)).toBe(true);
   });
 
+  it('re-queues teardown for a revoked connection that still holds secrets', async () => {
+    const f = await seed('requeue');
+    await h.c.query("UPDATE connection SET status = 'revoked' WHERE id = $1", [f.connectionId]);
+    const { deps, disconnected } = harness(f);
+    expect(await run(deps, f)).toEqual({ connectionsDisconnected: 1, usersDeleted: 0 });
+    expect(disconnected).toEqual([f.connectionId]);
+    expect(await orgExists(f.organizationId)).toBe(false);
+  });
+
   it('teardown never finishes -> teardown_timeout, org still exists', async () => {
     const f = await seed('timeout');
     const { deps } = harness(f, { teardownFinishes: false });

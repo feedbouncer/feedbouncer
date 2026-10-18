@@ -62,7 +62,10 @@ export async function eraseOrg(deps: EraseOrgDeps, input: EraseOrgInput): Promis
   if (org?.name !== input.confirmName) throw new EraseError('confirmation_mismatch');
 
   const live = await pool.query<{ id: string; brand_id: string }>(
-    "SELECT id, brand_id FROM connection WHERE organization_id = $1 AND status <> 'revoked'",
+    `SELECT id, brand_id FROM connection
+      WHERE organization_id = $1
+        AND (status <> 'revoked'
+             OR EXISTS (SELECT 1 FROM connection_secret s WHERE s.connection_id = connection.id))`,
     [organizationId],
   );
   for (const c of live.rows)
