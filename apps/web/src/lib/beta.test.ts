@@ -22,7 +22,12 @@ describe('readBetaConfig', () => {
       'help@example.com',
     );
   });
-  it.each(['a@b', 'x"@y.com', 'a@b.com<script>'])('rejects %s', (value) => {
+  it('lowercases the address like the API does', () => {
+    expect(readBetaConfig({ BETA_SUPPORT_EMAIL: ' Help@Example.com ' }).supportEmail).toBe(
+      'help@example.com',
+    );
+  });
+  it.each(['a@b', 'help@localhost', 'x"@y.com', 'a@b.com<script>'])('rejects %s', (value) => {
     expect(readBetaConfig({ BETA_SUPPORT_EMAIL: value }).supportEmail).toBeNull();
   });
   it('both unset -> both null', () => {

@@ -1,6 +1,7 @@
-// Not shared with the mailer package: the dev web container has no built workspace
-// packages, and this module is imported by the root layout.
-const SUPPORT_EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
+// Mirrors normalizeAddress in packages/mailer (the API's rule for the same setting). It is
+// not imported because the dev web container has no built workspace packages.
+const SUPPORT_EMAIL =
+  /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
 
 export interface BetaConfig {
   feedbackUrl: string | null;
@@ -8,8 +9,10 @@ export interface BetaConfig {
 }
 
 function emailAddress(raw: string | undefined): string | null {
-  const value = raw?.trim() ?? '';
-  return value.length <= 254 && SUPPORT_EMAIL.test(value) ? value : null;
+  const value = raw?.trim().toLowerCase() ?? '';
+  return value.length <= 254 && value.indexOf('@') <= 64 && SUPPORT_EMAIL.test(value)
+    ? value
+    : null;
 }
 
 function httpsUrl(raw: string | undefined): string | null {

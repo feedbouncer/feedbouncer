@@ -39,14 +39,14 @@ export class SignUpController {
     const email = normalizeEmail(input.email);
     assertPassword(input.password, [email, input.name]);
     await this.limits.consumeEmailSend(email, req.ip);
-    if (!(await isSignupAllowed(this.deps.pool, this.deps.env.signupAllowlist, email))) {
-      await hashPassword(input.password); // equalize timing with the create path
-      this.emails.signupClosed(email);
-      return ACCEPTED;
-    }
     if (await findUserIdByEmail(this.deps.pool, email)) {
       await hashPassword(input.password); // equalize timing with the create path
       this.emails.accountExists(email);
+      return ACCEPTED;
+    }
+    if (!(await isSignupAllowed(this.deps.pool, this.deps.env.signupAllowlist, email))) {
+      await hashPassword(input.password); // equalize timing with the create path
+      this.emails.signupClosed(email);
       return ACCEPTED;
     }
     try {

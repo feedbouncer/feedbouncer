@@ -78,6 +78,23 @@ describe('sign-up allowlist', () => {
     expect(mails[0]!.text).toContain('help@example.com');
   });
 
+  it('existing user who is not on the list gets the account-exists email, not the closed one', async () => {
+    const list = new Set(['member@example.com']);
+    api = await startTestApi({ signupAllowlist: list });
+    await signUp('member@example.com');
+    await tick();
+    list.delete('member@example.com');
+    api.mailer.sent.length = 0;
+    const r = await signUp('member@example.com');
+    expect(r.status).toBe(202);
+    await tick();
+    const subjects = api.mailer.sent
+      .filter((m) => m.to === 'member@example.com')
+      .map((m) => m.subject);
+    expect(subjects).not.toContain(CLOSED);
+    expect(subjects).toHaveLength(1);
+  });
+
   it('rate limit still applies to unlisted email', async () => {
     api = await startTestApi({ signupAllowlist: LIST });
     for (let i = 0; i < 3; i++) expect((await signUp('spam@example.com')).status).toBe(202);

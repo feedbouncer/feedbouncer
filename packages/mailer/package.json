@@ -10,11 +10,6 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./address": {
-      "@feedbouncer/source": "./src/address.ts",
-      "types": "./dist/address.d.ts",
-      "default": "./dist/address.js"
-    },
     "./testing": {
       "@feedbouncer/source": "./src/testing.ts",
       "types": "./dist/testing.d.ts",
