@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
-import { stat } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { mkdir, stat } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { exportRun } from '@feedbouncer/evaluation';
 import { UsageError, loadJobsConfig } from '@feedbouncer/jobs';
@@ -34,6 +34,17 @@ function intIn(value: string, flag: string, min: number, max: number): number {
   if (!Number.isSafeInteger(n) || n < min || n > max)
     throw new UsageError(`${flag} must be an integer from ${min} to ${max}`);
   return n;
+}
+
+/** Default run directory: tmp/eval/<UTC yyyymmddThhmmssZ> (tmp/ is git-ignored). */
+export function defaultOutDir(now: Date): string {
+  const stamp = now.toISOString().slice(0, 19).replaceAll(/[-:]/g, '');
+  return join('tmp', 'eval', `${stamp}Z`);
+}
+
+/** Creates the default parent (tmp/eval) if needed; an explicit --out parent is never created. */
+export async function ensureDefaultParent(out: string): Promise<void> {
+  await mkdir(dirname(out), { recursive: true, mode: 0o700 });
 }
 
 export const evalExportCommand: OpsCommand = async (argv, ctx) => {
@@ -76,9 +87,8 @@ export const evalExportCommand: OpsCommand = async (argv, ctx) => {
       ? randomInt(0, MAX_SEED + 1)
       : intIn(values.seed, '--seed', 0, MAX_SEED);
 
-  const out = resolve(
-    values.out ?? `eval-run-${now.toISOString().slice(0, 19).replaceAll(/[-:]/g, '')}`,
-  );
+  const out = resolve(values.out ?? defaultOutDir(now));
+  if (values.out === undefined) await ensureDefaultParent(out);
   const parent = await stat(dirname(out)).catch(() => null);
   if (!parent?.isDirectory()) throw new UsageError('output parent directory does not exist');
 
