@@ -63,6 +63,7 @@ export type DecisionFact = {
 };
 
 export type SuggestionFact = {
+  id: string;
   status: string;
   createdAt: Date;
   decidedAt: Date | null;
@@ -121,6 +122,24 @@ export function countedRemoval(actions: readonly ActionFact[]): ActionFact | nul
           byFeedBouncer(a) &&
           (a.status === 'applied' || (a.status === 'noop' && a.outcomeCode === 'already_hidden')),
       ) ?? null
+  );
+}
+
+/** The suggestion behind the counted removal (request key `suggestion:<id>:hide`), else the latest one. */
+export function pickSuggestion(
+  suggestions: readonly SuggestionFact[],
+  actions: readonly ActionFact[],
+): SuggestionFact | null {
+  const key = countedRemoval(actions)?.requestKey.split(':');
+  if (key?.[0] === 'suggestion') {
+    const own = suggestions.find((s) => s.id === key[1]);
+    if (own) return own;
+  }
+  return (
+    [...suggestions].sort(
+      (a, b) =>
+        b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
+    )[0] ?? null
   );
 }
 

@@ -5,7 +5,13 @@ import { EXECUTE_JOB, INGEST_JOB } from '@feedbouncer/comments';
 import { RUN_SCHEMA_VERSION } from '../constants.js';
 import { createRunDir, labelSheetCsv, writeRunFile, type LabelSheetRow } from '../io.js';
 import type { EvalItem, RunManifest } from '../schema.js';
-import { deriveItem, pseudonymiser, type CommentFacts, type LedgerFact } from './derive.js';
+import {
+  deriveItem,
+  pickSuggestion,
+  pseudonymiser,
+  type CommentFacts,
+  type LedgerFact,
+} from './derive.js';
 import { samplePermutation } from './sample.js';
 import {
   PAGE_SIZE,
@@ -120,7 +126,7 @@ export async function exportRunWithSalt(
         const l = ledgerFact(execKeys.get(a.id));
         if (l) execLedgers.set(a.id, l);
       }
-      const sug = rel.suggestions.get(c.id)?.[0] ?? null;
+      const sug = pickSuggestion(rel.suggestions.get(c.id) ?? [], actions);
       const facts: CommentFacts = {
         commentId: c.id,
         bodyNow: c.body,
@@ -136,14 +142,7 @@ export async function exportRunWithSalt(
         classifications: rel.classifications.get(c.id) ?? [],
         policyEvals: rel.policyEvals.get(c.id) ?? [],
         decisions: rel.decisions.get(c.id) ?? [],
-        suggestion: sug
-          ? {
-              status: sug.status,
-              createdAt: sug.createdAt,
-              decidedAt: sug.decidedAt,
-              sourceType: sug.sourceType,
-            }
-          : null,
+        suggestion: sug,
         ruleKindById: kinds,
       };
       const item = deriveItem(facts, pseudonym);

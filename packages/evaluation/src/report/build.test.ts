@@ -99,11 +99,10 @@ describe('report', () => {
   it('escapes Markdown injection', () => {
     const md = renderMarkdown(
       buildReport(
-        labelled(2) &&
-          inputs({
-            meta: [],
-            metaConfig: { ...metaConfig, method: '[x](javascript:alert(1)) <img src=x>' },
-          }),
+        inputs({
+          meta: [],
+          metaConfig: { ...metaConfig, method: '[x](javascript:alert(1)) <img src=x>' },
+        }),
       ),
     );
     expect(md).not.toContain('](');

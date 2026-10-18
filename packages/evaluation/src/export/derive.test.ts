@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { EvalItem } from '../schema.js';
 import {
   deriveItem,
+  pickSuggestion,
   pseudonymiser,
   type ActionFact,
   type ClassificationFact,
@@ -348,6 +349,7 @@ describe('deriveItem', () => {
         classifications: [classification({ reviewMode: true })],
         decisions: [decision({ mode: 'suggest' })],
         suggestion: {
+          id: 's1',
           status: 'approved',
           createdAt: at(10),
           decidedAt: at(10 + 1800),
@@ -371,6 +373,21 @@ describe('deriveItem', () => {
     expect(it11.review).toEqual({ suggestionStatus: 'approved', humanWaitMs: 1800000 });
     expect(it11.caughtByDecision).toBe(false);
     expect(it11.timing?.totalMs).toBe(1812000);
+  });
+
+  it('picks the suggestion named by the removal key, else the latest', () => {
+    const sug = (id: string, sec: number) => ({
+      id,
+      status: 'x',
+      createdAt: at(sec),
+      decidedAt: null,
+      sourceType: null,
+    });
+    const list = [sug('s1', 1), sug('s2', 2), sug('s3', 3)];
+    const viaKey = [action({ id: 'a1', createdAt: at(5), requestKey: 'suggestion:s2:hide' })];
+    expect(pickSuggestion(list, viaKey)?.id).toBe('s2');
+    expect(pickSuggestion(list, [])?.id).toBe('s3');
+    expect(pickSuggestion([], viaKey)).toBeNull();
   });
 
   it('12. noop already_hidden counts as hidden without timing', () => {

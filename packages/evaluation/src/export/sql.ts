@@ -64,12 +64,13 @@ export const TENANT_SQL = {
      WHERE organization_id = ANY($1::uuid[]) AND comment_id = ANY($2::uuid[])`,
 
   suggestions: `
-    SELECT s.comment_id, s.status, s.created_at, s.decided_at,
+    SELECT s.comment_id, s.id, s.status, s.created_at, s.decided_at,
            (SELECT src.source_type FROM action_suggestion_source src
              WHERE src.organization_id = ANY($1::uuid[]) AND src.brand_id = s.brand_id AND src.suggestion_id = s.id
              ORDER BY src.created_at, src.id LIMIT 1) AS source_type
       FROM action_suggestion s
-     WHERE s.organization_id = ANY($1::uuid[]) AND s.comment_id = ANY($2::uuid[])`,
+     WHERE s.organization_id = ANY($1::uuid[]) AND s.comment_id = ANY($2::uuid[])
+     ORDER BY s.created_at, s.id`,
 
   rules: `
     SELECT id, COALESCE(kind, conditions->>'type') AS kind
@@ -254,6 +255,7 @@ export async function relatedRows(
     }>(TENANT_SQL.decisions, p),
     pool.query<{
       comment_id: string;
+      id: string;
       status: string;
       created_at: Date;
       decided_at: Date | null;
@@ -332,6 +334,7 @@ export async function relatedRows(
     suggestions: group(
       su.rows.map((x) => ({
         commentId: x.comment_id,
+        id: x.id,
         status: x.status,
         createdAt: x.created_at,
         decidedAt: x.decided_at,
