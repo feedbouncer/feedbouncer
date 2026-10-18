@@ -21,16 +21,22 @@ beforeAll(async () => {
      VALUES ($1, $2, $3, $4, '1_2_3', 'hi', now()) RETURNING id`,
     [B.orgId, scope.brandId, scope.connectionId, source.rows[0].id],
   );
-  await api.pool.query(
+  const review = await api.pool.query(
     `INSERT INTO review_item (organization_id, brand_id, connection_id, comment_id, source)
-     VALUES ($1, $2, $3, $4, 'user')`,
+     VALUES ($1, $2, $3, $4, 'user') RETURNING id`,
     [B.orgId, scope.brandId, scope.connectionId, comment.rows[0].id],
   );
   const key = await new PgApiKeys(api.pool).create(A.orgId, A.owner.userId, {
     name: 'writer',
     scope: 'write',
   });
-  f = { A, B, aWriteToken: key.token.reveal(), bCommentId: comment.rows[0].id };
+  f = {
+    A,
+    B,
+    aWriteToken: key.token.reveal(),
+    bCommentId: comment.rows[0].id,
+    bReviewItemId: review.rows[0].id,
+  };
 });
 afterAll(() => api.close());
 

@@ -9,6 +9,7 @@ import { createAuthEmails, type AuthEmails } from './auth/emails.js';
 import { createAuthRateLimits } from './auth/rate-limit.js';
 import { ApiKeyGuard } from './public-api/api-key.guard.js';
 import { PublicCommentsController } from './public-api/comments.controller.js';
+import { PublicFlaggedItemsController } from './public-api/flagged-items.controller.js';
 import { PublicModerationController } from './public-api/moderation.controller.js';
 import { PublicModerationService } from './public-api/moderation.service.js';
 import { OpenApiController } from './public-api/openapi.controller.js';
@@ -136,6 +137,7 @@ export class AppModule {
         ApiKeysController,
         OpenApiController,
         PublicCommentsController,
+        PublicFlaggedItemsController,
         PublicModerationController,
         ...(deps.extraControllers ?? []),
       ],

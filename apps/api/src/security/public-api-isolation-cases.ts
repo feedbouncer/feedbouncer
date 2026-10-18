@@ -6,6 +6,7 @@ export interface PublicIsolationFixture {
   /** A write-scoped API key of A. */
   aWriteToken: string;
   bCommentId: string;
+  bReviewItemId: string;
 }
 
 export interface PublicApiCase {
@@ -18,6 +19,7 @@ export interface PublicApiCase {
 /** Every /v1 route with a path parameter, aimed at B's resources with A's write key. */
 export const PUBLIC_API_CASES: readonly PublicApiCase[] = [
   { route: 'GET /v1/comments/{id}', url: (f) => `/v1/comments/${f.bCommentId}` },
+  { route: 'GET /v1/flagged-items/{id}', url: (f) => `/v1/flagged-items/${f.bReviewItemId}` },
   {
     route: 'POST /v1/comments/{id}/hide',
     url: (f) => `/v1/comments/${f.bCommentId}/hide`,

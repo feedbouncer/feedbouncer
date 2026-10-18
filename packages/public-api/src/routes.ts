@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './constants.js';
 import type { ApiKeyScope } from './keys/token.js';
 import { CommentResource } from './resources/comment.js';
+import { FlaggedItemResource } from './resources/flagged-item.js';
 import { pageOf } from './resources/page.js';
 
 /** Codes may be added, never renamed: integrations match on them. */
@@ -67,6 +68,15 @@ export const ListCommentsQuery = z.strictObject({
   brandId: z.uuid().optional(),
   postedFrom: timestamp.optional().meta({ description: 'Inclusive. ISO 8601 with an offset.' }),
   postedTo: timestamp.optional().meta({ description: 'Exclusive. ISO 8601 with an offset.' }),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+  cursor: z.string().max(512).optional(),
+});
+
+export const ListFlaggedItemsQuery = z.strictObject({
+  status: z.enum(['open', 'resolved']).default('open'),
+  brandId: z.uuid().optional(),
+  createdFrom: timestamp.optional().meta({ description: 'Inclusive. ISO 8601 with an offset.' }),
+  createdTo: timestamp.optional().meta({ description: 'Exclusive. ISO 8601 with an offset.' }),
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   cursor: z.string().max(512).optional(),
 });
@@ -144,6 +154,28 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
   },
   moderationSpec('hide'),
   moderationSpec('unhide'),
+  {
+    id: 'listFlaggedItems',
+    method: 'GET',
+    path: '/v1/flagged-items',
+    scope: 'read',
+    summary: 'List flagged items, newest first',
+    query: ListFlaggedItemsQuery,
+    idempotent: false,
+    responses: { 200: pageOf(FlaggedItemResource, 'FlaggedItemPage') },
+    errors: ['invalid_request', 'invalid_cursor'],
+  },
+  {
+    id: 'getFlaggedItem',
+    method: 'GET',
+    path: '/v1/flagged-items/{id}',
+    scope: 'read',
+    summary: 'Fetch one flagged item',
+    params: z.object({ id: z.uuid() }),
+    idempotent: false,
+    responses: { 200: FlaggedItemResource },
+    errors: ['not_found'],
+  },
 ];
 
 export function routeSpec(id: string): RouteSpec {

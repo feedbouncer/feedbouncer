@@ -71,3 +71,15 @@ export async function loadPublicComment(
   const { rows } = await db.query<CommentRow>(`${SELECT}\n     AND c.id = $2`, [org, commentId]);
   return rows[0] ?? null;
 }
+
+export async function loadPublicCommentsByIds(
+  db: Db,
+  org: string,
+  ids: readonly string[],
+): Promise<Map<string, CommentRow>> {
+  const { rows } = await db.query<CommentRow>(`${SELECT}\n     AND c.id = ANY($2::uuid[])`, [
+    org,
+    ids,
+  ]);
+  return new Map(rows.map((r) => [r.id, r]));
+}
