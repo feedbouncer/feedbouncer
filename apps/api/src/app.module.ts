@@ -1,5 +1,6 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { PgBackfillStore } from '@feedbouncer/comments';
+import { PgApiKeys } from '@feedbouncer/public-api';
 import { Reflector } from '@nestjs/core';
 import { createAccountDeletionHooks } from './auth/account-deletion.js';
 import { createAuth, type AuthHooks } from './auth/auth.js';
@@ -15,6 +16,8 @@ import { AlertChannelsController } from './alerts/alert-channels.controller.js';
 import { AlertRecipientsController } from './alerts/alert-recipients.controller.js';
 import { AlertsService } from './alerts/alerts.service.js';
 import { BrandAlertsController } from './alerts/brand-alerts.controller.js';
+import { ApiKeysController } from './api-keys/api-keys.controller.js';
+import { ApiKeysService } from './api-keys/api-keys.service.js';
 import { AdsController } from './ads/ads.controller.js';
 import { AdsService } from './ads/ads.service.js';
 import { BrandsController } from './brands/brands.controller.js';
@@ -68,6 +71,7 @@ import { ReportsService } from './reports/reports.service.js';
 import { OrgAccessGuard } from './tenancy/org-access.guard.js';
 import {
   ACCOUNT_DELETION,
+  API_KEYS,
   AUTH,
   AUTH_EMAILS,
   BACKFILL_STORE,
@@ -122,6 +126,7 @@ export class AppModule {
         AlertRecipientsController,
         ReportsController,
         MeReportsController,
+        ApiKeysController,
       ],
       providers: [
         Reflector,
@@ -148,11 +153,13 @@ export class AppModule {
         InvitationsService,
         AlertsService,
         ReportsService,
+        ApiKeysService,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.
         { provide: CONNECTOR_STACK, useValue: deps.connectors?.stack ?? null },
         { provide: JOB_PRODUCER, useValue: deps.producer },
         { provide: COMMENTS, useValue: deps.comments },
+        { provide: API_KEYS, useValue: new PgApiKeys(deps.pool) },
         { provide: BACKFILL_STORE, useValue: new PgBackfillStore(deps.pool) },
         {
           provide: AUTH_EMAILS,

@@ -14,3 +14,5 @@ export const JOB_PRODUCER = Symbol('JOB_PRODUCER');
 export const COMMENTS = Symbol('COMMENTS');
 /** Per-connection backfill run state. */
 export const BACKFILL_STORE = Symbol('BACKFILL_STORE');
+/** The API key store. */
+export const API_KEYS = Symbol('API_KEYS');

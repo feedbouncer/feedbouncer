@@ -78,6 +78,8 @@ export type ErrorCode =
   | 'too_soon'
   | 'unknown_channel'
   | 'invalid_token'
+  | 'api_key_limit_reached'
+  | 'api_key_name_taken'
   | 'invalid_timezone'
   | 'invalid_week';
 
@@ -158,6 +160,9 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   too_soon: 'A confirmation was sent a moment ago. Try again in a minute.',
   unknown_channel: 'A selected alert channel no longer exists.',
   invalid_token: 'This link is invalid or has expired.',
+  api_key_limit_reached:
+    'This workspace already has 10 active API keys. Revoke one to create another.',
+  api_key_name_taken: 'An active API key already uses this name.',
 };
 
 export interface ErrorIssue {

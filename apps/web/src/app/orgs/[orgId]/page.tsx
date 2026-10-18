@@ -110,6 +110,11 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
             <AlertsNavLink role={role} href={`/orgs/${orgId}/alerts`} /> ·{' '}
           </>
         ) : null}
+        {can(role, 'api_key.manage') ? (
+          <>
+            <Link href={`/orgs/${orgId}/api-keys`}>API keys</Link> ·{' '}
+          </>
+        ) : null}
         <Link href="/hidden-today">Hidden today</Link> · <Link href="/account">Account</Link>
       </p>
     </main>
