@@ -7,3 +7,4 @@ export { exportRun, type ExportOptions } from './export/export.js';
 export * from './measures/hides.js';
 export * from './measures/timing.js';
 export * from './measures/meta.js';
+export * from './measures/cost.js';

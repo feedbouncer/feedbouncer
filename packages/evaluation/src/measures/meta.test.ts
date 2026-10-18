@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { metaComparison } from './meta.js';
-import { item, truth } from './fixtures.js';
+import { item, truth } from './fixtures.test-helper.js';
 import type { MetaRow } from '../schema.js';
 
 const row = (i: { item: string }, meta_outcome: MetaRow['meta_outcome']): MetaRow => ({

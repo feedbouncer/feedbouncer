@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { falseHides, missed } from './hides.js';
-import { item, truth } from './fixtures.js';
+import { item, truth } from './fixtures.test-helper.js';
 
 describe('falseHides', () => {
   it('restored hide counts as false hide even when labelled should_hide, and not as correct', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { reviewTimeToHide, timeToHide } from './timing.js';
-import { item } from './fixtures.js';
+import { item } from './fixtures.test-helper.js';
 import type { EvalItem } from '../schema.js';
 
 const br = {
