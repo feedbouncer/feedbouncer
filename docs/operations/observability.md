@@ -361,11 +361,15 @@ organization's brand both return `404` with the same body. A member gets `403`, 
       "lastErrorAt": "2026-10-12T08:55:12.000Z",
       "consecutiveFailures": 3,
       "stalenessSeconds": 3300,
-      "ingestLagSeconds": 0
+      "ingestLagSeconds": 0,
+      "failedImports": 0
     }
   ]
 }
 ```
+
+`failedImports` counts the connection's comment-ingest jobs dead-lettered in the last 14
+days; it never changes `status`.
 
 `reason` is limited to a fixed vocabulary: `ok`, `pending_first_sync`, `recent_failures`,
 `sync_stale`, `ingest_lag`, `token_expired`, `paused`, `revoked`,

@@ -56,11 +56,25 @@ describe('connection health endpoint', () => {
         lastErrorCode: null,
         consecutiveFailures: 0,
         ingestLagSeconds: 0,
+        failedImports: 0,
       }),
     ]);
     expect(r.body.connections[0].stalenessSeconds).toBeGreaterThanOrEqual(100);
     expect(JSON.stringify(r.body)).not.toContain(B.orgId);
     expect(r.headers['cache-control']).toBe('no-store');
+  });
+
+  it('reports dead-lettered ingest jobs as failedImports', async () => {
+    await api.pool.query(
+      `INSERT INTO job_ledger (organization_id, brand_id, connection_id, platform, job_type, idempotency_key,
+                               payload, state, expires_at, dead_letter_reason, dead_lettered_at)
+       VALUES ($1, $2, $3, 'youtube', 'comment_ingest', repeat('e', 64), '{}'::jsonb, 'dead_lettered',
+               now() + interval '1 day', 'retries_exhausted', now())`,
+      [A.orgId, A.brandId, A.connectionId],
+    );
+    const r = await api.req('GET', healthUrl(A.orgId, A.brandId), { cookie: A.owner.cookie });
+    expect(r.body.connections[0].failedImports).toBe(1);
+    await api.pool.query('DELETE FROM job_ledger WHERE connection_id = $1', [A.connectionId]);
   });
 
   it('admins may read, members may not', async () => {
@@ -170,6 +184,7 @@ describe('connection health endpoint', () => {
         'lastErrorCode',
         'lastErrorAt',
         'consecutiveFailures',
+        'failedImports',
         'stalenessSeconds',
         'ingestLagSeconds',
       ].sort(),

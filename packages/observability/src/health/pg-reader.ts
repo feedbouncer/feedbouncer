@@ -1,5 +1,6 @@
 import type pg from 'pg';
 import type { Platform } from '@feedbouncer/connectors';
+import { INGEST_JOB } from '@feedbouncer/comments';
 import { boundedQuery } from '@feedbouncer/db';
 import { deriveConnectionHealth, type ConnectionHealth, type HealthPolicy } from './derive.js';
 
@@ -8,6 +9,8 @@ export const HEALTH_SQL = `
          s.last_success_at, s.last_failure_at, s.last_error_code,
          COALESCE(s.consecutive_failures, 0) AS consecutive_failures,
          (SELECT min(j.created_at) FROM job_ledger j WHERE j.connection_id = c.id AND j.state = 'queued') AS oldest_queued_at,
+         (SELECT count(*)::int FROM job_ledger j WHERE j.connection_id = c.id AND j.state = 'dead_lettered'
+             AND j.job_type = '${INGEST_JOB.type}' AND j.dead_lettered_at > now() - interval '14 days') AS failed_imports,
          a.expires_at AS access_expires_at, (a.id IS NOT NULL) AS has_access,
          r.expires_at AS refresh_expires_at, (r.id IS NOT NULL) AS has_refresh,
          now() AS db_now
@@ -30,6 +33,7 @@ interface Rec {
   last_error_code: string | null;
   consecutive_failures: number;
   oldest_queued_at: Date | null;
+  failed_imports: number;
   access_expires_at: Date | null;
   has_access: boolean;
   refresh_expires_at: Date | null;
@@ -77,6 +81,7 @@ export class PgHealthReader implements HealthReader {
         hasAccessToken: r.has_access,
         refreshTokenExpiresAt: r.refresh_expires_at,
         hasRefreshToken: r.has_refresh,
+        failedImports: r.failed_imports,
       },
       this.policy,
       r.db_now,

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
+import { INGEST_JOB } from '@feedbouncer/comments';
 import { PgJobLedger } from '@feedbouncer/jobs';
 import { loadHealthPolicy } from './policy.js';
 import { HEALTH_SQL, PgHealthReader } from './pg-reader.js';
@@ -81,6 +82,62 @@ describe('PgHealthReader', () => {
 
   it('never selects encrypted_value', () => {
     expect(HEALTH_SQL).not.toContain('encrypted_value');
+  });
+
+  describe('failedImports', () => {
+    let seq = 0;
+    const seed = (
+      t: Tenant,
+      o: { type?: string; state?: string; ageDays?: number; connectionId?: string },
+    ) => {
+      const state = o.state ?? 'dead_lettered';
+      return h.c.query(
+        `INSERT INTO job_ledger (organization_id, brand_id, connection_id, platform, job_type, idempotency_key,
+                                 payload, state, expires_at, dead_letter_reason, dead_lettered_at, resolution)
+         VALUES ($1, $2, $3, 'youtube', $4, lpad($5, 64, 'f'), '{}'::jsonb, $6, now() + interval '1 day',
+                 $7, CASE WHEN $8 THEN now() - make_interval(days => $9) END, $10)`,
+        [
+          t.organizationId,
+          t.brandId,
+          o.connectionId ?? t.connectionId,
+          o.type ?? INGEST_JOB.type,
+          String(++seq),
+          state,
+          'retries_exhausted',
+          true,
+          o.ageDays ?? 1,
+          state === 'resolved' ? 'replayed' : null,
+        ],
+      );
+    };
+
+    it('counts only dead-lettered ingest jobs of that connection within 14 days', async () => {
+      const other = await h.c.query<{ id: string }>(
+        `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, display_name)
+         VALUES ($1, $2, 'youtube', 'other-acct', 'other') RETURNING id`,
+        [A.organizationId, A.brandId],
+      );
+      await seed(A, {});
+      await seed(A, { ageDays: 13 });
+      await seed(A, { ageDays: 15 });
+      await seed(A, { state: 'resolved' });
+      await seed(A, { type: 'poll' });
+      await seed(A, { connectionId: other.rows[0]!.id });
+      const rows = await new PgHealthReader(pool, policy).forBrand(A.organizationId, A.brandId);
+      expect(rows.find((x) => x.connectionId === A.connectionId)!.failedImports).toBe(2);
+      expect(rows.find((x) => x.connectionId === other.rows[0]!.id)!.failedImports).toBe(1);
+    });
+
+    it('forBrand of org A never counts org B jobs', async () => {
+      await seed(B, {});
+      await seed(B, {});
+      await seed(B, {});
+      const r = new PgHealthReader(pool, policy);
+      const a = await r.forBrand(A.organizationId, A.brandId);
+      expect(a.find((x) => x.connectionId === A.connectionId)!.failedImports).toBe(2);
+      expect((await r.forBrand(B.organizationId, B.brandId))[0]!.failedImports).toBe(3);
+      expect(await r.forBrand(A.organizationId, B.brandId)).toEqual([]);
+    });
   });
 
   it('queueStats runs through the same bounded read-only path', async () => {

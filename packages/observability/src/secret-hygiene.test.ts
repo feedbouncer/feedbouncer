@@ -133,6 +133,7 @@ it('known secrets, auth headers and comment bodies never reach logs, spans, metr
       hasAccessToken: true,
       refreshTokenExpiresAt: null,
       hasRefreshToken: true,
+      failedImports: 0,
     };
     const health = deriveConnectionHealth(facts, loadHealthPolicy({}), new Date());
     registerConnectorHealthMetrics(

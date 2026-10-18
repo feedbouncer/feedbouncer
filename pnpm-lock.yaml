@@ -743,6 +743,9 @@ importers:
 
   packages/observability:
     dependencies:
+      '@feedbouncer/comments':
+        specifier: workspace:*
+        version: link:../comments
       '@feedbouncer/connectors':
         specifier: workspace:*
         version: link:../connectors
