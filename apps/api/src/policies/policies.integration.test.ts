@@ -331,7 +331,10 @@ describe('preview', () => {
       enabled: true,
       id: 'fake',
       model: 'fake-1',
-      evaluate: async () => ({ p1: 'clear_match' }),
+      evaluate: async () => ({
+        verdicts: { p1: 'clear_match' },
+        usage: { inputTokens: null, outputTokens: null, cacheReadTokens: null },
+      }),
     };
     const job = policyPreviewJob({
       comments: new PgCommentStore(api.pool),
@@ -559,6 +562,7 @@ describe('decision log and evaluation', () => {
       model: 'fake-1',
       promptVersion: 'pol-v1',
       checkedRevisionIds: [p1.revisionId, p2.revisionId],
+      usage: null,
       inputTruncated: false,
       lowSignal: false,
       decision: { outcome: 'hide', winner, matches: [winner, low] },
@@ -646,6 +650,7 @@ describe('decision log and evaluation', () => {
         ruleEvaluationId: failed.ruleEvaluationId,
         failureCode: 'unavailable',
         checkedRevisionIds: [p.revisionId],
+        usage: null,
       },
     );
     const r = await get(o(), `/comments/${failed.commentId}/policy-evaluation`);

@@ -20,7 +20,7 @@ import {
   type PgReviewModeReader,
 } from '@feedbouncer/comments';
 import { bodySha256, type BrandScope, type PgEvaluationStore } from '@feedbouncer/rules';
-import { mapProviderError, prepareInput } from '@feedbouncer/ai';
+import { mapProviderError, prepareInput, type ModelUsage } from '@feedbouncer/ai';
 import type { BrandSlots } from '@feedbouncer/db';
 import type { Logger } from '@feedbouncer/service-runtime';
 import { decidePolicies } from '../decide.js';
@@ -115,12 +115,16 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
       policies = [one];
     }
     const checkedRevisionIds = policies.map((x) => x.revisionId);
-    const failed = (failureCode: FailureCode): EvaluationRecord => ({
+    const failed = (
+      failureCode: FailureCode,
+      usage: ModelUsage | null = null,
+    ): EvaluationRecord => ({
       ...base,
       status: 'failed',
       failureCode,
       ruleEvaluationId: ruleEval.id,
       checkedRevisionIds,
+      usage,
     });
 
     const input = prepareInput(row.body);
@@ -129,6 +133,7 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
     let byKey: Readonly<Record<string, PolicyVerdict>>;
     let provider = d.evaluator.id;
     let model = d.evaluator.model;
+    let usage: ModelUsage | null = null;
     if (input.empty) {
       byKey = Object.fromEntries(keys.map((k) => [k, 'no_match' as const]));
       provider = 'builtin';
@@ -146,7 +151,7 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
             skipReason: 'quota_exhausted',
             ruleEvaluationId: ruleEval.id,
           };
-        byKey = await d.evaluator.evaluate(input, keyed, ctx.signal);
+        ({ verdicts: byKey, usage } = await d.evaluator.evaluate(input, keyed, ctx.signal));
       } catch (e) {
         const err = mapProviderError(e);
         if (err.retryable && ctx.attempt < MAX_POLICY_PROVIDER_ATTEMPTS) {
@@ -162,7 +167,7 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
           code: err.code,
           attempt: ctx.attempt,
         });
-        return failed(err.code);
+        return failed(err.code, err.usage);
       } finally {
         await lease
           .release()
@@ -190,6 +195,7 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
       lowSignal: input.lowSignal,
       decision,
       reason: describeDecision(decision, { truncated: input.truncated }),
+      usage,
     };
   }
 

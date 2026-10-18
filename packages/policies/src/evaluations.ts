@@ -3,6 +3,7 @@
 // matches and decision are written in the same transaction, only by the insert
 // that won. Every statement filters on organization_id AND brand_id.
 import type pg from 'pg';
+import type { ModelUsage } from '@feedbouncer/ai';
 import { withTransaction } from '@feedbouncer/db';
 import type { BrandScope } from '@feedbouncer/rules';
 import type { ConnectionScope } from '@feedbouncer/secrets';
@@ -29,6 +30,7 @@ export type EvaluationRecord =
       failureCode: FailureCode;
       ruleEvaluationId: string;
       checkedRevisionIds: readonly string[];
+      usage: ModelUsage | null;
     })
   | (Base & {
       status: 'evaluated';
@@ -41,6 +43,7 @@ export type EvaluationRecord =
       lowSignal: boolean;
       decision: PolicyDecision;
       reason: string;
+      usage: ModelUsage | null;
     });
 
 export interface EvaluationRow {
@@ -133,6 +136,7 @@ export class PgPolicyEvaluationStore {
    */
   async record(scope: ConnectionScope, r: EvaluationRecord): Promise<EvaluationRow | null> {
     const ev = r.status === 'evaluated' ? r : null;
+    const usage = r.status === 'skipped' ? null : r.usage;
     const winner = ev?.decision.winner ?? null;
     const outcome = ev?.decision.outcome ?? null;
     if ((outcome === null) !== (winner === null))
@@ -143,10 +147,11 @@ export class PgPolicyEvaluationStore {
                                         trigger_key, rule_evaluation_id, status, skip_reason, failure_code,
                                         provider, model, prompt_version, checked_revision_ids,
                                         input_truncated, low_signal, outcome, winning_revision_id,
-                                        review_mode)
+                                        review_mode, input_tokens, output_tokens, cache_read_tokens)
          SELECT c.organization_id, c.brand_id, c.connection_id, c.id, $5::bytea, $6::text, $7::uuid,
                 $8::text, $9::text, $10::text, $11::text, $12::text, $13::text, $14::uuid[],
-                $15::boolean, $16::boolean, $17::text, $18::uuid, $19::boolean
+                $15::boolean, $16::boolean, $17::text, $18::uuid, $19::boolean,
+                $20::integer, $21::integer, $22::integer
            FROM comment c
           WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3 AND c.id = $4
          ON CONFLICT (comment_id, body_sha256, trigger_key) DO NOTHING
@@ -171,6 +176,9 @@ export class PgPolicyEvaluationStore {
           outcome,
           winner?.revisionId ?? null,
           r.reviewMode ?? false,
+          usage?.inputTokens ?? null,
+          usage?.outputTokens ?? null,
+          usage?.cacheReadTokens ?? null,
         ],
       );
       const row = rows[0];

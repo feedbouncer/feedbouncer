@@ -308,7 +308,7 @@ describe('policy_evaluation token columns', () => {
     await insert([0, 0, 0]);
     const cols = ['input_tokens', 'output_tokens', 'cache_read_tokens'];
     for (const [i, col] of cols.entries()) {
-      const tokens = [null, null, null];
+      const tokens: Array<number | null> = [null, null, null];
       tokens[i] = -1;
       await expectPgError(insert(tokens), '23514', `policy_evaluation_${col}_check`);
     }

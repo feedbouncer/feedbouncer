@@ -69,6 +69,7 @@ function evaluated(
     model: 'gpt-x',
     promptVersion: 'pol-v1',
     checkedRevisionIds: [p1.revisionId, p2.revisionId],
+    usage: null,
     inputTruncated: false,
     lowSignal: false,
     decision: { outcome: winner?.effectiveAction ?? null, winner, matches },
@@ -189,6 +190,7 @@ describe('PgPolicyEvaluationStore', () => {
       failureCode: 'unavailable',
       ruleEvaluationId: f.ruleEvaluationId,
       checkedRevisionIds: [p1.revisionId, p2.revisionId],
+      usage: null,
     });
     expect(failed).toMatchObject({
       status: 'failed',
@@ -312,6 +314,7 @@ describe('PgPolicyEvaluationStore', () => {
       failureCode: 'timeout',
       ruleEvaluationId: c.ruleEvaluationId,
       checkedRevisionIds: [p1.revisionId],
+      usage: null,
     });
     const m1 = match(p1, 'low', 'flag');
     const m2 = match(p2, 'low', 'flag');

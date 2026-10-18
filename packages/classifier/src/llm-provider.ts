@@ -1,6 +1,12 @@
 import { generateText, Output, type LanguageModel } from 'ai';
 import { z } from 'zod';
-import { mapProviderError, ProviderError, type PreparedInput } from '@feedbouncer/ai';
+import {
+  mapProviderError,
+  ProviderError,
+  toModelUsage,
+  type ModelUsage,
+  type PreparedInput,
+} from '@feedbouncer/ai';
 import {
   rawClassificationSchema,
   type ClassifierProvider,
@@ -61,6 +67,7 @@ export class LlmClassifierProvider implements ClassifierProvider {
 
   async classify(input: PreparedInput, signal: AbortSignal): Promise<RawClassification> {
     let output: unknown;
+    let usage: ModelUsage;
     try {
       const r = await generateText({
         model: this.o.model,
@@ -74,11 +81,12 @@ export class LlmClassifierProvider implements ClassifierProvider {
         abortSignal: signal,
       });
       output = r.output;
+      usage = toModelUsage(r.usage);
     } catch (e) {
       throw mapProviderError(e);
     }
     const parsed = rawClassificationSchema.safeParse(output);
-    if (!parsed.success) throw new ProviderError('invalid_output', true);
-    return parsed.data;
+    if (!parsed.success) throw new ProviderError('invalid_output', true, usage);
+    return { ...parsed.data, usage };
   }
 }

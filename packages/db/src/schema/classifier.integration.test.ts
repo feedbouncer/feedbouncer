@@ -159,7 +159,7 @@ describe('classifier schema', () => {
     await insertClassified({ sha: sha(9), tokens: [0, 0, 0] });
     const cols = ['input_tokens', 'output_tokens', 'cache_read_tokens'];
     for (const [i, col] of cols.entries()) {
-      const tokens = [null, null, null];
+      const tokens: Array<number | null> = [null, null, null];
       tokens[i] = -1;
       await expect(insertClassified({ sha: sha(10 + i), tokens })).rejects.toThrow(
         new RegExp(`comment_classification_${col}_check`),

@@ -223,6 +223,11 @@ what it would have done and waits for a person.
 evaluation ran. `rule_evaluation.also_matched_rule_ids uuid[]` lists the other
 rules that matched beside the winner (at most 50).
 
+`comment_classification` and `policy_evaluation` each have nullable
+`input_tokens`, `output_tokens` and `cache_read_tokens integer` columns (each
+`>= 0`): the token counts the provider reported for that evaluation. They are
+NULL when the provider reports none, and for reused scores and built-in results.
+
 `action_suggestion` is what automation would have done to one comment. Status is
 `pending`, `approved`, `dismissed`, `expired`, `not_applicable` or `withdrawn`;
 `decided_at` is set exactly when the status is not `pending`. At most one

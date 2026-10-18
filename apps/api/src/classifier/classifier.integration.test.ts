@@ -84,6 +84,7 @@ async function seedClassified(
       sha: hash,
       triggerKey,
       status: 'unclassified',
+      usage: null,
       unclassifiedReason: 'timeout',
       input,
     });
@@ -108,6 +109,7 @@ async function seedClassified(
     languageSupported: true,
     input,
     scoresReused: false,
+    usage: null,
     ruleEvaluationId: ev.rows[0].id,
     ruleDecided: false,
     policy: DEFAULT_THRESHOLDS,

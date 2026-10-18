@@ -178,7 +178,9 @@ CLASSIFIER_BASE_URL=http://ollama:11434/v1  CLASSIFIER_ALLOW_HTTP=true
   and its answer is validated against a fixed schema.
 - The model's free text is never stored. A decision stores the seven scores,
   the language, the provider and model, the prompt version and a generated
-  readable reason built from category names and numbers.
+  readable reason built from category names and numbers. Token counts reported
+  by the provider are stored per evaluation, and are null when the provider
+  doesn't report them.
 - Logs carry identifiers only. API keys are read from the environment or a
   mounted secret file and are never logged or returned by the API.
 - Use a self-hosted `openai_compatible` endpoint if comment text must not leave

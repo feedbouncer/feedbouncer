@@ -10,8 +10,8 @@ const input = (text: string) => ({
   inputChars: text.length,
 });
 const usage = {
-  inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
-  outputTokens: { total: 20, text: 20, reasoning: undefined },
+  inputTokens: { total: 80, noCache: 80, cacheRead: undefined, cacheWrite: undefined },
+  outputTokens: { total: 40, text: 40, reasoning: undefined },
 };
 const scores = {
   spam: 0.91,
@@ -58,8 +58,21 @@ describe('LlmClassifierProvider', () => {
     const r = await provider(
       modelReturning(JSON.stringify({ scores, language: 'en' }), seen),
     ).classify(input('buy now'), new AbortController().signal);
-    expect(r).toEqual({ scores, language: 'en' });
+    expect(r).toEqual({
+      scores,
+      language: 'en',
+      usage: { inputTokens: 80, outputTokens: 40, cacheReadTokens: null },
+    });
     expect(JSON.stringify(seen[0])).not.toContain('buy now"},{"role":"system');
+  });
+  it('keeps token usage on invalid_output from our own validation', async () => {
+    const p = provider(
+      modelReturning(JSON.stringify({ scores: { ...scores, spam: 1.4 }, language: 'en' })),
+    );
+    await expect(p.classify(input('x'), new AbortController().signal)).rejects.toMatchObject({
+      code: 'invalid_output',
+      usage: { inputTokens: 80, outputTokens: 40 },
+    });
   });
   it('out-of-range output is invalid_output (retryable), not clamped', async () => {
     const p = provider(

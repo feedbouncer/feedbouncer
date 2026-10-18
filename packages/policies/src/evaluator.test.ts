@@ -10,7 +10,7 @@ import {
 } from './evaluator.js';
 
 const usage = {
-  inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+  inputTokens: { total: 100, noCache: 20, cacheRead: 80, cacheWrite: undefined },
   outputTokens: { total: 5, text: 5, reasoning: undefined },
 };
 function mock(text: string, seen: unknown[] = []) {
@@ -46,13 +46,16 @@ const textOf = (content: unknown) =>
     : (content as { type: string; text: string }[]).map((p) => p.text).join('');
 
 describe('LlmPolicyEvaluator', () => {
-  it('returns one verdict per key', async () => {
+  it('returns verdicts and usage', async () => {
     const r = await evaluator('{"results":{"p1":"clear_match","p2":"no_match"}}').evaluate(
       prepareInput('DM @promo for cheap followers'),
       policies,
       signal,
     );
-    expect(r).toEqual({ p1: 'clear_match', p2: 'no_match' });
+    expect(r).toEqual({
+      verdicts: { p1: 'clear_match', p2: 'no_match' },
+      usage: { inputTokens: 100, outputTokens: 5, cacheReadTokens: 80 },
+    });
   });
 
   it('keeps the comment out of the system prompt and JSON-encodes it in the user message (embedded instructions are data)', async () => {

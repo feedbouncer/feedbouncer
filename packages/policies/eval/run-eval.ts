@@ -65,7 +65,8 @@ for (const f of fixtures) {
   let single: Row['single'] = 'error';
   let batched: Row['batched'] = 'error';
   try {
-    single = (await evaluator.evaluate(input, [{ key: 'p1', text: f.policy }], signal)).p1!;
+    single = (await evaluator.evaluate(input, [{ key: 'p1', text: f.policy }], signal)).verdicts
+      .p1!;
   } catch (e) {
     console.error(`${f.id}: single call failed: ${msg(e)}`);
   }
@@ -81,7 +82,7 @@ for (const f of fixtures) {
       ],
       signal,
     );
-    batched = out.p2!;
+    batched = out.verdicts.p2!;
   } catch (e) {
     console.error(`${f.id}: batched call failed: ${msg(e)}`);
   }

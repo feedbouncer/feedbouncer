@@ -3,7 +3,7 @@
 // act on a comment, and these tests check that nothing else is written either.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type pg from 'pg';
-import { ProviderError } from '@feedbouncer/ai';
+import { ProviderError, UNKNOWN_USAGE } from '@feedbouncer/ai';
 import { BrandSlots, createPool, withTransaction } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { PgCommentStore } from '@feedbouncer/comments';
@@ -149,7 +149,7 @@ describe('policy_preview (dry run)', () => {
     const own = await seedCommentRow(db.c, t, 'our own reply', { own: true });
     await evaluateRulesFor(ruleEvaluations, own, 'no_match');
     await candidate(t, { ageDays: 10 });
-    evaluator.evaluate.mockResolvedValue({ p1: 'clear_match' });
+    evaluator.evaluate.mockResolvedValue({ verdicts: { p1: 'clear_match' }, usage: UNKNOWN_USAGE });
     const before = await counts(t);
     const statesBefore = await platformStates(t);
 
@@ -175,7 +175,10 @@ describe('policy_preview (dry run)', () => {
   it('proposes flag for a possible match and says why', async () => {
     const t = await seedTenant(db.c, `pv${++n}`);
     await candidate(t);
-    evaluator.evaluate.mockResolvedValue({ p1: 'possible_match' });
+    evaluator.evaluate.mockResolvedValue({
+      verdicts: { p1: 'possible_match' },
+      usage: UNKNOWN_USAGE,
+    });
     const pv = await create(t);
     await makeJob().handle(ctxFor(t, t.connectionId), { previewId: pv.id, chunk: 0 });
     const v = await previews.view(brandOf(t), pv.id);
@@ -186,7 +189,7 @@ describe('policy_preview (dry run)', () => {
   it('records no_match without a proposed action', async () => {
     const t = await seedTenant(db.c, `pv${++n}`);
     await candidate(t);
-    evaluator.evaluate.mockResolvedValue({ p1: 'no_match' });
+    evaluator.evaluate.mockResolvedValue({ verdicts: { p1: 'no_match' }, usage: UNKNOWN_USAGE });
     const pv = await create(t);
     await makeJob().handle(ctxFor(t, t.connectionId), { previewId: pv.id, chunk: 0 });
     const v = await previews.view(brandOf(t), pv.id);
@@ -209,7 +212,7 @@ describe('policy_preview (dry run)', () => {
   it('processes 10 per job and enqueues the next chunk for the same connection', async () => {
     const t = await seedTenant(db.c, `pv${++n}`);
     for (let i = 0; i < 25; i++) await candidate(t);
-    evaluator.evaluate.mockResolvedValue({ p1: 'no_match' });
+    evaluator.evaluate.mockResolvedValue({ verdicts: { p1: 'no_match' }, usage: UNKNOWN_USAGE });
     const pv = await create(t);
     const job = makeJob();
     const ctx = ctxFor(t, t.connectionId);
@@ -234,8 +237,8 @@ describe('policy_preview (dry run)', () => {
     const t = await seedTenant(db.c, `pv${++n}`);
     for (let i = 0; i < 3; i++) await candidate(t);
     evaluator.evaluate
-      .mockResolvedValueOnce({ p1: 'no_match' })
-      .mockResolvedValueOnce({ p1: 'no_match' })
+      .mockResolvedValueOnce({ verdicts: { p1: 'no_match' }, usage: UNKNOWN_USAGE })
+      .mockResolvedValueOnce({ verdicts: { p1: 'no_match' }, usage: UNKNOWN_USAGE })
       .mockRejectedValueOnce(new ProviderError('unavailable', true));
     const pv = await create(t);
     const job = makeJob();
@@ -245,7 +248,7 @@ describe('policy_preview (dry run)', () => {
     ).rejects.toMatchObject({ kind: 'retryable', code: 'policy_unavailable' });
     expect(await previews.view(brandOf(t), pv.id)).toMatchObject({ examined: 2, notChecked: 1 });
 
-    evaluator.evaluate.mockResolvedValue({ p1: 'no_match' });
+    evaluator.evaluate.mockResolvedValue({ verdicts: { p1: 'no_match' }, usage: UNKNOWN_USAGE });
     await job.handle(ctxFor(t, t.connectionId, 2), { previewId: pv.id, chunk: 0 });
     expect(evaluator.evaluate).toHaveBeenCalledTimes(4);
     expect(await previews.view(brandOf(t), pv.id)).toMatchObject({ status: 'done', examined: 3 });
@@ -256,7 +259,7 @@ describe('policy_preview (dry run)', () => {
     for (let i = 0; i < 2; i++) await candidate(t);
     evaluator.evaluate
       .mockRejectedValueOnce(new ProviderError('unavailable', true))
-      .mockResolvedValueOnce({ p1: 'clear_match' });
+      .mockResolvedValueOnce({ verdicts: { p1: 'clear_match' }, usage: UNKNOWN_USAGE });
     const pv = await create(t);
     await makeJob().handle(ctxFor(t, t.connectionId, 5), { previewId: pv.id, chunk: 0 });
     const v = await previews.view(brandOf(t), pv.id);
@@ -278,7 +281,7 @@ describe('policy_preview (dry run)', () => {
   it('does not count skipped rows as not checked', async () => {
     const t = await seedTenant(db.c, `pv${++n}`);
     for (let i = 0; i < 2; i++) await candidate(t);
-    evaluator.evaluate.mockResolvedValue({ p1: 'no_match' });
+    evaluator.evaluate.mockResolvedValue({ verdicts: { p1: 'no_match' }, usage: UNKNOWN_USAGE });
     const pv = await create(t);
     await db.c.query(
       `UPDATE comment SET platform_state = 'deleted'
@@ -306,7 +309,7 @@ describe('policy_preview (dry run)', () => {
   it('stops with quota_exhausted when the monthly budget runs out', async () => {
     const t = await seedTenant(db.c, `pv${++n}`);
     for (let i = 0; i < 3; i++) await candidate(t);
-    evaluator.evaluate.mockResolvedValue({ p1: 'no_match' });
+    evaluator.evaluate.mockResolvedValue({ verdicts: { p1: 'no_match' }, usage: UNKNOWN_USAGE });
     const pv = await create(t);
     const r = await makeJob({ monthlyCallsPerBrand: 2 }).handle(ctxFor(t, t.connectionId), {
       previewId: pv.id,
@@ -380,7 +383,7 @@ describe('policy_preview (dry run)', () => {
     await candidate(t);
     await candidate(b);
     await candidate(b);
-    evaluator.evaluate.mockResolvedValue({ p1: 'no_match' });
+    evaluator.evaluate.mockResolvedValue({ verdicts: { p1: 'no_match' }, usage: UNKNOWN_USAGE });
     const pv = await create(t);
     expect(pv.connections.map((c) => c.connectionId).sort()).toEqual(
       [t.connectionId, b.connectionId].sort(),
