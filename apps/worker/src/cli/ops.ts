@@ -19,10 +19,12 @@ import {
   readUrl,
   resolveFileEnv,
 } from '@feedbouncer/service-runtime';
+import { BETA_STATUS_USAGE, betaStatusCommand } from './beta-status.js';
 import { ERASE_ORG_USAGE, EraseError, eraseOrgCommand } from './erase-org.js';
 import type { OpsCommand, OpsContext } from './ops-context.js';
 
 const COMMANDS: Readonly<Record<string, { run: OpsCommand; usage: string }>> = {
+  'beta-status': { run: betaStatusCommand, usage: BETA_STATUS_USAGE },
   'erase-org': { run: eraseOrgCommand, usage: ERASE_ORG_USAGE },
 };
 
@@ -76,6 +78,7 @@ async function main(argv: readonly string[]): Promise<number> {
   });
   const ctx: OpsContext = {
     log: silent,
+    env,
     out: (line) => process.stdout.write(`${line}\n`),
     pool,
     producer,
