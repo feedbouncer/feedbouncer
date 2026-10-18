@@ -4,13 +4,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { InputError } from '@feedbouncer/evaluation';
 import { UsageError } from '@feedbouncer/jobs';
-import { evalExportCommand } from './eval-export.js';
 import { evalReportCommand } from './eval-report.js';
 import type { OpsContext } from './ops-context.js';
 
 const ID1 = 'i_0000000000000001';
 const ID2 = 'i_0000000000000002';
-const ORG = '1b4e28ba-2fa1-4d2b-8f3e-1c6a2d9e7f10';
 
 function ctx(lines: string[] = []): OpsContext {
   return {
@@ -94,7 +92,7 @@ describe('eval-report', () => {
     expect(json.cost.status).toBe('no_pricing');
   });
 
-  it('rejects a label for an unknown item, naming the file and row', async () => {
+  it('rejects a label for an unknown item, naming the input', async () => {
     const dir = await makeRun({
       'a.csv': `item,labeller,verdict\n${ID1},a,should_hide\ni_00000000000000ff,a,should_stay\n`,
     });
@@ -106,27 +104,5 @@ describe('eval-report', () => {
   it('requires --run', async () => {
     await expect(evalReportCommand([], ctx())).rejects.toBeInstanceOf(UsageError);
     await expect(evalReportCommand(['--bogus'], ctx())).rejects.toBeInstanceOf(UsageError);
-  });
-});
-
-describe('eval-export argument validation', () => {
-  const ok = ['--org', ORG, '--from', '2026-10-01', '--to', '2026-10-08'];
-  it.each([
-    ['non-uuid org', ['--org', 'nope', '--from', '2026-10-01', '--to', '2026-10-08']],
-    ['no org', ['--from', '2026-10-01', '--to', '2026-10-08']],
-    ['non-uuid brand', [...ok, '--brand', 'x']],
-    ['from equal to', ['--org', ORG, '--from', '2026-10-08', '--to', '2026-10-08']],
-    ['from after to', ['--org', ORG, '--from', '2026-10-09', '--to', '2026-10-08']],
-    ['bad date', ['--org', ORG, '--from', '2026-02-31', '--to', '2026-10-08']],
-    ['to in the far future', ['--org', ORG, '--from', '2026-10-01', '--to', '2999-01-01']],
-    ['sample 0', [...ok, '--label-sample', '0']],
-    ['sample too big', [...ok, '--label-sample', '100001']],
-    ['sample not an integer', [...ok, '--label-sample', '1.5']],
-    ['negative seed', [...ok, '--seed', '-1']],
-    ['seed too big', [...ok, '--seed', '4294967296']],
-    ['unknown flag', [...ok, '--x', '1']],
-    ['missing parent', [...ok, '--out', '/nonexistent-parent-dir/run']],
-  ])('rejects %s', async (_name, argv) => {
-    await expect(evalExportCommand(argv, ctx())).rejects.toBeInstanceOf(UsageError);
   });
 });

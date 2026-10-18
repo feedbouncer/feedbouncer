@@ -233,26 +233,14 @@ describe('exportRun', () => {
     expect(run.items).toHaveLength(1);
   });
 
-  it('counts author-deleted comments and timing lost to retention', async () => {
+  it('counts author-deleted comments and hidden items without a timing breakdown', async () => {
     const t = await seedTenant(env.c, 'deleted');
     await seedEvalComment(env.c, t, { postedAt: day(1), state: 'deleted' });
     await seedHiddenTimeline(env.c, t, { postedAt: day(1) });
-    const o = await opts({
-      organizationIds: [t.organizationId],
-      now: new Date(day(1).getTime() + 3 * 86_400_000),
-      jobRetentionDays: 2,
-    });
-    const m = await exportRun(pool, o);
+    const m = await exportRun(pool, await opts({ organizationIds: [t.organizationId] }));
     expect(m.itemCount).toBe(1);
     expect(m.excludedAuthorDeleted).toBe(1);
     expect(m.timingUnavailableBeforeRetention).toBe(1);
-    const fresh = await exportRun(pool, await opts({ organizationIds: [t.organizationId] }));
-    expect(fresh.timingUnavailableBeforeRetention).toBe(0);
-    const recent = await exportRun(
-      pool,
-      await opts({ organizationIds: [t.organizationId], jobRetentionDays: 365 }),
-    );
-    expect(recent.timingUnavailableBeforeRetention).toBe(0);
   });
 
   it('end-to-end webhook timeline from real ledger rows', async () => {

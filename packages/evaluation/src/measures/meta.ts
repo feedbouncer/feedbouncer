@@ -20,9 +20,9 @@ export function metaComparison(
     if (item.cohort === 'review') reviewExcluded++;
     else if (row.meta_outcome === 'not_compared') notCompared++;
     else {
-      compared++;
       const verdict = gt.verdicts.get(item.item)?.verdict;
       if (!verdict || !item.judgedVersionAvailable) continue;
+      compared++;
       const fb = item.caughtByDecision;
       const m = row.meta_outcome === 'hidden';
       if (verdict === 'should_hide') {

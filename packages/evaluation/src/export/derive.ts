@@ -11,7 +11,6 @@ export type ActionFact = {
   actorType: string;
   ruleId: string | null;
   requestKey: string;
-  reversesActionId: string | null;
   createdAt: Date;
   completedAt: Date | null;
 };
@@ -60,9 +59,7 @@ export type DecisionFact = {
   category: string | null;
   ruleId: string | null;
   classificationId: string | null;
-  policyEvaluationId: string | null;
   reversal: boolean;
-  sequence: number;
 };
 
 export type SuggestionFact = {

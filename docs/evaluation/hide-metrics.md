@@ -88,7 +88,7 @@ You need shell access to the FeedBouncer worker and read access to its database.
 | `category` | no       | One of the label categories (see Labelling guide)              |
 | `role`     | no       | `labeller` (default) or `adjudicator`                          |
 
-The label sheet's own columns are `item`, `platform`, `text`, `labeller`, `verdict`, `category`, `role`, `note`; the report ignores `platform`, `text` and `note`. A labeller labelling the same comment twice, more than one adjudicator on one comment, an unknown `item`, or fewer than two labellers on a labelled comment is an error. The message names the file (and the row where one applies) but never repeats comment text.
+The label sheet's own columns are `item`, `platform`, `text`, `labeller`, `verdict`, `category`, `role`, `note`; the report ignores `platform`, `text` and `note`. A labeller labelling the same comment twice, more than one adjudicator on one comment, an unknown `item`, or fewer than two labellers on a labelled comment is an error. The message names the input (`labels`) and, for an offending comment, its pseudonymous item id; for malformed rows it names the file and row. It never repeats comment text.
 
 `meta.csv` (header required):
 

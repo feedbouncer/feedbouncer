@@ -35,7 +35,7 @@ export const TENANT_SQL = {
 
   actions: `
     SELECT id, comment_id, kind, status, outcome_code, actor_type, rule_id, request_key,
-           reverses_action_id, created_at, completed_at
+           created_at, completed_at
       FROM moderation_action
      WHERE organization_id = ANY($1::uuid[]) AND comment_id = ANY($2::uuid[])
        AND kind IN ('hide', 'unhide', 'delete')`,
@@ -59,13 +59,12 @@ export const TENANT_SQL = {
      WHERE organization_id = ANY($1::uuid[]) AND comment_id = ANY($2::uuid[])`,
 
   decisions: `
-    SELECT comment_id, outcome, mode, actor_type, category, rule_id, classification_id,
-           policy_evaluation_id, reversal, sequence::float8 AS sequence
+    SELECT comment_id, outcome, mode, actor_type, category, rule_id, classification_id, reversal
       FROM decision
      WHERE organization_id = ANY($1::uuid[]) AND comment_id = ANY($2::uuid[])`,
 
   suggestions: `
-    SELECT s.id, s.comment_id, s.status, s.created_at, s.decided_at,
+    SELECT s.comment_id, s.status, s.created_at, s.decided_at,
            (SELECT src.source_type FROM action_suggestion_source src
              WHERE src.organization_id = ANY($1::uuid[]) AND src.brand_id = s.brand_id AND src.suggestion_id = s.id
              ORDER BY src.created_at, src.id LIMIT 1) AS source_type
@@ -79,7 +78,7 @@ export const TENANT_SQL = {
 
   // Uses the (organization_id, idempotency_key) unique index.
   ledgers: `
-    SELECT idempotency_key, job_type, created_at, first_claimed_at, failures, crashes, deferrals
+    SELECT idempotency_key, created_at, first_claimed_at, failures, crashes, deferrals
       FROM job_ledger
      WHERE organization_id = ANY($1::uuid[]) AND idempotency_key = ANY($2::text[])`,
 } as const;
@@ -184,7 +183,7 @@ export type RelatedRows = {
   classifications: Map<string, ClassificationFact[]>;
   policyEvals: Map<string, PolicyEvalFact[]>;
   decisions: Map<string, DecisionFact[]>;
-  suggestions: Map<string, (SuggestionFact & { id: string })[]>;
+  suggestions: Map<string, SuggestionFact[]>;
 };
 
 /** One `= ANY($2)` query per related table for a page of comment ids. */
@@ -195,18 +194,75 @@ export async function relatedRows(
 ): Promise<RelatedRows> {
   const p = [orgs, ids];
   const [a, re, cl, pe, de, su] = await Promise.all([
-    pool.query(TENANT_SQL.actions, p),
-    pool.query(TENANT_SQL.ruleEvaluations, p),
-    pool.query(TENANT_SQL.classifications, p),
-    pool.query(TENANT_SQL.policyEvaluations, p),
-    pool.query(TENANT_SQL.decisions, p),
-    pool.query(TENANT_SQL.suggestions, p),
+    pool.query<{
+      comment_id: string;
+      id: string;
+      kind: string;
+      status: string;
+      outcome_code: string | null;
+      actor_type: string;
+      rule_id: string | null;
+      request_key: string;
+      created_at: Date;
+      completed_at: Date | null;
+    }>(TENANT_SQL.actions, p),
+    pool.query<{
+      comment_id: string;
+      created_at: Date;
+      sha: string;
+      status: string;
+      review_mode: boolean;
+    }>(TENANT_SQL.ruleEvaluations, p),
+    pool.query<{
+      comment_id: string;
+      created_at: Date;
+      status: string;
+      unclassified_reason: string | null;
+      provider: string | null;
+      model: string | null;
+      prompt_version: string | null;
+      scores_reused: boolean;
+      rule_decided: boolean;
+      language: string | null;
+      review_mode: boolean;
+      input_tokens: number | null;
+      output_tokens: number | null;
+      cache_read_tokens: number | null;
+    }>(TENANT_SQL.classifications, p),
+    pool.query<{
+      comment_id: string;
+      created_at: Date;
+      status: string;
+      failure_code: string | null;
+      provider: string | null;
+      model: string | null;
+      prompt_version: string | null;
+      review_mode: boolean;
+      input_tokens: number | null;
+      output_tokens: number | null;
+      cache_read_tokens: number | null;
+    }>(TENANT_SQL.policyEvaluations, p),
+    pool.query<{
+      comment_id: string;
+      outcome: string;
+      mode: string;
+      actor_type: string;
+      category: string | null;
+      rule_id: string | null;
+      classification_id: string | null;
+      reversal: boolean;
+    }>(TENANT_SQL.decisions, p),
+    pool.query<{
+      comment_id: string;
+      status: string;
+      created_at: Date;
+      decided_at: Date | null;
+      source_type: string | null;
+    }>(TENANT_SQL.suggestions, p),
   ]);
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  type Row = Record<string, any>;
   return {
     actions: group(
-      a.rows.map((x: Row) => ({
+      a.rows.map((x) => ({
         commentId: x.comment_id,
         id: x.id,
         kind: x.kind,
@@ -215,13 +271,12 @@ export async function relatedRows(
         actorType: x.actor_type,
         ruleId: x.rule_id,
         requestKey: x.request_key,
-        reversesActionId: x.reverses_action_id,
         createdAt: x.created_at,
         completedAt: x.completed_at,
       })),
     ),
     ruleEvals: group(
-      re.rows.map((x: Row) => ({
+      re.rows.map((x) => ({
         commentId: x.comment_id,
         createdAt: x.created_at,
         sha: x.sha,
@@ -230,7 +285,7 @@ export async function relatedRows(
       })),
     ),
     classifications: group(
-      cl.rows.map((x: Row) => ({
+      cl.rows.map((x) => ({
         commentId: x.comment_id,
         createdAt: x.created_at,
         status: x.status,
@@ -248,7 +303,7 @@ export async function relatedRows(
       })),
     ),
     policyEvals: group(
-      pe.rows.map((x: Row) => ({
+      pe.rows.map((x) => ({
         commentId: x.comment_id,
         createdAt: x.created_at,
         status: x.status,
@@ -263,7 +318,7 @@ export async function relatedRows(
       })),
     ),
     decisions: group(
-      de.rows.map((x: Row) => ({
+      de.rows.map((x) => ({
         commentId: x.comment_id,
         outcome: x.outcome,
         mode: x.mode,
@@ -271,15 +326,12 @@ export async function relatedRows(
         category: x.category,
         ruleId: x.rule_id,
         classificationId: x.classification_id,
-        policyEvaluationId: x.policy_evaluation_id,
         reversal: x.reversal,
-        sequence: Number(x.sequence),
       })),
     ),
     suggestions: group(
-      su.rows.map((x: Row) => ({
+      su.rows.map((x) => ({
         commentId: x.comment_id,
-        id: x.id,
         status: x.status,
         createdAt: x.created_at,
         decidedAt: x.decided_at,
@@ -287,7 +339,6 @@ export async function relatedRows(
       })),
     ),
   };
-  /* eslint-enable @typescript-eslint/no-explicit-any */
 }
 
 export async function ruleKinds(
@@ -303,17 +354,14 @@ export async function ruleKinds(
   return new Map(r.rows.filter((x) => x.kind !== null).map((x) => [x.id, x.kind!]));
 }
 
-export type LedgerHit = LedgerFact & { jobType: string };
-
 export async function ledgersByKey(
   pool: pg.Pool,
   orgs: readonly string[],
   keys: readonly string[],
-): Promise<Map<string, LedgerHit>> {
+): Promise<Map<string, LedgerFact>> {
   if (keys.length === 0) return new Map();
   const r = await pool.query<{
     idempotency_key: string;
-    job_type: string;
     created_at: Date;
     first_claimed_at: Date | null;
     failures: number;
@@ -324,7 +372,6 @@ export async function ledgersByKey(
     r.rows.map((x) => [
       x.idempotency_key,
       {
-        jobType: x.job_type,
         createdAt: x.created_at,
         firstClaimedAt: x.first_claimed_at,
         failures: x.failures,

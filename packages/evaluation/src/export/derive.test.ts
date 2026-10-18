@@ -25,7 +25,6 @@ const action = (o: Partial<ActionFact> & { id: string; createdAt: Date }): Actio
   actorType: 'classifier',
   ruleId: null,
   requestKey: `clf:c1`,
-  reversesActionId: null,
   completedAt: o.status === 'pending' ? null : new Date(o.createdAt.getTime() + 2000),
   ...o,
 });
@@ -76,9 +75,7 @@ const decision = (o: Partial<DecisionFact> = {}): DecisionFact => ({
   category: 'scam_phishing',
   ruleId: null,
   classificationId: 'c1',
-  policyEvaluationId: null,
   reversal: false,
-  sequence: 1,
   ...o,
 });
 
@@ -227,7 +224,6 @@ describe('deriveItem', () => {
             kind: 'unhide',
             actorType: 'user',
             requestKey: 'unhide:x',
-            reversesActionId: 'a1',
             createdAt: at(100),
           }),
           action({ id: 'a2', createdAt: at(200), requestKey: 'clf:c2' }),

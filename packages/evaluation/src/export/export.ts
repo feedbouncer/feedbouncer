@@ -30,8 +30,6 @@ export type ExportOptions = {
   jobRetentionDays: number;
 };
 
-const DAY_MS = 86_400_000;
-
 /** Exports a run with a fresh random salt that lives only in this process's memory. */
 export function exportRun(pool: pg.Pool, o: ExportOptions): Promise<RunManifest> {
   return exportRunWithSalt(pool, o, randomBytes(32));
@@ -52,7 +50,6 @@ export async function exportRunWithSalt(
 
   const pseudonym = pseudonymiser(salt);
   const scope = { orgs: o.organizationIds, brands: o.brandIds, from: o.from, to: o.to };
-  const retentionCutoff = o.now.getTime() - o.jobRetentionDays * DAY_MS;
 
   const items: EvalItem[] = [];
   const sheet = new Map<string, LabelSheetRow>();
@@ -113,11 +110,8 @@ export async function exportRunWithSalt(
       ...ingestKey.values(),
       ...execKeys.values(),
     ]);
-    const ledgerFact = (key: string | undefined): LedgerFact | null => {
-      const h = key ? ledgers.get(key) : undefined;
-      if (!h) return null;
-      return h;
-    };
+    const ledgerFact = (key: string | undefined): LedgerFact | null =>
+      (key && ledgers.get(key)) || null;
 
     for (const c of page) {
       const actions = rel.actions.get(c.id) ?? [];
@@ -158,7 +152,7 @@ export async function exportRunWithSalt(
         continue;
       }
       items.push(item);
-      if (item.outcome === 'hidden' && c.postedAt.getTime() < retentionCutoff)
+      if (item.outcome === 'hidden' && item.timing?.breakdown == null)
         timingUnavailableBeforeRetention++;
       for (const x of facts.classifications)
         if (x.promptVersion) promptVersions.add(x.promptVersion);
