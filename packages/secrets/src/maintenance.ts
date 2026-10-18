@@ -156,14 +156,20 @@ export interface SecretsStatus {
 }
 
 // Credential-like columns that are not encrypted envelopes. The NOT IN list holds the hash-only
-// columns the schema conventions test allows; maintenance.integration.test.ts fails if this
-// query reports anything on the migrated schema.
+// and non-credential columns listed in ALLOWED_CREDENTIAL_COLUMNS (conventions.integration.test.ts);
+// maintenance.integration.test.ts fails if this query reports anything on the migrated schema.
 const PLAINTEXT_COLUMNS_SQL = `
 SELECT c.relname || '.' || a.attname AS col FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
  WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped
    AND a.attname ~ '(token|secret|password|api_key|credential)'
    AND NOT (a.attname LIKE 'encrypted\\_%' AND a.atttypid = 'bytea'::regtype)
-   AND (c.relname || '.' || a.attname) NOT IN ('auth_account.password_hash', 'auth_session.token', 'invitation.token_hash')
+   AND (c.relname || '.' || a.attname) NOT IN (
+     'auth_account.password_hash', 'auth_session.token', 'invitation.token_hash',
+     'comment_classification.input_tokens', 'comment_classification.output_tokens',
+     'comment_classification.cache_read_tokens', 'policy_evaluation.input_tokens',
+     'policy_evaluation.output_tokens', 'policy_evaluation.cache_read_tokens',
+     'api_key.secret_sha256', 'moderation_action.actor_api_key_id',
+     'api_idempotency_record.api_key_id', 'webhook_endpoint.created_by_api_key_id')
  ORDER BY 1`;
 
 export async function secretsStatus(db: Queryable, keys: Keyring): Promise<SecretsStatus> {
