@@ -280,9 +280,6 @@ importers:
       '@feedbouncer/authz':
         specifier: workspace:*
         version: link:../../packages/authz
-      '@feedbouncer/mailer':
-        specifier: workspace:*
-        version: link:../../packages/mailer
       '@feedbouncer/reports':
         specifier: workspace:*
         version: link:../../packages/reports
