@@ -335,6 +335,9 @@ importers:
       '@feedbouncer/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@feedbouncer/evaluation':
+        specifier: workspace:*
+        version: link:../../packages/evaluation
       '@feedbouncer/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs

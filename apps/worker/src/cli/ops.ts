@@ -1,6 +1,7 @@
 import { LIFECYCLE_JOB, enqueueOnly } from '@feedbouncer/comments';
 import { isPlatform, type ConnectorRegistry } from '@feedbouncer/connectors';
 import { createPool } from '@feedbouncer/db';
+import { InputError } from '@feedbouncer/evaluation';
 import {
   JobMetrics,
   JobProducer,
@@ -21,11 +22,15 @@ import {
 } from '@feedbouncer/service-runtime';
 import { BETA_STATUS_USAGE, betaStatusCommand } from './beta-status.js';
 import { ERASE_ORG_USAGE, EraseError, eraseOrgCommand } from './erase-org.js';
+import { EVAL_EXPORT_USAGE, evalExportCommand } from './eval-export.js';
+import { EVAL_REPORT_USAGE, evalReportCommand } from './eval-report.js';
 import type { OpsCommand, OpsContext } from './ops-context.js';
 
 const COMMANDS: Readonly<Record<string, { run: OpsCommand; usage: string }>> = {
   'beta-status': { run: betaStatusCommand, usage: BETA_STATUS_USAGE },
   'erase-org': { run: eraseOrgCommand, usage: ERASE_ORG_USAGE },
+  'eval-export': { run: evalExportCommand, usage: EVAL_EXPORT_USAGE },
+  'eval-report': { run: evalReportCommand, usage: EVAL_REPORT_USAGE },
 };
 
 const silent = { debug() {}, info() {}, warn() {}, error() {} };
@@ -98,7 +103,7 @@ async function main(argv: readonly string[]): Promise<number> {
 try {
   process.exitCode = await main(process.argv.slice(2));
 } catch (err) {
-  if (err instanceof UsageError) {
+  if (err instanceof UsageError || err instanceof InputError) {
     process.stderr.write(`ops: ${err.message}\n`);
     process.exitCode = 2;
   } else if (err instanceof EraseError) {
