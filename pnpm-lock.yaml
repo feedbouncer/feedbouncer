@@ -875,6 +875,25 @@ importers:
         specifier: 8.23.1
         version: 8.23.1
 
+  packages/public-api:
+    dependencies:
+      '@feedbouncer/db':
+        specifier: workspace:*
+        version: link:../db
+      '@feedbouncer/service-runtime':
+        specifier: workspace:*
+        version: link:../service-runtime
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+
   packages/reports:
     dependencies:
       '@feedbouncer/actions':

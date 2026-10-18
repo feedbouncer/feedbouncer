@@ -52,6 +52,7 @@ pnpm test
 | `packages/reports`             | Weekly email report: metrics, scheduling, rendering, delivery and unsubscribe links                          |
 | `packages/evaluation`          | Evaluation runs: false-hide rate, time to hide and cost per 1,000 comments from exported items and labels    |
 | `packages/policies`            | Plain-language custom policies: validation, decisions, model evaluation, previews and runs                   |
+| `packages/public-api`          | Public REST API: API key generation, hashed storage and authentication                                       |
 | `packages/placeholder`         | Minimal package used as the template for new packages                                                        |
 | `packages/secrets`             | Envelope encryption for stored credentials and key management                                                |
 | `packages/service-runtime`     | Shared service startup, configuration, health and error handling                                             |

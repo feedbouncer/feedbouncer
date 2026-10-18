@@ -34,6 +34,13 @@ describe('createLogger', () => {
 });
 
 describe('redact', () => {
+  it('masks bare API key and webhook secret values', () => {
+    const key = redact(`key fbk_abcdefghijklmnop_${'A'.repeat(43)} used`);
+    expect(key).not.toContain('AAAA');
+    expect(key).toBe('key [redacted] used');
+    expect(redact(`whsec_${'B'.repeat(44)}`)).not.toContain('BBBB');
+  });
+
   it('replaces userinfo in URLs', () => {
     expect(redact('postgresql://fb:secret@postgres:5432/db')).toBe(
       'postgresql://[redacted]@postgres:5432/db',
