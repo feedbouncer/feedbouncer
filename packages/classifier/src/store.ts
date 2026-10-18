@@ -30,6 +30,8 @@ export type ClassificationRecord =
   | (Base & {
       status: 'unclassified';
       unclassifiedReason: UnclassifiedReason;
+      provider: string;
+      model: string;
       input: PreparedInput;
       usage: ModelUsage | null;
     })
@@ -160,6 +162,7 @@ export class PgClassificationStore {
   /** Null when the insert race was lost or the comment is not in this connection's scope. */
   async record(scope: ConnectionScope, r: ClassificationRecord): Promise<ClassificationRow | null> {
     const classified = r.status === 'classified' ? r : null;
+    const called = r.status === 'skipped' ? null : r;
     const input = r.status === 'skipped' ? null : (r.input ?? null);
     const usage = r.status === 'skipped' ? null : r.usage;
     const outcome = classified && !classified.ruleDecided ? classified.verdict.outcome : null;
@@ -175,8 +178,8 @@ export class PgClassificationStore {
       r.status,
       r.status === 'skipped' ? r.skipReason : null,
       r.status === 'unclassified' ? r.unclassifiedReason : null,
-      classified?.provider ?? null,
-      classified?.model ?? null,
+      called?.provider ?? null,
+      called?.model ?? null,
       classified?.promptVersion ?? null,
       classified ? JSON.stringify(roundScores(classified.scores)) : null,
       classified?.language ?? null,

@@ -7,31 +7,22 @@ SET LOCAL lock_timeout = '10s';
 ALTER TABLE job_ledger
   ADD COLUMN first_claimed_at timestamptz(3),
   ADD COLUMN last_claimed_at timestamptz(3),
-  ADD CONSTRAINT job_ledger_claimed_at_check CHECK ((first_claimed_at IS NULL) = (last_claimed_at IS NULL)) NOT VALID;
+  ADD CONSTRAINT job_ledger_claimed_at_check CHECK ((first_claimed_at IS NULL) = (last_claimed_at IS NULL));
 
 ALTER TABLE comment_classification
   ADD COLUMN input_tokens integer,
   ADD COLUMN output_tokens integer,
   ADD COLUMN cache_read_tokens integer,
-  ADD CONSTRAINT comment_classification_input_tokens_check CHECK (input_tokens IS NULL OR input_tokens >= 0) NOT VALID,
-  ADD CONSTRAINT comment_classification_output_tokens_check CHECK (output_tokens IS NULL OR output_tokens >= 0) NOT VALID,
-  ADD CONSTRAINT comment_classification_cache_read_tokens_check CHECK (cache_read_tokens IS NULL OR cache_read_tokens >= 0) NOT VALID;
+  ADD CONSTRAINT comment_classification_input_tokens_check CHECK (input_tokens IS NULL OR input_tokens >= 0),
+  ADD CONSTRAINT comment_classification_output_tokens_check CHECK (output_tokens IS NULL OR output_tokens >= 0),
+  ADD CONSTRAINT comment_classification_cache_read_tokens_check CHECK (cache_read_tokens IS NULL OR cache_read_tokens >= 0);
 
 ALTER TABLE policy_evaluation
   ADD COLUMN input_tokens integer,
   ADD COLUMN output_tokens integer,
   ADD COLUMN cache_read_tokens integer,
-  ADD CONSTRAINT policy_evaluation_input_tokens_check CHECK (input_tokens IS NULL OR input_tokens >= 0) NOT VALID,
-  ADD CONSTRAINT policy_evaluation_output_tokens_check CHECK (output_tokens IS NULL OR output_tokens >= 0) NOT VALID,
-  ADD CONSTRAINT policy_evaluation_cache_read_tokens_check CHECK (cache_read_tokens IS NULL OR cache_read_tokens >= 0) NOT VALID;
-
--- Validated separately so the ADD does not scan the tables under a long lock.
-ALTER TABLE job_ledger VALIDATE CONSTRAINT job_ledger_claimed_at_check;
-ALTER TABLE comment_classification VALIDATE CONSTRAINT comment_classification_input_tokens_check;
-ALTER TABLE comment_classification VALIDATE CONSTRAINT comment_classification_output_tokens_check;
-ALTER TABLE comment_classification VALIDATE CONSTRAINT comment_classification_cache_read_tokens_check;
-ALTER TABLE policy_evaluation VALIDATE CONSTRAINT policy_evaluation_input_tokens_check;
-ALTER TABLE policy_evaluation VALIDATE CONSTRAINT policy_evaluation_output_tokens_check;
-ALTER TABLE policy_evaluation VALIDATE CONSTRAINT policy_evaluation_cache_read_tokens_check;
+  ADD CONSTRAINT policy_evaluation_input_tokens_check CHECK (input_tokens IS NULL OR input_tokens >= 0),
+  ADD CONSTRAINT policy_evaluation_output_tokens_check CHECK (output_tokens IS NULL OR output_tokens >= 0),
+  ADD CONSTRAINT policy_evaluation_cache_read_tokens_check CHECK (cache_read_tokens IS NULL OR cache_read_tokens >= 0);
 
 COMMIT;

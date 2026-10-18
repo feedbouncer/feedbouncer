@@ -58,7 +58,7 @@ You need shell access to the FeedBouncer worker and read access to its database.
    pnpm ops eval-export --org <uuid> [--org <uuid>]... [--brand <uuid>]... --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--label-sample <n>] [--seed <int>] [--out <dir>]
    ```
 
-   The run directory defaults to `tmp/eval/<UTC yyyymmddThhmmssZ>` (git-ignored; the default parent is created if missing, an explicit `--out` parent must already exist). `--label-sample <n>` puts a random sample of `n` comments in the label sheet instead of all of them, and `--seed` makes the sample repeatable. The directory (mode 0700) gets `manifest.json`, `items.jsonl` (one pseudonymous record per comment, no text) and `label-sheet.csv` (comment text, blind to outcomes).
+   The run directory defaults to `tmp/eval/<UTC yyyymmddThhmmssZ>` under the directory you ran `pnpm ops` from (relative `--out` and `--run` paths are resolved from there too) (git-ignored; the default parent is created if missing, an explicit `--out` parent must already exist). `--label-sample <n>` puts a random sample of `n` comments in the label sheet instead of all of them, and `--seed` makes the sample repeatable. The directory (mode 0700) gets `manifest.json`, `items.jsonl` (one pseudonymous record per comment, no text) and `label-sheet.csv` (comment text, blind to outcomes).
 
 2. **Label.** Each labeller copies `label-sheet.csv` to `labels/<name>.csv` in the run directory and fills it in without seeing anyone else's labels. At least two labellers must label every comment; an adjudicator settles ties. See Labelling guide.
 

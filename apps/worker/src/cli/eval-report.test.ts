@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { InputError } from '@feedbouncer/evaluation';
 import { UsageError } from '@feedbouncer/jobs';
@@ -14,6 +14,7 @@ function ctx(lines: string[] = []): OpsContext {
   return {
     log: { debug() {}, info() {}, warn() {}, error() {} },
     env: {},
+    cwd: process.cwd(),
     out: (l) => lines.push(l),
     pool: () => {
       throw new Error('database must not be used');
@@ -90,6 +91,19 @@ describe('eval-report', () => {
       cost: { status: string };
     };
     expect(json.cost.status).toBe('no_pricing');
+  });
+
+  it('resolves a relative --run against the invocation directory', async () => {
+    const dir = await makeRun({
+      'a.csv': `item,labeller,verdict\n${ID1},a,should_hide\n${ID2},a,should_stay\n`,
+      'b.csv': `item,labeller,verdict\n${ID1},b,should_hide\n${ID2},b,should_stay\n`,
+    });
+    const lines: string[] = [];
+    const relative = basename(dir);
+    expect(await evalReportCommand(['--run', relative], { ...ctx(lines), cwd: dirname(dir) })).toBe(
+      0,
+    );
+    expect(lines).toEqual([join(dir, 'report.md')]);
   });
 
   it('rejects a label for an unknown item, naming the input', async () => {

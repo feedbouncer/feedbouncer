@@ -188,6 +188,8 @@ describe('PgPolicyEvaluationStore', () => {
       triggerKey: 'ingest',
       status: 'failed',
       failureCode: 'unavailable',
+      provider: 'openai',
+      model: 'gpt-test',
       ruleEvaluationId: f.ruleEvaluationId,
       checkedRevisionIds: [p1.revisionId, p2.revisionId],
       usage: null,
@@ -204,8 +206,8 @@ describe('PgPolicyEvaluationStore', () => {
       [failed!.id],
     );
     expect(fr.rows[0]).toEqual({
-      provider: null,
-      model: null,
+      provider: 'openai',
+      model: 'gpt-test',
       checked_revision_ids: [p1.revisionId, p2.revisionId],
     });
     expect(await decisionsFor(f.commentId)).toEqual([]);
@@ -312,6 +314,8 @@ describe('PgPolicyEvaluationStore', () => {
       triggerKey: 'ingest',
       status: 'failed',
       failureCode: 'timeout',
+      provider: 'openai',
+      model: 'gpt-test',
       ruleEvaluationId: c.ruleEvaluationId,
       checkedRevisionIds: [p1.revisionId],
       usage: null,

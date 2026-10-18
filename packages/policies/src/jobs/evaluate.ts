@@ -122,6 +122,8 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
       ...base,
       status: 'failed',
       failureCode,
+      provider: d.evaluator.id,
+      model: d.evaluator.model,
       ruleEvaluationId: ruleEval.id,
       checkedRevisionIds,
       usage,

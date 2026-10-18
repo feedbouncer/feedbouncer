@@ -114,6 +114,8 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
             ...base,
             status: 'unclassified',
             unclassifiedReason: 'disabled',
+            provider,
+            model,
             input,
             usage: null,
           };
@@ -122,6 +124,8 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
             ...base,
             status: 'unclassified',
             unclassifiedReason: 'queue_timeout',
+            provider,
+            model,
             input,
             usage: null,
           };
@@ -142,6 +146,8 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
             ...base,
             status: 'unclassified',
             unclassifiedReason: err.code,
+            provider,
+            model,
             input,
             usage: err.usage,
           };

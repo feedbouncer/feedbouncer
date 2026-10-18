@@ -84,6 +84,8 @@ async function seedClassified(
       sha: hash,
       triggerKey,
       status: 'unclassified',
+      provider: 'openai',
+      model: 'gpt-test',
       usage: null,
       unclassifiedReason: 'timeout',
       input,

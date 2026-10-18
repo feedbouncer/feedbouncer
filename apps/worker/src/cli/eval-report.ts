@@ -18,7 +18,7 @@ export const evalReportCommand: OpsCommand = async (argv, ctx) => {
     throw new UsageError('invalid arguments');
   }
   if (!run) throw new UsageError('--run is required');
-  const dir = resolve(run);
+  const dir = resolve(ctx.cwd, run);
 
   const report = buildReport(await readRun(dir));
   const markdownPath = join(dir, 'report.md');

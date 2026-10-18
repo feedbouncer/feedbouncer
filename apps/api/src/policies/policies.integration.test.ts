@@ -644,6 +644,8 @@ describe('decision log and evaluation', () => {
       { organizationId: o().orgId, brandId: o().brandId, connectionId: failed.connectionId },
       {
         status: 'failed',
+        provider: 'openai',
+        model: 'gpt-test',
         commentId: failed.commentId,
         sha: failed.sha,
         triggerKey: 'ingest',
@@ -657,6 +659,8 @@ describe('decision log and evaluation', () => {
     expect(r.status).toBe(200);
     expect(r.body.evaluation).toMatchObject({
       status: 'failed',
+      provider: 'openai',
+      model: 'gpt-test',
       failureCode: 'unavailable',
       matches: [],
     });

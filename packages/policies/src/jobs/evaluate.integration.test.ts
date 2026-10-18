@@ -539,8 +539,8 @@ describe('policy_evaluate', () => {
     expect(await evaluationFor(c)).toMatchObject({
       status: 'failed',
       failure_code: 'unavailable',
-      provider: null,
-      model: null,
+      provider: 'openai',
+      model: 'gpt-test',
     });
     expect(await decisionsFor(c, 'policy')).toEqual([]);
     expect(actions.calls).toEqual([]);

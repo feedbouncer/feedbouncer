@@ -26,6 +26,7 @@ afterAll(async () => {
 const ctx = (lines: string[], withPool: boolean): OpsContext => ({
   log: { debug() {}, info() {}, warn() {}, error() {} },
   env: {},
+  cwd: process.cwd(),
   out: (l) => lines.push(l),
   pool: () => {
     if (!withPool) throw new Error('database must not be used');

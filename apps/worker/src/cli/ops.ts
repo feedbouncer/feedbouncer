@@ -86,6 +86,7 @@ async function main(argv: readonly string[]): Promise<number> {
   const ctx: OpsContext = {
     log: silent,
     env,
+    cwd: env.INIT_CWD ?? process.cwd(),
     out: (line) => process.stdout.write(`${line}\n`),
     pool,
     producer,

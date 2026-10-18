@@ -28,6 +28,8 @@ export type EvaluationRecord =
   | (Base & {
       status: 'failed';
       failureCode: FailureCode;
+      provider: string;
+      model: string;
       ruleEvaluationId: string;
       checkedRevisionIds: readonly string[];
       usage: ModelUsage | null;
@@ -137,6 +139,7 @@ export class PgPolicyEvaluationStore {
   async record(scope: ConnectionScope, r: EvaluationRecord): Promise<EvaluationRow | null> {
     const ev = r.status === 'evaluated' ? r : null;
     const usage = r.status === 'skipped' ? null : r.usage;
+    const called = r.status === 'skipped' ? null : r;
     const winner = ev?.decision.winner ?? null;
     const outcome = ev?.decision.outcome ?? null;
     if ((outcome === null) !== (winner === null))
@@ -167,8 +170,8 @@ export class PgPolicyEvaluationStore {
           r.status,
           r.status === 'skipped' ? r.skipReason : null,
           r.status === 'failed' ? r.failureCode : null,
-          ev?.provider ?? null,
-          ev?.model ?? null,
+          called?.provider ?? null,
+          called?.model ?? null,
           ev?.promptVersion ?? null,
           r.status === 'skipped' ? [] : [...r.checkedRevisionIds],
           ev?.inputTruncated ?? null,

@@ -241,6 +241,8 @@ describe('PgClassificationStore', () => {
       triggerKey: 'ingest',
       status: 'unclassified',
       usage: null,
+      provider: 'openai',
+      model: 'gpt-test',
       unclassifiedReason: 'timeout',
       input: prepareInput(c.body),
     });
@@ -248,7 +250,8 @@ describe('PgClassificationStore', () => {
       status: 'unclassified',
       outcome: null,
       scores: null,
-      provider: null,
+      provider: 'openai',
+      model: 'gpt-test',
       triggers: [],
     });
     expect((await decisions(c.id)).rows).toHaveLength(0);
@@ -329,6 +332,8 @@ describe('PgClassificationStore', () => {
       triggerKey: 'ingest',
       status: 'unclassified',
       usage: null,
+      provider: 'openai',
+      model: 'gpt-test',
       unclassifiedReason: 'unavailable',
       input: prepareInput(c.body),
     });
@@ -592,6 +597,8 @@ describe('PgClassificationStore', () => {
       triggerKey: 'ingest',
       status: 'unclassified',
       usage: null,
+      provider: 'openai',
+      model: 'gpt-test',
       unclassifiedReason: 'timeout',
       input: prepareInput(unc.body),
     });

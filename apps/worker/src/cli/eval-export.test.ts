@@ -11,6 +11,7 @@ const ORG = '1b4e28ba-2fa1-4d2b-8f3e-1c6a2d9e7f10';
 const ctx = (): OpsContext => ({
   log: { debug() {}, info() {}, warn() {}, error() {} },
   env: {},
+  cwd: process.cwd(),
   out: () => {},
   pool: () => {
     throw new Error('database must not be used');

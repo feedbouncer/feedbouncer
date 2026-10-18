@@ -87,7 +87,7 @@ export const evalExportCommand: OpsCommand = async (argv, ctx) => {
       ? randomInt(0, MAX_SEED + 1)
       : intIn(values.seed, '--seed', 0, MAX_SEED);
 
-  const out = resolve(values.out ?? defaultOutDir(now));
+  const out = resolve(ctx.cwd, values.out ?? defaultOutDir(now));
   if (values.out === undefined) await ensureDefaultParent(out);
   const parent = await stat(dirname(out)).catch(() => null);
   if (!parent?.isDirectory()) throw new UsageError('output parent directory does not exist');
