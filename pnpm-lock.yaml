@@ -356,6 +356,9 @@ importers:
       '@feedbouncer/policies':
         specifier: workspace:*
         version: link:../../packages/policies
+      '@feedbouncer/public-api':
+        specifier: workspace:*
+        version: link:../../packages/public-api
       '@feedbouncer/reports':
         specifier: workspace:*
         version: link:../../packages/reports

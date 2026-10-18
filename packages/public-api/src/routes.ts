@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './constants.js';
 import type { ApiKeyScope } from './keys/token.js';
 import { CommentResource } from './resources/comment.js';
 import { pageOf } from './resources/page.js';
@@ -16,6 +17,8 @@ export const PUBLIC_ERROR_CODES = [
   'idempotency_key_reused',
   'idempotency_request_in_progress',
   'invalid_idempotency_key',
+  'connection_inactive',
+  'unsupported_action',
 ] as const;
 export type PublicErrorCode = (typeof PUBLIC_ERROR_CODES)[number];
 
@@ -27,7 +30,9 @@ export const PUBLIC_ERROR_STATUS: Readonly<Record<PublicErrorCode, number>> = {
   insufficient_scope: 403,
   not_found: 404,
   idempotency_request_in_progress: 409,
+  connection_inactive: 409,
   idempotency_key_reused: 422,
+  unsupported_action: 422,
   rate_limited: 429,
   internal_error: 500,
   temporarily_unavailable: 503,
@@ -45,6 +50,8 @@ export interface RouteSpec {
   readonly params?: z.ZodObject;
   readonly query?: z.ZodObject;
   readonly body?: z.ZodObject;
+  /** The request body may be omitted. */
+  readonly bodyOptional?: boolean;
   /** Accepts the Idempotency-Key header. */
   readonly idempotent: boolean;
   /** Success responses by status; null means no body. */
@@ -60,8 +67,46 @@ export const ListCommentsQuery = z.strictObject({
   brandId: z.uuid().optional(),
   postedFrom: timestamp.optional().meta({ description: 'Inclusive. ISO 8601 with an offset.' }),
   postedTo: timestamp.optional().meta({ description: 'Exclusive. ISO 8601 with an offset.' }),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   cursor: z.string().max(512).optional(),
+});
+
+const ACTION_STATUSES = ['pending', 'applied', 'noop', 'not_eligible', 'failed'] as const;
+
+export const ModerationResult = z
+  .object({
+    action: z.object({
+      id: z.uuid(),
+      kind: z.enum(['hide', 'unhide']),
+      status: z.enum(ACTION_STATUSES),
+      code: z.string().nullable().meta({
+        description: 'Why nothing was done or it failed, e.g. `already_hidden`; null otherwise.',
+      }),
+    }),
+    comment: CommentResource,
+  })
+  .meta({ id: 'ModerationResult' });
+
+const moderationSpec = (kind: 'hide' | 'unhide'): RouteSpec => ({
+  id: `${kind}Comment`,
+  method: 'POST',
+  path: `/v1/comments/{id}/${kind}`,
+  scope: 'write',
+  summary: `${kind === 'hide' ? 'Hide' : 'Unhide'} a comment on its platform`,
+  params: z.object({ id: z.uuid() }),
+  body: z.strictObject({}),
+  bodyOptional: true,
+  idempotent: true,
+  responses: { 200: ModerationResult, 202: ModerationResult },
+  errors: [
+    'invalid_request',
+    'not_found',
+    'connection_inactive',
+    'unsupported_action',
+    'idempotency_key_reused',
+    'idempotency_request_in_progress',
+    'invalid_idempotency_key',
+  ],
 });
 
 export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
@@ -97,6 +142,8 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     responses: { 200: CommentResource },
     errors: ['not_found'],
   },
+  moderationSpec('hide'),
+  moderationSpec('unhide'),
 ];
 
 export function routeSpec(id: string): RouteSpec {

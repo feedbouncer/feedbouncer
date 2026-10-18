@@ -39,6 +39,7 @@ export interface ModerationActionView {
   readonly kind: ActionKind;
   readonly actorType: ActionActor['type'];
   readonly actorUserId: string | null;
+  readonly actorApiKeyId: string | null;
   readonly status: ActionStatus;
   readonly outcomeCode: string | null;
   readonly replyText: string | null;
@@ -112,8 +113,8 @@ export const REPLY_KINDS: ReadonlySet<ActionKind> = new Set(['public_reply', 'pr
 const REQUEST_KEY_UNIQUE = 'moderation_action_organization_id_request_key_key';
 const PRIVATE_REPLY_ONCE = 'moderation_action_private_reply_once_key';
 
-export const VIEW_COLUMNS = `id, comment_id, kind, actor_type, actor_user_id, status, outcome_code,
-  reply_text, undo_kind, created_at, completed_at`;
+export const VIEW_COLUMNS = `id, comment_id, kind, actor_type, actor_user_id, actor_api_key_id, status,
+  outcome_code, reply_text, undo_kind, created_at, completed_at`;
 
 export const toView = (r: Record<string, unknown>): ModerationActionView => ({
   id: r.id as string,
@@ -121,6 +122,7 @@ export const toView = (r: Record<string, unknown>): ModerationActionView => ({
   kind: r.kind as ActionKind,
   actorType: r.actor_type as ActionActor['type'],
   actorUserId: (r.actor_user_id as string | null) ?? null,
+  actorApiKeyId: (r.actor_api_key_id as string | null) ?? null,
   status: r.status as ActionStatus,
   outcomeCode: (r.outcome_code as string | null) ?? null,
   replyText: (r.reply_text as string | null) ?? null,
@@ -131,10 +133,10 @@ export const toView = (r: Record<string, unknown>): ModerationActionView => ({
 
 const INSERT = `
   INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind, actor_type,
-                                 actor_user_id, rule_id, request_key, reply_text, status, outcome_code,
-                                 reverses_action_id, completed_at)
-  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::text, $12, $13,
-          CASE WHEN $11::text = 'pending' THEN NULL ELSE now() END)
+                                 actor_user_id, actor_api_key_id, rule_id, request_key, reply_text, status,
+                                 outcome_code, reverses_action_id, completed_at)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text, $13, $14,
+          CASE WHEN $12::text = 'pending' THEN NULL ELSE now() END)
   RETURNING ${VIEW_COLUMNS}`;
 
 /**
@@ -151,6 +153,7 @@ export async function recordActionAudit(
     kind: ActionKind;
     actorType: ActionActor['type'];
     actorUserId: string | null;
+    actorApiKeyId: string | null;
     status: Exclude<ActionStatus, 'pending'>;
     outcomeCode: string | null;
   },
@@ -170,6 +173,7 @@ export async function recordActionAudit(
         kind: a.kind,
         status: a.status,
         outcomeCode: a.outcomeCode,
+        ...(a.actorApiKeyId && { apiKeyId: a.actorApiKeyId }),
       }),
     ],
   );
@@ -197,6 +201,9 @@ interface StoredAction {
   readonly reverses: string | null;
 }
 
+/** Automation may only suggest during review and never overrides a moderator; a person or an API caller decided for themselves. */
+const isAutomation = (a: ActionActor): boolean => a.type !== 'user' && a.type !== 'api_key';
+
 const refused = (code: RefusalCode): RequestActionResult => ({ status: 'refused', code });
 
 /** Throws a TypeError on malformed input; the API validates before calling. Returns the reply text. */
@@ -206,9 +213,11 @@ function validate(i: Request): string | null {
   };
   if (!(ACTION_KINDS as readonly string[]).includes(i.kind)) bad('kind');
   if (typeof i.requestKey !== 'string' || !REQUEST_KEY.test(i.requestKey)) bad('requestKey');
-  const a = i.actor as { type?: unknown; userId?: unknown; ruleId?: unknown };
+  const a = i.actor as { type?: unknown; userId?: unknown; ruleId?: unknown; apiKeyId?: unknown };
   if (a?.type === 'user') {
     if (typeof a.userId !== 'string' || !UUID.test(a.userId)) bad('actor');
+  } else if (a?.type === 'api_key') {
+    if (typeof a.apiKeyId !== 'string' || !UUID.test(a.apiKeyId)) bad('actor');
   } else if (a?.type === 'rule') {
     if (typeof a.ruleId !== 'string' || !UUID.test(a.ruleId)) bad('actor');
   } else if (a?.type !== 'classifier' && a?.type !== 'policy' && a?.type !== 'system') bad('actor');
@@ -249,14 +258,14 @@ export class ModerationActions {
     // After the key replay, so an action stored before the window began still replays.
     const now = new Date(this.d.clock.now());
     if (
-      i.actor.type !== 'user' &&
+      isAutomation(i.actor) &&
       GATED_KINDS.includes(i.kind) &&
       reviewModeState(comment.reviewMode, now) === 'active'
     )
       return refused('review_mode_active');
     if (
       i.kind === 'hide' &&
-      i.actor.type !== 'user' &&
+      isAutomation(i.actor) &&
       (await this.d.store.userUnhidLast(i.scope, comment.id))
     )
       return refused('moderator_override');
@@ -311,6 +320,7 @@ export class ModerationActions {
       i.kind,
       i.actor.type,
       i.actor.type === 'user' ? i.actor.userId : null,
+      i.actor.type === 'api_key' ? i.actor.apiKeyId : null,
       i.actor.type === 'rule' ? i.actor.ruleId : null,
       i.requestKey,
       text,
@@ -333,6 +343,7 @@ export class ModerationActions {
                 kind: row.kind,
                 actorType: row.actorType,
                 actorUserId: row.actorUserId,
+                actorApiKeyId: row.actorApiKeyId,
                 status: v.status as 'noop' | 'not_eligible',
                 outcomeCode: v.code,
               });
@@ -385,6 +396,7 @@ export class ModerationActions {
         kind: action.kind,
         actorType: action.actorType,
         actorUserId: action.actorUserId,
+        actorApiKeyId: action.actorApiKeyId,
         status: 'failed',
         outcomeCode: 'enqueue_failed',
       });

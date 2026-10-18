@@ -10,6 +10,7 @@ export const ACTION_KINDS = [
 export type ActionKind = (typeof ACTION_KINDS)[number];
 export type ActionActor =
   | { type: 'user'; userId: string }
+  | { type: 'api_key'; apiKeyId: string }
   | { type: 'rule'; ruleId: string }
   | { type: 'classifier' }
   | { type: 'policy' }

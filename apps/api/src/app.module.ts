@@ -9,6 +9,8 @@ import { createAuthEmails, type AuthEmails } from './auth/emails.js';
 import { createAuthRateLimits } from './auth/rate-limit.js';
 import { ApiKeyGuard } from './public-api/api-key.guard.js';
 import { PublicCommentsController } from './public-api/comments.controller.js';
+import { PublicModerationController } from './public-api/moderation.controller.js';
+import { PublicModerationService } from './public-api/moderation.service.js';
 import { OpenApiController } from './public-api/openapi.controller.js';
 import { createPublicApiLimits } from './public-api/rate-limit.js';
 import { SessionGuard } from './auth/session.guard.js';
@@ -134,6 +136,7 @@ export class AppModule {
         ApiKeysController,
         OpenApiController,
         PublicCommentsController,
+        PublicModerationController,
         ...(deps.extraControllers ?? []),
       ],
       providers: [
@@ -163,6 +166,7 @@ export class AppModule {
         ReportsService,
         ApiKeysService,
         ApiKeyGuard,
+        PublicModerationService,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.
         { provide: CONNECTOR_STACK, useValue: deps.connectors?.stack ?? null },

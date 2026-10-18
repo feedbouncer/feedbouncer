@@ -8,3 +8,4 @@ export * from './resources/comment.js';
 export * from './resources/flagged-item.js';
 export * from './resources/page.js';
 export * from './queries/comments.js';
+export * from './idempotency.js';

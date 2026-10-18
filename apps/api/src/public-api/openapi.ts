@@ -54,6 +54,12 @@ const RATE_LIMIT_HEADERS: JsonObject = {
   'X-RateLimit-Limit': integerHeader('Requests allowed per minute for this key.'),
   'X-RateLimit-Remaining': integerHeader('Requests left in the current window.'),
 };
+const REPLAYED: JsonObject = {
+  'Idempotent-Replayed': {
+    description: '`true` when this is the stored response of an earlier request with the same key.',
+    schema: { type: 'string', enum: ['true'] },
+  },
+};
 const RETRY_AFTER: JsonObject = {
   'Retry-After': integerHeader('Whole seconds to wait before retrying (at least 1).'),
 };
@@ -137,7 +143,9 @@ function responses(spec: RouteSpec, schemas: SchemaCollector): JsonObject {
   for (const [status, body] of Object.entries(spec.responses)) {
     out[Number(status)] = {
       description: REASONS[Number(status)] ?? 'Success',
-      ...(authenticated && { headers: RATE_LIMIT_HEADERS }),
+      ...(authenticated && {
+        headers: { ...RATE_LIMIT_HEADERS, ...(spec.idempotent && REPLAYED) },
+      }),
       ...(body && {
         content: { 'application/json': { schema: schemas.convert(body, 'output') } },
       }),
@@ -172,7 +180,7 @@ function operation(spec: RouteSpec, schemas: SchemaCollector): JsonObject {
     ...(params.length > 0 && { parameters: params }),
     ...(spec.body && {
       requestBody: {
-        required: true,
+        required: !spec.bodyOptional,
         content: { 'application/json': { schema: schemas.convert(spec.body, 'input') } },
       },
     }),

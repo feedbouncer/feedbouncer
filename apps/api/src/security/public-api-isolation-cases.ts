@@ -18,4 +18,12 @@ export interface PublicApiCase {
 /** Every /v1 route with a path parameter, aimed at B's resources with A's write key. */
 export const PUBLIC_API_CASES: readonly PublicApiCase[] = [
   { route: 'GET /v1/comments/{id}', url: (f) => `/v1/comments/${f.bCommentId}` },
+  {
+    route: 'POST /v1/comments/{id}/hide',
+    url: (f) => `/v1/comments/${f.bCommentId}/hide`,
+  },
+  {
+    route: 'POST /v1/comments/{id}/unhide',
+    url: (f) => `/v1/comments/${f.bCommentId}/unhide`,
+  },
 ];

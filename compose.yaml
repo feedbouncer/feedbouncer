@@ -182,6 +182,7 @@ services:
       - ./packages/classifier/src:/repo/packages/classifier/src:ro
       - ./packages/comments/src:/repo/packages/comments/src:ro
       - ./packages/policies/src:/repo/packages/policies/src:ro
+      - ./packages/public-api/src:/repo/packages/public-api/src:ro
       - ./packages/reports/src:/repo/packages/reports/src:ro
       - ./packages/rules/src:/repo/packages/rules/src:ro
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
@@ -283,6 +284,7 @@ services:
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
       - ./packages/observability/src:/repo/packages/observability/src:ro
       - ./packages/policies/src:/repo/packages/policies/src:ro
+      - ./packages/public-api/src:/repo/packages/public-api/src:ro
       - ./packages/evaluation/src:/repo/packages/evaluation/src:ro
       - ./packages/reports/src:/repo/packages/reports/src:ro
       - ./packages/rules/src:/repo/packages/rules/src:ro

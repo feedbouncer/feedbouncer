@@ -47,6 +47,7 @@ import {
   writeStartupConfigError,
 } from '@feedbouncer/service-runtime';
 import { startAlertLoops } from './alerts.js';
+import { startIdempotencyPurge } from './idempotency.js';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { startReportLoops } from './reports.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
@@ -135,6 +136,7 @@ try {
   let scheduler: PollScheduler | null = null;
   let alertLoops: ReturnType<typeof startAlertLoops> = null;
   let reportLoops: ReturnType<typeof startReportLoops> = null;
+  let idempotencyPurge: ReturnType<typeof startIdempotencyPurge> | null = null;
   if (facebook && mail && mailer) {
     const stack = buildPgConnectorStack({
       pool,
@@ -258,6 +260,7 @@ try {
   onShutdown(async () => {
     alertLoops?.stop();
     reportLoops?.stop();
+    idempotencyPurge?.stop();
     await scheduler?.stop();
     await Promise.all([worker.close(), jobWorkers.close()]);
     await queues.close();
@@ -312,6 +315,7 @@ try {
     { enabled: env.weeklyReports },
     { pool, log, keys: env.encryption, mailer, web: env.publicWebUrl },
   );
+  idempotencyPurge = startIdempotencyPurge({ pool, log });
 
   worker.run().catch((err: unknown) => {
     log.error('worker stopped', errorFields(err));
