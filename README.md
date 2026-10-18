@@ -50,6 +50,7 @@ pnpm test
 | `packages/actions`             | Moderation actions: step model, execution and review queue                                                   |
 | `packages/alerts`              | Alerts: negative-comment spike detection and delivery to Slack and email                                     |
 | `packages/reports`             | Weekly email report: metrics, scheduling, rendering, delivery and unsubscribe links                          |
+| `packages/evaluation`          | Evaluation runs: false-hide rate, time to hide and cost per 1,000 comments from exported items and labels    |
 | `packages/policies`            | Plain-language custom policies: validation, decisions, model evaluation, previews and runs                   |
 | `packages/placeholder`         | Minimal package used as the template for new packages                                                        |
 | `packages/secrets`             | Envelope encryption for stored credentials and key management                                                |
