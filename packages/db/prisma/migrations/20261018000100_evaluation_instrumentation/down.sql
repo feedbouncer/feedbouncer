@@ -1,0 +1,18 @@
+ALTER TABLE policy_evaluation
+  DROP CONSTRAINT policy_evaluation_cache_read_tokens_check,
+  DROP CONSTRAINT policy_evaluation_output_tokens_check,
+  DROP CONSTRAINT policy_evaluation_input_tokens_check,
+  DROP COLUMN cache_read_tokens,
+  DROP COLUMN output_tokens,
+  DROP COLUMN input_tokens;
+ALTER TABLE comment_classification
+  DROP CONSTRAINT comment_classification_cache_read_tokens_check,
+  DROP CONSTRAINT comment_classification_output_tokens_check,
+  DROP CONSTRAINT comment_classification_input_tokens_check,
+  DROP COLUMN cache_read_tokens,
+  DROP COLUMN output_tokens,
+  DROP COLUMN input_tokens;
+ALTER TABLE job_ledger
+  DROP CONSTRAINT job_ledger_claimed_at_check,
+  DROP COLUMN last_claimed_at,
+  DROP COLUMN first_claimed_at;

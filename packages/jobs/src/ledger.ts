@@ -156,7 +156,8 @@ const CLAIM_SQL = `
   UPDATE job_ledger j SET
     crashes = j.crashes + CASE WHEN j.lease_owner IS NOT NULL THEN 1 ELSE 0 END,
     lease_owner = $2, lease_expires_at = now() + ($3::bigint * interval '1 millisecond'),
-    next_run_at = NULL
+    next_run_at = NULL,
+    first_claimed_at = COALESCE(j.first_claimed_at, now()), last_claimed_at = now()
   FROM (SELECT id, next_run_at AS due_at FROM job_ledger WHERE id = $1) prev
   WHERE j.id = $1 AND prev.id = j.id AND j.state = 'queued'
     AND (j.lease_expires_at IS NULL OR j.lease_expires_at < now())

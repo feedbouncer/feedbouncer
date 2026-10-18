@@ -43,6 +43,12 @@ const ALLOWED_CREDENTIAL_COLUMNS: Record<string, string> = {
   'auth_session.token':
     'SHA-256 digest of the session token; the raw token exists only in the cookie (apps/api auth contract test)',
   'invitation.token_hash': 'sha256 of a 32-byte random invitation token',
+  'comment_classification.input_tokens': 'LLM token count, not a credential',
+  'comment_classification.output_tokens': 'LLM token count, not a credential',
+  'comment_classification.cache_read_tokens': 'LLM token count, not a credential',
+  'policy_evaluation.input_tokens': 'LLM token count, not a credential',
+  'policy_evaluation.output_tokens': 'LLM token count, not a credential',
+  'policy_evaluation.cache_read_tokens': 'LLM token count, not a credential',
 };
 
 describe('schema conventions', () => {

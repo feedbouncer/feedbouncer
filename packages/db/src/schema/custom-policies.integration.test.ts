@@ -294,3 +294,23 @@ describe('policy_usage', () => {
     await expectPgError(ins(1), '23505', 'policy_usage_brand_id_period_start_key');
   });
 });
+
+describe('policy_evaluation token columns', () => {
+  it('are nullable and reject negatives', async () => {
+    const commentId = await comment(t);
+    const insert = (tokens: (number | null)[]) =>
+      ctx.c.query(
+        `INSERT INTO policy_evaluation (organization_id, brand_id, connection_id, comment_id, body_sha256, trigger_key,
+           status, skip_reason, input_tokens, output_tokens, cache_read_tokens)
+         VALUES ($1, $2, $3, $4, decode(repeat('cd', 32), 'hex'), 'ingest', 'skipped', 'deleted', $5, $6, $7)`,
+        [t.organizationId, t.brandId, t.connectionId, commentId, ...tokens],
+      );
+    await insert([0, 0, 0]);
+    const cols = ['input_tokens', 'output_tokens', 'cache_read_tokens'];
+    for (const [i, col] of cols.entries()) {
+      const tokens = [null, null, null];
+      tokens[i] = -1;
+      await expectPgError(insert(tokens), '23514', `policy_evaluation_${col}_check`);
+    }
+  });
+});

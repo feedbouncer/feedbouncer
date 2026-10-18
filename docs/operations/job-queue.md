@@ -133,6 +133,7 @@ What to do per reason:
   its row purged, or a duplicate could slip in; too long only grows storage.
 - `queued` rows are never purged. The sweeper purges expired settled rows, up to 1,000
   per sweep, once a minute.
+- Claim times (`first_claimed_at`, `last_claimed_at`) are kept for evaluation; they are purged with the row.
 
 ## Redis loss
 
