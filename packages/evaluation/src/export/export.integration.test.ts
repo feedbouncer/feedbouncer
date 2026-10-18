@@ -8,7 +8,7 @@ import { EXECUTE_JOB, INGEST_JOB, type IngestPayload } from '@feedbouncer/commen
 import { PgJobLedger, UsageError, deriveIdempotencyKey } from '@feedbouncer/jobs';
 import { readRun } from '../io.js';
 import { RunManifest } from '../schema.js';
-import { seedEvalComment, seedHiddenTimeline } from '../testing.js';
+import { seedEvalAction, seedEvalComment, seedHiddenTimeline } from '../testing.js';
 import { pseudonymiser } from './derive.js';
 import { exportRun, exportRunWithSalt, type ExportOptions } from './export.js';
 
@@ -241,6 +241,19 @@ describe('exportRun', () => {
     expect(m.itemCount).toBe(1);
     expect(m.excludedAuthorDeleted).toBe(1);
     expect(m.timingUnavailableBeforeRetention).toBe(1);
+  });
+
+  it('does not count already-hidden removals as missing job records', async () => {
+    const t = await seedTenant(env.c, 'noop');
+    const s = await seedEvalComment(env.c, t, { postedAt: day(1), state: 'hidden' });
+    await seedEvalAction(env.c, s, {
+      createdAt: new Date(day(1).getTime() + 9000),
+      status: 'noop',
+      outcomeCode: 'already_hidden',
+    });
+    const m = await exportRun(pool, await opts({ organizationIds: [t.organizationId] }));
+    expect(m.itemCount).toBe(1);
+    expect(m.timingUnavailableBeforeRetention).toBe(0);
   });
 
   it('end-to-end webhook timeline from real ledger rows', async () => {

@@ -152,7 +152,7 @@ export async function exportRunWithSalt(
         continue;
       }
       items.push(item);
-      if (item.outcome === 'hidden' && item.timing?.breakdown == null)
+      if (item.timing?.breakdown === null && facts.execLedgers.size === 0)
         timingUnavailableBeforeRetention++;
       for (const x of facts.classifications)
         if (x.promptVersion) promptVersions.add(x.promptVersion);

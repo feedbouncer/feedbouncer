@@ -202,9 +202,14 @@ export async function readRun(dir: string): Promise<RunInputs> {
     ? validate(Pricing, parseJson(pricingBuf, 'pricing.json', 'file'), 'pricing.json', 'file')
     : null;
 
+  // Label files are named after their labeller; the report lists them by position instead.
+  let labelFiles = 0;
   const inputDigests = [...r.digests]
-    .map(([file, sha256]) => ({ file, sha256 }))
-    .sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([file, sha256]) => ({
+      file: file.startsWith('labels/') ? `labels/labeller-${++labelFiles}.csv` : file,
+      sha256,
+    }));
 
   return { manifest, items, labels, meta, metaConfig, pricing, inputDigests };
 }

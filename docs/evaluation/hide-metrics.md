@@ -197,7 +197,7 @@ The Graph API is listed as an `other` line at 0 because Meta does not meter it. 
 - **Percentiles** are nearest-rank: the p-th percentile of `n` sorted values is the value at position `ceil(p/100 * n)`. No interpolation.
 - **Intervals.** Rates show a 95% Wilson score interval (z = 1.96), which behaves sensibly for small samples and for rates near 0% or 100%.
 - **Sections.** The report has these sections: Summary, Dataset and labelling, False-hide rate, Time to hide, Comments missed, the Meta comparison, Cost per 1,000 comments, and Method and limits. Review-mode results are shown separately under their own subheading.
-- **Input digests.** The report ends with a SHA-256 digest of each input file, so a reader can check which inputs produced it.
+- **Input digests.** The report ends with a SHA-256 digest of each input file, so a reader can check which inputs produced it. Label files are listed by position (`labels/labeller-1.csv`, …), not by name, so labeller names stay out of the report; use neutral file names anyway if the run directory is shared.
 
 ## Known limits
 

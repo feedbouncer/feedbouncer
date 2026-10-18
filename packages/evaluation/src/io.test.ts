@@ -88,7 +88,8 @@ describe('readRun', () => {
     expect(digest?.sha256).toBe(
       createHash('sha256').update(JSON.stringify(manifest)).digest('hex'),
     );
-    expect(run.inputDigests.map((d) => d.file)).toContain('labels/a.csv');
+    expect(run.inputDigests.map((d) => d.file)).toContain('labels/labeller-1.csv');
+    expect(run.inputDigests.map((d) => d.file)).not.toContain('labels/a.csv');
   });
 
   it('sorts label files by name', async () => {
