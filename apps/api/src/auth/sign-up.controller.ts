@@ -10,6 +10,7 @@ import { normalizeEmail } from './email.js';
 import type { AuthEmails } from './emails.js';
 import { assertPassword, PASSWORD_MAX } from './password-policy.js';
 import type { AuthRateLimits } from './rate-limit.js';
+import { isSignupAllowed } from './signup-gate.js';
 import { findUserIdByEmail } from './users.repo.js';
 
 // Generous raw caps: the policy (in code points) decides, these only bound input.
@@ -29,8 +30,8 @@ export class SignUpController {
     @Inject(RATE_LIMITS) private readonly limits: AuthRateLimits,
   ) {}
 
-  // The same 202 for a new and an existing address: an existing account gets an
-  // "already registered" email instead, so the response reveals nothing.
+  // The same 202 for a new, an existing and a not-allowed address: the latter two get
+  // an email instead, so the response reveals nothing.
   @Post('sign-up')
   @HttpCode(202)
   async signUp(@Body() body: unknown, @Req() req: FastifyRequest) {
@@ -38,6 +39,11 @@ export class SignUpController {
     const email = normalizeEmail(input.email);
     assertPassword(input.password, [email, input.name]);
     await this.limits.consumeEmailSend(email, req.ip);
+    if (!(await isSignupAllowed(this.deps.pool, this.deps.env.signupAllowlist, email))) {
+      await hashPassword(input.password); // equalize timing with the create path
+      this.emails.signupClosed(email);
+      return ACCEPTED;
+    }
     if (await findUserIdByEmail(this.deps.pool, email)) {
       await hashPassword(input.password); // equalize timing with the create path
       this.emails.accountExists(email);

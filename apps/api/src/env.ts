@@ -18,6 +18,7 @@ import {
   type LogLevel,
   type SecretFileSystem,
 } from '@feedbouncer/service-runtime';
+import { normalizeAddress } from '@feedbouncer/mailer';
 import { parseAlertChannels, readAlertLimits } from '@feedbouncer/alerts';
 import {
   FACEBOOK_FILE_VARS,
@@ -61,6 +62,10 @@ export interface ApiEnv {
   readonly publicWebUrl: URL;
   readonly smtpUrl: URL;
   readonly mailFrom: string;
+  /** Null when SIGNUP_ALLOWED_EMAILS is unset: anyone may sign up. Otherwise the normalized addresses allowed to (invited emails always may). */
+  readonly signupAllowlist: ReadonlySet<string> | null;
+  /** Contact address shown in the "private beta" email; null when BETA_SUPPORT_EMAIL is unset. */
+  readonly betaSupportEmail: string | null;
   /** Reverse-proxy hops to trust for the client IP (Fastify trustProxy). */
   readonly trustProxyHops: number;
   /** Deployment keys for stored platform credentials. Serializes without key material. */
@@ -97,6 +102,28 @@ export interface LoadEnvOptions {
   readonly fs?: SecretFileSystem;
 }
 
+const SIGNUP_ALLOWLIST_MAX = 200;
+
+function parseEmailList(raw: string | undefined, name: string): ReadonlySet<string> | null {
+  const items = (raw ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (items.length === 0) return null;
+  if (items.length > SIGNUP_ALLOWLIST_MAX) {
+    throw new EnvError(`${name} has too many entries (at most ${SIGNUP_ALLOWLIST_MAX}).`);
+  }
+  return new Set(items.map((item) => parseEmail(item, name)));
+}
+
+function parseEmail(raw: string, name: string): string {
+  const email = normalizeAddress(raw);
+  if (email === null || !email.includes('@')) {
+    throw new EnvError(`${name} contains an invalid email`);
+  }
+  return email;
+}
+
 /** The API's single typed configuration layer. Call once, from main.ts. */
 export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
   const env = resolveFileEnv(rawEnv, API_FILE_VARS, opts.fs);
@@ -127,6 +154,10 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
       maxLength: 200,
       pattern: /^[^\r\n]+$/,
     }),
+    signupAllowlist: parseEmailList(env.SIGNUP_ALLOWED_EMAILS, 'SIGNUP_ALLOWED_EMAILS'),
+    betaSupportEmail: env.BETA_SUPPORT_EMAIL?.trim()
+      ? parseEmail(env.BETA_SUPPORT_EMAIL, 'BETA_SUPPORT_EMAIL')
+      : null,
     trustProxyHops: readInt(env, 'TRUST_PROXY_HOPS', { min: 0, max: 5, fallback: 0 }),
     encryption: loadEncryptionKeyring(env, appEnv, opts.warn),
     facebook,

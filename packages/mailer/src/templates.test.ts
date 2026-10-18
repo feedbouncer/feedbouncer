@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml, headerSafe, renderInvitation, renderReconnectRequired } from './templates.js';
+import {
+  escapeHtml,
+  headerSafe,
+  renderInvitation,
+  renderReconnectRequired,
+  renderSignupClosed,
+} from './templates.js';
 
 describe('templates', () => {
   it('escapes HTML in organization and inviter names', () => {
@@ -70,5 +76,21 @@ describe('templates', () => {
       expect(n.text).toContain('Acme');
       expect(n.text).not.toContain('null');
     });
+  });
+});
+
+describe('renderSignupClosed', () => {
+  it('says the product is in private beta', () => {
+    const m = renderSignupClosed({ supportEmail: null });
+    expect(m.subject).toBe('FeedBouncer is in private beta');
+    expect(m.text).toContain('private beta');
+    expect(m.html).toContain('private beta');
+  });
+
+  it('includes the support email only when given', () => {
+    expect(renderSignupClosed({ supportEmail: null }).text).not.toContain('@');
+    const m = renderSignupClosed({ supportEmail: 'help@example.com' });
+    expect(m.text).toContain('help@example.com');
+    expect(m.html).toContain('help@example.com');
   });
 });

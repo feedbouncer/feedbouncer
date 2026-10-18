@@ -353,4 +353,37 @@ describe('secrets configuration', () => {
     expect(env.authSecret.reveal()).toBe(SECRET);
     expect(env.encryption.activeKeyId).toBe('k1');
   });
+
+  describe('sign-up allowlist', () => {
+    it('is null when unset or empty', () => {
+      expect(load(base).signupAllowlist).toBeNull();
+      expect(load({ ...base, SIGNUP_ALLOWED_EMAILS: ' , ' }).signupAllowlist).toBeNull();
+    });
+    it('normalizes entries', () => {
+      const env = load({ ...base, SIGNUP_ALLOWED_EMAILS: ' A@X.com, b@y.com ,' });
+      expect([...env.signupAllowlist!]).toEqual(['a@x.com', 'b@y.com']);
+    });
+    it('rejects an invalid entry without echoing it', () => {
+      const msg = messageOf(() => load({ ...base, SIGNUP_ALLOWED_EMAILS: 'a@x.com,not-an-email' }));
+      expect(msg).toBe('SIGNUP_ALLOWED_EMAILS contains an invalid email');
+      expect(msg).not.toContain('not-an-email');
+    });
+    it('rejects more than 200 entries', () => {
+      const many = Array.from({ length: 201 }, (_, i) => `u${i}@x.com`).join(',');
+      expect(() => load({ ...base, SIGNUP_ALLOWED_EMAILS: many })).toThrow(EnvError);
+    });
+  });
+
+  describe('beta support email', () => {
+    it('is null when unset and normalized when set', () => {
+      expect(load(base).betaSupportEmail).toBeNull();
+      expect(load({ ...base, BETA_SUPPORT_EMAIL: ' Help@X.com ' }).betaSupportEmail).toBe(
+        'help@x.com',
+      );
+    });
+    it('rejects an invalid address without echoing it', () => {
+      const msg = messageOf(() => load({ ...base, BETA_SUPPORT_EMAIL: 'nope' }));
+      expect(msg).not.toContain('nope');
+    });
+  });
 });

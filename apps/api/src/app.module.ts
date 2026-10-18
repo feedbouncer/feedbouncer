@@ -157,7 +157,8 @@ export class AppModule {
         {
           provide: AUTH_EMAILS,
           inject: [DEPS],
-          useFactory: (d: AppDeps) => createAuthEmails(d.mailer, d.log, d.env.publicWebUrl.origin),
+          useFactory: (d: AppDeps) =>
+            createAuthEmails(d.mailer, d.log, d.env.publicWebUrl.origin, d.env.betaSupportEmail),
         },
         {
           provide: RATE_LIMITS,

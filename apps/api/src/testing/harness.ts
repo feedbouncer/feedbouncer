@@ -111,6 +111,8 @@ export async function startTestApi(
     publicWebUrl: new URL(WEB),
     smtpUrl: new URL('smtp://127.0.0.1:1'),
     mailFrom: 'FeedBouncer <no-reply@localhost>',
+    signupAllowlist: null,
+    betaSupportEmail: null,
     trustProxyHops: 0,
     encryption: testKeyring(),
     telemetry: loadTelemetryConfig({ METRICS_PORT: '0' }, 'api'),
