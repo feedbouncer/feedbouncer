@@ -3,7 +3,9 @@ import type { IExecuteFunctions, INodeExecutionData, INodeType, INodeTypeDescrip
 import { CREDENTIAL_NAME } from '../shared/constants';
 import { ReturnAllLimitError } from '../shared/pagination';
 import { commentDescription } from './descriptions/comment';
+import { decisionDescription } from './descriptions/decision';
 import { executeComment } from './operations/comment';
+import { executeDecision } from './operations/decision';
 
 export class FeedBouncer implements INodeType {
   description: INodeTypeDescription = {
@@ -33,20 +35,25 @@ export class FeedBouncer implements INodeType {
         default: 'comment',
       },
       ...commentDescription,
+      ...decisionDescription,
     ],
   };
 
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
     const out: INodeExecutionData[] = [];
-    const resource = this.getNodeParameter('resource', 0) as string;
-    const operation = this.getNodeParameter('operation', 0) as string;
 
     for (let i = 0; i < this.getInputData().length; i++) {
       try {
-        if (resource !== 'comment') {
-          throw new NodeOperationError(this.getNode(), `Unsupported resource: ${resource}.`, { itemIndex: i });
+        const resource = this.getNodeParameter('resource', i) as string;
+        const operation = this.getNodeParameter('operation', i) as string;
+        if (resource === 'comment' && (operation === 'get' || operation === 'list')) {
+          out.push(...(await executeComment.call(this, operation, i)));
+        } else if (resource === 'decision' && (operation === 'hide' || operation === 'undoHide')) {
+          out.push(...(await executeDecision.call(this, operation, i)));
+        } else {
+          const what = resource === 'comment' || resource === 'decision' ? `operation: ${operation}` : `resource: ${resource}`;
+          throw new NodeOperationError(this.getNode(), `Unsupported ${what}.`, { itemIndex: i });
         }
-        out.push(...(await executeComment.call(this, operation as 'get' | 'list', i)));
       } catch (error) {
         const failure =
           error instanceof ReturnAllLimitError
@@ -57,12 +64,16 @@ export class FeedBouncer implements INodeType {
               )
             : error;
         if (!this.continueOnFail()) throw failure;
-        const { message, description, httpCode } = failure as {
+        const { message, description, httpCode, context } = failure as {
           message: string;
           description?: string;
           httpCode?: string;
+          context?: { code?: string };
         };
-        out.push({ json: { error: message, description, httpCode }, pairedItem: { item: i } });
+        out.push({
+          json: { error: message, description, httpCode, ...(context?.code && { code: context.code }) },
+          pairedItem: { item: i },
+        });
       }
     }
     return [out];
