@@ -283,6 +283,15 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
+      '@feedbouncer/api':
+        specifier: workspace:*
+        version: link:../api
+      '@feedbouncer/connector-facebook':
+        specifier: workspace:*
+        version: link:../../packages/connector-facebook
+      '@feedbouncer/public-api':
+        specifier: workspace:*
+        version: link:../../packages/public-api
       '@modelcontextprotocol/client':
         specifier: 2.3.1
         version: 2.3.1

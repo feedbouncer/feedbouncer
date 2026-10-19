@@ -271,6 +271,10 @@ jobs:
         run: pnpm turbo run build --filter=@feedbouncer/webhooks...
       - name: Webhooks transport integration tests
         run: pnpm --filter @feedbouncer/webhooks test:integration
+      - name: Build the MCP server and its dependencies
+        run: pnpm turbo run build --filter=@feedbouncer/mcp...
+      - name: MCP server end-to-end tests (tenant isolation, prompt injection, stdio)
+        run: pnpm --filter @feedbouncer/mcp test:integration
 
   compose-smoke:
     name: Compose smoke

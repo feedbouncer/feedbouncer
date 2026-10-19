@@ -14,7 +14,8 @@
     "format": "prettier --write . --ignore-path ../../.prettierignore --ignore-unknown",
     "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
     "typecheck": "tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "tsc --build tsconfig.build.json && vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@feedbouncer/service-runtime": "workspace:*",
@@ -22,6 +23,9 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@feedbouncer/api": "workspace:*",
+    "@feedbouncer/connector-facebook": "workspace:*",
+    "@feedbouncer/public-api": "workspace:*",
     "@modelcontextprotocol/client": "2.3.1",
     "@types/node": "24.13.6"
   }
