@@ -38,6 +38,8 @@ export interface IsolationFixture {
   bAlertChannelId: string;
   /** B's active API key. */
   bApiKeyId: string;
+  /** B's pending rule-change proposal, made with that key. */
+  bProposalId: string;
 }
 
 const ALERT_SLACK_URL =
@@ -237,6 +239,30 @@ export const CASES: IsolationCase[] = [
     route: 'DELETE /api/v1/orgs/:orgId/brands/:brandId/domains/:domainId',
     name: "remove B's domain under A brand",
     url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/domains/${f.bDomainId}`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/rule-changes',
+    name: 'list B rule changes under A path',
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/rule-changes`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/rule-changes/:changeId',
+    name: "B's rule change under A brand",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/rule-changes/${f.bProposalId}`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/rule-changes/:changeId/approve',
+    name: "approve B's rule change under A brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/rule-changes/${f.bProposalId}/approve`,
+    body: () => ({}),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/rule-changes/:changeId/reject',
+    name: "reject B's rule change under A brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/rule-changes/${f.bProposalId}/reject`,
+    body: () => ({}),
   },
   {
     route: 'GET /api/v1/orgs/:orgId/brands/:brandId/rule-activity',

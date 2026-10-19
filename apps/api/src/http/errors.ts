@@ -52,6 +52,9 @@ export type ErrorCode =
   | 'confirmation_required'
   | 'rule_limit_reached'
   | 'rule_order_mismatch'
+  | 'proposal_not_pending'
+  | 'proposal_expired'
+  | 'proposal_stale'
   | 'invalid_domain'
   | 'domain_exists'
   | 'domain_limit_reached'
@@ -145,6 +148,9 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   confirmation_required: 'Confirm this action to continue.',
   rule_limit_reached: 'This brand has reached the maximum number of rules.',
   rule_order_mismatch: 'The order must list every rule of the brand exactly once.',
+  proposal_not_pending: 'This rule change was already decided.',
+  proposal_expired: 'This rule change has expired. Ask for a new proposal.',
+  proposal_stale: 'Rules changed since this was proposed. Ask for a new proposal.',
   invalid_domain: 'Enter a valid domain name.',
   domain_exists: 'This domain is already in the list.',
   domain_limit_reached: 'This brand has reached the maximum number of own domains.',

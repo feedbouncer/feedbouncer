@@ -24,6 +24,8 @@ import {
   ruleInputSchema,
   rulePatchSchema,
   type BrandDomain,
+  type RuleInput,
+  type RulePatch,
   type StoredRule,
 } from '@feedbouncer/rules';
 import { recordAudit, type AuditInput } from '../audit/audit.js';
@@ -109,14 +111,14 @@ export class RulesService {
 
   #audit(
     c: pg.PoolClient,
-    org: OrgContext,
     scope: BrandScope,
+    actorUserId: string,
     e: Pick<AuditInput, 'action' | 'subjectType' | 'subjectId' | 'details'>,
   ): Promise<void> {
     return recordAudit(c, {
       organizationId: scope.organizationId,
       brandId: scope.brandId,
-      actorUserId: org.actorUserId,
+      actorUserId,
       ...e,
     });
   }
@@ -196,24 +198,35 @@ export class RulesService {
     const input = parseRule(ruleInputSchema, body);
     const problem = checkActionForConditions(input.conditions, input.actions);
     if (problem !== null) throw invalidRule([{ path: 'actions', message: problem }]);
+    const { rule, warnings } = await this.#write(org, 'rule.write', (c) =>
+      this.applyCreate(c, scope, input, org.actorUserId),
+    );
+    return { ...(await this.#view(scope, rule.id)), actionWarnings: warnings };
+  }
+
+  /** Creates the rule in the caller's transaction and audits it as `userId`. */
+  async applyCreate(
+    tx: pg.PoolClient,
+    scope: BrandScope,
+    input: RuleInput,
+    userId: string,
+  ): Promise<{ rule: StoredRule; warnings: StepWarning[] }> {
+    const checked = await this.#checkSteps(tx, scope, input.conditions, input.actions);
+    if (checked.errors.length > 0) throw stepErrors(checked.errors);
+    let rule: StoredRule;
     try {
-      const { rule, warnings } = await this.#write(org, 'rule.write', async (c) => {
-        const checked = await this.#checkSteps(c, scope, input.conditions, input.actions);
-        if (checked.errors.length > 0) throw stepErrors(checked.errors);
-        const created = await this.#store.create(c, scope, input);
-        await this.#audit(c, org, scope, {
-          action: 'rule.created',
-          subjectType: 'rule',
-          subjectId: created.id,
-          details: this.#ruleDetails(created),
-        });
-        return { rule: created, warnings: checked.warnings };
-      });
-      return { ...(await this.#view(scope, rule.id)), actionWarnings: warnings };
+      rule = await this.#store.create(tx, scope, input);
     } catch (e) {
       if (e instanceof RuleLimitError) throw new ApiError(409, 'rule_limit_reached');
       throw e;
     }
+    await this.#audit(tx, scope, userId, {
+      action: 'rule.created',
+      subjectType: 'rule',
+      subjectId: rule.id,
+      details: this.#ruleDetails(rule),
+    });
+    return { rule, warnings: checked.warnings };
   }
 
   async update(
@@ -224,35 +237,24 @@ export class RulesService {
   ): Promise<RuleWriteDto> {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     const patch = parseRule(rulePatchSchema, body);
-    let warnings: StepWarning[];
+    const warnings = await this.#write(org, 'rule.write', (c) =>
+      this.applyUpdate(c, scope, ruleId, patch, org.actorUserId),
+    );
+    return { ...(await this.#view(scope, ruleId)), actionWarnings: warnings };
+  }
+
+  /** Updates the rule in the caller's transaction and audits it as `userId`; 404 when it is gone. */
+  async applyUpdate(
+    tx: pg.PoolClient,
+    scope: BrandScope,
+    ruleId: string,
+    patch: RulePatch,
+    userId: string,
+  ): Promise<StepWarning[]> {
+    const before = await this.#store.get(scope, ruleId, tx);
+    let updated: StoredRule | null;
     try {
-      warnings = await this.#write(org, 'rule.write', async (c) => {
-        const before = await this.#store.get(scope, ruleId, c);
-        const updated = await this.#store.update(c, scope, ruleId, patch);
-        if (!before || !updated) throw notFound();
-        // Only a change to the steps or the platform can be refused; later changes to the
-        // brand's connections just show up as warnings.
-        const changesSteps =
-          patch.actions !== undefined ||
-          rulePlatform(updated.conditions) !== rulePlatform(before.conditions);
-        const checked = await this.#checkSteps(c, scope, updated.conditions, updated.actions);
-        if (changesSteps && checked.errors.length > 0) throw stepErrors(checked.errors);
-        const change = suggestionChange(before, updated);
-        const swept = change
-          ? await this.#suggestions.onRuleChanged(c, scope, ruleId, change)
-          : { withdrawn: 0, updated: 0 };
-        await this.#audit(c, org, scope, {
-          action: 'rule.updated',
-          subjectType: 'rule',
-          subjectId: updated.id,
-          details: {
-            ...this.#ruleDetails(updated, Object.keys(patch)),
-            suggestionsWithdrawn: swept.withdrawn,
-            suggestionsUpdated: swept.updated,
-          },
-        });
-        return checked.warnings;
-      });
+      updated = await this.#store.update(tx, scope, ruleId, patch);
     } catch (e) {
       // The store re-checks the merged rule: the stored conditions or the new action do not fit.
       if (e instanceof InvalidRuleActionError)
@@ -263,25 +265,57 @@ export class RulesService {
         throw invalidRule([{ path: 'conditions', message: 'The rule conditions are not valid.' }]);
       throw e;
     }
-    return { ...(await this.#view(scope, ruleId)), actionWarnings: warnings };
+    if (!before || !updated) throw notFound();
+    // Only a change to the steps or the platform can be refused; later changes to the
+    // brand's connections just show up as warnings.
+    const changesSteps =
+      patch.actions !== undefined ||
+      rulePlatform(updated.conditions) !== rulePlatform(before.conditions);
+    const checked = await this.#checkSteps(tx, scope, updated.conditions, updated.actions);
+    if (changesSteps && checked.errors.length > 0) throw stepErrors(checked.errors);
+    const change = suggestionChange(before, updated);
+    const swept = change
+      ? await this.#suggestions.onRuleChanged(tx, scope, ruleId, change)
+      : { withdrawn: 0, updated: 0 };
+    await this.#audit(tx, scope, userId, {
+      action: 'rule.updated',
+      subjectType: 'rule',
+      subjectId: updated.id,
+      details: {
+        ...this.#ruleDetails(updated, Object.keys(patch)),
+        suggestionsWithdrawn: swept.withdrawn,
+        suggestionsUpdated: swept.updated,
+      },
+    });
+    return checked.warnings;
   }
 
   async archive(org: OrgContext, brandId: unknown, ruleId: string): Promise<void> {
     const scope = await requireBrand(this.deps.pool, org, brandId);
-    await this.#write(org, 'rule.write', async (c) => {
-      const before = await this.#store.get(scope, ruleId, c);
-      if (!before || !(await this.#store.archive(c, scope, ruleId))) throw notFound();
-      const swept = await this.#suggestions.onRuleChanged(c, scope, ruleId, 'retired');
-      await this.#audit(c, org, scope, {
-        action: 'rule.archived',
-        subjectType: 'rule',
-        subjectId: ruleId,
-        details: {
-          ...this.#ruleDetails(before),
-          suggestionsWithdrawn: swept.withdrawn,
-          suggestionsUpdated: swept.updated,
-        },
-      });
+    await this.#write(org, 'rule.write', (c) =>
+      this.applyArchive(c, scope, ruleId, org.actorUserId),
+    );
+  }
+
+  /** Archives the rule in the caller's transaction and audits it as `userId`; 404 when it is gone. */
+  async applyArchive(
+    tx: pg.PoolClient,
+    scope: BrandScope,
+    ruleId: string,
+    userId: string,
+  ): Promise<void> {
+    const before = await this.#store.get(scope, ruleId, tx);
+    if (!before || !(await this.#store.archive(tx, scope, ruleId))) throw notFound();
+    const swept = await this.#suggestions.onRuleChanged(tx, scope, ruleId, 'retired');
+    await this.#audit(tx, scope, userId, {
+      action: 'rule.archived',
+      subjectType: 'rule',
+      subjectId: ruleId,
+      details: {
+        ...this.#ruleDetails(before),
+        suggestionsWithdrawn: swept.withdrawn,
+        suggestionsUpdated: swept.updated,
+      },
     });
   }
 
@@ -290,7 +324,7 @@ export class RulesService {
     await this.#write(org, 'rule.write', async (c) => {
       if ((await this.#store.reorder(c, scope, ruleIds)) === 'mismatch')
         throw new ApiError(409, 'rule_order_mismatch');
-      await this.#audit(c, org, scope, {
+      await this.#audit(c, scope, org.actorUserId, {
         action: 'rule.reordered',
         subjectType: 'rule',
         subjectId: null,
@@ -314,7 +348,7 @@ export class RulesService {
       added = await this.#write(org, 'brand.write', async (c) => {
         const r = await this.#store.addDomain(c, scope, domain);
         if (r !== 'exists')
-          await this.#audit(c, org, scope, {
+          await this.#audit(c, scope, org.actorUserId, {
             action: 'brand_domain.added',
             subjectType: 'brand_domain',
             subjectId: r.id,
@@ -333,7 +367,7 @@ export class RulesService {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     await this.#write(org, 'brand.write', async (c) => {
       if (!(await this.#store.removeDomain(c, scope, domainId))) throw notFound();
-      await this.#audit(c, org, scope, {
+      await this.#audit(c, scope, org.actorUserId, {
         action: 'brand_domain.removed',
         subjectType: 'brand_domain',
         subjectId: domainId,

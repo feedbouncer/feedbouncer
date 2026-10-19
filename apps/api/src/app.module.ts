@@ -70,6 +70,8 @@ import { PoliciesController } from './policies/policies.controller.js';
 import { PoliciesService } from './policies/policies.service.js';
 import { ActivityController } from './rules/activity.controller.js';
 import { DomainsController } from './rules/domains.controller.js';
+import { RuleChangesController } from './rule-changes/rule-changes.controller.js';
+import { RuleChangesService } from './rule-changes/rule-changes.service.js';
 import { RulesController } from './rules/rules.controller.js';
 import { RulesService } from './rules/rules.service.js';
 import { OrgController, OrgsListController } from './orgs/orgs.controller.js';
@@ -123,6 +125,7 @@ export class AppModule {
         TagsController,
         AdsController,
         RulesController,
+        RuleChangesController,
         ActionsController,
         ReviewController,
         HiddenTodayController,
@@ -168,6 +171,7 @@ export class AppModule {
         TagsService,
         AdsService,
         RulesService,
+        RuleChangesService,
         ActionsService,
         HiddenTodayService,
         ReviewModeService,
