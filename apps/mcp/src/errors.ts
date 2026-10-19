@@ -3,6 +3,22 @@ import { redact } from '@feedbouncer/service-runtime';
 import { ApiCallError } from './api-client.js';
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+const num = (v: unknown): number | undefined => (typeof v === 'number' ? v : undefined);
+
+const INVALID_REQUEST_REASONS: Readonly<Record<string, string>> = {
+  to_before_from: '`to` must be after `from`.',
+  to_in_future: '`to` must not be in the future.',
+};
+
+/** API error messages are fixed texts that never quote request values. */
+function invalidRequest(e: ApiCallError, reason: string | undefined): string {
+  if (reason !== undefined) {
+    return Object.hasOwn(INVALID_REQUEST_REASONS, reason)
+      ? `Invalid request: ${INVALID_REQUEST_REASONS[reason]}`
+      : `Invalid request (${reason}).`;
+  }
+  return e.message === e.code ? 'Invalid request.' : `Invalid request: ${e.message}`;
+}
 
 function messageFor(e: ApiCallError): string {
   const d = e.details ?? {};
@@ -18,7 +34,7 @@ function messageFor(e: ApiCallError): string {
     case 'insufficient_scope':
       return "This API key is read-only. Create a write key on the organization's API keys page.";
     case 'text_too_long':
-      return `Reply is longer than the platform allows (max ${typeof d.max === 'number' ? d.max : 'unknown'}).`;
+      return `Reply is longer than the platform allows (max ${num(d.max) ?? 'unknown'}).`;
     case 'reply_not_allowed':
       return str(d.reason) ?? 'A reply is not allowed on this comment.';
     case 'connection_inactive':
@@ -30,6 +46,18 @@ function messageFor(e: ApiCallError): string {
     case 'already_deleted':
     case 'comment_gone':
       return 'The comment was deleted on the platform.';
+    case 'invalid_request':
+      return invalidRequest(e, str(d.reason));
+    case 'pending_limit_reached': {
+      const max = num(d.max);
+      return `Too many pending rule changes for this brand${max === undefined ? '' : ` (max ${max})`}; ask a person to approve or reject some.`;
+    }
+    case 'rule_limit_reached': {
+      const max = num(d.max);
+      return `This brand already has the maximum number of rules${max === undefined ? '' : ` (${max})`}; archive a rule before adding another.`;
+    }
+    case 'idempotency_key_reused':
+      return 'That idempotency key was already used with different input; use a new key.';
     case 'reply_to_hidden_comment':
       return `${str(d.platform) ?? 'This platform'} does not allow replies to hidden comments. Unhide the comment first.`;
     default:

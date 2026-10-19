@@ -54,9 +54,44 @@ describe('toToolError', () => {
       'Instagram does not allow replies to hidden comments. Unhide the comment first.',
     ],
     [
-      new ApiCallError(409, 'pending_limit_reached', 'x'),
-      'FeedBouncer API error (pending_limit_reached).',
+      new ApiCallError(409, 'pending_limit_reached', 'x', { max: 20 }),
+      'Too many pending rule changes for this brand (max 20); ask a person to approve or reject some.',
     ],
+    [
+      new ApiCallError(409, 'pending_limit_reached', 'x'),
+      'Too many pending rule changes for this brand; ask a person to approve or reject some.',
+    ],
+    [
+      new ApiCallError(409, 'rule_limit_reached', 'x', { max: 100 }),
+      'This brand already has the maximum number of rules (100); archive a rule before adding another.',
+    ],
+    [
+      new ApiCallError(422, 'idempotency_key_reused', 'x'),
+      'That idempotency key was already used with different input; use a new key.',
+    ],
+    [
+      new ApiCallError(400, 'invalid_request', 'The request is not valid.', {
+        reason: 'to_before_from',
+      }),
+      'Invalid request: `to` must be after `from`.',
+    ],
+    [
+      new ApiCallError(400, 'invalid_request', 'The request is not valid.', {
+        reason: 'to_in_future',
+      }),
+      'Invalid request: `to` must not be in the future.',
+    ],
+    [
+      new ApiCallError(400, 'invalid_request', 'The request is not valid.', {
+        reason: 'something_new',
+      }),
+      'Invalid request (something_new).',
+    ],
+    [
+      new ApiCallError(400, 'invalid_request', 'postedFrom must be before postedTo.'),
+      'Invalid request: postedFrom must be before postedTo.',
+    ],
+    [new ApiCallError(400, 'teapot', 'x'), 'FeedBouncer API error (teapot).'],
   ];
 
   it.each(cases)('maps %s', (err, expected) => {
@@ -64,6 +99,14 @@ describe('toToolError', () => {
     expect(out).toBe(expected);
     expect(out).not.toContain('fbk_');
     expect(out).not.toContain('Bearer');
+    expect(out).not.toContain('my-secret-key');
+  });
+
+  it('does not echo the idempotency key back', () => {
+    const out = text(
+      new ApiCallError(422, 'idempotency_key_reused', 'x', { key: 'my-secret-key' }),
+    );
+    expect(out).not.toContain('my-secret-key');
   });
 
   it('hides unknown errors and logs them redacted to stderr', () => {

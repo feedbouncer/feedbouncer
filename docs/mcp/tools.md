@@ -20,20 +20,24 @@ Every tool returns a text result for the model and, on success, a `structuredCon
 
 A failed call returns `isError: true` and one line of text. Invalid arguments (a malformed UUID, an unknown enum value, a missing field) are refused by the MCP layer before any request is made, with a message naming the field. Errors from the API map to these messages:
 
-| API error code                    | Message                                                                                                                                                                                           |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `not_found`                       | No comment/rule/brand with that ID in this workspace. List the inbox to get current IDs.                                                                                                          |
-| `unauthenticated`                 | The API key was rejected.                                                                                                                                                                         |
-| `insufficient_scope`              | This API key is read-only. Create a write key on the organization's API keys page.                                                                                                                |
-| `rate_limited`                    | Rate limited. Retry after N seconds. (N from `Retry-After`)                                                                                                                                       |
-| `unsupported_action`              | Instagram does not support this action. (the comment's platform)                                                                                                                                  |
-| `connection_inactive`             | Reconnect the account in FeedBouncer.                                                                                                                                                             |
-| `text_too_long`                   | Reply is longer than the platform allows (max N).                                                                                                                                                 |
-| `reply_not_allowed`               | The platform's reason, for example `comments_closed`.                                                                                                                                             |
-| `reply_to_hidden_comment`         | Facebook does not allow replies to hidden comments. Unhide the comment first.                                                                                                                     |
-| `already_deleted`, `comment_gone` | The comment was deleted on the platform.                                                                                                                                                          |
-| `rule_rejected`                   | Rule rejected (reason): message. See [propose_rule_change](#propose_rule_change).                                                                                                                 |
-| anything else                     | FeedBouncer API error (code). This includes `unreachable` (no answer within 10 seconds, or no connection), `invalid_request`, `invalid_cursor`, `rule_limit_reached` and `pending_limit_reached`. |
+| API error code                    | Message                                                                                                                         |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `not_found`                       | No comment/rule/brand with that ID in this workspace. List the inbox to get current IDs.                                        |
+| `unauthenticated`                 | The API key was rejected.                                                                                                       |
+| `insufficient_scope`              | This API key is read-only. Create a write key on the organization's API keys page.                                              |
+| `rate_limited`                    | Rate limited. Retry after N seconds. (N from `Retry-After`)                                                                     |
+| `unsupported_action`              | Instagram does not support this action. (the comment's platform)                                                                |
+| `connection_inactive`             | Reconnect the account in FeedBouncer.                                                                                           |
+| `text_too_long`                   | Reply is longer than the platform allows (max N).                                                                               |
+| `reply_not_allowed`               | The reason, for example `review_mode_active`.                                                                                   |
+| `reply_to_hidden_comment`         | Facebook does not allow replies to hidden comments. Unhide the comment first.                                                   |
+| `already_deleted`, `comment_gone` | The comment was deleted on the platform.                                                                                        |
+| `rule_rejected`                   | Rule rejected (reason): message. See [propose_rule_change](#propose_rule_change).                                               |
+| `rule_limit_reached`              | This brand already has the maximum number of rules (N); archive a rule before adding another.                                   |
+| `pending_limit_reached`           | Too many pending rule changes for this brand (max N); ask a person to approve or reject some.                                   |
+| `idempotency_key_reused`          | That idempotency key was already used with different input; use a new key.                                                      |
+| `invalid_request`                 | Invalid request: `to` must be after `from`. (or `` `to` must not be in the future``, or the API's message)                      |
+| anything else                     | FeedBouncer API error (code). This includes `unreachable` (no answer within 10 seconds, or no connection) and `invalid_cursor`. |
 
 A key of one workspace gets `not_found` for the IDs of every other workspace, exactly as for IDs that do not exist. Filtering `list_inbox` or `search_inbox` by another workspace's `brandId` returns no comments.
 
