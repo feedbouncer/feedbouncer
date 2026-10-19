@@ -1,6 +1,6 @@
 import { Body, Controller, Inject, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
-import { PgIdempotency, routeSpec } from '@feedbouncer/public-api';
+import { CreateReplyBody, PgIdempotency, routeSpec } from '@feedbouncer/public-api';
 import { parseBody, parseUuidOr404 } from '../http/validation.js';
 import { DEPS } from '../tokens.js';
 import type { AppDeps } from '../deps.js';
@@ -31,7 +31,7 @@ export class PublicRepliesController {
   ) {
     const spec = routeSpec('replyToComment');
     const id = parseUuidOr404(rawId);
-    const body = parseBody(spec.body!, rawBody) as { text: string };
+    const body = parseBody(CreateReplyBody, rawBody);
     return runIdempotent(this.#idempotency, req, reply, spec, { id }, body, (idempotencyKey) =>
       this.moderation.reply(req.apiKey, id, body.text, idempotencyKey),
     );

@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import * as z from 'zod/v4';
+import * as z from 'zod';
 import type { Summary } from '../api-client.js';
 import { UNTRUSTED_NOTICE, wrapUntrusted } from '../present.js';
 import { runTool, text, timestamp, type ToolDeps } from './common.js';

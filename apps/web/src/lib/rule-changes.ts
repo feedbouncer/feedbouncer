@@ -35,18 +35,6 @@ export const STALE_TEXT = 'Rules changed since this was proposed — ask for a n
 const base = (orgId: string, brandId: string) =>
   `/api/v1/orgs/${orgId}/brands/${brandId}/rule-changes` as const;
 
-export async function listRuleChanges(
-  orgId: string,
-  brandId: string,
-  status?: RuleChangeStatus,
-): Promise<RuleChangeView[]> {
-  const path = status ? `${base(orgId, brandId)}?status=${status}` : base(orgId, brandId);
-  return (await apiFetch<{ changes: RuleChangeView[] }>(path as `/api/${string}`)).changes;
-}
-
-export const getRuleChange = (orgId: string, brandId: string, id: string) =>
-  apiFetch<RuleChangeView>(`${base(orgId, brandId)}/${id}`);
-
 const decide =
   (decision: 'approve' | 'reject') => (orgId: string, brandId: string, id: string, note?: string) =>
     apiFetch<RuleChangeView>(`${base(orgId, brandId)}/${id}/${decision}`, {

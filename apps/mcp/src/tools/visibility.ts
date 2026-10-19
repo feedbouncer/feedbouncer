@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/server';
-import * as z from 'zod/v4';
+import * as z from 'zod';
 import { actionError, idempotencyKey, runTool, text, type ToolDeps } from './common.js';
 
 const input = z.object({

@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import * as z from 'zod/v4';
+import * as z from 'zod';
 import { runTool, type ToolDeps } from './common.js';
 import { inboxFilters, inboxPage } from './list-inbox.js';
 

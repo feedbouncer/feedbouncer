@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { McpServer } from '@modelcontextprotocol/server';
-import * as z from 'zod/v4';
+import * as z from 'zod';
 import { ApiCallError } from '../api-client.js';
 import { toToolError } from '../errors.js';
 import { actionError, idempotencyKey, runTool, text, type ToolDeps } from './common.js';

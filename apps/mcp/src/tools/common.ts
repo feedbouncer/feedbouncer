@@ -1,5 +1,5 @@
 import type { CallToolResult } from '@modelcontextprotocol/server';
-import * as z from 'zod/v4';
+import * as z from 'zod';
 import type { Logger } from '@feedbouncer/service-runtime';
 import { ApiCallError, type ApiPort } from '../api-client.js';
 import { toToolError } from '../errors.js';

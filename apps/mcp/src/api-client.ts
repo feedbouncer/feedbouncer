@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import * as z from 'zod/v4';
+import * as z from 'zod';
 import { UUID } from '@feedbouncer/service-runtime';
 import type { McpConfig } from './config.js';
 

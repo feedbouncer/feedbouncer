@@ -2,8 +2,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   approveRuleChange,
   decideRuleChange,
-  getRuleChange,
-  listRuleChanges,
   rejectRuleChange,
   ruleChangeErrorText,
   valueText,
@@ -30,20 +28,6 @@ const error = (code: string, status: number) =>
 const BASE = '/api/v1/orgs/o/brands/b/rule-changes';
 
 describe('rule change requests', () => {
-  it('lists changes, optionally filtered by status, and unwraps the envelope', async () => {
-    const calls = stubFetch(json({ changes: [{ id: 'c1' }] }));
-    await expect(listRuleChanges('o', 'b')).resolves.toEqual([{ id: 'c1' }]);
-    await listRuleChanges('o', 'b', 'pending');
-    expect(calls[0]![0]).toBe(BASE);
-    expect(calls[1]![0]).toBe(`${BASE}?status=pending`);
-  });
-
-  it('gets one change', async () => {
-    const calls = stubFetch(json({ id: 'c1' }));
-    await expect(getRuleChange('o', 'b', 'c1')).resolves.toEqual({ id: 'c1' });
-    expect(calls[0]![0]).toBe(`${BASE}/c1`);
-  });
-
   it('posts approve and reject with an optional note', async () => {
     const calls = stubFetch(json({ id: 'c1' }));
     await approveRuleChange('o', 'b', 'c1');
