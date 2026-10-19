@@ -1,4 +1,3 @@
-import { createHash, randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { PgTriage } from '@feedbouncer/actions';
 import type { ModerationActionView, RequestActionResult } from '@feedbouncer/comments';
@@ -13,6 +12,7 @@ import {
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
 import { DEPS } from '../tokens.js';
+import { requestKey } from './idempotent.js';
 
 type ModerationKind = 'hide' | 'unhide';
 
@@ -35,14 +35,6 @@ function refusalError(r: Extract<RequestActionResult, { status: 'refused' }>): E
   const refusal = Object.hasOwn(REFUSALS, r.code) ? REFUSALS[r.code] : undefined;
   return refusal ? new ApiError(...refusal) : new Error(`unexpected refusal ${r.code}`);
 }
-
-/** One API key's request is retried under the same moderation key; another key's never is. */
-const requestKey = (apiKeyId: string, idempotencyKey: string | undefined): string =>
-  `api:${apiKeyId}:${
-    idempotencyKey === undefined
-      ? randomUUID()
-      : createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 32)
-  }`;
 
 @Injectable()
 export class PublicModerationService {

@@ -216,8 +216,10 @@ export class ApiError extends Error {
       readonly handled?: HandledDetails;
       /** The platform permission a connection lacks, for 409 missing_permission. */
       readonly permission?: string;
-      /** Why a tag name was refused, for 400 invalid_tag_name. */
+      /** Why a tag name was refused (400 invalid_tag_name) or a rule change rejected (422 rule_rejected). */
       readonly reason?: string;
+      /** The existing rule a rejected rule change duplicates or conflicts with, for 422 rule_rejected. */
+      readonly ruleId?: string;
       /** The existing tag, for 409 tag_name_taken. */
       readonly tag?: unknown;
       /** The current number of comments with the tag, for 409 tag_count_changed. */
@@ -241,6 +243,7 @@ export function errorBody(e: ApiError): {
     handled?: HandledDetails;
     permission?: string;
     reason?: string;
+    ruleId?: string;
     tag?: unknown;
     count?: number;
   };

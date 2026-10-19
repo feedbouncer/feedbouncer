@@ -77,7 +77,7 @@ export interface RouteSpec {
   readonly summary: string;
   readonly params?: z.ZodObject;
   readonly query?: z.ZodObject;
-  readonly body?: z.ZodObject;
+  readonly body?: z.ZodType;
   /** The request body may be omitted. */
   readonly bodyOptional?: boolean;
   /** Accepts the Idempotency-Key header. */
@@ -235,6 +235,93 @@ export const ReplyResult = z
 export const KeyResource = z
   .object({ organizationId: z.uuid(), name: z.string(), scope: z.enum(['read', 'write']) })
   .meta({ id: 'Key' });
+
+export const ListRulesQuery = z.strictObject({ brandId: z.uuid().optional() });
+
+const PROPOSAL_OPERATIONS = ['create', 'update', 'archive'] as const;
+const PROPOSAL_STATUSES = ['pending', 'approved', 'rejected', 'expired', 'stale'] as const;
+const RULE_FIELDS = ['name', 'conditions', 'actions', 'mode', 'enabled'] as const;
+
+export const RuleResource = z
+  .object({
+    id: z.uuid(),
+    name: z.string(),
+    conditions: z.record(z.string(), z.unknown()),
+    actions: z.array(z.record(z.string(), z.unknown())),
+    mode: z.enum(['enforce', 'suggest']),
+    priority: z.int(),
+    enabled: z.boolean(),
+  })
+  .meta({ id: 'Rule' });
+
+export const RuleChangeSummary = z
+  .object({
+    id: z.uuid(),
+    operation: z.enum(PROPOSAL_OPERATIONS),
+    ruleId: z.uuid().nullable().meta({ description: 'The rule changed; null for a create.' }),
+    status: z.enum(PROPOSAL_STATUSES),
+    expiresAt: z.iso.datetime(),
+    decidedAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: 'RuleChangeSummary' });
+
+export const RuleSetResource = z
+  .object({
+    brands: z.array(
+      z.object({
+        id: z.uuid(),
+        name: z.string(),
+        ruleRevision: z.int().meta({ description: "Changes whenever the brand's rules change." }),
+        rules: z.array(RuleResource).meta({ description: 'Live rules, in evaluation order.' }),
+        changes: z.array(RuleChangeSummary).meta({
+          description: 'Proposals that are pending or were settled in the last 7 days.',
+        }),
+      }),
+    ),
+  })
+  .meta({ id: 'RuleSet' });
+
+const ruleFields = z.record(z.string(), z.unknown());
+const proposalBase = {
+  brandId: z.uuid(),
+  rationale: z.string().max(1000).optional().meta({ description: 'Shown to the reviewer.' }),
+};
+export const ProposeRuleChangeBody = z
+  .discriminatedUnion('operation', [
+    z.strictObject({
+      ...proposalBase,
+      operation: z.literal('create'),
+      rule: ruleFields.meta({
+        description:
+          '`name`, `conditions`, `actions`, `mode` (default `suggest`) and `enabled` (default true), as in the rules of `listRules`.',
+      }),
+    }),
+    z.strictObject({
+      ...proposalBase,
+      operation: z.literal('update'),
+      ruleId: z.uuid(),
+      patch: ruleFields.meta({ description: 'The rule fields to change.' }),
+    }),
+    z.strictObject({ ...proposalBase, operation: z.literal('archive'), ruleId: z.uuid() }),
+  ])
+  .meta({ id: 'ProposeRuleChangeRequest' });
+
+export const RuleChangeProposalResource = z
+  .object({
+    id: z.uuid(),
+    brandId: z.uuid(),
+    operation: z.enum(PROPOSAL_OPERATIONS),
+    ruleId: z.uuid().nullable(),
+    status: z.enum(PROPOSAL_STATUSES),
+    diff: z.array(
+      z.object({ field: z.enum(RULE_FIELDS), before: z.unknown(), after: z.unknown() }),
+    ),
+    warnings: z.array(z.string()),
+    expiresAt: z.iso.datetime(),
+    baseRuleRevision: z.int(),
+    reviewUrl: z.url().meta({ description: 'Where a person approves or rejects the change.' }),
+  })
+  .meta({ id: 'RuleChangeProposal' });
 
 const moderationSpec = (kind: 'hide' | 'unhide'): RouteSpec => ({
   id: `${kind}Comment`,
@@ -466,6 +553,36 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     idempotent: false,
     responses: { 200: PeriodSummaryResource },
     errors: ['invalid_request', 'not_found'],
+  },
+  {
+    id: 'listRules',
+    method: 'GET',
+    path: '/v1/rules',
+    scope: 'read',
+    summary: 'List the live rules and recent rule-change proposals of every brand, or of one',
+    query: ListRulesQuery,
+    idempotent: false,
+    responses: { 200: RuleSetResource },
+    errors: ['invalid_request', 'not_found'],
+  },
+  {
+    id: 'proposeRuleChange',
+    method: 'POST',
+    path: '/v1/rule-change-proposals',
+    scope: 'write',
+    summary:
+      'Propose a rule change for a person to approve in the dashboard; no rule changes until then. Answers 200 with the waiting proposal when the same change is already pending. 422 `rule_rejected` carries `reason`, and `ruleId` for a duplicate or conflicting rule',
+    body: ProposeRuleChangeBody,
+    idempotent: true,
+    responses: { 200: RuleChangeProposalResource, 201: RuleChangeProposalResource },
+    errors: [
+      'invalid_request',
+      'not_found',
+      'rule_rejected',
+      'rule_limit_reached',
+      'pending_limit_reached',
+      ...IDEMPOTENCY_ERRORS,
+    ],
   },
   {
     id: 'getApiKey',

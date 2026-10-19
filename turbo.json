@@ -23,7 +23,8 @@
     "API_INTERNAL_URL",
     "WEB_WATCH_POLL_MS",
     "BETA_FEEDBACK_URL",
-    "BETA_SUPPORT_EMAIL"
+    "BETA_SUPPORT_EMAIL",
+    "RULE_PROPOSAL_TTL_HOURS"
   ],
   "tasks": {
     "build": {

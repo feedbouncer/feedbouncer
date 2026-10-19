@@ -15,6 +15,8 @@ import { PublicRepliesController } from './public-api/replies.controller.js';
 import { PublicActionsController } from './public-api/actions.controller.js';
 import { PublicKeyController } from './public-api/key.controller.js';
 import { PublicSummaryController } from './public-api/summary.controller.js';
+import { PublicRulesController } from './public-api/rules.controller.js';
+import { PublicRuleProposalsService } from './public-api/rule-proposals.service.js';
 import { PublicModerationService } from './public-api/moderation.service.js';
 import { PublicWebhookEndpointsController } from './public-api/webhook-endpoints.controller.js';
 import { OpenApiController } from './public-api/openapi.controller.js';
@@ -148,6 +150,7 @@ export class AppModule {
         PublicActionsController,
         PublicKeyController,
         PublicSummaryController,
+        PublicRulesController,
         PublicWebhookEndpointsController,
       ],
       providers: [
@@ -178,6 +181,7 @@ export class AppModule {
         ApiKeysService,
         ApiKeyGuard,
         PublicModerationService,
+        PublicRuleProposalsService,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.
         { provide: CONNECTOR_STACK, useValue: deps.connectors?.stack ?? null },

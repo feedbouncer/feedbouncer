@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyReply } from 'fastify';
 import {
   IDEMPOTENCY_KEY,
@@ -9,6 +10,14 @@ import {
 } from '@feedbouncer/public-api';
 import { ApiError, errorBody } from '../http/errors.js';
 import type { ApiKeyRequest } from './api-key.guard.js';
+
+/** One API key's request is retried under the same request key; another key's never is. */
+export const requestKey = (apiKeyId: string, idempotencyKey: string | undefined): string =>
+  `api:${apiKeyId}:${
+    idempotencyKey === undefined
+      ? randomUUID()
+      : createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 32)
+  }`;
 
 /**
  * Runs `work` once per Idempotency-Key and API key, storing its response (client errors included)

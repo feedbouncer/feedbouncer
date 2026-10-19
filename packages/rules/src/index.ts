@@ -75,4 +75,12 @@ export {
   type RuleProposalInput,
   type RuleSnapshot,
 } from './proposal.js';
+export {
+  PgRuleProposalStore,
+  effectiveStatus,
+  type NewProposal,
+  type ProposalOperation,
+  type ProposalRow,
+  type ProposalStatus,
+} from './proposal-store.js';
 export { PROBE_TEXTS, checkOverbroad } from './overbroad.js';

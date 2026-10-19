@@ -125,8 +125,8 @@ export class PgRuleStore {
     this.#pool = pool;
   }
 
-  async list(scope: BrandScope): Promise<StoredRule[]> {
-    const { rows } = await this.#pool.query<RuleRow>(
+  async list(scope: BrandScope, db: pg.Pool | pg.PoolClient = this.#pool): Promise<StoredRule[]> {
+    const { rows } = await db.query<RuleRow>(
       `SELECT ${COLS} FROM rule
         WHERE organization_id = $1 AND brand_id = $2 AND archived_at IS NULL ${ORDER}`,
       [scope.organizationId, scope.brandId],
