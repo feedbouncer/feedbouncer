@@ -177,6 +177,20 @@ describe('loadApiEnv', () => {
     });
   });
 
+  describe('rule proposal lifetime', () => {
+    it('defaults to 24 hours', () => {
+      expect(load(base).ruleProposalTtlHours).toBe(24);
+    });
+    it('reads the hours and rejects values outside 1-168', () => {
+      expect(load({ ...base, RULE_PROPOSAL_TTL_HOURS: '2' }).ruleProposalTtlHours).toBe(2);
+      for (const bad of ['0', '169', 'abc', '1.5']) {
+        expect(() => load({ ...base, RULE_PROPOSAL_TTL_HOURS: bad })).toThrow(
+          /RULE_PROPOSAL_TTL_HOURS/,
+        );
+      }
+    });
+  });
+
   describe('webhook destinations', () => {
     it('allows no private network by default', () => {
       expect(load(base).webhookAllowedPrivateCidrs).toEqual([]);

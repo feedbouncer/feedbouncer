@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist", "rootDir": "src", "types": ["node"] },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/service-runtime/tsconfig.build.json" },
+    { "path": "../api/tsconfig.build.json" },
+    { "path": "../../packages/connector-facebook/tsconfig.build.json" },
+    { "path": "../../packages/public-api/tsconfig.build.json" }
+  ]
+}

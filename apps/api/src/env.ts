@@ -88,6 +88,8 @@ export interface ApiEnv {
   readonly policy: ReturnType<typeof loadPolicyLimits>;
   /** Requests per minute allowed to each API key of the public /v1 API. */
   readonly publicApiRateLimitPerMinute: number;
+  /** Hours a rule-change proposal made through the public API waits for review before it expires. */
+  readonly ruleProposalTtlHours: number;
   /** Private networks, besides public addresses, that webhook endpoints may point at. Empty by default. */
   readonly webhookAllowedPrivateCidrs: readonly string[];
   readonly telemetry: TelemetryConfig;
@@ -176,6 +178,11 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
       max: 10_000,
       fallback: 60,
     }),
+    ruleProposalTtlHours: readInt(env, 'RULE_PROPOSAL_TTL_HOURS', {
+      min: 1,
+      max: 168,
+      fallback: 24,
+    }),
     webhookAllowedPrivateCidrs: readAllowedPrivateCidrs(env),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),
@@ -189,6 +196,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     appEnv,
     port: config.port,
     publicApiRateLimitPerMinute: config.publicApiRateLimitPerMinute,
+    ruleProposalTtlHours: config.ruleProposalTtlHours,
     logLevel: config.logLevel,
     publicWebUrl: publicWebUrl.origin,
     trustProxyHops: config.trustProxyHops,

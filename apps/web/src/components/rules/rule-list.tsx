@@ -12,7 +12,12 @@ function isTrustedAuthorList(r: RuleView): boolean {
   return r.kind === 'author' && c?.type === 'author' && c.list === 'trusted';
 }
 
-export function RuleList(props: { orgId: string; brandId: string; rules: RuleView[] }) {
+export function RuleList(props: {
+  orgId: string;
+  brandId: string;
+  rules: RuleView[];
+  pendingChanges: number;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +52,21 @@ export function RuleList(props: { orgId: string; brandId: string; rules: RuleVie
     void run(`${base}/${rule.id}`, { method: 'DELETE' });
   }
 
-  if (props.rules.length === 0) return <p>No rules yet.</p>;
+  const pending =
+    props.pendingChanges > 0 ? (
+      <p>
+        <Link href={`${pages}/changes`}>
+          {props.pendingChanges} pending {props.pendingChanges === 1 ? 'change' : 'changes'}
+        </Link>
+      </p>
+    ) : null;
+  if (props.rules.length === 0)
+    return (
+      <div>
+        {pending}
+        <p>No rules yet.</p>
+      </div>
+    );
   // Trusted-author rules are always checked first, so they are never moved or passed.
   const movable = (index: number) => {
     const r = props.rules[index];
@@ -55,6 +74,7 @@ export function RuleList(props: { orgId: string; brandId: string; rules: RuleVie
   };
   return (
     <div>
+      {pending}
       {error ? <p role="alert">{error}</p> : null}
       <table>
         <thead>

@@ -4,6 +4,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./testing": {
+      "@feedbouncer/source": "./src/testing/index.ts",
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc --build tsconfig.build.json",
     "dev": "tsx watch --clear-screen=false src/main.ts",

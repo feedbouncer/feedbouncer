@@ -121,6 +121,20 @@ describe('buildOpenApiDocument', () => {
     });
   });
 
+  it('documents the optional error details: max, reason and ruleId', () => {
+    const error = (
+      doc.components.schemas.Error as {
+        properties: { error: { required: string[]; properties: Record<string, unknown> } };
+      }
+    ).properties.error;
+    expect(error.required).toEqual(['code', 'message']);
+    expect(error.properties).toMatchObject({
+      max: { type: 'integer' },
+      reason: { type: 'string' },
+      ruleId: { type: 'string', format: 'uuid' },
+    });
+  });
+
   it('is deterministic', () => {
     expect(JSON.stringify(buildOpenApiDocument(fixture))).toBe(JSON.stringify(doc));
   });

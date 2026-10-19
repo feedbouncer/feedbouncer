@@ -199,6 +199,13 @@ beforeAll(async () => {
     name: 'b key',
     scope: 'write',
   });
+  const bProposal = await api.pool.query(
+    `INSERT INTO rule_change_proposal (organization_id, brand_id, operation, target_rule_id, before,
+       diff, base_rule_revision, proposed_by_api_key_id, request_key, expires_at)
+     SELECT $1, $2, 'archive', $3, '{}'::jsonb, '[]'::jsonb, rule_revision, $4, 'iso', now() + interval '1 hour'
+       FROM brand WHERE id = $2 RETURNING id`,
+    [B.orgId, B.brandId, bRule.rows[0].id, bApiKey.key.id],
+  );
   const grants = new PgOAuthGrantStore(api.pool, api.deps.env.encryption);
   const bGrantIds = { facebook: randomUUID(), instagram: randomUUID() };
   for (const platform of ['facebook', 'instagram'] as const) {
@@ -245,6 +252,7 @@ beforeAll(async () => {
     bGrantIds,
     bAlertChannelId: bChannel.channel.id,
     bApiKeyId: bApiKey.key.id,
+    bProposalId: bProposal.rows[0].id,
   };
 });
 afterAll(() => api.close());
@@ -297,6 +305,9 @@ async function snapshot(orgId: string) {
     ),
     apiKeys: await q(
       'SELECT id, name, revoked_at FROM api_key WHERE organization_id = $1 ORDER BY id',
+    ),
+    ruleChanges: await q(
+      'SELECT id, status, decided_at FROM rule_change_proposal WHERE organization_id = $1 ORDER BY id',
     ),
     domains: await q('SELECT id, domain FROM brand_domain WHERE organization_id = $1 ORDER BY id'),
     grants: await q('SELECT id FROM oauth_grant WHERE organization_id = $1 ORDER BY id'),

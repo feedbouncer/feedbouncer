@@ -19,8 +19,10 @@ const rule = (over: Partial<RuleView>): RuleView => ({
   ...over,
 });
 
-const render = (rules: RuleView[]) =>
-  renderToStaticMarkup(<RuleList orgId="o" brandId="b" rules={rules} />);
+const render = (rules: RuleView[], pendingChanges = 0) =>
+  renderToStaticMarkup(
+    <RuleList orgId="o" brandId="b" rules={rules} pendingChanges={pendingChanges} />,
+  );
 
 describe('RuleList', () => {
   it('lists rules in the given order with action labels', () => {
@@ -90,5 +92,17 @@ describe('RuleList', () => {
       }),
     ]);
     expect(html).toContain('Always checked first');
+  });
+
+  it('links to pending rule changes only when there are some', () => {
+    expect(render([rule({})])).not.toContain('pending change');
+    const html = render([rule({})], 2);
+    expect(html).toContain('2 pending changes');
+    expect(html).toContain('href="/orgs/o/brands/b/rules/changes"');
+    expect(render([rule({})], 1)).toContain('1 pending change<');
+  });
+
+  it('still links to pending changes when there are no rules', () => {
+    expect(render([], 1)).toContain('1 pending change');
   });
 });

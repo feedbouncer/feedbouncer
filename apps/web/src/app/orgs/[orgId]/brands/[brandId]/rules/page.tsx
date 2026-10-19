@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { RuleList } from '../../../../../../components/rules/rule-list';
 import { isUuid } from '../../../../../../lib/ids';
+import type { RuleChangeView } from '../../../../../../lib/rule-changes';
 import type { RuleView } from '../../../../../../lib/rules';
 import { dataOrThrow, requireMe, serverGet } from '../../../../../../lib/server-api';
 
@@ -16,6 +17,12 @@ export default async function RulesPage({
   const { rules } = dataOrThrow(
     await serverGet<{ rules: RuleView[] }>(`/api/v1/orgs/${orgId}/brands/${brandId}/rules`),
     'rules',
+  );
+  const { changes } = dataOrThrow(
+    await serverGet<{ changes: RuleChangeView[] }>(
+      `/api/v1/orgs/${orgId}/brands/${brandId}/rule-changes?status=pending`,
+    ),
+    'rule changes',
   );
   const brand = `/orgs/${orgId}/brands/${brandId}`;
   return (
@@ -33,7 +40,7 @@ export default async function RulesPage({
         <Link href={`${brand}/classifier`}>Classifier</Link> ·{' '}
         <Link href={`${brand}/domains`}>Own domains</Link>
       </p>
-      <RuleList orgId={orgId} brandId={brandId} rules={rules} />
+      <RuleList orgId={orgId} brandId={brandId} rules={rules} pendingChanges={changes.length} />
       <p>
         <Link href={`${brand}/comments`}>Comments</Link> ·{' '}
         <Link href={`/orgs/${orgId}`}>Back to organization</Link>

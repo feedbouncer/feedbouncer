@@ -10,8 +10,9 @@ Create an API key in the dashboard (owners and admins only) and send it as a bea
 Authorization: Bearer fbk_<id>_<secret>
 ```
 
-- A key belongs to one organization and can only see that organization's brands, comments and flagged items. Asking for another organization's ids, an archived brand or a deleted comment returns `404`.
-- Scopes: `read` keys can call every `GET` route except the webhook endpoint ones; `write` keys can also hide comments and manage webhook endpoints. Reading webhook endpoints needs a `write` key because it reveals where events are sent.
+- A key belongs to one organization and can only see that organization's brands, comments and flagged items. Asking for another organization's ids, an archived brand or a deleted comment returns `404`. The exception is list filters: `GET /v1/comments?brandId=` with a brand outside the organization returns an empty page.
+- Scopes: `read` keys can call every `GET` route except the webhook endpoint ones; `write` keys can also hide, unhide and reply to comments, propose rule changes and manage webhook endpoints. Reading webhook endpoints needs a `write` key because it reveals where events are sent.
+- `GET /v1/key` describes the key making the request (`organizationId`, `name`, `scope`). Use it to check a key before doing anything else.
 - The secret is shown once and only a hash is stored. Revoking a key takes effect on its next request. Keys keep working after the admin who created them leaves, so revoke them when someone leaves.
 
 ## Errors, rate limits and idempotency
@@ -19,6 +20,26 @@ Authorization: Bearer fbk_<id>_<secret>
 - Errors are `{ "error": { "code": "...", "message": "..." } }`. Match on `code`; each route lists its codes and statuses in the reference.
 - Each key may make a limited number of requests per minute (`PUBLIC_API_RATE_LIMIT_PER_MINUTE`, default 60). Every response carries `X-RateLimit-Limit` and `X-RateLimit-Remaining`. Over the limit you get `429 rate_limited` with `Retry-After` in seconds.
 - Every route that changes state except `DELETE /v1/webhook-endpoints/{id}` accepts an `Idempotency-Key` header (1 to 128 characters of letters, digits and `. _ : -`). A repeat with the same key and body within 24 hours returns the first response; the same key with a different body is `422 idempotency_key_reused`.
+
+## Comments, replies and moderation
+
+- `GET /v1/comments` lists comments newest first and pages with `cursor`. Filters: `brandId`, `platform` (`facebook`, `instagram`), `status` (`visible`, `hidden`, `flagged`, `replied`, `unanswered`), `postedFrom` (inclusive) and `postedTo` (exclusive), and `q`, a case-insensitive substring (2 to 200 characters) of the comment text or the author name. Filters combine, and a search with no match is an empty page. A cursor keeps the result set it started with, so later pages neither repeat nor skip comments when new ones arrive.
+- `POST /v1/comments/{id}/hide` and `/unhide` ask the platform to change a comment's visibility. A comment already in that state answers `200` with action status `noop` and code `already_hidden` or `already_visible`; otherwise the answer is `202` with a `pending` action.
+- `POST /v1/comments/{id}/replies` with `{"text": "..."}` posts a public reply as the brand. It answers `202` with a `pending` action that the worker then posts, or `200` when the outcome is known at once. Errors: `422 text_too_long` (with `max`), `422 reply_not_allowed` (with `reason`), `422 unsupported_action`, `409 connection_inactive`. Send an `Idempotency-Key` so a retry cannot post twice.
+- `GET /v1/actions/{id}` returns the status of a hide, unhide or reply: `pending`, `applied` (for a reply, `platformRef` is the reply's platform ID), `noop`, `not_eligible` or `failed`, with a `code` for the last three.
+
+## Summaries
+
+`GET /v1/summary?from=&to=&brandId=` returns totals (comments, hidden, replied, unanswered), categories, the rules that matched most and the threads with the most replies. `to` (exclusive) defaults to now and `from` (inclusive) to 7 days before it. A longer period than 92 days is cut to its last 92 days and `bounded` says so. `to` before `from` or in the future is `400 invalid_request` with `reason` `to_before_from` or `to_in_future`.
+
+## Rules and rule-change proposals
+
+- `GET /v1/rules` lists the live rules of every brand (or of `brandId`) with the brand's `ruleRevision` and the rule-change proposals of the last 7 days. It changes nothing.
+- `POST /v1/rule-change-proposals` proposes creating, updating or archiving a rule: `{"brandId", "operation": "create", "rule": {...}}`, `{"brandId", "operation": "update", "ruleId", "patch": {...}}` or `{"brandId", "operation": "archive", "ruleId"}`, each with an optional `rationale`. It answers `201` with a `pending` proposal, its `diff`, `warnings`, `expiresAt` and the `reviewUrl` of its page in the web app. No rule changes until a person approves it there; no API route approves. The same change while one is pending answers `200` with the waiting proposal.
+- A proposal that could never be applied is `422 rule_rejected` with a `reason` (`invalid_rule`, `matches_everything`, `duplicate_of_rule`, `conflicts_with_rule`, `step_not_allowed_via_api`, `no_change`) and, for a duplicate or conflict, the other rule's `ruleId`. A brand with 200 rules gets `409 rule_limit_reached`, and one with 20 pending proposals `409 pending_limit_reached`.
+- Proposals expire after `RULE_PROPOSAL_TTL_HOURS` (default 24). How they are approved, and why they go stale: [docs/mcp/approval.md](../mcp/approval.md).
+
+The MCP server in `apps/mcp` wraps these routes as tools for MCP clients: see [docs/mcp](../mcp/README.md).
 
 ## Webhook endpoints
 

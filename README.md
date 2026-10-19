@@ -33,6 +33,7 @@ pnpm test
 | `apps/api`                     | HTTP API (NestJS on Fastify): accounts, organizations, brands, health                                        |
 | `apps/web`                     | Web app (Next.js)                                                                                            |
 | `apps/worker`                  | Background worker that runs queued jobs                                                                      |
+| `apps/mcp`                     | MCP server over stdio, a client of the public API                                                            |
 | `apps/placeholder-app`         | Minimal app used as the template for new apps and Docker images                                              |
 | `packages/authz`               | Roles and authorization checks                                                                               |
 | `packages/comments`            | Comments: storage, moderation, lifecycle, webhooks, reconnect emails                                         |
@@ -99,6 +100,7 @@ Sign-up, email confirmation, password reset and invitations send real emails. In
 - **`AUTH_SECRET`** signs session cookies and is required (at least 32 characters). `.env.example` has a development-only value; for anything else generate one with `openssl rand -base64 48`.
 - **`PUBLIC_WEB_URL`** is set by compose to `http://localhost:<WEB_HOST_PORT>`. It must be the exact origin users type: cookies, the origin check on state-changing requests and the links in emails all depend on it. Browse the app as `localhost`, not `127.0.0.1`.
 - The public REST API and outgoing webhooks are documented in [docs/api/README.md](docs/api/README.md).
+- The MCP server, which lets desktop and IDE MCP clients work with a workspace through the API, is documented in [docs/mcp/README.md](docs/mcp/README.md).
 - API settings such as `TRUST_PROXY_HOPS` (reverse proxies trusted for the client IP) and `MAIL_FROM`, plus the roles, routes and rate limits, are described in [apps/api/README.md](apps/api/README.md).
 
 ### Facebook Pages (optional)

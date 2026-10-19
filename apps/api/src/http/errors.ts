@@ -52,6 +52,9 @@ export type ErrorCode =
   | 'confirmation_required'
   | 'rule_limit_reached'
   | 'rule_order_mismatch'
+  | 'proposal_not_pending'
+  | 'proposal_expired'
+  | 'proposal_stale'
   | 'invalid_domain'
   | 'domain_exists'
   | 'domain_limit_reached'
@@ -89,7 +92,10 @@ export type ErrorCode =
   | 'webhook_endpoint_limit_reached'
   | 'webhook_endpoint_disabled'
   | 'webhook_event_unavailable'
-  | 'webhook_delivery_in_progress';
+  | 'webhook_delivery_in_progress'
+  | 'reply_not_allowed'
+  | 'rule_rejected'
+  | 'pending_limit_reached';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
@@ -142,6 +148,9 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   confirmation_required: 'Confirm this action to continue.',
   rule_limit_reached: 'This brand has reached the maximum number of rules.',
   rule_order_mismatch: 'The order must list every rule of the brand exactly once.',
+  proposal_not_pending: 'This rule change was already decided.',
+  proposal_expired: 'This rule change has expired. Ask for a new proposal.',
+  proposal_stale: 'Rules changed since this was proposed. Ask for a new proposal.',
   invalid_domain: 'Enter a valid domain name.',
   domain_exists: 'This domain is already in the list.',
   domain_limit_reached: 'This brand has reached the maximum number of own domains.',
@@ -181,6 +190,9 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   webhook_endpoint_disabled: 'This webhook endpoint is disabled. Re-enable it first.',
   webhook_event_unavailable: 'The comment of this event is no longer available.',
   webhook_delivery_in_progress: 'This delivery is still being attempted.',
+  reply_not_allowed: 'A reply cannot be posted to this comment right now.',
+  rule_rejected: 'The rule was rejected.',
+  pending_limit_reached: 'Too many proposals are waiting for review.',
 };
 
 export interface ErrorIssue {
@@ -210,8 +222,10 @@ export class ApiError extends Error {
       readonly handled?: HandledDetails;
       /** The platform permission a connection lacks, for 409 missing_permission. */
       readonly permission?: string;
-      /** Why a tag name was refused, for 400 invalid_tag_name. */
+      /** Why a tag name was refused (400 invalid_tag_name) or a rule change rejected (422 rule_rejected). */
       readonly reason?: string;
+      /** The existing rule a rejected rule change duplicates or conflicts with, for 422 rule_rejected. */
+      readonly ruleId?: string;
       /** The existing tag, for 409 tag_name_taken. */
       readonly tag?: unknown;
       /** The current number of comments with the tag, for 409 tag_count_changed. */
@@ -235,6 +249,7 @@ export function errorBody(e: ApiError): {
     handled?: HandledDetails;
     permission?: string;
     reason?: string;
+    ruleId?: string;
     tag?: unknown;
     count?: number;
   };

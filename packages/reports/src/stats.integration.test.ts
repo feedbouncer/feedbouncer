@@ -479,7 +479,10 @@ describe('computeWeeklyStats', () => {
 describe('@feedbouncer/reports source', () => {
   it('no statement in @feedbouncer/reports selects comment.body', async () => {
     const dir = new URL('.', import.meta.url);
-    const files = (await readdir(dir)).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
+    // The period summary is the API's read model, not the email's: it shows thread previews.
+    const files = (await readdir(dir)).filter(
+      (f) => f.endsWith('.ts') && !f.endsWith('.test.ts') && f !== 'period-summary.ts',
+    );
     expect(files).toContain('stats.ts');
     expect(files).toContain('sql.ts');
     for (const f of files) {

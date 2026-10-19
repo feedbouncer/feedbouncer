@@ -11,6 +11,12 @@ import { ApiKeyGuard } from './public-api/api-key.guard.js';
 import { PublicCommentsController } from './public-api/comments.controller.js';
 import { PublicFlaggedItemsController } from './public-api/flagged-items.controller.js';
 import { PublicModerationController } from './public-api/moderation.controller.js';
+import { PublicRepliesController } from './public-api/replies.controller.js';
+import { PublicActionsController } from './public-api/actions.controller.js';
+import { PublicKeyController } from './public-api/key.controller.js';
+import { PublicSummaryController } from './public-api/summary.controller.js';
+import { PublicRulesController } from './public-api/rules.controller.js';
+import { PublicRuleProposalsService } from './public-api/rule-proposals.service.js';
 import { PublicModerationService } from './public-api/moderation.service.js';
 import { PublicWebhookEndpointsController } from './public-api/webhook-endpoints.controller.js';
 import { OpenApiController } from './public-api/openapi.controller.js';
@@ -64,6 +70,8 @@ import { PoliciesController } from './policies/policies.controller.js';
 import { PoliciesService } from './policies/policies.service.js';
 import { ActivityController } from './rules/activity.controller.js';
 import { DomainsController } from './rules/domains.controller.js';
+import { RuleChangesController } from './rule-changes/rule-changes.controller.js';
+import { RuleChangesService } from './rule-changes/rule-changes.service.js';
 import { RulesController } from './rules/rules.controller.js';
 import { RulesService } from './rules/rules.service.js';
 import { OrgController, OrgsListController } from './orgs/orgs.controller.js';
@@ -117,6 +125,7 @@ export class AppModule {
         TagsController,
         AdsController,
         RulesController,
+        RuleChangesController,
         ActionsController,
         ReviewController,
         HiddenTodayController,
@@ -140,6 +149,11 @@ export class AppModule {
         PublicCommentsController,
         PublicFlaggedItemsController,
         PublicModerationController,
+        PublicRepliesController,
+        PublicActionsController,
+        PublicKeyController,
+        PublicSummaryController,
+        PublicRulesController,
         PublicWebhookEndpointsController,
       ],
       providers: [
@@ -157,6 +171,7 @@ export class AppModule {
         TagsService,
         AdsService,
         RulesService,
+        RuleChangesService,
         ActionsService,
         HiddenTodayService,
         ReviewModeService,
@@ -170,6 +185,7 @@ export class AppModule {
         ApiKeysService,
         ApiKeyGuard,
         PublicModerationService,
+        PublicRuleProposalsService,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.
         { provide: CONNECTOR_STACK, useValue: deps.connectors?.stack ?? null },

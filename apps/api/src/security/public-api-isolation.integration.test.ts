@@ -36,6 +36,12 @@ beforeAll(async () => {
      VALUES ($1, $2, $3, $4, 'user') RETURNING id`,
     [B.orgId, scope.brandId, scope.connectionId, comment.rows[0].id],
   );
+  const action = await api.pool.query(
+    `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind,
+                                    actor_type, request_key, status, completed_at)
+     VALUES ($1, $2, $3, $4, 'hide', 'system', 'piso-b', 'noop', now()) RETURNING id`,
+    [B.orgId, scope.brandId, scope.connectionId, comment.rows[0].id],
+  );
   const delivery = await api.pool.query(`SELECT id FROM webhook_delivery WHERE endpoint_id = $1`, [
     bEndpointId,
   ]);
@@ -49,6 +55,7 @@ beforeAll(async () => {
     aWriteToken: key.token.reveal(),
     bCommentId: comment.rows[0].id,
     bReviewItemId: review.rows[0].id,
+    bActionId: action.rows[0].id,
     aEndpointId,
     bEndpointId,
     bDeliveryId: delivery.rows[0].id,
@@ -102,6 +109,7 @@ describe('public API tenant isolation', () => {
       const before = await snapshot(f.B.orgId);
       expect(before.comments.length).toBeGreaterThan(0);
       expect(before.reviewItems.length).toBeGreaterThan(0);
+      expect(before.actions.length).toBeGreaterThan(0);
       expect(before.webhookDeliveries.length).toBeGreaterThan(0);
       const [method] = c.route.split(' ');
       const r = await api.req(method!, c.url(f), {

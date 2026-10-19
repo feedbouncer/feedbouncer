@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './constants.js';
 import type { ApiKeyScope } from './keys/token.js';
+import { ACTION_STATUSES, ActionResource } from './resources/action.js';
 import { CommentResource } from './resources/comment.js';
 import { FlaggedItemResource } from './resources/flagged-item.js';
 import { pageOf } from './resources/page.js';
@@ -31,6 +32,11 @@ export const PUBLIC_ERROR_CODES = [
   'webhook_endpoint_disabled',
   'webhook_event_unavailable',
   'webhook_delivery_in_progress',
+  'text_too_long',
+  'reply_not_allowed',
+  'rule_rejected',
+  'rule_limit_reached',
+  'pending_limit_reached',
 ] as const;
 export type PublicErrorCode = (typeof PUBLIC_ERROR_CODES)[number];
 
@@ -47,9 +53,14 @@ export const PUBLIC_ERROR_STATUS: Readonly<Record<PublicErrorCode, number>> = {
   webhook_endpoint_disabled: 409,
   webhook_event_unavailable: 409,
   webhook_delivery_in_progress: 409,
+  rule_limit_reached: 409,
+  pending_limit_reached: 409,
   idempotency_key_reused: 422,
   unsupported_action: 422,
   invalid_webhook_url: 422,
+  text_too_long: 422,
+  reply_not_allowed: 422,
+  rule_rejected: 422,
   rate_limited: 429,
   internal_error: 500,
   temporarily_unavailable: 503,
@@ -66,7 +77,7 @@ export interface RouteSpec {
   readonly summary: string;
   readonly params?: z.ZodObject;
   readonly query?: z.ZodObject;
-  readonly body?: z.ZodObject;
+  readonly body?: z.ZodType;
   /** The request body may be omitted. */
   readonly bodyOptional?: boolean;
   /** Accepts the Idempotency-Key header. */
@@ -80,8 +91,16 @@ export interface RouteSpec {
 const timestamp = z.iso.datetime({ offset: true });
 
 export const ListCommentsQuery = z.strictObject({
-  status: z.enum(['visible', 'hidden', 'flagged']).optional(),
+  status: z.enum(['visible', 'hidden', 'flagged', 'replied', 'unanswered']).optional(),
   brandId: z.uuid().optional(),
+  platform: z.enum(['facebook', 'instagram']).optional(),
+  q: z
+    .string()
+    .trim()
+    .min(2)
+    .max(200)
+    .optional()
+    .meta({ description: 'Case-insensitive substring of the comment text or author name' }),
   postedFrom: timestamp.optional().meta({ description: 'Inclusive. ISO 8601 with an offset.' }),
   postedTo: timestamp.optional().meta({ description: 'Exclusive. ISO 8601 with an offset.' }),
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
@@ -96,6 +115,50 @@ export const ListFlaggedItemsQuery = z.strictObject({
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   cursor: z.string().max(512).optional(),
 });
+
+export const GetSummaryQuery = z.strictObject({
+  from: timestamp.optional().meta({
+    description: 'Inclusive. Defaults to 7 days before `to`; at most 92 days before it.',
+  }),
+  to: timestamp.optional().meta({ description: 'Exclusive. Defaults to now.' }),
+  brandId: z.uuid().optional(),
+});
+
+export const PeriodSummaryResource = z
+  .object({
+    period: z.object({ from: z.iso.datetime(), to: z.iso.datetime() }),
+    bounded: z
+      .object({
+        requestedFrom: z.iso.datetime(),
+        reason: z.literal('max_range_92_days'),
+      })
+      .nullable()
+      .meta({ description: 'Set when the requested start was moved forward to fit 92 days.' }),
+    totals: z
+      .object({ comments: z.int(), hidden: z.int(), replied: z.int(), unanswered: z.int() })
+      .meta({
+        description:
+          "Counts of other people's comments posted in the period. Deleted comments and comments of archived brands are not counted.",
+      }),
+    categories: z.array(z.object({ category: z.string(), count: z.int() })).meta({
+      description:
+        'The ten most common categories the classifier flagged (hide, flag or remove, not approve), by comment count.',
+    }),
+    topRules: z.array(z.object({ ruleId: z.uuid(), name: z.string(), matches: z.int() })),
+    notableThreads: z
+      .array(
+        z.object({
+          commentId: z.uuid(),
+          platform: z.enum(['facebook', 'instagram']),
+          authorName: z.string().nullable(),
+          textPreview: z.string(),
+          replies: z.int().meta({ description: "Replies, including the account's own." }),
+          postedAt: z.iso.datetime(),
+        }),
+      )
+      .meta({ description: 'Up to five top-level comments with the most replies, then newest.' }),
+  })
+  .meta({ id: 'PeriodSummary' });
 
 const eventTypes = z
   .array(z.enum(WEBHOOK_EVENT_TYPES))
@@ -147,8 +210,6 @@ export const ListWebhookDeliveriesQuery = z.strictObject({
   cursor: z.string().max(512).optional(),
 });
 
-const ACTION_STATUSES = ['pending', 'applied', 'noop', 'not_eligible', 'failed'] as const;
-
 export const ModerationResult = z
   .object({
     action: z.object({
@@ -162,6 +223,105 @@ export const ModerationResult = z
     comment: CommentResource,
   })
   .meta({ id: 'ModerationResult' });
+
+export const CreateReplyBody = z
+  .strictObject({ text: z.string().trim().min(1).max(8000) })
+  .meta({ id: 'CreateReplyRequest' });
+
+export const ReplyResult = z
+  .object({ action: ActionResource, comment: CommentResource })
+  .meta({ id: 'ReplyResult' });
+
+export const KeyResource = z
+  .object({ organizationId: z.uuid(), name: z.string(), scope: z.enum(['read', 'write']) })
+  .meta({ id: 'Key' });
+
+export const ListRulesQuery = z.strictObject({ brandId: z.uuid().optional() });
+
+const PROPOSAL_OPERATIONS = ['create', 'update', 'archive'] as const;
+const PROPOSAL_STATUSES = ['pending', 'approved', 'rejected', 'expired', 'stale'] as const;
+const RULE_FIELDS = ['name', 'conditions', 'actions', 'mode', 'enabled'] as const;
+
+export const RuleResource = z
+  .object({
+    id: z.uuid(),
+    name: z.string(),
+    conditions: z.record(z.string(), z.unknown()),
+    actions: z.array(z.record(z.string(), z.unknown())),
+    mode: z.enum(['enforce', 'suggest']),
+    priority: z.int(),
+    enabled: z.boolean(),
+  })
+  .meta({ id: 'Rule' });
+
+export const RuleChangeSummary = z
+  .object({
+    id: z.uuid(),
+    operation: z.enum(PROPOSAL_OPERATIONS),
+    ruleId: z.uuid().nullable().meta({ description: 'The rule changed; null for a create.' }),
+    status: z.enum(PROPOSAL_STATUSES),
+    expiresAt: z.iso.datetime(),
+    decidedAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: 'RuleChangeSummary' });
+
+export const RuleSetResource = z
+  .object({
+    brands: z.array(
+      z.object({
+        id: z.uuid(),
+        name: z.string(),
+        ruleRevision: z.int().meta({ description: "Changes whenever the brand's rules change." }),
+        rules: z.array(RuleResource).meta({ description: 'Live rules, in evaluation order.' }),
+        changes: z.array(RuleChangeSummary).meta({
+          description: 'Proposals that are pending or were settled in the last 7 days.',
+        }),
+      }),
+    ),
+  })
+  .meta({ id: 'RuleSet' });
+
+const ruleFields = z.record(z.string(), z.unknown());
+const proposalBase = {
+  brandId: z.uuid(),
+  rationale: z.string().max(1000).optional().meta({ description: 'Shown to the reviewer.' }),
+};
+export const ProposeRuleChangeBody = z
+  .discriminatedUnion('operation', [
+    z.strictObject({
+      ...proposalBase,
+      operation: z.literal('create'),
+      rule: ruleFields.meta({
+        description:
+          '`name`, `conditions`, `actions`, `mode` (default `suggest`) and `enabled` (default true), as in the rules of `listRules`.',
+      }),
+    }),
+    z.strictObject({
+      ...proposalBase,
+      operation: z.literal('update'),
+      ruleId: z.uuid(),
+      patch: ruleFields.meta({ description: 'The rule fields to change.' }),
+    }),
+    z.strictObject({ ...proposalBase, operation: z.literal('archive'), ruleId: z.uuid() }),
+  ])
+  .meta({ id: 'ProposeRuleChangeRequest' });
+
+export const RuleChangeProposalResource = z
+  .object({
+    id: z.uuid(),
+    brandId: z.uuid(),
+    operation: z.enum(PROPOSAL_OPERATIONS),
+    ruleId: z.uuid().nullable(),
+    status: z.enum(PROPOSAL_STATUSES),
+    diff: z.array(
+      z.object({ field: z.enum(RULE_FIELDS), before: z.unknown(), after: z.unknown() }),
+    ),
+    warnings: z.array(z.string()),
+    expiresAt: z.iso.datetime(),
+    baseRuleRevision: z.int(),
+    reviewUrl: z.url().meta({ description: 'Where a person approves or rejects the change.' }),
+  })
+  .meta({ id: 'RuleChangeProposal' });
 
 const moderationSpec = (kind: 'hide' | 'unhide'): RouteSpec => ({
   id: `${kind}Comment`,
@@ -348,6 +508,92 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
   },
   moderationSpec('hide'),
   moderationSpec('unhide'),
+  {
+    id: 'replyToComment',
+    method: 'POST',
+    path: '/v1/comments/{id}/replies',
+    scope: 'write',
+    summary:
+      'Post a public reply to a comment. Answers 202 when queued, 200 when the outcome was known up front; poll `getAction` for the result',
+    params: z.object({ id: z.uuid() }),
+    body: CreateReplyBody,
+    idempotent: true,
+    responses: { 200: ReplyResult, 202: ReplyResult },
+    errors: [
+      'invalid_request',
+      'not_found',
+      'connection_inactive',
+      'unsupported_action',
+      'text_too_long',
+      'reply_not_allowed',
+      'idempotency_key_reused',
+      'idempotency_request_in_progress',
+      'invalid_idempotency_key',
+    ],
+  },
+  {
+    id: 'getAction',
+    method: 'GET',
+    path: '/v1/actions/{id}',
+    scope: 'read',
+    summary: 'Fetch the status of a hide, unhide or reply',
+    params: z.object({ id: z.uuid() }),
+    idempotent: false,
+    responses: { 200: ActionResource },
+    errors: ['not_found'],
+  },
+  {
+    id: 'getSummary',
+    method: 'GET',
+    path: '/v1/summary',
+    scope: 'read',
+    summary:
+      'Summarize a period: totals, categories, top rules and notable threads. Answers 400 `invalid_request` with `reason` `to_before_from` or `to_in_future` for a bad range',
+    query: GetSummaryQuery,
+    idempotent: false,
+    responses: { 200: PeriodSummaryResource },
+    errors: ['invalid_request', 'not_found'],
+  },
+  {
+    id: 'listRules',
+    method: 'GET',
+    path: '/v1/rules',
+    scope: 'read',
+    summary: 'List the live rules and recent rule-change proposals of every brand, or of one',
+    query: ListRulesQuery,
+    idempotent: false,
+    responses: { 200: RuleSetResource },
+    errors: ['invalid_request', 'not_found'],
+  },
+  {
+    id: 'proposeRuleChange',
+    method: 'POST',
+    path: '/v1/rule-change-proposals',
+    scope: 'write',
+    summary:
+      'Propose a rule change for a person to approve in the dashboard; no rule changes until then. Answers 200 with the waiting proposal when the same change is already pending. 422 `rule_rejected` carries `reason`, and `ruleId` for a duplicate or conflicting rule',
+    body: ProposeRuleChangeBody,
+    idempotent: true,
+    responses: { 200: RuleChangeProposalResource, 201: RuleChangeProposalResource },
+    errors: [
+      'invalid_request',
+      'not_found',
+      'rule_rejected',
+      'rule_limit_reached',
+      'pending_limit_reached',
+      ...IDEMPOTENCY_ERRORS,
+    ],
+  },
+  {
+    id: 'getApiKey',
+    method: 'GET',
+    path: '/v1/key',
+    scope: 'read',
+    summary: 'Describe the API key making the request',
+    idempotent: false,
+    responses: { 200: KeyResource },
+    errors: [],
+  },
   {
     id: 'listFlaggedItems',
     method: 'GET',

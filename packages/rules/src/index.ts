@@ -42,6 +42,7 @@ export {
   InvalidRuleActionError,
   InvalidRuleConditionsError,
   MAX_DOMAINS_PER_BRAND,
+  MAX_PENDING_PROPOSALS_PER_BRAND,
   MAX_RULES_PER_BRAND,
   PgRuleStore,
   RuleLimitError,
@@ -67,3 +68,21 @@ export {
   type RuleEvaluatedEvent,
   type RuleEvaluatedHook,
 } from './hooks.js';
+export {
+  ruleDiff,
+  validateRuleProposal,
+  type ProposalRejection,
+  type ProposalResult,
+  type RuleProposalInput,
+  type RuleSnapshot,
+} from './proposal.js';
+export {
+  PgRuleProposalStore,
+  ProposalNotPendingError,
+  effectiveStatus,
+  type NewProposal,
+  type ProposalOperation,
+  type ProposalRow,
+  type ProposalStatus,
+} from './proposal-store.js';
+export { PROBE_TEXTS, checkOverbroad } from './overbroad.js';
