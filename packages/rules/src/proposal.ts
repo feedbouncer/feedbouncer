@@ -48,13 +48,24 @@ const reject = (reason: ProposalRejection, message: string, ruleId?: string): Pr
   ...(ruleId === undefined ? {} : { ruleId }),
 });
 
-/** JSON with object keys sorted, so equal values compare equal regardless of key order. */
-function canonical(v: unknown): string {
-  return JSON.stringify(v, (_k, x: unknown) =>
-    x && typeof x === 'object' && !Array.isArray(x)
-      ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
-      : x,
-  );
+const byJson = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+// Condition lists whose order does not change what a rule matches.
+const SET_KEYS = new Set(['terms', 'patterns', 'domains', 'emoji', 'entries', 'names', 'handles']);
+
+/** JSON with object keys sorted and set-like lists ordered, so equivalent values compare equal. */
+function canonical(v: unknown, key?: string): string {
+  if (Array.isArray(v)) {
+    const items = v.map((x) => canonical(x));
+    return `[${(key !== undefined && SET_KEYS.has(key) ? items.sort(byJson) : items).join(',')}]`;
+  }
+  if (v && typeof v === 'object') {
+    const fields = Object.entries(v)
+      .filter(([, x]) => x !== undefined)
+      .sort(([x], [y]) => byJson(x, y))
+      .map(([k, x]) => `${JSON.stringify(k)}:${canonical(x, k)}`);
+    return `{${fields.join(',')}}`;
+  }
+  return JSON.stringify(v) ?? 'null';
 }
 
 const snapshotOf = (r: RuleRecord): RuleSnapshot => {
@@ -105,6 +116,10 @@ function warningsFor(
   return warnings;
 }
 
+/**
+ * `current` must hold the brand's non-archived rules only. Conditions are expected to be
+ * schema-validated, which `ruleInputSchema` and `rulePatchSchema` guarantee here.
+ */
 export function validateRuleProposal(
   input: RuleProposalInput,
   current: readonly RuleRecord[],
@@ -149,20 +164,26 @@ export function validateRuleProposal(
     );
   if (before && ruleDiff(before, after).length === 0)
     return reject('no_change', 'The update does not change the rule.');
-  if (checkOverbroad(after.conditions))
-    return reject('matches_everything', 'These conditions would match every comment.');
+  // A disabled rule matches nothing, so it can always be saved (this lets a bad rule be switched off).
+  if (after.enabled) {
+    if (checkOverbroad(after.conditions))
+      return reject('matches_everything', 'These conditions would match every comment.');
 
-  const conditions = canonical(after.conditions);
-  const steps = canonical(after.actions);
-  for (const r of current) {
-    if (r.id === target?.id || canonical(snapshotOf(r).conditions) !== conditions) continue;
-    return canonical(r.actions) === steps
-      ? reject('duplicate_of_rule', `Same conditions and actions as "${r.name}".`, r.id)
-      : reject(
-          'conflicts_with_rule',
-          `Same conditions as "${r.name}" with different actions.`,
-          r.id,
-        );
+    const conditions = canonical(after.conditions);
+    const steps = canonical(after.actions);
+    const same = current.filter(
+      (r) => r.id !== target?.id && canonical(snapshotOf(r).conditions) === conditions,
+    );
+    const dup = same.find((r) => canonical(r.actions) === steps);
+    if (dup)
+      return reject('duplicate_of_rule', `Same conditions and actions as "${dup.name}".`, dup.id);
+    const [clash] = same;
+    if (clash)
+      return reject(
+        'conflicts_with_rule',
+        `Same conditions as "${clash.name}" with different actions.`,
+        clash.id,
+      );
   }
 
   return { ok: true, before, after, warnings: warningsFor(current, after, target) };

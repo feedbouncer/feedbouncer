@@ -103,6 +103,50 @@ describe('validateRuleProposal create', () => {
   });
 });
 
+describe('disabled results', () => {
+  const overbroad = { type: 'regex', patterns: ['.*'] };
+  it('allows creating a disabled overbroad rule', () => {
+    const rule = { ...valid, conditions: overbroad, enabled: false };
+    expect(validateRuleProposal({ operation: 'create', rule }, [])).toMatchObject({ ok: true });
+  });
+  it('allows disabling an overbroad rule', () => {
+    const bad = rec({ conditions: overbroad });
+    expect(
+      validateRuleProposal({ operation: 'update', ruleId: bad.id, patch: { enabled: false } }, [
+        bad,
+      ]),
+    ).toMatchObject({ ok: true });
+  });
+  it('allows disabling a duplicate rule', () => {
+    const twin = rec();
+    expect(
+      validateRuleProposal({ operation: 'update', ruleId: twin.id, patch: { enabled: false } }, [
+        existing,
+        twin,
+      ]),
+    ).toMatchObject({ ok: true });
+  });
+});
+
+describe('duplicate detection', () => {
+  it('ignores the order of list entries', () => {
+    const a = rec({ conditions: kw('alpha', 'beta') });
+    const rule = { ...valid, conditions: kw('beta', 'alpha') };
+    expect(validateRuleProposal({ operation: 'create', rule }, [a])).toMatchObject({
+      reason: 'duplicate_of_rule',
+    });
+  });
+  it('prefers a duplicate over a conflict', () => {
+    const conflict = rec({ actions: [{ type: 'flag_for_review' }] });
+    const dup = rec();
+    const rule = { ...valid, conditions: existing.conditions };
+    expect(validateRuleProposal({ operation: 'create', rule }, [conflict, dup])).toMatchObject({
+      reason: 'duplicate_of_rule',
+      ruleId: dup.id,
+    });
+  });
+});
+
 describe('validateRuleProposal update and archive', () => {
   it('rejects unknown rules', () => {
     expect(
