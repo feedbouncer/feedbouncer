@@ -70,14 +70,14 @@ CREATE TRIGGER api_idempotency_record_set_updated_at_trg BEFORE UPDATE ON api_id
 ALTER TABLE moderation_action ADD COLUMN actor_api_key_id uuid;
 ALTER TABLE moderation_action ADD CONSTRAINT moderation_action_organization_id_actor_api_key_id_fkey
   FOREIGN KEY (organization_id, actor_api_key_id) REFERENCES api_key (organization_id, id)
-  ON DELETE SET NULL (actor_api_key_id);
+  ON DELETE SET NULL (actor_api_key_id) NOT VALID;
 CREATE INDEX moderation_action_actor_api_key_id_idx ON moderation_action (actor_api_key_id)
   WHERE actor_api_key_id IS NOT NULL;
 ALTER TABLE moderation_action DROP CONSTRAINT moderation_action_actor_type_check,
-  ADD CONSTRAINT moderation_action_actor_type_check CHECK (actor_type IN ('user', 'rule', 'classifier', 'system', 'policy', 'api_key')),
-  ADD CONSTRAINT moderation_action_api_key_actor_check CHECK (actor_type = 'api_key' OR actor_api_key_id IS NULL);
+  ADD CONSTRAINT moderation_action_actor_type_check CHECK (actor_type IN ('user', 'rule', 'classifier', 'system', 'policy', 'api_key')) NOT VALID,
+  ADD CONSTRAINT moderation_action_api_key_actor_check CHECK (actor_type = 'api_key' OR actor_api_key_id IS NULL) NOT VALID;
 ALTER TABLE audit_event DROP CONSTRAINT audit_event_actor_type_check,
-  ADD CONSTRAINT audit_event_actor_type_check CHECK (actor_type IN ('user', 'system', 'rule', 'classifier', 'policy', 'api_key'));
+  ADD CONSTRAINT audit_event_actor_type_check CHECK (actor_type IN ('user', 'system', 'rule', 'classifier', 'policy', 'api_key')) NOT VALID;
 
 -- The existing (organization_id, posted_at) index is partial to visible comments, so hidden/deleted listings need this one.
 CREATE INDEX comment_org_posted_idx ON comment (organization_id, posted_at DESC, id DESC);

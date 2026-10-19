@@ -11,14 +11,14 @@ Authorization: Bearer fbk_<id>_<secret>
 ```
 
 - A key belongs to one organization and can only see that organization's brands, comments and flagged items. Asking for another organization's ids, an archived brand or a deleted comment returns `404`.
-- Scopes: `read` keys can call every `GET` route; `write` keys can also hide, flag and manage webhook endpoints. Reading webhook endpoints needs a `write` key because it reveals where events are sent.
+- Scopes: `read` keys can call every `GET` route; `write` keys can also hide comments and manage webhook endpoints. Reading webhook endpoints needs a `write` key because it reveals where events are sent.
 - The secret is shown once and only a hash is stored. Revoking a key takes effect on its next request. Keys keep working after the admin who created them leaves, so revoke them when someone leaves.
 
 ## Errors, rate limits and idempotency
 
 - Errors are `{ "error": { "code": "...", "message": "..." } }`. Match on `code`; each route lists its codes and statuses in the reference.
 - Each key may make a limited number of requests per minute (`PUBLIC_API_RATE_LIMIT_PER_MINUTE`, default 60). Every response carries `X-RateLimit-Limit` and `X-RateLimit-Remaining`. Over the limit you get `429 rate_limited` with `Retry-After` in seconds.
-- Routes that change state accept an `Idempotency-Key` header (1 to 128 characters of letters, digits and `. _ : -`). A repeat with the same key and body within 24 hours returns the first response; the same key with a different body is `422 idempotency_key_reused`.
+- Every route that changes state except `DELETE /v1/webhook-endpoints/{id}` accepts an `Idempotency-Key` header (1 to 128 characters of letters, digits and `. _ : -`). A repeat with the same key and body within 24 hours returns the first response; the same key with a different body is `422 idempotency_key_reused`.
 
 ## Webhook endpoints
 
