@@ -164,6 +164,7 @@ services:
       # The web app's server-side proxy is one hop in front of the API.
       TRUST_PROXY_HOPS: '1'
       PUBLIC_API_RATE_LIMIT_PER_MINUTE: ${PUBLIC_API_RATE_LIMIT_PER_MINUTE:-}
+      WEBHOOK_ALLOWED_PRIVATE_CIDRS: ${WEBHOOK_ALLOWED_PRIVATE_CIDRS:-}
       # Shown in the classifier settings; the key is held by the worker only.
       CLASSIFIER_PROVIDER: ${CLASSIFIER_PROVIDER:-}
       CLASSIFIER_MODEL: ${CLASSIFIER_MODEL:-}
@@ -236,6 +237,8 @@ services:
       ALERT_EMAIL_MAX_PER_MINUTE: ${ALERT_EMAIL_MAX_PER_MINUTE:-}
       # Weekly email report: on|off, empty means off.
       WEEKLY_REPORTS: ${WEEKLY_REPORTS:-}
+      WEBHOOK_ALLOWED_PRIVATE_CIDRS: ${WEBHOOK_ALLOWED_PRIVATE_CIDRS:-}
+      WEBHOOK_DISPATCH_CONCURRENCY: ${WEBHOOK_DISPATCH_CONCURRENCY:-}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
       # Empty means "use the default" (see docs/operations/job-queue.md).
       JOB_QUEUE_PREFIX: ${JOB_QUEUE_PREFIX:-}
@@ -292,6 +295,7 @@ services:
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro
       - ./packages/secrets/src:/repo/packages/secrets/src:ro
+      - ./packages/webhooks/src:/repo/packages/webhooks/src:ro
     depends_on:
       postgres:
         condition: service_healthy

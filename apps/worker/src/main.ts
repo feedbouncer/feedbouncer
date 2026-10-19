@@ -48,6 +48,7 @@ import {
 } from '@feedbouncer/service-runtime';
 import { startAlertLoops } from './alerts.js';
 import { startIdempotencyPurge } from './idempotency.js';
+import { startWebhookLoops } from './webhooks.js';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { startReportLoops } from './reports.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
@@ -137,6 +138,7 @@ try {
   let alertLoops: ReturnType<typeof startAlertLoops> = null;
   let reportLoops: ReturnType<typeof startReportLoops> = null;
   let idempotencyPurge: ReturnType<typeof startIdempotencyPurge> | null = null;
+  let webhookLoops: ReturnType<typeof startWebhookLoops> | null = null;
   if (facebook && mail && mailer) {
     const stack = buildPgConnectorStack({
       pool,
@@ -261,6 +263,7 @@ try {
     alertLoops?.stop();
     reportLoops?.stop();
     idempotencyPurge?.stop();
+    await webhookLoops?.stop();
     await scheduler?.stop();
     await Promise.all([worker.close(), jobWorkers.close()]);
     await queues.close();
@@ -316,6 +319,13 @@ try {
     { pool, log, keys: env.encryption, mailer, web: env.publicWebUrl },
   );
   idempotencyPurge = startIdempotencyPurge({ pool, log });
+  webhookLoops = startWebhookLoops(
+    {
+      concurrency: env.webhookConcurrency,
+      allowedPrivateCidrs: env.webhookAllowedPrivateCidrs,
+    },
+    { pool, log, keys: env.encryption, mailer, registry: telemetry.metrics.registry },
+  );
 
   worker.run().catch((err: unknown) => {
     log.error('worker stopped', errorFields(err));

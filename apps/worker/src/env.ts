@@ -17,6 +17,7 @@ import {
   type SecretFileSystem,
 } from '@feedbouncer/service-runtime';
 import { parseAlertChannels, readAlertLimits } from '@feedbouncer/alerts';
+import { readAllowedPrivateCidrs } from '@feedbouncer/webhooks';
 import {
   CLASSIFIER_FILE_VARS,
   CLASSIFIER_JOB_SPECS,
@@ -100,6 +101,10 @@ export interface WorkerEnv {
   readonly alerts: WorkerAlertsConfig;
   /** WEEKLY_REPORTS=on: the weekly report loops run, which needs mail and PUBLIC_WEB_URL. */
   readonly weeklyReports: boolean;
+  /** Outgoing webhook deliveries in flight at once across this worker. */
+  readonly webhookConcurrency: number;
+  /** Private networks webhook endpoints may point at; empty allows only public addresses. */
+  readonly webhookAllowedPrivateCidrs: readonly string[];
 }
 
 export interface WorkerAlertsConfig {
@@ -247,6 +252,12 @@ export function loadWorkerEnv(
     publicWebUrl,
     alerts,
     weeklyReports,
+    webhookConcurrency: readInt(env, 'WEBHOOK_DISPATCH_CONCURRENCY', {
+      min: 1,
+      max: 256,
+      fallback: 32,
+    }),
+    webhookAllowedPrivateCidrs: readAllowedPrivateCidrs(env),
   };
   // A whole-config dump (JSON, util.inspect) must never carry URL passwords or keys.
   return redactOnSerialize(config, {

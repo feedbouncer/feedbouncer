@@ -1,7 +1,6 @@
 import type pg from 'pg';
 import { recordAuditEvent, withTransaction } from '@feedbouncer/db';
 import { escapeHtml, type Mailer } from '@feedbouncer/mailer';
-import { purgeExpiredIdempotency } from '@feedbouncer/public-api';
 import { errorFields, type Logger, type Secret } from '@feedbouncer/service-runtime';
 import {
   DISABLE_AFTER_CONSECUTIVE_FAILURES,
@@ -129,7 +128,7 @@ export class WebhookDispatcher {
     return r.rowCount ?? 0;
   }
 
-  /** Deletes events past retention (their deliveries cascade), expired previous secrets and idempotency records. */
+  /** Deletes events past retention (their deliveries cascade), and expired previous secrets. */
   async purge(): Promise<number> {
     const now = this.#now();
     let events = 0;
@@ -153,10 +152,8 @@ export class WebhookDispatcher {
           [now],
         )
       ).rowCount ?? 0;
-    const idempotency = await purgeExpiredIdempotency(this.d.pool, PURGE_BATCH);
-    if (events + rotations + idempotency > 0)
-      this.d.log.info('webhooks.purged', { events, rotations, idempotency });
-    return events + rotations + idempotency;
+    if (events + rotations > 0) this.d.log.info('webhooks.purged', { events, rotations });
+    return events + rotations;
   }
 
   async #claim(tx: pg.PoolClient, free: number, now: Date): Promise<Claimed[]> {
@@ -179,7 +176,12 @@ export class WebhookDispatcher {
         left,
       );
       if (allowance <= 0) continue;
-      const { rows } = await tx.query<{ id: string }>(DUE, [c.organization_id, c.id, now, allowance]);
+      const { rows } = await tx.query<{ id: string }>(DUE, [
+        c.organization_id,
+        c.id,
+        now,
+        allowance,
+      ]);
       if (rows.length === 0) continue;
       ids.push(...rows.map((r) => r.id));
       touched.push(c.id);
@@ -194,10 +196,10 @@ export class WebhookDispatcher {
         RETURNING id, organization_id, endpoint_id, event_id, attempts`,
       [ids, now, LEASE_SECONDS],
     );
-    await tx.query('UPDATE webhook_endpoint SET last_dispatched_at = $2 WHERE id = ANY($1::uuid[])', [
-      touched,
-      now,
-    ]);
+    await tx.query(
+      'UPDATE webhook_endpoint SET last_dispatched_at = $2 WHERE id = ANY($1::uuid[])',
+      [touched, now],
+    );
     return rows;
   }
 

@@ -93,7 +93,10 @@ function start(o: { random?: () => number; concurrency?: number } = {}) {
   return { transport, d: dispatcher(transport, o) };
 }
 
-function dispatcher(transport: WebhookTransport, o: { random?: () => number; concurrency?: number } = {}) {
+function dispatcher(
+  transport: WebhookTransport,
+  o: { random?: () => number; concurrency?: number } = {},
+) {
   const d = new WebhookDispatcher({
     pool,
     endpoints,
@@ -224,7 +227,11 @@ describe('WebhookDispatcher delivery', () => {
       if (i === MAX_ATTEMPTS - 1) break;
       const delay = Math.round(RETRY_DELAYS_SECONDS[i]! * 1.1);
       const [row] = await rowsOf(endpointId);
-      expect(row).toMatchObject({ status: 'retrying', attempts: i + 1, last_error_code: 'http_status' });
+      expect(row).toMatchObject({
+        status: 'retrying',
+        attempts: i + 1,
+        last_error_code: 'http_status',
+      });
       expect((row.next_attempt_at.getTime() - row.last_attempt_at.getTime()) / 1000).toBe(delay);
       advance(delay - 1);
       await run(d);
@@ -366,10 +373,11 @@ describe('WebhookDispatcher auto-disable', () => {
       'INSERT INTO app_user (email, email_verified) VALUES ($1, $2) RETURNING id',
       [email, verified],
     );
-    await h.c.query(
-      'INSERT INTO membership (organization_id, user_id, role) VALUES ($1, $2, $3)',
-      [t.organizationId, rows[0]!.id, role],
-    );
+    await h.c.query('INSERT INTO membership (organization_id, user_id, role) VALUES ($1, $2, $3)', [
+      t.organizationId,
+      rows[0]!.id,
+      role,
+    ]);
     return email;
   }
 

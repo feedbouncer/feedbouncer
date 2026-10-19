@@ -28,5 +28,7 @@ export {
   type DeliveryOut,
   type DeliveryStatus,
 } from './deliveries.js';
+export { WebhookDispatcher } from './dispatcher.js';
+export { createWebhookMetrics, type MetricsRegistry, type WebhookMetrics } from './metrics.js';
 export { WEBHOOK_PAYLOAD_SCHEMAS } from './payloads.js';
 export { renderEvent, type RenderedEvent } from './render.js';
