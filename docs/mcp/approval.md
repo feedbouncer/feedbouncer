@@ -44,9 +44,9 @@ When someone approves, the API checks that the revision is still the same and va
 
 `stale` is recorded only at that moment. Until someone tries to approve, a proposal whose rules have changed underneath it:
 
-- shows a stale warning on its review page, which offers no Approve or Reject button for it;
-- is reported as `pending` by `read_rules` and `GET /v1/rules`, and as `expired` once its `expiresAt` passes;
-- cannot be rejected, and counts toward the brand's limit of 20 pending proposals until it expires.
+- shows a stale warning on its review page, which offers Reject but no Approve button;
+- is reported as `pending` by `read_rules` and `GET /v1/rules` until someone rejects it, or as `expired` once its `expiresAt` passes;
+- counts toward the brand's limit of 20 pending proposals until it is rejected or expires.
 
 This is on purpose. The diff you review and the checks for duplicate, conflicting or overbroad rules were computed against the rules as they were. Applying the change on top of different rules could do something nobody reviewed. A stale proposal cannot be revived: ask for the change again (call `propose_rule_change` again), and review the new proposal against the current rules.
 

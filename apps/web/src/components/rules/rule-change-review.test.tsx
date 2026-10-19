@@ -62,11 +62,19 @@ describe('RuleChangeReview', () => {
     expect(html).toContain('Reject');
   });
 
-  it('stale proposal hides Approve and shows the stale banner', () => {
+  it('stale pending proposal shows the stale banner and offers Reject but not Approve', () => {
     const html = render(change({ isStale: true }));
     expect(html).toContain('Rules changed since this was proposed — ask for a new proposal');
     expect(html).not.toContain('Approve');
-    expect(html).not.toContain('Reject');
+    expect(html).toContain('Reject');
+  });
+
+  it('stale pending proposal offers no buttons to a member (canDecide=false)', () => {
+    expect(render(change({ isStale: true }), false)).not.toContain('<button');
+  });
+
+  it('settled stale proposal offers no buttons', () => {
+    expect(render(change({ status: 'stale', isStale: true }))).not.toContain('<button');
   });
 
   it('member (canDecide=false) sees no buttons', () => {

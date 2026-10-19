@@ -75,11 +75,16 @@ export function RuleChangeReview(props: {
         </p>
       ) : null}
       {error ? <p role="alert">{error}</p> : null}
-      {props.canDecide && change.status === 'pending' && !change.isStale ? (
+      {/* A stale proposal can't be approved, but rejecting it clears it from the pending list. */}
+      {props.canDecide && change.status === 'pending' ? (
         <p>
-          <button type="button" disabled={busy} onClick={() => void decide('approve')}>
-            Approve
-          </button>{' '}
+          {change.isStale ? null : (
+            <>
+              <button type="button" disabled={busy} onClick={() => void decide('approve')}>
+                Approve
+              </button>{' '}
+            </>
+          )}
           <button type="button" disabled={busy} onClick={() => void decide('reject')}>
             Reject
           </button>
