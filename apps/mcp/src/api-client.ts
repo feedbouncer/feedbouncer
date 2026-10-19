@@ -3,7 +3,9 @@ import * as z from 'zod/v4';
 import { UUID } from '@feedbouncer/service-runtime';
 import type { McpConfig } from './config.js';
 
-const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
+export const { version } = createRequire(import.meta.url)('../package.json') as {
+  version: string;
+};
 
 export class ApiCallError extends Error {
   constructor(
@@ -159,21 +161,22 @@ export type Summary = z.output<typeof SummarySchema>;
 export type RulesResponse = z.output<typeof RulesSchema>;
 export type Proposal = z.output<typeof ProposalSchema>;
 
+// Undefined fields are omitted from the query string.
 export interface ListQuery {
-  status?: 'visible' | 'hidden' | 'flagged' | 'replied' | 'unanswered';
-  brandId?: string;
-  platform?: 'facebook' | 'instagram';
-  q?: string;
-  postedFrom?: string;
-  postedTo?: string;
-  limit?: number;
-  cursor?: string;
+  status?: 'visible' | 'hidden' | 'flagged' | 'replied' | 'unanswered' | undefined;
+  brandId?: string | undefined;
+  platform?: 'facebook' | 'instagram' | undefined;
+  q?: string | undefined;
+  postedFrom?: string | undefined;
+  postedTo?: string | undefined;
+  limit?: number | undefined;
+  cursor?: string | undefined;
 }
 
 export interface SummaryQuery {
-  from?: string;
-  to?: string;
-  brandId?: string;
+  from?: string | undefined;
+  to?: string | undefined;
+  brandId?: string | undefined;
 }
 
 export type RuleChangeBody =
@@ -326,3 +329,16 @@ export class FeedBouncerApi {
     ).body;
   }
 }
+
+/** The API surface the tools depend on; tests substitute an in-memory double. */
+export type ApiPort = Pick<
+  FeedBouncerApi,
+  | 'whoami'
+  | 'listComments'
+  | 'reply'
+  | 'setVisibility'
+  | 'getAction'
+  | 'summary'
+  | 'rules'
+  | 'proposeRuleChange'
+>;
