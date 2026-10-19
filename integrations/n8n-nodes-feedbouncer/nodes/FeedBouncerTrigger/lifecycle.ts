@@ -1,6 +1,7 @@
 import type { IHookFunctions } from 'n8n-workflow';
 import { DEFAULT_LIMIT } from '../shared/constants';
 import { toNodeApiError } from '../shared/errors';
+import { isUuid } from '../shared/ids';
 import { collectPages } from '../shared/pagination';
 import { feedBouncerRequest } from '../shared/transport';
 
@@ -33,7 +34,7 @@ async function deleteEndpoint(ctx: IHookFunctions, id: string): Promise<void> {
   try {
     await feedBouncerRequest(ctx, {
       method: 'DELETE',
-      path: `/v1/webhook-endpoints/${id}`,
+      path: `/v1/webhook-endpoints/${encodeURIComponent(id)}`,
       operationId: 'deleteWebhookEndpoint',
       resourceLabel: 'webhook endpoint',
       id,
@@ -45,7 +46,7 @@ async function deleteEndpoint(ctx: IHookFunctions, id: string): Promise<void> {
   }
 }
 
-/** Deletes the stored endpoint and any endpoint registered for exactly this node's URL. */
+/** Deletes the stored endpoint and any endpoint registered for exactly this node's URL. Ids that are not UUIDs are skipped. */
 async function cleanup(ctx: IHookFunctions, url: string): Promise<void> {
   const all = await collectPages<WebhookEndpoint>(
     async (cursor, limit) =>
@@ -59,23 +60,22 @@ async function cleanup(ctx: IHookFunctions, url: string): Promise<void> {
       ).body,
     { returnAll: true, limit: DEFAULT_LIMIT },
   );
-  const ids = new Set(all.filter((endpoint) => endpoint.url === url).map((endpoint) => endpoint.id));
   const { endpointId } = staticData(ctx);
-  if (endpointId) ids.add(endpointId);
-  for (const id of ids) await deleteEndpoint(ctx, id);
+  const ids = new Set([...all.filter((endpoint) => endpoint.url === url).map((endpoint) => endpoint.id), endpointId]);
+  for (const id of ids) if (isUuid(id)) await deleteEndpoint(ctx, id);
 }
 
 export async function checkExists(this: IHookFunctions): Promise<boolean> {
   const data = staticData(this);
   const url = webhookUrl(this);
   const wanted = [...events(this)].sort();
-  if (!data.endpointId || !data.secret || data.url !== url) return false;
+  if (!isUuid(data.endpointId) || !data.secret || data.url !== url) return false;
   if (JSON.stringify([...(data.events ?? [])].sort()) !== JSON.stringify(wanted)) return false;
 
   try {
     const { body } = await feedBouncerRequest<WebhookEndpoint>(this, {
       method: 'GET',
-      path: `/v1/webhook-endpoints/${data.endpointId}`,
+      path: `/v1/webhook-endpoints/${encodeURIComponent(data.endpointId)}`,
       operationId: 'getWebhookEndpoint',
       resourceLabel: 'webhook endpoint',
       id: data.endpointId,

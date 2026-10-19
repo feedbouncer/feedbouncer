@@ -87,6 +87,16 @@ describe('create', () => {
     expect(ctx.staticData.endpointId).toBe(ID_2);
   });
 
+  it('skips non-UUID ids from the list and from static data, sending nothing with them in the path', async () => {
+    const ctx = hook({
+      staticData: stored({ endpointId: '../x' }),
+      http: [page([endpoint('../y', URL_A), endpoint(ID_2, URL_A)]), gone, created(ID_3)],
+    });
+    expect(await create.call(ctx)).toBe(true);
+    expect(ctx.calls.map((c) => c.url).filter((u) => u.includes('..'))).toEqual([]);
+    expect(methods(ctx)).toEqual(['GET', 'DELETE', 'POST']);
+  });
+
   it('walks listWebhookEndpoints pages', async () => {
     const ctx = hook({
       http: [page([endpoint(ID_3, URL_B)], 'c1'), page([endpoint(ID_2, URL_A)]), gone, created(ID_1)],
@@ -180,6 +190,12 @@ describe('checkExists', () => {
     expect(ctx.calls[0].url).toBe(`https://fb.acme.io/v1/webhook-endpoints/${ID_1}`);
   });
 
+  it('is false without a request when the stored id is not a UUID', async () => {
+    const ctx = hook({ staticData: stored({ endpointId: '../x' }), http: [] });
+    expect(await checkExists.call(ctx)).toBe(false);
+    expect(ctx.calls).toEqual([]);
+  });
+
   it('propagates errors other than 404', async () => {
     const ctx = hook({ staticData: stored(), http: [apiError(401, 'unauthorized')] });
     await expect(checkExists.call(ctx)).rejects.toThrow(/rejected the API key/);
@@ -198,6 +214,13 @@ describe('remove', () => {
     expect(await remove.call(ctx)).toBe(true);
     expect(ctx.staticData.endpointId).toBeUndefined();
     expect(ctx.staticData.secret).toBeUndefined();
+  });
+
+  it('skips a non-UUID stored id and still clears and returns true', async () => {
+    const ctx = hook({ staticData: stored({ endpointId: '../x' }), http: [page([])] });
+    expect(await remove.call(ctx)).toBe(true);
+    expect(ctx.calls.map((c) => c.url).filter((u) => u.includes('..'))).toEqual([]);
+    expect(ctx.staticData).toEqual({});
   });
 
   it.each([
