@@ -48,7 +48,9 @@ class FakeTransport implements WebhookTransport {
     return this.sent.filter((s) => s.url.hostname === host);
   }
 
+  /** Settles what is hanging and answers any send still on its way, so a drain cannot stall. */
   release(): void {
+    this.reply = () => OK;
     for (const s of this.sent) s.settle(OK);
   }
 }
