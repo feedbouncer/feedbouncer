@@ -67,6 +67,8 @@ async function hide(
 async function ok(t: Tenant, id: string) {
   const r = await renderEvent(h.c, t.organizationId, id);
   if (r.kind !== 'ok') throw new Error('expected an ok render');
+  // The schema parse in each test checks the payload shape; the rest only reads it by path.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return { ...r, json: JSON.parse(r.body) as Record<string, any> };
 }
 
