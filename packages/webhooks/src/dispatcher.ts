@@ -157,6 +157,8 @@ export class WebhookDispatcher {
   }
 
   async #claim(tx: pg.PoolClient, free: number, now: Date): Promise<Claimed[]> {
+    // Held until commit, so each claim counts the `sending` rows left by the one before it.
+    await tx.query("SELECT pg_advisory_xact_lock(hashtextextended('webhook-claim', 0))");
     const { rows: candidates } = await tx.query<{
       id: string;
       organization_id: string;

@@ -8,7 +8,12 @@ import { MemoryMailer } from '@feedbouncer/mailer/testing';
 import { PgApiKeys, type ApiKeyContext } from '@feedbouncer/public-api';
 import { testKeyring } from '@feedbouncer/secrets/testing';
 import { createLogger, type Secret } from '@feedbouncer/service-runtime';
-import { MAX_ATTEMPTS, PER_ENDPOINT_IN_FLIGHT, RETRY_DELAYS_SECONDS } from './constants.js';
+import {
+  MAX_ATTEMPTS,
+  PER_ENDPOINT_IN_FLIGHT,
+  PER_ORG_IN_FLIGHT,
+  RETRY_DELAYS_SECONDS,
+} from './constants.js';
 import { EventUnavailableError, PgWebhookDeliveries } from './deliveries.js';
 import { WebhookDispatcher } from './dispatcher.js';
 import { PgWebhookEndpoints } from './endpoints.js';
@@ -322,6 +327,23 @@ describe('WebhookDispatcher fairness', () => {
       expect(transport.to('slow.example.com')).toHaveLength(PER_ENDPOINT_IN_FLIGHT);
       expect(await sendingCount(a.endpointId)).toBe(PER_ENDPOINT_IN_FLIGHT);
     }
+  });
+
+  it('holds the in-flight caps when several dispatchers claim at once', async () => {
+    const { d, transport } = start();
+    transport.reply = () => null;
+    const others = Array.from({ length: 3 }, () => dispatcher(transport));
+    const a = await setup('slow.example.com');
+    const second = await setup('slow2.example.com', a.t);
+    await comments(a.t, 40);
+    for (let round = 0; round < 3; round++) {
+      await Promise.all([d, ...others].map((x) => x.tick()));
+    }
+    expect(await sendingCount(a.endpointId)).toBeLessThanOrEqual(PER_ENDPOINT_IN_FLIGHT);
+    expect(await sendingCount(second.endpointId)).toBeLessThanOrEqual(PER_ENDPOINT_IN_FLIGHT);
+    expect(
+      (await sendingCount(a.endpointId)) + (await sendingCount(second.endpointId)),
+    ).toBeLessThanOrEqual(PER_ORG_IN_FLIGHT);
   });
 });
 
