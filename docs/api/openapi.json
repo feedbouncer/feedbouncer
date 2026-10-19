@@ -3462,6 +3462,19 @@
               },
               "message": {
                 "type": "string"
+              },
+              "max": {
+                "type": "integer",
+                "description": "The limit that was hit, for `text_too_long`, `rule_limit_reached` and `pending_limit_reached`."
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why, for `reply_not_allowed`, `rule_rejected` and some `invalid_request` errors (for example `to_before_from`)."
+              },
+              "ruleId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The existing rule a `rule_rejected` change duplicates or conflicts with."
               }
             }
           }
