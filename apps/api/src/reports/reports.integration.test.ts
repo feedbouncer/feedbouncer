@@ -278,6 +278,7 @@ describe('email and dashboard parity', () => {
       mailer,
       subscriptions: subs,
       web: api.deps.env.publicWebUrl,
+      now: () => dueNow,
     }).tick();
     // The owner unsubscribed above; the admin re-subscribed.
     const text = mailer.lastTo(users.admin.email)!.text;
