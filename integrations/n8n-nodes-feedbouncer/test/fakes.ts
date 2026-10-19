@@ -129,6 +129,7 @@ export function fakeExecute(init: FakeInit = {}): IExecuteFunctions & FakeContex
 export function fakeHook(init: FakeInit & { webhookUrl?: string } = {}): IHookFunctions & FakeContext {
   const ctx = build(init);
   return Object.assign(ctx, {
+    getWorkflow: () => ({ id: 'wf-1' }),
     getNodeWebhookUrl: () => init.webhookUrl ?? 'https://n8n.example.com/webhook/abc',
     getMode: () => 'trigger',
     getActivationMode: () => 'activate',
