@@ -24,7 +24,9 @@
     "WEB_WATCH_POLL_MS",
     "BETA_FEEDBACK_URL",
     "BETA_SUPPORT_EMAIL",
-    "RULE_PROPOSAL_TTL_HOURS"
+    "RULE_PROPOSAL_TTL_HOURS",
+    "FEEDBOUNCER_API_URL",
+    "FEEDBOUNCER_API_KEY"
   ],
   "tasks": {
     "build": {
