@@ -3,11 +3,14 @@ import { ApiError } from '../http/errors.js';
 
 type Filters = Parameters<typeof decodeCursor>[1];
 
-/** The position a cursor points at, or undefined for the first page. A bad cursor is a 400. */
+/**
+ * The position a cursor points at (and its snapshot time, when it has one), or undefined for the
+ * first page. A bad cursor is a 400.
+ */
 export function decodePageCursor(
   cursor: string | undefined,
   filters: Filters,
-): { t: Date; id: string } | undefined {
+): { t: Date; id: string; asOf: Date | null } | undefined {
   if (cursor === undefined) return undefined;
   try {
     return decodeCursor(cursor, filters);

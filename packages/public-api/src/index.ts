@@ -4,6 +4,7 @@ export * from './keys/token.js';
 export * from './keys/store.js';
 export * from './text.js';
 export * from './cursor.js';
+export * from './like.js';
 export * from './resources/comment.js';
 export * from './resources/flagged-item.js';
 export * from './resources/page.js';

@@ -1,9 +1,15 @@
 import type pg from 'pg';
+import { repliedSql, unansweredSql } from '@feedbouncer/comments';
+import { escapeLike } from '../like.js';
 import type { CommentRow } from '../resources/comment.js';
 
 export interface CommentFilters {
-  status?: 'visible' | 'hidden' | 'flagged' | undefined;
+  status?: 'visible' | 'hidden' | 'flagged' | 'replied' | 'unanswered' | undefined;
   brandId?: string | undefined;
+  platform?: 'facebook' | 'instagram' | undefined;
+  q?: string | undefined;
+  /** Snapshot time from a later page's cursor. Never set on the first page, which reads unfiltered. */
+  asOf?: Date | undefined;
   postedFrom?: Date | undefined;
   postedTo?: Date | undefined;
 }
@@ -38,7 +44,11 @@ export async function listPublicComments(
   org: string,
   f: CommentFilters,
   page: CommentPage,
-): Promise<{ rows: CommentRow[]; next: { t: Date; id: string } | null }> {
+): Promise<{ rows: CommentRow[]; next: { t: Date; id: string } | null; asOf: Date }> {
+  // The snapshot time comes from the database clock (the same one that stamps ingested_at), read
+  // before the page so that anything ingested after it is excluded from later pages. The first page
+  // applies no snapshot filter.
+  const asOf = f.asOf ?? (await db.query<{ t: Date }>(`SELECT clock_timestamp() AS t`)).rows[0]!.t;
   const params: unknown[] = [org];
   const where: string[] = [];
   const bind = (value: unknown) => `$${params.push(value)}`;
@@ -49,6 +59,17 @@ export async function listPublicComments(
   if (f.status === 'visible')
     where.push(`c.platform_state = 'visible' AND NOT ${OPEN_REVIEW_ITEM}`);
   if (f.status === 'flagged') where.push(`c.platform_state = 'visible' AND ${OPEN_REVIEW_ITEM}`);
+  if (f.status === 'replied') where.push(repliedSql('c'));
+  if (f.status === 'unanswered') where.push(unansweredSql('c'));
+  if (f.platform) where.push(`cn.platform = ${bind(f.platform)}`);
+  if (f.q) {
+    const pattern = bind(escapeLike(f.q));
+    where.push(
+      `(c.body ILIKE '%' || ${pattern} || '%' ESCAPE '\\'
+        OR (a.anonymized_at IS NULL AND a.display_name ILIKE '%' || ${pattern} || '%' ESCAPE '\\'))`,
+    );
+  }
+  if (f.asOf) where.push(`c.ingested_at <= ${bind(f.asOf)}`);
   if (page.after)
     where.push(`(c.posted_at, c.id) < (${bind(page.after.t)}, ${bind(page.after.id)})`);
   const { rows } = await db.query<CommentRow>(
@@ -60,7 +81,7 @@ export async function listPublicComments(
   const more = rows.length > page.limit;
   const kept = rows.slice(0, page.limit);
   const last = kept.at(-1);
-  return { rows: kept, next: more && last ? { t: last.postedAt, id: last.id } : null };
+  return { rows: kept, next: more && last ? { t: last.postedAt, id: last.id } : null, asOf };
 }
 
 export async function loadPublicComment(

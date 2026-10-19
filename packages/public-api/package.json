@@ -21,6 +21,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
+    "@feedbouncer/comments": "workspace:*",
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
     "pg": "8.23.1",

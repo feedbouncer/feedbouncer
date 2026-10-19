@@ -80,8 +80,16 @@ export interface RouteSpec {
 const timestamp = z.iso.datetime({ offset: true });
 
 export const ListCommentsQuery = z.strictObject({
-  status: z.enum(['visible', 'hidden', 'flagged']).optional(),
+  status: z.enum(['visible', 'hidden', 'flagged', 'replied', 'unanswered']).optional(),
   brandId: z.uuid().optional(),
+  platform: z.enum(['facebook', 'instagram']).optional(),
+  q: z
+    .string()
+    .trim()
+    .min(2)
+    .max(200)
+    .optional()
+    .meta({ description: 'Case-insensitive substring of the comment text or author name' }),
   postedFrom: timestamp.optional().meta({ description: 'Inclusive. ISO 8601 with an offset.' }),
   postedTo: timestamp.optional().meta({ description: 'Exclusive. ISO 8601 with an offset.' }),
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),

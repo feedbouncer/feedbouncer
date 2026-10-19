@@ -32,17 +32,32 @@ export class PublicCommentsController {
     const filters = {
       status: q.status,
       brandId: q.brandId,
+      platform: q.platform,
+      q: q.q,
       postedFrom: q.postedFrom,
       postedTo: q.postedTo,
     };
     const after = decodePageCursor(q.cursor, filters);
-    const { rows, next } = await listPublicComments(
+    // The first page reads unfiltered and returns the database's snapshot time; later pages reuse
+    // it (from the cursor) so newly ingested comments cannot shift them. A v1 cursor has no snapshot.
+    const { rows, next, asOf } = await listPublicComments(
       this.#pool,
       req.apiKey.organizationId,
-      { status: q.status, brandId: q.brandId, postedFrom: range.from, postedTo: range.to },
+      {
+        status: q.status,
+        brandId: q.brandId,
+        platform: q.platform,
+        q: q.q,
+        postedFrom: range.from,
+        postedTo: range.to,
+        asOf: after?.asOf ?? undefined,
+      },
       { limit: q.limit, after },
     );
-    return { data: rows.map(toCommentResource), nextCursor: next && encodeCursor(next, filters) };
+    return {
+      data: rows.map(toCommentResource),
+      nextCursor: next && encodeCursor(next, filters, asOf),
+    };
   }
 
   @Get(':id')
