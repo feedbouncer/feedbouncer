@@ -116,6 +116,45 @@ export const ListFlaggedItemsQuery = z.strictObject({
   cursor: z.string().max(512).optional(),
 });
 
+export const GetSummaryQuery = z.strictObject({
+  from: timestamp.optional().meta({
+    description: 'Inclusive. Defaults to 7 days before `to`; at most 92 days before it.',
+  }),
+  to: timestamp.optional().meta({ description: 'Exclusive. Defaults to now.' }),
+  brandId: z.uuid().optional(),
+});
+
+export const PeriodSummaryResource = z
+  .object({
+    period: z.object({ from: z.iso.datetime(), to: z.iso.datetime() }),
+    bounded: z
+      .object({
+        requestedFrom: z.iso.datetime(),
+        reason: z.literal('max_range_92_days'),
+      })
+      .nullable()
+      .meta({ description: 'Set when the requested start was moved forward to fit 92 days.' }),
+    totals: z.object({
+      comments: z.int(),
+      hidden: z.int(),
+      replied: z.int(),
+      unanswered: z.int(),
+    }),
+    categories: z.array(z.object({ category: z.string(), count: z.int() })),
+    topRules: z.array(z.object({ ruleId: z.uuid(), name: z.string(), matches: z.int() })),
+    notableThreads: z.array(
+      z.object({
+        commentId: z.uuid(),
+        platform: z.enum(['facebook', 'instagram']),
+        authorName: z.string().nullable(),
+        textPreview: z.string(),
+        replies: z.int(),
+        postedAt: z.iso.datetime(),
+      }),
+    ),
+  })
+  .meta({ id: 'PeriodSummary' });
+
 const eventTypes = z
   .array(z.enum(WEBHOOK_EVENT_TYPES))
   .min(1)
@@ -410,6 +449,18 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     idempotent: false,
     responses: { 200: ActionResource },
     errors: ['not_found'],
+  },
+  {
+    id: 'getSummary',
+    method: 'GET',
+    path: '/v1/summary',
+    scope: 'read',
+    summary:
+      'Summarize a period: totals, categories, top rules and notable threads. Answers 400 `invalid_request` with `reason` `to_before_from` or `to_in_future` for a bad range',
+    query: GetSummaryQuery,
+    idempotent: false,
+    responses: { 200: PeriodSummaryResource },
+    errors: ['invalid_request', 'not_found'],
   },
   {
     id: 'getApiKey',

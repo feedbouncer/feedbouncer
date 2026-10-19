@@ -14,6 +14,7 @@ import { PublicModerationController } from './public-api/moderation.controller.j
 import { PublicRepliesController } from './public-api/replies.controller.js';
 import { PublicActionsController } from './public-api/actions.controller.js';
 import { PublicKeyController } from './public-api/key.controller.js';
+import { PublicSummaryController } from './public-api/summary.controller.js';
 import { PublicModerationService } from './public-api/moderation.service.js';
 import { PublicWebhookEndpointsController } from './public-api/webhook-endpoints.controller.js';
 import { OpenApiController } from './public-api/openapi.controller.js';
@@ -146,6 +147,7 @@ export class AppModule {
         PublicRepliesController,
         PublicActionsController,
         PublicKeyController,
+        PublicSummaryController,
         PublicWebhookEndpointsController,
       ],
       providers: [

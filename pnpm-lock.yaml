@@ -926,6 +926,9 @@ importers:
       '@feedbouncer/classifier':
         specifier: workspace:*
         version: link:../classifier
+      '@feedbouncer/comments':
+        specifier: workspace:*
+        version: link:../comments
       '@feedbouncer/db':
         specifier: workspace:*
         version: link:../db
