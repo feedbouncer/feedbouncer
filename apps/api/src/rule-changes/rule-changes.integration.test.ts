@@ -247,6 +247,28 @@ describe('rule changes', () => {
     expect((await approve(id)).body.error.code).toBe('proposal_not_pending');
   });
 
+  it('reject after expiry → 409 proposal_expired, status expired (not rejected), audit rule_change.expired', async () => {
+    const id = await proposeCreate('too late to reject');
+    await api.pool.query(
+      `UPDATE rule_change_proposal SET expires_at = now() - interval '1 minute' WHERE id = $1`,
+      [id],
+    );
+    const r = await reject(id, A.owner.cookie, { note: 'No' });
+    expect(r.status).toBe(409);
+    expect(r.body.error.code).toBe('proposal_expired');
+    expect(await proposalRow(id)).toMatchObject({
+      status: 'expired',
+      decided_by_user_id: null,
+      decision_note: null,
+      decided_at: expect.any(Date),
+    });
+    expect((await audits(id)).map((a) => [a.action, a.actor_user_id])).toEqual([
+      ['rule_change.proposed', null],
+      ['rule_change.expired', A.owner.userId],
+    ]);
+    expect((await reject(id)).body.error.code).toBe('proposal_not_pending');
+  });
+
   it('rule edited via dashboard after proposal → approve → 409 proposal_stale, rules unchanged', async () => {
     const id = await proposeCreate('stale one');
     await createRule('edited meanwhile');

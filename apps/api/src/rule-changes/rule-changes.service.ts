@@ -96,14 +96,9 @@ export class RuleChangesService {
   ): Promise<RuleChangeView> {
     const scope = await requireBrand(this.deps.pool, org, brandId);
     const userId = org.actorUserId;
-    const settled = await this.#decide(org, scope, id, async (tx, p) => {
+    await this.#decide(org, scope, id, async (tx, p) => {
       const audit = (action: AuditInput['action'], details: AuditDetails) =>
         this.#audit(tx, scope, userId, p.id, action, details);
-      if (p.expiresAt <= new Date()) {
-        await this.#proposals.decide(tx, scope.organizationId, p.id, { status: 'expired' });
-        await audit('rule_change.expired', { proposalId: p.id, operation: p.operation });
-        return { refused: 'proposal_expired' };
-      }
       const { rows } = await tx.query<{ rev: string }>(
         `SELECT rule_revision::text AS rev FROM brand
           WHERE organization_id = $1 AND id = $2 AND archived_at IS NULL FOR UPDATE`,
@@ -130,7 +125,6 @@ export class RuleChangesService {
       await audit('rule_change.approved', { proposalId: p.id, ruleId, operation: p.operation });
       return null;
     });
-    if (settled) throw new ApiError(409, settled.refused);
     return this.get(org, scope.brandId, id);
   }
 
@@ -158,27 +152,39 @@ export class RuleChangesService {
   }
 
   /**
-   * Runs `fn` on the pending proposal, locked, after re-reading the actor's role under the
-   * organization lock. What `fn` writes commits even when it answers with a refusal.
+   * Runs `fn` on the live pending proposal, locked, after re-reading the actor's role under the
+   * organization lock. A proposal past expiry (by the database clock) is settled as expired
+   * instead. Settling commits before the refusal is thrown.
    */
-  #decide(
+  async #decide(
     org: OrgContext,
     scope: BrandScope,
     id: string,
     fn: (tx: pg.PoolClient, p: ProposalRow) => Promise<Settled | null>,
-  ): Promise<Settled | null> {
-    return withTransaction(this.deps.pool, async (tx) => {
+  ): Promise<void> {
+    const settled = await withTransaction(this.deps.pool, async (tx): Promise<Settled | null> => {
       if (!can(await lockedActor(tx, org), 'rule.write')) throw new ApiError(403, 'forbidden');
       const p = await this.#proposals.get(tx, scope.organizationId, id, { forUpdate: true });
       if (p?.brandId !== scope.brandId) throw notFound();
       if (p.status !== 'pending') throw new ApiError(409, 'proposal_not_pending');
       try {
-        return await fn(tx, p);
+        const { rows } = await tx.query<{ expired: boolean }>(
+          'SELECT expires_at <= now() AS expired FROM rule_change_proposal WHERE id = $1',
+          [p.id],
+        );
+        if (!rows[0]!.expired) return await fn(tx, p);
+        await this.#proposals.decide(tx, scope.organizationId, p.id, { status: 'expired' });
+        await this.#audit(tx, scope, org.actorUserId, p.id, 'rule_change.expired', {
+          proposalId: p.id,
+          operation: p.operation,
+        });
+        return { refused: 'proposal_expired' };
       } catch (e) {
         if (e instanceof ProposalNotPendingError) throw new ApiError(409, 'proposal_not_pending');
         throw e;
       }
     });
+    if (settled) throw new ApiError(409, settled.refused);
   }
 
   /** Applies an approved change through the dashboard's own rule writes; returns the rule id. */
@@ -230,7 +236,8 @@ export class RuleChangesService {
       'SELECT rule_revision::text AS rev FROM brand WHERE organization_id = $1 AND id = $2',
       [scope.organizationId, scope.brandId],
     );
-    const currentRuleRevision = Number(brand[0]?.rev ?? 0);
+    if (!brand[0]) throw notFound();
+    const currentRuleRevision = Number(brand[0].rev);
     const { rows: names } = await db.query<{
       id: string;
       key_name: string;
@@ -248,6 +255,8 @@ export class RuleChangesService {
     return rows.map((p) => {
       const status = effectiveStatus(p, now);
       const n = byId.get(p.id);
+      // The proposal cascades away with its key; gone since it was read.
+      if (!n) throw notFound();
       return {
         id: p.id,
         operation: p.operation,
@@ -264,10 +273,8 @@ export class RuleChangesService {
         isStale:
           status === 'stale' ||
           (status === 'pending' && currentRuleRevision !== p.baseRuleRevision),
-        proposedBy: { apiKeyName: n?.key_name ?? '' },
-        decidedBy: p.decidedByUserId
-          ? { userId: p.decidedByUserId, name: n?.user_name ?? null }
-          : null,
+        proposedBy: { apiKeyName: n.key_name },
+        decidedBy: p.decidedByUserId ? { userId: p.decidedByUserId, name: n.user_name } : null,
         decidedAt: p.decidedAt?.toISOString() ?? null,
         decisionNote: p.decisionNote,
       };

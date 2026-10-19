@@ -7,6 +7,8 @@ export interface PublicIsolationFixture {
   aWriteToken: string;
   bCommentId: string;
   bReviewItemId: string;
+  /** A settled moderation action on B's comment. */
+  bActionId: string;
   aEndpointId: string;
   bEndpointId: string;
   bDeliveryId: string;
@@ -33,6 +35,12 @@ export const PUBLIC_API_CASES: readonly PublicApiCase[] = [
     route: 'POST /v1/comments/{id}/unhide',
     url: (f) => `/v1/comments/${f.bCommentId}/unhide`,
   },
+  {
+    route: 'POST /v1/comments/{id}/replies',
+    url: (f) => `/v1/comments/${f.bCommentId}/replies`,
+    body: () => ({ text: 'taken over' }),
+  },
+  { route: 'GET /v1/actions/{id}', url: (f) => `/v1/actions/${f.bActionId}` },
   { route: 'GET /v1/webhook-endpoints/{id}', url: (f) => `/v1/webhook-endpoints/${f.bEndpointId}` },
   {
     route: 'PATCH /v1/webhook-endpoints/{id}',
