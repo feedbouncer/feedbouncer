@@ -72,4 +72,17 @@ describe('verifySignature', () => {
     expect(verify({ secret: undefined })).toEqual({ ok: false, reason: 'no_secret' });
     expect(verify({ secret: '' })).toEqual({ ok: false, reason: 'no_secret' });
   });
+
+  it.each([
+    ['only the prefix', 'whsec_'],
+    ['a key shorter than 24 bytes', `whsec_${randomBytes(23).toString('base64')}`],
+    ['no whsec_ prefix', randomBytes(32).toString('base64')],
+  ])('fails closed for a secret with %s', (_name, secret) => {
+    expect(verify({ secret })).toEqual({ ok: false, reason: 'no_secret' });
+  });
+
+  it('accepts a key of exactly 24 bytes', () => {
+    const secret = `whsec_${randomBytes(24).toString('base64')}`;
+    expect(verify({ secret, signatureHeader: sign(NOW, BODY, secret) })).toEqual({ ok: true });
+  });
 });

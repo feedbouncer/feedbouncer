@@ -58,6 +58,19 @@ describe('create', () => {
     expect(ctx.staticData).toMatchObject({ endpointId: ID_1, secret: SIGNING, url: URL_A, events: ['item.flagged', 'comment.hidden'] });
   });
 
+  it.each([['only the prefix', 'whsec_'], ['a short key', 'whsec_AAAA'], ['no prefix', 'MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw'], ['no value', undefined]])(
+    'rejects an API secret with %s, deletes the new endpoint and stores nothing',
+    async (_name, secret) => {
+      const ctx = hook({ http: [page([]), { status: 201, body: { endpoint: endpoint(ID_1, URL_A), secret } }, gone] });
+      const error = await create.call(ctx).catch((e: unknown) => e as Error);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe('FeedBouncer returned an invalid webhook signing secret.');
+      expect(methods(ctx)).toEqual(['GET', 'POST', 'DELETE']);
+      expect(ctx.calls[2].url).toBe(`https://fb.acme.io/v1/webhook-endpoints/${ID_1}`);
+      expect(ctx.staticData.endpointId).toBeUndefined();
+    },
+  );
+
   it('keeps the dedupe record in static data', async () => {
     const ctx = hook({ http: [page([]), created(ID_1)], staticData: { seen: { x: 1 } } });
     await create.call(ctx);

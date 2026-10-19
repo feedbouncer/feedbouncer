@@ -1,9 +1,11 @@
+import { NodeOperationError } from 'n8n-workflow';
 import type { IHookFunctions } from 'n8n-workflow';
 import { DEFAULT_LIMIT } from '../shared/constants';
 import { toNodeApiError } from '../shared/errors';
 import { isUuid } from '../shared/ids';
 import { collectPages } from '../shared/pagination';
 import { feedBouncerRequest } from '../shared/transport';
+import { isValidSecret } from './signature';
 
 export interface TriggerStaticData {
   endpointId?: string;
@@ -129,6 +131,14 @@ export async function create(this: IHookFunctions): Promise<boolean> {
     }));
   } catch (error) {
     throw createFailure(this, error, url);
+  }
+
+  if (!isValidSecret(created.secret)) {
+    // Without a usable secret no delivery could be verified: remove the endpoint again.
+    if (isUuid(created.endpoint?.id)) await deleteEndpoint(this, created.endpoint.id).catch(() => undefined);
+    throw new NodeOperationError(this.getNode(), 'FeedBouncer returned an invalid webhook signing secret.', {
+      description: 'The trigger was not activated. Check that the FeedBouncer server is up to date, then try again.',
+    });
   }
 
   Object.assign(staticData(this), { endpointId: created.endpoint.id, secret: created.secret, url, events: eventTypes });

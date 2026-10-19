@@ -7,6 +7,15 @@ export type VerifyResult =
 
 const SECRET_PREFIX = 'whsec_';
 const SIGNATURE_LENGTH = 32;
+const MIN_KEY_BYTES = 24;
+
+const decodeKey = (secret: string): Buffer | null => {
+  if (!secret.startsWith(SECRET_PREFIX)) return null;
+  const key = Buffer.from(secret.slice(SECRET_PREFIX.length), 'base64');
+  return key.length >= MIN_KEY_BYTES ? key : null;
+};
+
+export const isValidSecret = (secret: unknown): secret is string => typeof secret === 'string' && decodeKey(secret) !== null;
 
 /** Standard Webhooks (v1, HMAC-SHA256) over `${id}.${timestamp}.${rawBody}`. */
 export function verifySignature(input: {
@@ -18,13 +27,13 @@ export function verifySignature(input: {
   nowSec: number;
 }): VerifyResult {
   const { secret, id, timestamp, signatureHeader, rawBody, nowSec } = input;
-  if (!secret) return { ok: false, reason: 'no_secret' };
+  const key = secret ? decodeKey(secret) : null;
+  if (!key) return { ok: false, reason: 'no_secret' };
   if (!id || !timestamp || !signatureHeader) return { ok: false, reason: 'missing_headers' };
   if (!/^\d{1,12}$/.test(timestamp) || Math.abs(nowSec - Number(timestamp)) > SIGNATURE_TOLERANCE_SECONDS) {
     return { ok: false, reason: 'stale_timestamp' };
   }
 
-  const key = Buffer.from(secret.slice(SECRET_PREFIX.length), 'base64');
   const expected = createHmac('sha256', key).update(`${id}.${timestamp}.`).update(rawBody).digest();
 
   for (const entry of signatureHeader.split(' ')) {
