@@ -134,24 +134,29 @@ export const PeriodSummaryResource = z
       })
       .nullable()
       .meta({ description: 'Set when the requested start was moved forward to fit 92 days.' }),
-    totals: z.object({
-      comments: z.int(),
-      hidden: z.int(),
-      replied: z.int(),
-      unanswered: z.int(),
-    }),
-    categories: z.array(z.object({ category: z.string(), count: z.int() })),
-    topRules: z.array(z.object({ ruleId: z.uuid(), name: z.string(), matches: z.int() })),
-    notableThreads: z.array(
-      z.object({
-        commentId: z.uuid(),
-        platform: z.enum(['facebook', 'instagram']),
-        authorName: z.string().nullable(),
-        textPreview: z.string(),
-        replies: z.int(),
-        postedAt: z.iso.datetime(),
+    totals: z
+      .object({ comments: z.int(), hidden: z.int(), replied: z.int(), unanswered: z.int() })
+      .meta({
+        description:
+          "Counts of other people's comments posted in the period. Deleted comments and comments of archived brands are not counted.",
       }),
-    ),
+    categories: z.array(z.object({ category: z.string(), count: z.int() })).meta({
+      description:
+        'The ten most common categories the classifier flagged (hide, flag or remove, not approve), by comment count.',
+    }),
+    topRules: z.array(z.object({ ruleId: z.uuid(), name: z.string(), matches: z.int() })),
+    notableThreads: z
+      .array(
+        z.object({
+          commentId: z.uuid(),
+          platform: z.enum(['facebook', 'instagram']),
+          authorName: z.string().nullable(),
+          textPreview: z.string(),
+          replies: z.int().meta({ description: "Replies, including the account's own." }),
+          postedAt: z.iso.datetime(),
+        }),
+      )
+      .meta({ description: 'Up to five top-level comments with the most replies, then newest.' }),
   })
   .meta({ id: 'PeriodSummary' });
 

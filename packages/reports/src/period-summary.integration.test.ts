@@ -73,7 +73,13 @@ async function secondBrand(t: Tenant): Promise<Tenant> {
      VALUES ($1, $2, $3, 'ad_post', $4) RETURNING id`,
     [t.organizationId, brandId, connectionId, `post-${randomUUID()}`],
   );
-  return { ...t, brandId, connectionId, sourceId };
+  const ruleId = await one(
+    `INSERT INTO rule (organization_id, brand_id, name, conditions, action)
+     SELECT organization_id, $2, 'Brand rule', conditions, action FROM rule WHERE id = $1
+     RETURNING id`,
+    [t.ruleId, brandId],
+  );
+  return { ...t, brandId, connectionId, sourceId, ruleId };
 }
 
 /** A reply from the account itself under `parentId`. */
@@ -175,6 +181,23 @@ describe('computePeriodSummary', () => {
     expect((await summary(t)).totals.comments).toBe(3);
     expect((await summary(t, t.brandId)).totals.comments).toBe(1);
     expect((await summary(t, b2.brandId)).totals.comments).toBe(2);
+  });
+
+  it('excludes comments of archived brands everywhere', async () => {
+    const t = await fresh();
+    const b2 = await secondBrand(t);
+    await seedProcessed(h.c, t, { postedAt: MID });
+    const hidden = await seedProcessed(h.c, b2, { postedAt: MID, via: 'rule' });
+    await seedHide(h.c, b2, hidden, { by: 'classifier', category: 'spam' });
+    await seedProcessed(h.c, b2, { postedAt: MID, via: 'rule' });
+    expect((await summary(t)).totals.comments).toBe(3);
+    await h.c.query('UPDATE brand SET archived_at = now() WHERE id = $1', [b2.brandId]);
+    const s = await summary(t);
+    expect(s.totals).toEqual({ comments: 1, hidden: 0, replied: 0, unanswered: 1 });
+    expect(s.categories).toEqual([]);
+    expect(s.topRules).toEqual([]);
+    expect(s.notableThreads).toHaveLength(1);
+    expect((await summary(t, b2.brandId)).totals.comments).toBe(0);
   });
 
   it("excludes another organization's data", async () => {

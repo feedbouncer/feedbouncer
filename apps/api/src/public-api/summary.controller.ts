@@ -32,7 +32,7 @@ export class PublicSummaryController {
         await c.query('SET TRANSACTION READ ONLY');
         if (q.brandId) {
           const brand = await c.query(
-            'SELECT 1 FROM brand WHERE organization_id = $1 AND id = $2',
+            'SELECT 1 FROM brand WHERE organization_id = $1 AND id = $2 AND archived_at IS NULL',
             [orgId, q.brandId],
           );
           if (!brand.rowCount) throw notFound();

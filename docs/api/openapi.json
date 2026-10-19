@@ -3495,7 +3495,8 @@
               "replied",
               "unanswered"
             ],
-            "additionalProperties": false
+            "additionalProperties": false,
+            "description": "Counts of other people's comments posted in the period. Deleted comments and comments of archived brands are not counted."
           },
           "categories": {
             "type": "array",
@@ -3516,7 +3517,8 @@
                 "count"
               ],
               "additionalProperties": false
-            }
+            },
+            "description": "The ten most common categories the classifier flagged (hide, flag or remove, not approve), by comment count."
           },
           "topRules": {
             "type": "array",
@@ -3574,7 +3576,8 @@
                 "replies": {
                   "type": "integer",
                   "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
+                  "maximum": 9007199254740991,
+                  "description": "Replies, including the account's own."
                 },
                 "postedAt": {
                   "type": "string",
@@ -3591,7 +3594,8 @@
                 "postedAt"
               ],
               "additionalProperties": false
-            }
+            },
+            "description": "Up to five top-level comments with the most replies, then newest."
           }
         },
         "required": [

@@ -102,6 +102,14 @@ describe('GET /v1/summary', () => {
     expect((await get('?brandId=nope')).status).toBe(400);
   });
 
+  it('answers 404 for an archived brand', async () => {
+    const brand = await api.pool.query(
+      `INSERT INTO brand (organization_id, name, archived_at) VALUES ($1, 'Old', now()) RETURNING id`,
+      [A.orgId],
+    );
+    expect((await get(`?brandId=${brand.rows[0].id}`)).status).toBe(404);
+  });
+
   it('rejects a missing key', async () => {
     const r = await api.req('GET', '/v1/summary', {});
     expect(r.status).toBe(401);

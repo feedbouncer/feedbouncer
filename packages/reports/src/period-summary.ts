@@ -52,6 +52,10 @@ export interface PeriodSummary {
   }[];
 }
 
+// Comments of archived brands are left out, as in the public comment list.
+const BRAND_JOIN = `JOIN brand b ON b.organization_id = c.organization_id AND b.id = c.brand_id
+                  AND b.archived_at IS NULL`;
+
 // $1 org, $2 from, $3 to, $4 brand (null: all brands). Other people's comments in [from, to).
 const IN_SCOPE = `c.organization_id = $1 AND NOT c.is_own_account AND c.platform_state <> 'deleted'
   AND c.posted_at >= $2 AND c.posted_at < $3 AND ($4::uuid IS NULL OR c.brand_id = $4)`;
@@ -62,12 +66,14 @@ SELECT count(*)::int AS comments,
        (count(*) FILTER (WHERE ${repliedSql('c')}))::int AS replied,
        (count(*) FILTER (WHERE ${unansweredSql('c')}))::int AS unanswered
   FROM comment c
+  ${BRAND_JOIN}
  WHERE ${IN_SCOPE}`;
 
 // A comment counts once per category, however many decisions name it.
 const CATEGORIES_SQL = `
 SELECT d.category, count(DISTINCT c.id)::int AS count
   FROM comment c
+  ${BRAND_JOIN}
   JOIN decision d ON d.organization_id = c.organization_id AND d.brand_id = c.brand_id
                  AND d.comment_id = c.id AND d.actor_type = 'classifier'
                  AND d.outcome <> 'approve' AND d.category IS NOT NULL
@@ -79,6 +85,7 @@ SELECT d.category, count(DISTINCT c.id)::int AS count
 const RULES_SQL = `
 SELECT r.id AS "ruleId", r.name, count(DISTINCT c.id)::int AS matches
   FROM comment c
+  ${BRAND_JOIN}
   JOIN decision d ON d.organization_id = c.organization_id AND d.brand_id = c.brand_id
                  AND d.comment_id = c.id AND d.rule_id IS NOT NULL
   JOIN rule r ON r.organization_id = c.organization_id AND r.brand_id = d.brand_id AND r.id = d.rule_id
@@ -93,8 +100,9 @@ SELECT c.id AS "commentId", cn.platform,
        left(c.body, ${PREVIEW_CHARS}) AS "textPreview",
        count(k.id)::int AS replies, c.posted_at AS "postedAt"
   FROM comment c
-  JOIN connection cn ON cn.id = c.connection_id
-  LEFT JOIN author a ON a.id = c.author_id
+  ${BRAND_JOIN}
+  JOIN connection cn ON cn.organization_id = c.organization_id AND cn.id = c.connection_id
+  LEFT JOIN author a ON a.organization_id = c.organization_id AND a.id = c.author_id
   LEFT JOIN comment k ON k.organization_id = c.organization_id AND k.parent_comment_id = c.id
                      AND k.platform_state <> 'deleted'
  WHERE ${IN_SCOPE} AND c.parent_comment_id IS NULL
