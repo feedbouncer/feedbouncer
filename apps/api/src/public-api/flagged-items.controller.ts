@@ -1,20 +1,19 @@
 import { Controller, Get, Inject, Param, Query, Req, UseGuards } from '@nestjs/common';
 import type pg from 'pg';
 import {
-  decodeCursor,
   encodeCursor,
-  InvalidCursorError,
   ListFlaggedItemsQuery,
   listPublicFlaggedItems,
   loadPublicFlaggedItem,
   toCommentResource,
   toFlaggedItemResource,
 } from '@feedbouncer/public-api';
-import { ApiError, notFound } from '../http/errors.js';
+import { notFound } from '../http/errors.js';
 import { parseBody, parseUuidOr404 } from '../http/validation.js';
 import { DEPS } from '../tokens.js';
 import type { AppDeps } from '../deps.js';
 import { ApiKeyGuard, type ApiKeyRequest } from './api-key.guard.js';
+import { decodePageCursor, parseDateRange } from './pagination.js';
 import { RequireScope } from './scope.decorator.js';
 
 @Controller('v1/flagged-items')
@@ -30,30 +29,21 @@ export class PublicFlaggedItemsController {
   @RequireScope('read')
   async list(@Req() req: ApiKeyRequest, @Query() rawQuery: unknown) {
     const q = parseBody(ListFlaggedItemsQuery, rawQuery);
-    const createdFrom = q.createdFrom ? new Date(q.createdFrom) : undefined;
-    const createdTo = q.createdTo ? new Date(q.createdTo) : undefined;
-    if (createdFrom && createdTo && createdFrom >= createdTo) {
-      throw new ApiError(400, 'invalid_request', 'createdFrom must be before createdTo.');
-    }
+    const range = parseDateRange(q.createdFrom, q.createdTo, {
+      from: 'createdFrom',
+      to: 'createdTo',
+    });
     const filters = {
       status: q.status,
       brandId: q.brandId,
       createdFrom: q.createdFrom,
       createdTo: q.createdTo,
     };
-    let after: { t: Date; id: string } | undefined;
-    if (q.cursor !== undefined) {
-      try {
-        after = decodeCursor(q.cursor, filters);
-      } catch (err) {
-        if (err instanceof InvalidCursorError) throw new ApiError(400, 'invalid_cursor');
-        throw err;
-      }
-    }
+    const after = decodePageCursor(q.cursor, filters);
     const { rows, next } = await listPublicFlaggedItems(
       this.#pool,
       req.apiKey.organizationId,
-      { status: q.status, brandId: q.brandId, createdFrom, createdTo },
+      { status: q.status, brandId: q.brandId, createdFrom: range.from, createdTo: range.to },
       { limit: q.limit, after },
     );
     return {

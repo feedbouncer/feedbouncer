@@ -17,9 +17,7 @@ import {
 import type { FastifyReply } from 'fastify';
 import {
   CreateWebhookEndpointBody,
-  decodeCursor,
   encodeCursor,
-  InvalidCursorError,
   ListWebhookDeliveriesQuery,
   PgIdempotency,
   routeSpec,
@@ -42,6 +40,7 @@ import { DEPS } from '../tokens.js';
 import type { AppDeps } from '../deps.js';
 import { ApiKeyGuard, type ApiKeyRequest } from './api-key.guard.js';
 import { runIdempotent } from './idempotent.js';
+import { decodePageCursor } from './pagination.js';
 import { RequireScope } from './scope.decorator.js';
 
 const resolveAddresses = async (host: string): Promise<string[]> =>
@@ -190,15 +189,7 @@ export class PublicWebhookEndpointsController {
     const id = parseUuidOr404(rawId);
     const q = parseBody(ListWebhookDeliveriesQuery, rawQuery);
     const filters = { endpointId: id, status: q.status };
-    let after: { t: Date; id: string } | undefined;
-    if (q.cursor !== undefined) {
-      try {
-        after = decodeCursor(q.cursor, filters);
-      } catch (err) {
-        if (err instanceof InvalidCursorError) throw new ApiError(400, 'invalid_cursor');
-        throw err;
-      }
-    }
+    const after = decodePageCursor(q.cursor, filters);
     const page = await this.#deliveries.list(
       req.apiKey.organizationId,
       id,
