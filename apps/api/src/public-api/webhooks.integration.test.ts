@@ -125,6 +125,10 @@ describe('endpoint CRUD', () => {
   });
 
   it('re-enables a disabled endpoint and clears its failure state', async () => {
+    const { rows: seen } = await api.pool.query(
+      'SELECT coalesce(max(sequence), 0) AS last FROM audit_event WHERE organization_id = $1',
+      [A.orgId],
+    );
     const id = (await create()).body.endpoint.id as string;
     const off = await call('PATCH', `/v1/webhook-endpoints/${id}`, {
       body: { status: 'disabled' },
@@ -143,8 +147,9 @@ describe('endpoint CRUD', () => {
     expect(row.rows[0]).toEqual({ consecutive_failures: 0, first_failure_at: null });
     const audit = await api.pool.query(
       `SELECT action, details FROM audit_event WHERE organization_id = $1 AND action LIKE 'webhook_endpoint.%'
+          AND sequence > $2
         ORDER BY sequence`,
-      [A.orgId],
+      [A.orgId, seen[0].last],
     );
     expect(audit.rows.map((r) => r.action)).toEqual([
       'webhook_endpoint.created',
