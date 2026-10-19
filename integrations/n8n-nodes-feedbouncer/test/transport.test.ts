@@ -156,6 +156,20 @@ describe('error mapping', () => {
     expect(error.message).toBe('FeedBouncer returned an unexpected response (HTTP 502).');
   });
 
+  it.each([
+    ['HTML', '<html>Sign in to the network</html>'],
+    ['an empty body', ''],
+    ['no body', undefined],
+  ])('maps a 200 with %s to an unexpected response', async (_name, body) => {
+    const { error } = await failure(get, [{ status: 200, body }]);
+    expect(error.message).toBe('FeedBouncer returned an unexpected response (HTTP 200).');
+  });
+
+  it('accepts a 204 without a body', async () => {
+    const ctx = fakeExecute({ http: [{ status: 204 }], credentials: DEFAULT_CREDENTIALS });
+    await expect(feedBouncerRequest(ctx, { ...get, method: 'DELETE' })).resolves.toMatchObject({ status: 204 });
+  });
+
   it('maps ENOTFOUND to a host-only message', async () => {
     const { error } = await failure(get, [{ throw: { code: 'ENOTFOUND' } }], {
       ...DEFAULT_CREDENTIALS,

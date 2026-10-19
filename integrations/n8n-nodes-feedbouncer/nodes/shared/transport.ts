@@ -161,7 +161,9 @@ export async function ensureOperationSupported(ctx: Ctx, operationId: string): P
 export async function feedBouncerRequest<T>(ctx: Ctx, req: FbRequest): Promise<FbResponse<T>> {
   const conn = await connect(ctx);
   const outcome = await transfer(ctx, conn, req);
-  if (outcome.status !== null && outcome.status >= 200 && outcome.status < 300) {
+  // Anything but a JSON object or array (a proxy's HTML page, an empty body) is not a FeedBouncer answer; 204 has no body by design.
+  const hasBody = typeof outcome.body === 'object' && outcome.body !== null;
+  if (outcome.status !== null && outcome.status >= 200 && outcome.status < 300 && (hasBody || outcome.status === 204)) {
     return { status: outcome.status, body: outcome.body as T, headers: outcome.headers };
   }
 
