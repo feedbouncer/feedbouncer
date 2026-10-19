@@ -416,6 +416,11 @@ test('n8n package has no runtime dependencies and the community keyword', () => 
   assert.deepEqual(p.files, ['dist']);
 });
 
+test('n8n build does not emit a tsbuildinfo into the published dist', () => {
+  const { compilerOptions } = JSON.parse(read(`${N8N_PACKAGE}/tsconfig.json`));
+  assert.notEqual(compilerOptions.incremental, true, 'incremental builds write dist/tsconfig.tsbuildinfo');
+});
+
 test('README states the n8n version CI tests against', () => {
   const ci = parse(read('.github/workflows/ci.yml'));
   const version = ci.env.N8N_TESTED_VERSION;
