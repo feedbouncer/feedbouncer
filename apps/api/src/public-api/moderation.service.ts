@@ -26,7 +26,8 @@ const REFUSALS: Readonly<Record<string, readonly [409 | 422, ErrorCode]>> = {
 /** Refusals that tell the caller why a reply is not allowed. */
 const REPLY_REFUSALS: ReadonlySet<string> = new Set(['review_mode_active', 'moderator_override']);
 
-function refusalError(r: Extract<RequestActionResult, { status: 'refused' }>): Error {
+/** Exported for tests. */
+export function refusalError(r: Extract<RequestActionResult, { status: 'refused' }>): Error {
   if (r.code === 'not_found') return notFound();
   if (r.code === 'text_too_long' && 'max' in r)
     return new ApiError(422, 'text_too_long', undefined, { max: r.max });

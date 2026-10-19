@@ -201,6 +201,46 @@ describe('POST /v1/comments/{id}/replies', () => {
     expect(graph.calls()).toHaveLength(calls);
   });
 
+  it('an outcome known up front -> 200 with the recorded not_eligible action; replayed under its key', async () => {
+    // Instagram does not take public replies to hidden comments, so nothing is queued.
+    const { pageId } = graph.addPage(graph.addUser('Noa').userId, { name: 'Shop IG 2' });
+    const { igUserId } = graph.addInstagramAccount(pageId, { username: 'shop2' });
+    const { scope } = await api.seedConnection(
+      { orgId: A.orgId, brandId: A.brandId },
+      { platform: 'instagram', externalAccountId: igUserId },
+    );
+    const ig = graph.addIgComment(igUserId, { text: 'hidden one', createdAtMs: Date.now() });
+    const stored = await api.deps.comments!.store.upsertFromPlatform(
+      scope,
+      {
+        externalId: ig.commentId,
+        sourceExternalId: ig.mediaId,
+        parentExternalId: null,
+        author: { externalId: '17800000002', displayName: 'ig_fan2', profileUrl: null },
+        body: 'hidden one',
+        postedAt: new Date(),
+        platformState: 'hidden',
+        permalink: null,
+      },
+      { ownAccountExternalId: igUserId, syncedAt: new Date() },
+    );
+    const calls = graph.calls().length;
+    const idem = `i-${randomUUID()}`;
+    const first = await reply(stored.commentId, { text: 'hi' }, { idem });
+    expect(first.status).toBe(200);
+    expect(ReplyResult.parse(first.body).action).toMatchObject({
+      status: 'not_eligible',
+      code: 'reply_to_hidden_comment',
+      platformRef: null,
+    });
+    const again = await reply(stored.commentId, { text: 'hi' }, { idem });
+    expect(again.status).toBe(200);
+    expect(again.headers['idempotent-replayed']).toBe('true');
+    expect(again.body).toEqual(first.body);
+    expect(await actionRows(stored.commentId)).toHaveLength(1);
+    expect(graph.calls()).toHaveLength(calls);
+  });
+
   it('a platform without the public_reply capability -> 422 unsupported_action', async () => {
     const c = await comment(pageA);
     const registry = api.deps.connectors!.registry;
