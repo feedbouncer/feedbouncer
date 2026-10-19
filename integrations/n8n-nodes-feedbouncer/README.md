@@ -80,7 +80,7 @@ Operations on **FeedBouncer** run once per input item. IDs are FeedBouncer UUIDs
 | Hide | Comment ID | One item: `action` (`id`, `kind`, `status`, `code`), `comment`, and `changed`. |
 | Undo Hide | Comment ID | The same, for making a hidden comment visible again. |
 
-Options for both: **Wait for Result** (on by default) polls up to 15 seconds for the platform to confirm the change, and **Idempotency Key** overrides the key sent with the request. By default the key is derived from the execution, node and item, so a retried run cannot repeat the action. A custom key may use 1 to 128 letters, digits and `. _ : -`. If the platform does not apply the change, the node fails with the platform's code. An Undo Hide that the platform cannot perform fails with a message saying so.
+Options for both: **Wait for Result** (on by default) polls up to 15 seconds for the platform to confirm the change, and **Idempotency Key** overrides the key sent with the request. By default the key is derived from the execution, node and item, so a retried run cannot repeat the action. A custom key may use 1 to 128 letters, digits and `. _ : -`. A custom key is reused for every input item of a run, so when processing several items build it with an expression that includes the item index (for example `{{ 'hide-' + $itemIndex }}`). If the platform does not apply the change, the node fails with the platform's code. An Undo Hide that the platform cannot perform fails with a message saying so.
 
 ### Rule
 
