@@ -66,6 +66,14 @@ describe('rule list', () => {
     expect(ctx.calls).toHaveLength(0);
   });
 
+  it('a brand the account cannot see (API 404) reads as a missing brand', async () => {
+    const { result } = run({
+      params: { resource: 'rule', operation: 'list', returnAll: true, brandId: BRAND_B },
+      http: [{ status: 404, body: { error: { code: 'not_found', message: 'nope' } } }],
+    });
+    await expect(result).rejects.toThrow(`No brand with ID ${BRAND_B} in this FeedBouncer workspace.`);
+  });
+
   it('a brand without rules gives zero items and no error', async () => {
     const { result } = run({
       params: { resource: 'rule', operation: 'list', returnAll: true },

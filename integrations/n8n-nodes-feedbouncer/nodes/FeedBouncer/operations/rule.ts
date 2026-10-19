@@ -29,8 +29,9 @@ export async function executeRule(
     path: '/v1/rules',
     qs,
     operationId: 'listRules',
-    resourceLabel: 'rule',
-    id: ruleId,
+    // An API 404 means the brand filter is unknown, unless a rule was asked for by ID.
+    resourceLabel: ruleId ? 'rule' : 'brand',
+    id: ruleId ?? (brandParam || undefined),
     itemIndex: i,
   });
   const rules = flatten(body);
