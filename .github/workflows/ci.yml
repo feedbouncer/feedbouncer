@@ -65,9 +65,7 @@ jobs:
           turbo-cache-scope: n8n-node
       - name: Build
         run: pnpm --filter @feedbouncer/n8n-nodes-feedbouncer build
-      # The node exists from the action-node task on; lint needs it.
       - name: Lint
-        if: hashFiles('integrations/n8n-nodes-feedbouncer/nodes/FeedBouncer/FeedBouncer.node.ts') != ''
         run: pnpm --filter @feedbouncer/n8n-nodes-feedbouncer lint
       - name: Typecheck
         run: pnpm --filter @feedbouncer/n8n-nodes-feedbouncer typecheck
