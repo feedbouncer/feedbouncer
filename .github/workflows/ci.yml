@@ -20,8 +20,6 @@ concurrency:
 env:
   TURBO_TELEMETRY_DISABLED: '1'
   FORCE_COLOR: '1'
-  # n8n release the smoke test runs; the package README must state the same version.
-  N8N_TESTED_VERSION: '2.43.8'
 
 jobs:
   typecheck:
@@ -76,7 +74,7 @@ jobs:
           set -euo pipefail
           pack_dir="$(mktemp -d)"
           pnpm --filter @feedbouncer/n8n-nodes-feedbouncer pack --pack-destination "$pack_dir"
-          node integrations/n8n-nodes-feedbouncer/scripts/smoke.mjs "$pack_dir"/*.tgz "$N8N_TESTED_VERSION"
+          node integrations/n8n-nodes-feedbouncer/scripts/smoke.mjs "$pack_dir"/*.tgz "$(cat integrations/n8n-nodes-feedbouncer/scripts/n8n-tested-version)"
       - name: n8n node PRs must not change product code
         if: github.event_name == 'pull_request'
         env:

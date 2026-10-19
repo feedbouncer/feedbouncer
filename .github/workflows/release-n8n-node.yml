@@ -67,7 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           # Same n8n release the CI smoke test uses.
-          n8n_version="$(sed -n "s/^  N8N_TESTED_VERSION: '\(.*\)'$/\1/p" .github/workflows/ci.yml)"
+          n8n_version="$(cat integrations/n8n-nodes-feedbouncer/scripts/n8n-tested-version)"
           pack_dir="$(mktemp -d)"
           pnpm --filter "$PACKAGE" pack --pack-destination "$pack_dir"
           node integrations/n8n-nodes-feedbouncer/scripts/smoke.mjs "$pack_dir"/*.tgz "$n8n_version"
@@ -76,8 +76,22 @@ jobs:
         working-directory: integrations/n8n-nodes-feedbouncer
         run: npm publish --provenance --access public
 
-      # Fails the release job if the published package does not pass n8n's community checks.
-      - name: Scan the published package
+  # A separate job so the scanner never runs with the OIDC publishing permission.
+  scan:
+    name: Scan the published package
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Scan with n8n's community package checks
         run: |
           set -euo pipefail
           version="$(node -p "require('./integrations/n8n-nodes-feedbouncer/package.json').version")"
@@ -86,4 +100,4 @@ jobs:
             npm view "${PACKAGE}@${version}" version >/dev/null 2>&1 && break
             [ "$attempt" -lt 6 ] && sleep 10
           done
-          npx --yes @n8n/scan-community-package "${PACKAGE}@${version}"
+          npx --yes @n8n/scan-community-package@0.39.0 "${PACKAGE}@${version}"

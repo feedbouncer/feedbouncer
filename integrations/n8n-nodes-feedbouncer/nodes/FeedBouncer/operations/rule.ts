@@ -1,8 +1,8 @@
 import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-workflow';
-import { CREDENTIAL_NAME, DEFAULT_LIMIT } from '../../shared/constants';
+import { CREDENTIAL_NAME, DEFAULT_LIMIT, RETURN_ALL_MAX } from '../../shared/constants';
 import { describeFailure, toNodeApiError } from '../../shared/errors';
 import { assertUuid } from '../../shared/ids';
-import { collectPages } from '../../shared/pagination';
+import { ReturnAllLimitError } from '../../shared/pagination';
 import { feedBouncerRequest } from '../../shared/transport';
 
 interface RuleSet {
@@ -51,17 +51,8 @@ export async function executeRule(
     return [{ json: found, pairedItem }];
   }
 
-  const offset = (cursor?: string) => (cursor ? Number(cursor) : 0);
-  const selected = await collectPages<IDataObject>(
-    async (cursor, pageLimit) => {
-      const start = offset(cursor);
-      const end = start + pageLimit;
-      return { data: rules.slice(start, end), nextCursor: end < rules.length ? String(end) : null };
-    },
-    {
-      returnAll: this.getNodeParameter('returnAll', i) as boolean,
-      limit: this.getNodeParameter('limit', i, DEFAULT_LIMIT) as number,
-    },
-  );
-  return selected.map((json) => ({ json, pairedItem }));
+  const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+  if (returnAll && rules.length > RETURN_ALL_MAX) throw new ReturnAllLimitError('Return All stopped at the maximum.');
+  const limit = returnAll ? rules.length : (this.getNodeParameter('limit', i, DEFAULT_LIMIT) as number);
+  return rules.slice(0, limit).map((json) => ({ json, pairedItem }));
 }

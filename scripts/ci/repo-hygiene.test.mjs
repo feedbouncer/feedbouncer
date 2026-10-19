@@ -422,8 +422,11 @@ test('n8n build does not emit a tsbuildinfo into the published dist', () => {
 });
 
 test('README states the n8n version CI tests against', () => {
-  const ci = parse(read('.github/workflows/ci.yml'));
-  const version = ci.env.N8N_TESTED_VERSION;
-  assert.match(version, /^\d+\.\d+\.\d+$/, 'N8N_TESTED_VERSION in ci.yml');
+  const versionFile = `${N8N_PACKAGE}/scripts/n8n-tested-version`;
+  const version = read(versionFile).trim();
+  assert.match(version, /^\d+\.\d+\.\d+$/, versionFile);
+  for (const workflow of ['ci.yml', 'release-n8n-node.yml']) {
+    assert.ok(read(`.github/workflows/${workflow}`).includes(versionFile), `${workflow} must read ${versionFile}`);
+  }
   assert.ok(read(`${N8N_PACKAGE}/README.md`).includes(version), 'README must state the version');
 });

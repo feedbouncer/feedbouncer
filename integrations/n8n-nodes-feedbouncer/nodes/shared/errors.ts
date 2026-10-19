@@ -122,9 +122,11 @@ export function describeFailure(input: FailureInput): FeedBouncerErrorInfo {
 /** Built from plain strings only, never from a request or response object. */
 export function toNodeApiError(node: INode, info: FeedBouncerErrorInfo, itemIndex?: number): NodeApiError {
   const httpCode = info.httpCode === null ? undefined : String(info.httpCode);
-  return new NodeApiError(
+  const error = new NodeApiError(
     node,
     { message: info.message, description: info.description, ...(httpCode && { httpCode }) },
     { message: info.message, description: info.description, httpCode, itemIndex },
   );
+  if (info.code) error.context = { ...error.context, code: info.code };
+  return error;
 }

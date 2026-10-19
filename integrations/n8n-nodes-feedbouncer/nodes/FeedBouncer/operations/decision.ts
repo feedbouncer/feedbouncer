@@ -60,7 +60,7 @@ async function waitForAction(ctx: IExecuteFunctions, action: ActionSummary, i: n
 
 /** The API's own words for an unsupported undo go into the description. */
 function explainUnsupportedUndo(ctx: IExecuteFunctions, error: unknown, i: number): unknown {
-  if (!(error instanceof NodeApiError) || error.httpCode !== '422' || !error.description?.endsWith('unsupported_action.')) {
+  if (!(error instanceof NodeApiError) || error.httpCode !== '422' || error.context.code !== 'unsupported_action') {
     return error;
   }
   return toNodeApiError(
@@ -102,7 +102,7 @@ export async function executeDecision(
 
   if (action.status === 'failed' || action.status === 'not_eligible') {
     const code = action.code ?? action.status;
-    const error = toNodeApiError(
+    throw toNodeApiError(
       this.getNode(),
       {
         httpCode: null,
@@ -112,8 +112,6 @@ export async function executeDecision(
       },
       i,
     );
-    error.context = { ...error.context, code };
-    throw error;
   }
 
   const { id: actionId, kind, status: finalStatus, code } = action;

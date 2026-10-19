@@ -168,6 +168,7 @@ describe('decision undoHide', () => {
     expect(error).toBeInstanceOf(NodeApiError);
     expect(error.message).toBe("This hide can't be undone on its platform.");
     expect(error.description).toBe('Instagram cannot unhide.');
+    expect(error.context.code).toBe('unsupported_action');
   });
 });
 
