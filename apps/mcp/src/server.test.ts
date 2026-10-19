@@ -16,7 +16,8 @@ const VALID_ARGS: Record<string, Record<string, unknown>> = {
   read_rules: {},
   propose_rule_change: {
     brandId: BRAND_ID,
-    operation: { kind: 'archive', ruleId: RULE_ID },
+    operation: 'archive',
+    ruleId: RULE_ID,
   },
 };
 

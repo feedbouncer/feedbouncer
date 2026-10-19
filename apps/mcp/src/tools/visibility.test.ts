@@ -31,16 +31,18 @@ describe('set_comment_visibility', () => {
     expect(h.api.callsTo('setVisibility')[0]![2]).toBe('k1');
   });
 
-  it('reports a noop as unchanged', async () => {
+  it.each([
+    ['hidden', 'already_hidden', 'Already hidden — nothing changed.'],
+    ['visible', 'already_visible', 'Already visible — nothing changed.'],
+    ['hidden', 'already_deleted', 'Comment was deleted on the platform — nothing changed.'],
+    ['visible', 'comment_gone', 'Comment was deleted on the platform — nothing changed.'],
+  ] as const)('reports a %s noop with %s as unchanged', async (visibility, code, message) => {
     h = await connect();
-    h.api.visibilityAction = { status: 'noop', code: 'already_hidden' };
-    const r = await h.call('set_comment_visibility', {
-      commentId: COMMENT_ID,
-      visibility: 'hidden',
-    });
+    h.api.visibilityAction = { status: 'noop', code };
+    const r = await h.call('set_comment_visibility', { commentId: COMMENT_ID, visibility });
     expect(r.isError).toBeFalsy();
-    expect(r.structuredContent).toEqual({ changed: false, reason: 'already_hidden' });
-    expect(textOf(r)).toBe('Already hidden — nothing changed.');
+    expect(r.structuredContent).toEqual({ changed: false, reason: code });
+    expect(textOf(r)).toBe(message);
   });
 
   it('gives an actionable error for an unknown comment', async () => {

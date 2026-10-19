@@ -27,6 +27,11 @@ function messageFor(e: ApiCallError): string {
       return `Rule rejected (${str(d.reason) ?? 'unknown reason'}): ${e.message}`;
     case 'unauthenticated':
       return 'The API key was rejected.';
+    case 'already_deleted':
+    case 'comment_gone':
+      return 'The comment was deleted on the platform.';
+    case 'reply_to_hidden_comment':
+      return `${str(d.platform) ?? 'This platform'} does not allow replies to hidden comments. Unhide the comment first.`;
     default:
       return `FeedBouncer API error (${e.code}).`;
   }

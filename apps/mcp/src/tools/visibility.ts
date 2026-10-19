@@ -9,6 +9,16 @@ const input = z.object({
   idempotencyKey,
 });
 
+const NOOP_MESSAGES: Record<string, string> = {
+  already_hidden: 'Already hidden — nothing changed.',
+  already_visible: 'Already visible — nothing changed.',
+  already_deleted: 'Comment was deleted on the platform — nothing changed.',
+  comment_gone: 'Comment was deleted on the platform — nothing changed.',
+};
+
+const noopMessage = (code: string | null, visibility: string): string =>
+  (code !== null ? NOOP_MESSAGES[code] : undefined) ?? `Already ${visibility} — nothing changed.`;
+
 export function registerVisibility(server: McpServer, deps: ToolDeps): void {
   server.registerTool(
     'set_comment_visibility',
@@ -30,7 +40,7 @@ export function registerVisibility(server: McpServer, deps: ToolDeps): void {
           case 'noop':
             return {
               result: {
-                content: text(`Already ${args.visibility} — nothing changed.`),
+                content: text(noopMessage(action.code, args.visibility)),
                 structuredContent: { changed: false, reason: action.code ?? 'noop' },
               },
               outcome: 'noop',

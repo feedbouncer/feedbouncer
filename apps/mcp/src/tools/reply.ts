@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
+import { toToolError } from '../errors.js';
 import { actionError, idempotencyKey, runTool, text, type ToolDeps } from './common.js';
 
 const input = z.object({
@@ -37,7 +38,18 @@ export function registerReply(server: McpServer, deps: ToolDeps): void {
         const deadline = Date.now() + deps.replyWaitMs;
         while (action.status === 'pending' && Date.now() < deadline) {
           await sleep(Math.min(deps.pollIntervalMs, Math.max(0, deadline - Date.now())));
-          action = await deps.api.getAction(action.id);
+          try {
+            action = await deps.api.getAction(action.id);
+          } catch (e) {
+            const result = toToolError(e);
+            const retry = args.idempotencyKey === undefined ? 'text' : 'idempotencyKey';
+            result.content.push(
+              ...text(
+                `The reply was accepted (action ${action.id}) but its status could not be checked. Retrying with the same ${retry} is safe; it will not post twice.`,
+              ),
+            );
+            return { result, outcome: 'status_unknown' };
+          }
         }
 
         if (action.status === 'applied') {

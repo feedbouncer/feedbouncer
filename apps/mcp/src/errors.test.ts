@@ -47,6 +47,12 @@ describe('toToolError', () => {
       'Rule rejected (duplicate): Duplicate rule.',
     ],
     [new ApiCallError(401, 'unauthenticated', 'x'), 'The API key was rejected.'],
+    [new ApiCallError(422, 'already_deleted', 'x'), 'The comment was deleted on the platform.'],
+    [new ApiCallError(422, 'comment_gone', 'x'), 'The comment was deleted on the platform.'],
+    [
+      new ApiCallError(422, 'reply_to_hidden_comment', 'x', { platform: 'Instagram' }),
+      'Instagram does not allow replies to hidden comments. Unhide the comment first.',
+    ],
     [
       new ApiCallError(409, 'pending_limit_reached', 'x'),
       'FeedBouncer API error (pending_limit_reached).',

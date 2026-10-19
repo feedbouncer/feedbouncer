@@ -58,6 +58,29 @@ describe('reply_to_comment', () => {
     expect(textOf(r)).toContain('comments_closed');
   });
 
+  it('says a deleted comment was not replied to', async () => {
+    h = await connect();
+    h.api.replyAction = { status: 'noop', code: 'already_deleted' };
+    const r = await h.call('reply_to_comment', args);
+    expect(r.isError).toBe(true);
+    expect(textOf(r)).toBe('The comment was deleted on the platform.\nNothing was posted.');
+  });
+
+  it('says retrying is safe when the status check fails after the reply was accepted', async () => {
+    h = await connect();
+    h.api.replyAction = { status: 'pending' };
+    const getAction = h.api.getAction.bind(h.api);
+    h.api.getAction = async (id) => {
+      await getAction(id);
+      throw new ApiCallError(503, 'unreachable', 'FeedBouncer API is unreachable');
+    };
+    const r = await h.call('reply_to_comment', args);
+    expect(r.isError).toBe(true);
+    const action = [...h.api.posts.values()][0]!;
+    expect(textOf(r)).toContain(`The reply was accepted (action ${action.id})`);
+    expect(textOf(r)).toContain('Retrying with the same text is safe; it will not post twice.');
+  });
+
   it('returns queued when still pending after the wait', async () => {
     h = await connect({ replyWaitMs: 50 });
     h.api.replyAction = { status: 'pending' };
