@@ -1,4 +1,3 @@
-import type { Type } from '@nestjs/common';
 import type pg from 'pg';
 import type { Redis } from 'ioredis';
 import type { ModerationActions, PgCommentStore } from '@feedbouncer/comments';
@@ -26,7 +25,5 @@ export interface AppDeps {
   readonly producer: JobProducer | null;
   /** Replaces the network behind the Slack webhook client; tests only. */
   readonly alertsFetch?: typeof fetch;
-  /** Extra controllers to mount; tests only. */
-  readonly extraControllers?: readonly Type[];
   readonly comments: { store: PgCommentStore; actions: ModerationActions } | null;
 }

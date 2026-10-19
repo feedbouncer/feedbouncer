@@ -141,7 +141,6 @@ export class AppModule {
         PublicFlaggedItemsController,
         PublicModerationController,
         PublicWebhookEndpointsController,
-        ...(deps.extraControllers ?? []),
       ],
       providers: [
         Reflector,

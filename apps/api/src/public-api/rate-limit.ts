@@ -31,23 +31,28 @@ export function createPublicApiLimits(
 
   // rate-limiter-flexible rejects with RateLimiterRes when over the limit and
   // with an Error when Redis fails. Fail closed on Redis errors.
-  const limited = (limiter: RateLimiterRedis, res: RateLimiterRes) =>
+  const limited = (res: RateLimiterRes, perKeyHeaders: boolean) =>
     new ApiError(429, 'rate_limited', undefined, undefined, {
       'retry-after': String(Math.max(1, Math.ceil(res.msBeforeNext / 1000))),
-      'x-ratelimit-limit': String(limiter.points),
-      'x-ratelimit-remaining': '0',
+      ...(perKeyHeaders
+        ? { 'x-ratelimit-limit': String(perMinute), 'x-ratelimit-remaining': '0' }
+        : {}),
     });
-  const consume = async (limiter: RateLimiterRedis, key: string): Promise<RateLimiterRes> => {
+  const consume = async (
+    limiter: RateLimiterRedis,
+    key: string,
+    perKeyHeaders = false,
+  ): Promise<RateLimiterRes> => {
     try {
       return await limiter.consume(key);
     } catch (e) {
       if (!(e instanceof RateLimiterRes)) throw new ApiError(503, 'temporarily_unavailable');
-      throw limited(limiter, e);
+      throw limited(e, perKeyHeaders);
     }
   };
   return {
     async consumeKey(apiKeyId) {
-      const res = await consume(perKey, apiKeyId);
+      const res = await consume(perKey, apiKeyId, true);
       return { limit: perMinute, remaining: res.remainingPoints };
     },
     async assertAuthBudget(ip) {
@@ -57,7 +62,7 @@ export function createPublicApiLimits(
       } catch {
         throw new ApiError(503, 'temporarily_unavailable');
       }
-      if (used && used.consumedPoints >= authFailures.points) throw limited(authFailures, used);
+      if (used && used.consumedPoints >= authFailures.points) throw limited(used, false);
     },
     async consumeAuthFailure(ip) {
       await consume(authFailures, clientIpKey(ip));

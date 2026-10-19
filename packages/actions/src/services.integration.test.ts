@@ -535,6 +535,14 @@ describe('resolveReviewItem', () => {
     expect(await actionRows(f.comment.id)).toHaveLength(1);
   });
 
+  it('approve leaves a comment an API key hid alone', async () => {
+    const f = await fresh('hidden');
+    await seedModerationActionRow(ctx.c, f.comment, { kind: 'hide', actorType: 'api_key' });
+    const itemId = await openItem(f);
+    expect(await resolve(f, itemId, 'approve')).toEqual({ status: 'resolved', actionId: null });
+    expect(await actionRows(f.comment.id)).toHaveLength(1);
+  });
+
   it('approve of a visible comment only resolves the item', async () => {
     const f = await fresh();
     const itemId = await openItem(f);

@@ -7,8 +7,24 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import dns from 'node:dns';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { buildConnector } from 'undici';
 import { createGuardedTransport } from './transport.js';
+
+// The receiver listens on a random port, so the agent's connector is wrapped to dial that port. The URL
+// the policy sees keeps port 443, and the guarded connector still runs the address lookup and TLS checks.
+vi.mock('undici', async (importOriginal) => {
+  const undici = await importOriginal<typeof import('undici')>();
+  class DialingAgent extends undici.Agent {
+    constructor(o: { connect: buildConnector.connector }) {
+      super({
+        ...o,
+        connect: (opts, cb) => o.connect({ ...opts, port: String(testPort.value) }, cb),
+      });
+    }
+  }
+  return { ...undici, Agent: DialingAgent };
+});
 
 const run = promisify(execFile);
 let dir: string;
@@ -16,6 +32,7 @@ let cert: string;
 let key: string;
 let server: Server;
 let port: number;
+const testPort = vi.hoisted(() => ({ value: 0 }));
 let requests = 0;
 let connections = 0;
 let handler: RequestListener = (_req, res) => res.writeHead(204).end();
@@ -60,6 +77,7 @@ beforeAll(async () => {
   server.on('connection', () => (connections += 1));
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   port = (server.address() as AddressInfo).port;
+  testPort.value = port;
 });
 
 afterAll(async () => {
@@ -73,14 +91,11 @@ const reset = () => {
   connections = 0;
 };
 
-// The receiver listens on a random port, so the injected connector dials that port. The URL the
-// policy sees keeps port 443, and the guarded connector still runs the address lookup and TLS checks.
 const make = (o: Record<string, unknown> = {}) =>
   createGuardedTransport({
     allowedPrivateCidrs: ['127.0.0.0/8'],
     lookup: toLoopback,
     ca: cert,
-    dialPort: port,
     ...o,
   });
 const send = (t: ReturnType<typeof make>, url = target()) =>

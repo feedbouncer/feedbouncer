@@ -1,33 +1,14 @@
-import { Controller, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PgApiKeys, type ApiKeyScope } from '@feedbouncer/public-api';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
-import { ApiKeyGuard } from './api-key.guard.js';
 import { buildOpenApiDocument } from './openapi.js';
-import { RequireScope } from './scope.decorator.js';
-
-@Controller('v1/_probe')
-@UseGuards(ApiKeyGuard)
-class ProbeController {
-  @Get()
-  @RequireScope('read')
-  read() {
-    return { ok: true };
-  }
-
-  @Post()
-  @HttpCode(200)
-  @RequireScope('write')
-  write() {
-    return { ok: true };
-  }
-}
 
 let api: TestApi;
 let org: OrgFixture;
 let keys: PgApiKeys;
 beforeAll(async () => {
-  api = await startTestApi({ trustProxyHops: 1 }, { extraControllers: [ProbeController] });
+  api = await startTestApi({ trustProxyHops: 1 });
   org = await orgWithRoles(api, 'pubauth');
   keys = new PgApiKeys(api.pool);
 });
@@ -40,13 +21,18 @@ const newKey = async (scope: ApiKeyScope, name = `key-${scope}-${ipCounter++}`) 
   const { key, token } = await keys.create(org.orgId, org.owner.userId, { name, scope });
   return { key, token: token.reveal() };
 };
+// A read route and a write route of the real API. Passing authentication shows up as anything but
+// 401/403: the list answers 200, and hiding an unknown comment answers 404.
+const route = (method: string) =>
+  method === 'GET' ? '/v1/comments' : `/v1/comments/${randomUUID()}/hide`;
+const PASSES = { GET: 200, POST: 404 } as const;
 const call = (
   method: string,
   token: string | null,
   extra: Record<string, string> = {},
   ip = freshIp(),
 ) =>
-  api.req(method, '/v1/_probe', {
+  api.req(method, route(method), {
     headers: {
       'x-forwarded-for': ip,
       ...(token === null ? {} : { authorization: `Bearer ${token}` }),
@@ -59,7 +45,6 @@ describe('API key authentication', () => {
     const { token } = await newKey('read');
     const r = await call('GET', token);
     expect(r.status).toBe(200);
-    expect(r.body).toEqual({ ok: true });
     expect(r.headers['x-ratelimit-limit']).toBe('60');
     expect(r.headers['x-ratelimit-remaining']).toBe('59');
   });
@@ -80,7 +65,7 @@ describe('API key authentication', () => {
   it('rejects other schemes, malformed tokens and a dashboard session cookie', async () => {
     const basic = await call('GET', null, { authorization: 'Basic Zm9vOmJhcg==' });
     const malformed = await call('GET', 'not-a-key');
-    const cookie = await api.req('GET', '/v1/_probe', {
+    const cookie = await api.req('GET', '/v1/comments', {
       cookie: org.owner.cookie,
       headers: { 'x-forwarded-for': freshIp() },
     });
@@ -107,14 +92,14 @@ describe('API key authentication', () => {
     const denied = await call('POST', read.token);
     expect(denied.status).toBe(403);
     expect(denied.body.error.code).toBe('insufficient_scope');
-    expect((await call('POST', write.token)).status).toBe(200);
+    expect((await call('POST', write.token)).status).toBe(PASSES.POST);
     expect((await call('GET', write.token)).status).toBe(200);
   });
 
   it('is not subject to the dashboard Origin check', async () => {
     const { token } = await newKey('write');
     const r = await call('POST', token, { origin: 'https://evil.example' });
-    expect(r.status).toBe(200);
+    expect(r.status).toBe(PASSES.POST);
   });
 });
 
@@ -138,6 +123,7 @@ describe('rate limits', () => {
     const limited = await call('GET', 'bad-token', {}, ip);
     expect(limited.status).toBe(429);
     expect(limited.headers['retry-after']).toMatch(/^[1-9]\d*$/);
+    expect(limited.headers['x-ratelimit-limit']).toBeUndefined();
     // Other addresses are unaffected.
     expect((await call('GET', 'bad-token')).status).toBe(401);
   });
@@ -159,7 +145,7 @@ describe('rate limits', () => {
   });
 
   it('fails closed with 503 when the rate limit store is down', async () => {
-    const down = await startTestApi({}, { extraControllers: [ProbeController] });
+    const down = await startTestApi({});
     try {
       const o = await orgWithRoles(down, 'pubdown');
       const { token } = await new PgApiKeys(down.pool).create(o.orgId, o.owner.userId, {
@@ -167,10 +153,10 @@ describe('rate limits', () => {
         scope: 'read',
       });
       expect(
-        (await down.req('GET', '/v1/_probe', { headers: bearer(token.reveal()) })).status,
+        (await down.req('GET', '/v1/comments', { headers: bearer(token.reveal()) })).status,
       ).toBe(200);
       down.deps.redis.disconnect();
-      const r = await down.req('GET', '/v1/_probe', { headers: bearer(token.reveal()) });
+      const r = await down.req('GET', '/v1/comments', { headers: bearer(token.reveal()) });
       expect(r.status).toBe(503);
       expect(r.body.error.code).toBe('temporarily_unavailable');
     } finally {

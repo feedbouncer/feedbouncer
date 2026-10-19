@@ -730,6 +730,16 @@ describe('moderation execute job', () => {
       expect(await store.userUnhidLast(t, seeded.id)).toBe(true);
     });
 
+    it('an API key unhide counts as a deliberate unhide', async () => {
+      await pool.query(
+        `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind,
+           actor_type, request_key, status, completed_at)
+         VALUES ($1, $2, $3, $4, 'unhide', 'api_key', $5, 'applied', now())`,
+        [t.organizationId, t.brandId, t.connectionId, seeded.id, `k-${randomUUID()}`],
+      );
+      expect(await store.userUnhidLast(t, seeded.id)).toBe(true);
+    });
+
     it('unhide of a comment removed on the platform records noop comment_gone and marks deleted', async () => {
       const actionId = await requestUnhide();
       graph.removeComment(seeded.commentId);

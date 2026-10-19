@@ -227,7 +227,7 @@ export class PgCommentStore {
       [scope.organizationId, scope.brandId, commentId],
     );
     const last = r.rows[0];
-    return last?.kind === 'unhide' && last.actor_type === 'user';
+    return last?.kind === 'unhide' && (last.actor_type === 'user' || last.actor_type === 'api_key');
   }
 
   /** Live, non-deleted comments of one connection whose body the hook was not yet told about. */

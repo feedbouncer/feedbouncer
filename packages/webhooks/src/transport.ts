@@ -48,8 +48,6 @@ interface TransportOptions {
   lookup?: typeof dns.lookup;
   ca?: string;
   timeoutMs?: number;
-  /** Port to dial instead of the URL's (tests only); the address policy and TLS checks still apply. */
-  dialPort?: number;
 }
 
 export function createGuardedTransport(o: TransportOptions): WebhookTransport {
@@ -85,9 +83,7 @@ export function createGuardedTransport(o: TransportOptions): WebhookTransport {
     ...(o.ca ? { ca: o.ca } : {}),
   });
   const dispatcher = new Agent({
-    connect: o.dialPort
-      ? (opts, cb) => guarded({ ...opts, port: String(o.dialPort) }, cb)
-      : guarded,
+    connect: guarded,
     headersTimeout: timeoutMs,
     bodyTimeout: timeoutMs,
   });
