@@ -3,7 +3,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { createPool, isUniqueViolation, withTransaction } from '@feedbouncer/db';
 import { migratedDb, seedTenant, uuid, type Tenant } from '@feedbouncer/db/testing';
-import { effectiveStatus, PgRuleProposalStore, type NewProposal } from './proposal-store.js';
+import {
+  effectiveStatus,
+  PgRuleProposalStore,
+  ProposalNotPendingError,
+  type NewProposal,
+} from './proposal-store.js';
 
 let ctx: Awaited<ReturnType<typeof migratedDb>>;
 let pool: pg.Pool;
@@ -147,7 +152,7 @@ describe('PgRuleProposalStore', () => {
     const { t, key } = await fresh();
     const p = await withTransaction(pool, (tx) => store.create(tx, proposal(t, key)));
     await withTransaction(pool, (tx) =>
-      store.decide(tx, p.id, {
+      store.decide(tx, t.organizationId, p.id, {
         status: 'rejected',
         decidedByUserId: t.userId,
         decisionNote: 'No',
@@ -161,22 +166,58 @@ describe('PgRuleProposalStore', () => {
     });
     expect(got!.decidedAt).toBeInstanceOf(Date);
     await expect(
-      withTransaction(pool, (tx) => store.decide(tx, p.id, { status: 'expired' })),
-    ).rejects.toThrow();
+      withTransaction(pool, (tx) =>
+        store.decide(tx, t.organizationId, p.id, { status: 'expired' }),
+      ),
+    ).rejects.toBeInstanceOf(ProposalNotPendingError);
 
     const since = (d: Date) => store.list(pool, t.organizationId, t.brandId, { since: d });
     expect((await since(new Date(Date.now() - 60_000))).map((r) => r.id)).toEqual([p.id]);
     expect(await since(new Date(Date.now() + 60_000))).toEqual([]);
   });
 
-  it('rejects a decided status without a user, and a create with a target rule', async () => {
+  it('decides only proposals of the given organization', async () => {
+    const { t, key } = await fresh();
+    const other = await fresh();
+    const p = await withTransaction(pool, (tx) => store.create(tx, proposal(t, key)));
+    await expect(
+      withTransaction(pool, (tx) =>
+        store.decide(tx, other.t.organizationId, p.id, { status: 'stale' }),
+      ),
+    ).rejects.toBeInstanceOf(ProposalNotPendingError);
+    expect((await store.get(pool, t.organizationId, p.id))!.status).toBe('pending');
+  });
+
+  it('keeps a decision when the deciding user is deleted', async () => {
+    const { t, key } = await fresh();
+    const { rows } = await ctx.c.query<{ id: string }>(
+      'INSERT INTO app_user (email) VALUES ($1) RETURNING id',
+      [`decider-${uuid()}@example.test`],
+    );
+    const decider = rows[0]!.id;
+    const p = await withTransaction(pool, (tx) => store.create(tx, proposal(t, key)));
+    await withTransaction(pool, (tx) =>
+      store.decide(tx, t.organizationId, p.id, { status: 'approved', decidedByUserId: decider }),
+    );
+    await ctx.c.query('DELETE FROM app_user WHERE id = $1', [decider]);
+    const got = await store.get(pool, t.organizationId, p.id);
+    expect(got).toMatchObject({ status: 'approved', decidedByUserId: null });
+    expect(got!.decidedAt).toBeInstanceOf(Date);
+  });
+
+  it('rejects a user on an unattended decision, and a create with a target rule', async () => {
     const { t, key } = await fresh();
     await expect(
       withTransaction(pool, (tx) => store.create(tx, proposal(t, key, { targetRuleId: t.ruleId }))),
     ).rejects.toThrow(/check/);
     const p = await withTransaction(pool, (tx) => store.create(tx, proposal(t, key)));
     await expect(
-      withTransaction(pool, (tx) => store.decide(tx, p.id, { status: 'approved' })),
+      withTransaction(pool, (tx) =>
+        store.decide(tx, t.organizationId, p.id, { status: 'expired', decidedByUserId: t.userId }),
+      ),
+    ).rejects.toThrow(/check/);
+    await expect(
+      ctx.c.query(`UPDATE rule_change_proposal SET status = 'stale' WHERE id = $1`, [p.id]),
     ).rejects.toThrow(/check/);
   });
 });

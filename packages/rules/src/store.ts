@@ -33,6 +33,8 @@ export interface BrandDomain {
 }
 
 export const MAX_RULES_PER_BRAND = 200;
+/** Rule-change proposals of one brand that may wait for review at once. */
+export const MAX_PENDING_PROPOSALS_PER_BRAND = 20;
 export const MAX_DOMAINS_PER_BRAND = 50;
 export class RuleLimitError extends Error {
   constructor() {

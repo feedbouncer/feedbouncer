@@ -3,6 +3,7 @@ import type { z } from 'zod';
 import { isUniqueViolation, recordAuditEvent, withTransaction } from '@feedbouncer/db';
 import type { ApiKeyContext, ProposeRuleChangeBody, StoredResponse } from '@feedbouncer/public-api';
 import {
+  MAX_PENDING_PROPOSALS_PER_BRAND,
   MAX_RULES_PER_BRAND,
   PgRuleProposalStore,
   PgRuleStore,
@@ -18,7 +19,6 @@ import { ApiError, notFound } from '../http/errors.js';
 import { DEPS } from '../tokens.js';
 import { requestKey } from './idempotent.js';
 
-export const MAX_PENDING_PROPOSALS_PER_BRAND = 20;
 const CHANGES_WINDOW_MS = 7 * 86_400_000;
 
 type ProposeBody = z.infer<typeof ProposeRuleChangeBody>;

@@ -39,8 +39,11 @@ CREATE TABLE rule_change_proposal (
   CONSTRAINT rule_change_proposal_status_check CHECK (
     status IN ('pending', 'approved', 'rejected', 'expired', 'stale')),
   CONSTRAINT rule_change_proposal_decision_note_check CHECK (char_length(decision_note) <= 500),
-  CONSTRAINT rule_change_proposal_decided_check CHECK (
-    (status IN ('approved', 'rejected')) = (decided_by_user_id IS NOT NULL)),
+  -- Every settled row is stamped; one left pending past expires_at reads as expired but stays pending.
+  CONSTRAINT rule_change_proposal_decided_check CHECK ((status = 'pending') = (decided_at IS NULL)),
+  -- Only a person approves or rejects. The service requires the user; the column outlives them.
+  CONSTRAINT rule_change_proposal_decided_by_user_id_check CHECK (
+    decided_by_user_id IS NULL OR status IN ('approved', 'rejected')),
   CONSTRAINT rule_change_proposal_organization_id_fkey FOREIGN KEY (organization_id)
     REFERENCES organization (id) ON DELETE CASCADE,
   CONSTRAINT rule_change_proposal_brand_id_fkey FOREIGN KEY (organization_id, brand_id)
@@ -53,9 +56,8 @@ CREATE TABLE rule_change_proposal (
     REFERENCES rule (brand_id, id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
   CONSTRAINT rule_change_proposal_proposed_by_api_key_id_fkey FOREIGN KEY (organization_id, proposed_by_api_key_id)
     REFERENCES api_key (organization_id, id) ON DELETE CASCADE,
-  -- Same target and ON DELETE as membership.user_id: SET NULL would break the decided check.
   CONSTRAINT rule_change_proposal_decided_by_user_id_fkey FOREIGN KEY (decided_by_user_id)
-    REFERENCES app_user (id) ON DELETE CASCADE
+    REFERENCES app_user (id) ON DELETE SET NULL (decided_by_user_id)
 );
 CREATE INDEX rule_change_proposal_brand_status_idx ON rule_change_proposal (brand_id, status, created_at DESC);
 CREATE INDEX rule_change_proposal_target_rule_id_idx ON rule_change_proposal (target_rule_id)

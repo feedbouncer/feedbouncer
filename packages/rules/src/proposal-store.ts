@@ -41,6 +41,13 @@ export const effectiveStatus = (
   now: Date = new Date(),
 ): ProposalStatus => (row.status === 'pending' && row.expiresAt <= now ? 'expired' : row.status);
 
+export class ProposalNotPendingError extends Error {
+  constructor() {
+    super('proposal_not_pending');
+    this.name = 'ProposalNotPendingError';
+  }
+}
+
 const EFFECTIVE_STATUS_SQL = `CASE WHEN status = 'pending' AND expires_at <= now() THEN 'expired' ELSE status END`;
 const LIVE_PENDING_SQL = `status = 'pending' AND expires_at > now()`;
 
@@ -193,9 +200,13 @@ export class PgRuleProposalStore {
     return rows.map(toProposal);
   }
 
-  /** Settles a pending proposal; the caller holds it FOR UPDATE (see get). */
+  /**
+   * Settles a pending proposal of the organization; the caller holds it FOR UPDATE (see get).
+   * Throws ProposalNotPendingError when there is no such pending proposal.
+   */
   async decide(
     tx: pg.ClientBase,
+    orgId: string,
     id: string,
     patch: {
       status: Exclude<ProposalStatus, 'pending'>;
@@ -206,10 +217,11 @@ export class PgRuleProposalStore {
   ): Promise<void> {
     const { rowCount } = await tx.query(
       `UPDATE rule_change_proposal
-          SET status = $2, decided_by_user_id = $3, decided_at = now(), decision_note = $4,
-              applied_rule_id = $5
-        WHERE id = $1 AND status = 'pending'`,
+          SET status = $3, decided_by_user_id = $4, decided_at = now(), decision_note = $5,
+              applied_rule_id = $6
+        WHERE organization_id = $1 AND id = $2 AND status = 'pending'`,
       [
+        orgId,
         id,
         patch.status,
         patch.decidedByUserId ?? null,
@@ -217,6 +229,6 @@ export class PgRuleProposalStore {
         patch.appliedRuleId ?? null,
       ],
     );
-    if (rowCount !== 1) throw new Error('proposal_not_pending');
+    if (rowCount !== 1) throw new ProposalNotPendingError();
   }
 }

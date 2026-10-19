@@ -42,6 +42,7 @@ export {
   InvalidRuleActionError,
   InvalidRuleConditionsError,
   MAX_DOMAINS_PER_BRAND,
+  MAX_PENDING_PROPOSALS_PER_BRAND,
   MAX_RULES_PER_BRAND,
   PgRuleStore,
   RuleLimitError,
@@ -77,6 +78,7 @@ export {
 } from './proposal.js';
 export {
   PgRuleProposalStore,
+  ProposalNotPendingError,
   effectiveStatus,
   type NewProposal,
   type ProposalOperation,
