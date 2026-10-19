@@ -421,7 +421,7 @@ export class PgActionRunStore {
                 AND a.comment_id IN (SELECT id FROM cs)
                 AND a.kind IN ($4, $5) AND a.status IN ('pending', 'applied')
               ORDER BY a.created_at DESC, a.id DESC LIMIT 1
-           ) l WHERE l.kind = $5 AND l.actor_type = 'user'
+           ) l WHERE l.kind = $5 AND l.actor_type IN ('user', 'api_key')
          )
          OR EXISTS (
            SELECT 1 FROM action_run_step s

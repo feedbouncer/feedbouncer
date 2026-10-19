@@ -1,11 +1,20 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { PgBackfillStore } from '@feedbouncer/comments';
+import { PgApiKeys } from '@feedbouncer/public-api';
 import { Reflector } from '@nestjs/core';
 import { createAccountDeletionHooks } from './auth/account-deletion.js';
 import { createAuth, type AuthHooks } from './auth/auth.js';
 import { AuthProxyController } from './auth/auth-proxy.controller.js';
 import { createAuthEmails, type AuthEmails } from './auth/emails.js';
 import { createAuthRateLimits } from './auth/rate-limit.js';
+import { ApiKeyGuard } from './public-api/api-key.guard.js';
+import { PublicCommentsController } from './public-api/comments.controller.js';
+import { PublicFlaggedItemsController } from './public-api/flagged-items.controller.js';
+import { PublicModerationController } from './public-api/moderation.controller.js';
+import { PublicModerationService } from './public-api/moderation.service.js';
+import { PublicWebhookEndpointsController } from './public-api/webhook-endpoints.controller.js';
+import { OpenApiController } from './public-api/openapi.controller.js';
+import { createPublicApiLimits } from './public-api/rate-limit.js';
 import { SessionGuard } from './auth/session.guard.js';
 import { SignUpController } from './auth/sign-up.controller.js';
 import { ActionsController } from './actions/actions.controller.js';
@@ -15,6 +24,8 @@ import { AlertChannelsController } from './alerts/alert-channels.controller.js';
 import { AlertRecipientsController } from './alerts/alert-recipients.controller.js';
 import { AlertsService } from './alerts/alerts.service.js';
 import { BrandAlertsController } from './alerts/brand-alerts.controller.js';
+import { ApiKeysController } from './api-keys/api-keys.controller.js';
+import { ApiKeysService } from './api-keys/api-keys.service.js';
 import { AdsController } from './ads/ads.controller.js';
 import { AdsService } from './ads/ads.service.js';
 import { BrandsController } from './brands/brands.controller.js';
@@ -68,6 +79,7 @@ import { ReportsService } from './reports/reports.service.js';
 import { OrgAccessGuard } from './tenancy/org-access.guard.js';
 import {
   ACCOUNT_DELETION,
+  API_KEYS,
   AUTH,
   AUTH_EMAILS,
   BACKFILL_STORE,
@@ -75,6 +87,7 @@ import {
   CONNECTOR_STACK,
   DEPS,
   JOB_PRODUCER,
+  PUBLIC_API_LIMITS,
   RATE_LIMITS,
 } from './tokens.js';
 import type { AppDeps } from './deps.js';
@@ -122,6 +135,12 @@ export class AppModule {
         AlertRecipientsController,
         ReportsController,
         MeReportsController,
+        ApiKeysController,
+        OpenApiController,
+        PublicCommentsController,
+        PublicFlaggedItemsController,
+        PublicModerationController,
+        PublicWebhookEndpointsController,
       ],
       providers: [
         Reflector,
@@ -148,11 +167,15 @@ export class AppModule {
         InvitationsService,
         AlertsService,
         ReportsService,
+        ApiKeysService,
+        ApiKeyGuard,
+        PublicModerationService,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.
         { provide: CONNECTOR_STACK, useValue: deps.connectors?.stack ?? null },
         { provide: JOB_PRODUCER, useValue: deps.producer },
         { provide: COMMENTS, useValue: deps.comments },
+        { provide: API_KEYS, useValue: new PgApiKeys(deps.pool) },
         { provide: BACKFILL_STORE, useValue: new PgBackfillStore(deps.pool) },
         {
           provide: AUTH_EMAILS,
@@ -164,6 +187,12 @@ export class AppModule {
           provide: RATE_LIMITS,
           inject: [DEPS],
           useFactory: (d: AppDeps) => createAuthRateLimits(d.redis, d.redisKeyPrefix),
+        },
+        {
+          provide: PUBLIC_API_LIMITS,
+          inject: [DEPS],
+          useFactory: (d: AppDeps) =>
+            createPublicApiLimits(d.redis, d.redisKeyPrefix, d.env.publicApiRateLimitPerMinute),
         },
         {
           provide: ACCOUNT_DELETION,

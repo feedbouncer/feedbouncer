@@ -1,0 +1,40 @@
+{
+  "name": "@feedbouncer/webhooks",
+  "license": "AGPL-3.0-only",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "@feedbouncer/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build tsconfig.build.json",
+    "lint": "eslint .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore --ignore-unknown",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
+    "typecheck": "tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@feedbouncer/db": "workspace:*",
+    "@feedbouncer/mailer": "workspace:*",
+    "@feedbouncer/public-api": "workspace:*",
+    "@feedbouncer/secrets": "workspace:*",
+    "@feedbouncer/service-runtime": "workspace:*",
+    "@prometheus-io/client": "0.16.1",
+    "ipaddr.js": "2.5.0",
+    "pg": "8.23.1",
+    "undici": "8.12.2",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "@types/pg": "8.23.1",
+    "standardwebhooks": "1.1.1"
+  }
+}

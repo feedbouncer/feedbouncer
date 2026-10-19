@@ -83,7 +83,26 @@ describe('forwardToApi', () => {
     expect(res.headers.getSetCookie()).toEqual(['a=1; Path=/', 'b=2; Path=/']);
   });
 
-  it('refuses paths outside /api/auth and /api/v1 without calling the API', async () => {
+  it('forwards the public /v1 API with its bearer key and returns rate-limit headers unchanged', async () => {
+    const calls = stubFetch(
+      () =>
+        new Response('{}', {
+          status: 429,
+          headers: { 'retry-after': '12', 'www-authenticate': 'Bearer realm="FeedBouncer API"' },
+        }),
+    );
+    const req = new Request('http://localhost:3000/v1/comments?limit=5', {
+      headers: { authorization: 'Bearer fbk_x', 'x-forwarded-for': '203.0.113.7' },
+    });
+    const res = await forwardToApi(req, API);
+    expect(calls[0]!.url).toBe('http://api:3001/v1/comments?limit=5');
+    expect(new Headers(calls[0]!.init.headers).get('authorization')).toBe('Bearer fbk_x');
+    expect(res.status).toBe(429);
+    expect(res.headers.get('retry-after')).toBe('12');
+    expect(res.headers.get('www-authenticate')).toBe('Bearer realm="FeedBouncer API"');
+  });
+
+  it('refuses paths outside /api/auth, /api/v1 and /v1 without calling the API', async () => {
     const calls = stubFetch(() => Response.json({}));
     const res = await forwardToApi(new Request('http://localhost:3000/healthz'), API);
     expect(res.status).toBe(404);

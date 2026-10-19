@@ -23,6 +23,7 @@ export type HiddenSource =
   | { type: 'policy'; policyId: string | null; policyName: string | null }
   | { type: 'person'; userName: string | null }
   | { type: 'suggestion'; userName: string | null }
+  | { type: 'api_key' }
   | { type: 'system' };
 
 export interface UnhideAttempt {
@@ -232,6 +233,8 @@ function sourceOf(r: Row): HiddenSource {
       return r.from_suggestion
         ? { type: 'suggestion', userName: r.actor_name }
         : { type: 'person', userName: r.actor_name };
+    case 'api_key':
+      return { type: 'api_key' };
     case 'system':
       return { type: 'system' };
   }

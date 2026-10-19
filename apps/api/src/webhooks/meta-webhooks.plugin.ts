@@ -16,6 +16,8 @@ declare module 'fastify' {
   interface FastifyContextConfig {
     /** Marks a route that authenticates by platform signature and so skips the Origin check. */
     publicWebhook?: boolean;
+    /** Marks a /v1 route, which authenticates by API key and so skips the Origin check. */
+    publicApi?: boolean;
   }
 }
 

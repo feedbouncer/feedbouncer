@@ -63,6 +63,17 @@ describe('envelope v1', () => {
     await expect(open(ringK1, blob, { ...rctx, connectionId: 'subscription-2' })).rejects.toThrow();
   });
 
+  it('seal/open round-trips webhook_endpoint_secret; a different endpoint id fails to open', async () => {
+    const wctx = {
+      organizationId: 'org',
+      connectionId: 'endpoint-1',
+      kind: 'webhook_endpoint_secret',
+    } as const;
+    const { blob } = await seal(ringK1, new Secret('whsec_abc'), wctx);
+    expect((await open(ringK1, blob, wctx)).reveal()).toBe('whsec_abc');
+    await expect(open(ringK1, blob, { ...wctx, connectionId: 'endpoint-2' })).rejects.toThrow();
+  });
+
   it('round-trips and records the key id', async () => {
     const { keyId, blob } = await seal(ringK1, new Secret(TOKEN), ctx);
     expect(keyId).toBe('k1');

@@ -18,6 +18,7 @@ export type HiddenSource =
   | { type: 'policy'; policyId: string | null; policyName: string | null }
   | { type: 'person'; userName: string | null }
   | { type: 'suggestion'; userName: string | null }
+  | { type: 'api_key' }
   | { type: 'system' };
 
 export interface HiddenItemDto {
@@ -93,6 +94,8 @@ export function sourceText(s: HiddenSource): string {
       return s.userName === null
         ? 'Suggestion approved by a teammate'
         : `Suggestion approved by ${s.userName}`;
+    case 'api_key':
+      return 'An API key';
     case 'system':
       return 'FeedBouncer';
   }

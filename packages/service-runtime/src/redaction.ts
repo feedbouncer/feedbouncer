@@ -18,6 +18,9 @@ const AUTH_HEADER =
 // A bare "Bearer <token>" outside a header.
 const BEARER = /\b(bearer\s+)[^\s,;'"\\]+/gi;
 
+// Bare API key values, wherever they appear.
+const SECRET_VALUE = /\bfbk_[a-z2-7]{16}_[A-Za-z0-9_-]{43}/g;
+
 // A field whose NAME looks secret is redacted whatever its value, so a caller
 // cannot leak a token by logging it under a descriptive key.
 // Names are split into words (camelCase, snake_case, kebab-case) and matched whole, so
@@ -60,6 +63,7 @@ function redactToken(token: string): string {
 
 export function redact(text: string): string {
   return text
+    .replace(SECRET_VALUE, '[redacted]')
     .replace(TOKEN, redactToken)
     .replace(
       AUTH_HEADER,

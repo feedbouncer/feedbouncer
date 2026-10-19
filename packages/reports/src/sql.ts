@@ -78,7 +78,7 @@ hidden AS (
     FROM latest_hide h
     ${HIDE_STEP_LATERAL_SQL}
     ${HIDE_DECISION_LATERAL_SQL}
-   WHERE (h.actor_type <> 'user' OR st.run_suggestion_id IS NOT NULL)
+   WHERE (h.actor_type NOT IN ('user', 'api_key') OR st.run_suggestion_id IS NOT NULL)
      AND NOT EXISTS (SELECT 1 FROM moderation_action u
                       WHERE u.organization_id = h.organization_id AND u.brand_id = h.brand_id
                         AND u.kind = 'unhide' AND u.status = 'applied'

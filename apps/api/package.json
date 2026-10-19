@@ -13,12 +13,13 @@
     "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
     "typecheck": "tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
     "test": "vitest run",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "openapi:write": "tsx scripts/write-openapi.ts"
   },
   "dependencies": {
     "@feedbouncer/actions": "workspace:*",
-    "@feedbouncer/alerts": "workspace:*",
     "@feedbouncer/ai": "workspace:*",
+    "@feedbouncer/alerts": "workspace:*",
     "@feedbouncer/authz": "workspace:*",
     "@feedbouncer/classifier": "workspace:*",
     "@feedbouncer/comments": "workspace:*",
@@ -31,10 +32,12 @@
     "@feedbouncer/mailer": "workspace:*",
     "@feedbouncer/observability": "workspace:*",
     "@feedbouncer/policies": "workspace:*",
+    "@feedbouncer/public-api": "workspace:*",
     "@feedbouncer/reports": "workspace:*",
     "@feedbouncer/rules": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
+    "@feedbouncer/webhooks": "workspace:*",
     "@nestjs/common": "12.1.2",
     "@nestjs/core": "12.1.2",
     "@nestjs/platform-fastify": "12.1.2",
@@ -53,6 +56,7 @@
   },
   "devDependencies": {
     "@opentelemetry/sdk-trace-base": "2.12.0",
+    "@seriousme/openapi-schema-validator": "2.11.0",
     "@types/node": "24.13.6",
     "@types/pg": "8.23.1",
     "tsx": "4.23.15"

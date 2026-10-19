@@ -263,6 +263,14 @@ jobs:
         run: pnpm turbo run build --filter=@feedbouncer/evaluation...
       - name: Evaluation integration tests
         run: pnpm --filter @feedbouncer/evaluation test:integration
+      - name: Build public API and dependencies
+        run: pnpm turbo run build --filter=@feedbouncer/public-api...
+      - name: Public API integration tests
+        run: pnpm --filter @feedbouncer/public-api test:integration
+      - name: Build webhooks and dependencies
+        run: pnpm turbo run build --filter=@feedbouncer/webhooks...
+      - name: Webhooks transport integration tests
+        run: pnpm --filter @feedbouncer/webhooks test:integration
 
   compose-smoke:
     name: Compose smoke

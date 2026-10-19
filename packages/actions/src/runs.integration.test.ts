@@ -287,6 +287,21 @@ describe('markUndone', () => {
 });
 
 describe('hasUserReversal', () => {
+  it('an API key unhide counts as a deliberate reversal', async () => {
+    const f = await fresh();
+    await seedModerationActionRow(ctx.c, f.comment, {
+      kind: 'hide',
+      actorType: 'rule',
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+    await seedModerationActionRow(ctx.c, f.comment, {
+      kind: 'unhide',
+      actorType: 'api_key',
+      createdAt: '2026-01-02T00:00:00Z',
+    });
+    expect(await store.hasUserReversal(f.scope, f.comment.id, 'hide')).toBe(true);
+  });
+
   it('user unhide after automated hide -> true; automated re-hide after user unhide -> false', async () => {
     const f = await fresh();
     expect(await store.hasUserReversal(f.scope, f.comment.id, 'hide')).toBe(false);

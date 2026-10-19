@@ -309,5 +309,7 @@ async function autoHidden(
       ORDER BY created_at DESC, id DESC LIMIT 1`,
     [scope.organizationId, scope.brandId, commentId],
   );
-  return r.rows[0] !== undefined && r.rows[0].actor_type !== 'user';
+  return (
+    r.rows[0] !== undefined && r.rows[0].actor_type !== 'user' && r.rows[0].actor_type !== 'api_key'
+  );
 }

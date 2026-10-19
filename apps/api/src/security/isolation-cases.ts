@@ -36,6 +36,8 @@ export interface IsolationFixture {
   bGrantIds: Record<'facebook' | 'instagram', string>;
   /** B's Slack alert channel; B's brand also has alert settings and a route to it. */
   bAlertChannelId: string;
+  /** B's active API key. */
+  bApiKeyId: string;
 }
 
 const ALERT_SLACK_URL =
@@ -711,6 +713,23 @@ export const CASES: IsolationCase[] = [
     name: 'change B brand alerts under A path (IDOR)',
     url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/alerts`,
     body: () => ALERT_SETTINGS_BODY,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/api-keys',
+    name: "list B's API keys",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/api-keys`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/api-keys',
+    name: 'create an API key in B',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/api-keys`,
+    body: () => ({ name: 'pwned', scope: 'write' }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/api-keys/:keyId/revoke',
+    name: "revoke B's API key under A path (IDOR)",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/api-keys/${f.bApiKeyId}/revoke`,
+    body: () => ({}),
   },
 ];
 

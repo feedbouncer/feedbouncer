@@ -58,6 +58,7 @@ interface LoadedAction {
   readonly kind: ActionKind;
   readonly actorType: ActionActor['type'];
   readonly actorUserId: string | null;
+  readonly actorApiKeyId: string | null;
   readonly ruleId: string | null;
   readonly requestKey: string;
   readonly status: ActionStatus;
@@ -176,7 +177,7 @@ async function loadForExecution(
   actionId: string,
 ): Promise<LoadedAction | null> {
   const r = await pool.query(
-    `SELECT m.id, m.comment_id, m.kind, m.actor_type, m.actor_user_id, m.rule_id, m.request_key, m.status, m.reply_text,
+    `SELECT m.id, m.comment_id, m.kind, m.actor_type, m.actor_user_id, m.actor_api_key_id, m.rule_id, m.request_key, m.status, m.reply_text,
             m.created_at, c.external_id AS comment_external_id, c.parent_external_id,
             s.external_id AS source_external_id, a.external_id AS author_external_id,
             cn.external_account_id
@@ -199,6 +200,7 @@ async function loadForExecution(
     kind: x.kind as ActionKind,
     actorType: x.actor_type as ActionActor['type'],
     actorUserId: (x.actor_user_id as string | null) ?? null,
+    actorApiKeyId: (x.actor_api_key_id as string | null) ?? null,
     ruleId: (x.rule_id as string | null) ?? null,
     requestKey: x.request_key as string,
     status: x.status as ActionStatus,
@@ -307,6 +309,7 @@ async function finish(
       kind: a.kind,
       actorType: a.actorType,
       actorUserId: a.actorUserId,
+      actorApiKeyId: a.actorApiKeyId,
       status: f.status,
       outcomeCode: f.code,
     });

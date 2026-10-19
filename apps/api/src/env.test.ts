@@ -161,6 +161,45 @@ describe('loadApiEnv', () => {
     });
   });
 
+  describe('public API rate limit', () => {
+    it('defaults to 60 requests per minute per key', () => {
+      expect(load(base).publicApiRateLimitPerMinute).toBe(60);
+    });
+    it('reads the limit and rejects values outside 1-10000', () => {
+      expect(
+        load({ ...base, PUBLIC_API_RATE_LIMIT_PER_MINUTE: '600' }).publicApiRateLimitPerMinute,
+      ).toBe(600);
+      for (const bad of ['0', '10001', 'abc', '1.5']) {
+        expect(() => load({ ...base, PUBLIC_API_RATE_LIMIT_PER_MINUTE: bad })).toThrow(
+          /PUBLIC_API_RATE_LIMIT_PER_MINUTE/,
+        );
+      }
+    });
+  });
+
+  describe('webhook destinations', () => {
+    it('allows no private network by default', () => {
+      expect(load(base).webhookAllowedPrivateCidrs).toEqual([]);
+      expect(
+        load({ ...base, WEBHOOK_ALLOWED_PRIVATE_CIDRS: ' ' }).webhookAllowedPrivateCidrs,
+      ).toEqual([]);
+    });
+    it('reads a comma-separated CIDR list', () => {
+      expect(
+        load({ ...base, WEBHOOK_ALLOWED_PRIVATE_CIDRS: '10.0.0.0/8, fd00::/8' })
+          .webhookAllowedPrivateCidrs,
+      ).toEqual(['10.0.0.0/8', 'fd00::/8']);
+    });
+    it.each(['10.0.0.0', '10.0.0.0/33', 'nope', '10.0.0.0/8,,x'])(
+      'fails startup on the bad entry in %s',
+      (bad) => {
+        expect(() => load({ ...base, WEBHOOK_ALLOWED_PRIVATE_CIDRS: bad })).toThrow(
+          /WEBHOOK_ALLOWED_PRIVATE_CIDRS/,
+        );
+      },
+    );
+  });
+
   describe('alerts', () => {
     it('is off by default with the default cap', () => {
       expect(load(base).alerts).toEqual({

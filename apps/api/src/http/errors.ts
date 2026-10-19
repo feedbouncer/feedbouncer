@@ -78,8 +78,18 @@ export type ErrorCode =
   | 'too_soon'
   | 'unknown_channel'
   | 'invalid_token'
+  | 'api_key_limit_reached'
+  | 'api_key_name_taken'
   | 'invalid_timezone'
-  | 'invalid_week';
+  | 'invalid_week'
+  | 'insufficient_scope'
+  | 'idempotency_key_reused'
+  | 'idempotency_request_in_progress'
+  | 'invalid_idempotency_key'
+  | 'webhook_endpoint_limit_reached'
+  | 'webhook_endpoint_disabled'
+  | 'webhook_event_unavailable'
+  | 'webhook_delivery_in_progress';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
@@ -158,6 +168,19 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   too_soon: 'A confirmation was sent a moment ago. Try again in a minute.',
   unknown_channel: 'A selected alert channel no longer exists.',
   invalid_token: 'This link is invalid or has expired.',
+  api_key_limit_reached:
+    'This workspace already has 10 active API keys. Revoke one to create another.',
+  api_key_name_taken: 'An active API key already uses this name.',
+  insufficient_scope: 'This API key does not have the scope this request needs.',
+  idempotency_key_reused: 'This Idempotency-Key was already used for a different request.',
+  idempotency_request_in_progress: 'A request with this Idempotency-Key is still being processed.',
+  invalid_idempotency_key:
+    'The Idempotency-Key must be 1 to 128 characters of letters, digits and . _ : -.',
+  webhook_endpoint_limit_reached:
+    'This workspace already has 10 webhook endpoints. Delete one to create another.',
+  webhook_endpoint_disabled: 'This webhook endpoint is disabled. Re-enable it first.',
+  webhook_event_unavailable: 'The comment of this event is no longer available.',
+  webhook_delivery_in_progress: 'This delivery is still being attempted.',
 };
 
 export interface ErrorIssue {
@@ -194,6 +217,8 @@ export class ApiError extends Error {
       /** The current number of comments with the tag, for 409 tag_count_changed. */
       readonly count?: number;
     },
+    /** Response headers to send with the error (Retry-After, WWW-Authenticate). */
+    readonly headers?: Readonly<Record<string, string>>,
   ) {
     super(message ?? DEFAULT_MESSAGES[code]);
   }
@@ -242,6 +267,7 @@ export class ApiErrorFilter implements ExceptionFilter {
       this.log.error('unhandled error', errorFields(err));
       e = new ApiError(500, 'internal_error');
     }
+    for (const [name, value] of Object.entries(e.headers ?? {})) void reply.header(name, value);
     void reply.status(e.status).header('cache-control', 'no-store').send(errorBody(e));
   }
 }

@@ -52,6 +52,8 @@ pnpm test
 | `packages/reports`             | Weekly email report: metrics, scheduling, rendering, delivery and unsubscribe links                          |
 | `packages/evaluation`          | Evaluation runs: false-hide rate, time to hide and cost per 1,000 comments from exported items and labels    |
 | `packages/policies`            | Plain-language custom policies: validation, decisions, model evaluation, previews and runs                   |
+| `packages/public-api`          | Public REST API: API key generation, hashed storage and authentication                                       |
+| `packages/webhooks`            | Outgoing webhooks: Standard Webhooks signing, destination policy and SSRF-guarded transport                  |
 | `packages/placeholder`         | Minimal package used as the template for new packages                                                        |
 | `packages/secrets`             | Envelope encryption for stored credentials and key management                                                |
 | `packages/service-runtime`     | Shared service startup, configuration, health and error handling                                             |
@@ -96,6 +98,7 @@ Sign-up, email confirmation, password reset and invitations send real emails. In
 
 - **`AUTH_SECRET`** signs session cookies and is required (at least 32 characters). `.env.example` has a development-only value; for anything else generate one with `openssl rand -base64 48`.
 - **`PUBLIC_WEB_URL`** is set by compose to `http://localhost:<WEB_HOST_PORT>`. It must be the exact origin users type: cookies, the origin check on state-changing requests and the links in emails all depend on it. Browse the app as `localhost`, not `127.0.0.1`.
+- The public REST API and outgoing webhooks are documented in [docs/api/README.md](docs/api/README.md).
 - API settings such as `TRUST_PROXY_HOPS` (reverse proxies trusted for the client IP) and `MAIL_FROM`, plus the roles, routes and rate limits, are described in [apps/api/README.md](apps/api/README.md).
 
 ### Facebook Pages (optional)

@@ -4,6 +4,7 @@ import { PgOAuthGrantStore } from '@feedbouncer/connectors';
 import { extractFirstUrl } from '@feedbouncer/mailer/testing';
 import { Secret } from '@feedbouncer/service-runtime';
 import { PgAlertChannels } from '@feedbouncer/alerts';
+import { PgApiKeys } from '@feedbouncer/public-api';
 import { orgWithRoles, startTestApi, type TestApi } from '../testing/harness.js';
 import { CASES, TOKEN_CASES, type IsolationFixture } from './isolation-cases.js';
 
@@ -194,6 +195,10 @@ beforeAll(async () => {
      VALUES ($1, $2, 'negative_spike', $3, true, now())`,
     [B.orgId, B.brandId, bChannel.channel.id],
   );
+  const bApiKey = await new PgApiKeys(api.pool).create(B.orgId, B.owner.userId, {
+    name: 'b key',
+    scope: 'write',
+  });
   const grants = new PgOAuthGrantStore(api.pool, api.deps.env.encryption);
   const bGrantIds = { facebook: randomUUID(), instagram: randomUUID() };
   for (const platform of ['facebook', 'instagram'] as const) {
@@ -239,6 +244,7 @@ beforeAll(async () => {
     bTagId: bTag.rows[0].id,
     bGrantIds,
     bAlertChannelId: bChannel.channel.id,
+    bApiKeyId: bApiKey.key.id,
   };
 });
 afterAll(() => api.close());
@@ -288,6 +294,9 @@ async function snapshot(orgId: string) {
     rules: await q(
       `SELECT id, name, conditions, action, mode, enabled, priority, archived_at FROM rule
        WHERE organization_id = $1 ORDER BY id`,
+    ),
+    apiKeys: await q(
+      'SELECT id, name, revoked_at FROM api_key WHERE organization_id = $1 ORDER BY id',
     ),
     domains: await q('SELECT id, domain FROM brand_domain WHERE organization_id = $1 ORDER BY id'),
     grants: await q('SELECT id FROM oauth_grant WHERE organization_id = $1 ORDER BY id'),

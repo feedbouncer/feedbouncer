@@ -54,6 +54,7 @@ describe('sourceText', () => {
     expect(sourceText({ type: 'suggestion', userName: 'Dana' })).toBe(
       'Suggestion approved by Dana',
     );
+    expect(sourceText({ type: 'api_key' })).toBe('An API key');
     expect(sourceText({ type: 'system' })).toBe('FeedBouncer');
   });
 });

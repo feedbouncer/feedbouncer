@@ -36,6 +36,25 @@ function messageOf(fn: () => unknown): string {
 }
 
 describe('loadWorkerEnv', () => {
+  it('reads the webhook delivery settings with defaults', () => {
+    expect(load(base).webhookConcurrency).toBe(32);
+    expect(load(base).webhookAllowedPrivateCidrs).toEqual([]);
+    const env = load({
+      ...base,
+      WEBHOOK_DISPATCH_CONCURRENCY: '8',
+      WEBHOOK_ALLOWED_PRIVATE_CIDRS: '10.0.0.0/8',
+    });
+    expect(env.webhookConcurrency).toBe(8);
+    expect(env.webhookAllowedPrivateCidrs).toEqual(['10.0.0.0/8']);
+  });
+
+  it('rejects a malformed webhook setting', () => {
+    expect(() => load({ ...base, WEBHOOK_DISPATCH_CONCURRENCY: '0' })).toThrow(/WEBHOOK_DISPATCH/);
+    expect(() => load({ ...base, WEBHOOK_ALLOWED_PRIVATE_CIDRS: 'nope' })).toThrow(
+      /WEBHOOK_ALLOWED_PRIVATE_CIDRS/,
+    );
+  });
+
   it('rejects an invalid LOG_LEVEL', () => {
     expect(() => load({ ...base, LOG_LEVEL: 'verbose' })).toThrow(/LOG_LEVEL/);
   });

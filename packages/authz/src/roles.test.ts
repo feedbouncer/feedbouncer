@@ -32,6 +32,7 @@ const MATRIX: Record<Capability, Record<Role, boolean>> = {
   'alert.read': { owner: true, admin: true, member: false },
   'alert.manage': { owner: true, admin: true, member: false },
   'report.read': { owner: true, admin: true, member: false },
+  'api_key.manage': { owner: true, admin: true, member: false },
   'org.update': { owner: true, admin: true, member: false },
   'org.transfer_ownership': { owner: true, admin: false, member: false },
   'org.delete': { owner: true, admin: false, member: false },

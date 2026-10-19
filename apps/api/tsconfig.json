@@ -24,6 +24,8 @@
     { "path": "../../packages/observability/tsconfig.build.json" },
     { "path": "../../packages/rules/tsconfig.build.json" },
     { "path": "../../packages/classifier/tsconfig.build.json" },
-    { "path": "../../packages/reports/tsconfig.build.json" }
+    { "path": "../../packages/public-api/tsconfig.build.json" },
+    { "path": "../../packages/reports/tsconfig.build.json" },
+    { "path": "../../packages/webhooks/tsconfig.build.json" }
   ]
 }

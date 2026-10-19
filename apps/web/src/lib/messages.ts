@@ -174,6 +174,7 @@ const ACTION_KINDS: Record<string, string> = {
 
 const ACTOR_TYPES: Record<string, string> = {
   user: 'a team member',
+  api_key: 'an API key',
   rule: 'a rule',
   classifier: 'classifier',
   policy: 'a custom policy',

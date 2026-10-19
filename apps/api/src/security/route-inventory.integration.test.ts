@@ -1,10 +1,9 @@
-import { RequestMethod } from '@nestjs/common';
-import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
-import { DiscoveryService, MetadataScanner, ModulesContainer, Reflector } from '@nestjs/core';
+import { Reflector } from '@nestjs/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Secret } from '@feedbouncer/service-runtime';
 import { ROUTES } from '../auth/auth-proxy.controller.js';
 import { startTestApi, type TestApi } from '../testing/harness.js';
+import { nestHandlers as discoverHandlers } from './nest-handlers.js';
 import { CAPABILITY } from '../tenancy/capability.decorator.js';
 import {
   ACCOUNT_ROUTES,
@@ -28,47 +27,6 @@ beforeAll(async () => {
   api = await startTestApi({ facebook: FACEBOOK, instagram: { meta: FACEBOOK } });
 });
 afterAll(() => api.close());
-
-const join = (...parts: string[]) =>
-  '/' +
-  parts
-    .map((p) => p.replace(/^\/+|\/+$/g, ''))
-    .filter(Boolean)
-    .join('/');
-
-interface NestHandler {
-  /** "METHOD /path" as declared on the controller. */
-  route: string;
-  label: string;
-  handler: () => unknown;
-}
-
-/** Every Nest controller handler with its declared method and full path. */
-function nestHandlers(): NestHandler[] {
-  const reflector = new Reflector();
-  const discovery = new DiscoveryService(api.app.get(ModulesContainer, { strict: false }));
-  const scanner = new MetadataScanner();
-  const out: NestHandler[] = [];
-  for (const wrapper of discovery.getControllers()) {
-    const instance = wrapper.instance as object | undefined;
-    if (!instance) continue;
-    const proto = Object.getPrototypeOf(instance) as object;
-    const base = reflector.get<string | undefined>(PATH_METADATA, wrapper.metatype as never) ?? '';
-    for (const name of scanner.getAllMethodNames(proto)) {
-      const handler = (proto as Record<string, unknown>)[name] as () => unknown;
-      const sub = reflector.get<string | undefined>(PATH_METADATA, handler);
-      const method = reflector.get<number | undefined>(METHOD_METADATA, handler);
-      if (sub === undefined || method === undefined) continue;
-      const full = join(String(base), sub);
-      out.push({
-        route: `${RequestMethod[method]} ${full}`,
-        label: `${RequestMethod[method]} ${full} (${wrapper.name}.${name})`,
-        handler,
-      });
-    }
-  }
-  return out;
-}
 
 // "METHOD /path" for every registered route, from Fastify's printed radix tree
 // (4 columns per level); HEAD companions of GET are dropped. Routes that share a
@@ -104,6 +62,8 @@ function expand(route: string): string[] {
     .flatMap((alt) => expand(route.slice(0, m.index) + alt + route.slice(m.index + m[0].length)));
 }
 
+const nestHandlers = () => discoverHandlers(api.app);
+
 describe('route inventory', () => {
   it('every /api/v1 route is tenant-scoped (covered), a known account route or a signed public route', () => {
     const v1 = registered().filter((r) => r.includes(' /api/v1/'));
@@ -124,7 +84,16 @@ describe('route inventory', () => {
       });
       if (r.body?.error?.code !== 'invalid_origin') exempt.push(route);
     }
-    expect(exempt.sort()).toEqual(PUBLIC_ROUTES.filter((r) => r.startsWith('POST ')).sort());
+    // The /v1 routes authenticate by bearer key and never read cookies, so they
+    // skip the check too; they are pinned separately to the registered /v1 routes.
+    expect(exempt.filter((r) => !r.includes(' /v1/')).sort()).toEqual(
+      PUBLIC_ROUTES.filter((r) => r.startsWith('POST ')).sort(),
+    );
+    expect(exempt.filter((r) => r.includes(' /v1/')).sort()).toEqual(
+      registered()
+        .filter((r) => r.includes(' /v1/') && !r.startsWith('GET '))
+        .sort(),
+    );
   });
 
   it('every invitation token route has a cross-organization case', () => {
@@ -150,8 +119,10 @@ describe('route inventory', () => {
     expect(Object.keys(ROUTES).sort()).toEqual([...PROXY_ROUTES].sort());
   });
 
-  it('nothing is registered outside /api/v1 except health and the catch-all that serves the proxy', () => {
-    const other = registered().filter((r) => !r.includes(' /api/v1/') && !r.endsWith(' *'));
+  it('nothing is registered outside /api/v1 and /v1 except health and the catch-all that serves the proxy', () => {
+    const other = registered().filter(
+      (r) => !r.includes(' /api/v1/') && !r.includes(' /v1/') && !r.endsWith(' *'),
+    );
     expect(other.sort()).toEqual(['GET /healthz', 'GET /livez']);
   });
 

@@ -34,6 +34,12 @@ describe('createLogger', () => {
 });
 
 describe('redact', () => {
+  it('masks bare API key values', () => {
+    const key = redact(`key fbk_abcdefghijklmnop_${'A'.repeat(43)} used`);
+    expect(key).not.toContain('AAAA');
+    expect(key).toBe('key [redacted] used');
+  });
+
   it('replaces userinfo in URLs', () => {
     expect(redact('postgresql://fb:secret@postgres:5432/db')).toBe(
       'postgresql://[redacted]@postgres:5432/db',

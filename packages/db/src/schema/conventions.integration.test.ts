@@ -49,6 +49,14 @@ const ALLOWED_CREDENTIAL_COLUMNS: Record<string, string> = {
   'policy_evaluation.input_tokens': 'LLM token count, not a credential',
   'policy_evaluation.output_tokens': 'LLM token count, not a credential',
   'policy_evaluation.cache_read_tokens': 'LLM token count, not a credential',
+  'api_key.secret_sha256':
+    'SHA-256 digest of a 256-bit random key secret; the plaintext is shown once at creation',
+  'moderation_action.actor_api_key_id':
+    'Reference to the api_key row that made the request, not a credential',
+  'api_idempotency_record.api_key_id':
+    'Reference to the api_key row the record is scoped to, not a credential',
+  'webhook_endpoint.created_by_api_key_id':
+    'Reference to the api_key row that created the endpoint, not a credential',
 };
 
 describe('schema conventions', () => {
