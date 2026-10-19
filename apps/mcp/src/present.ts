@@ -13,6 +13,15 @@ export function wrapUntrusted(kind: UntrustedKind, id: string, text: string): st
   return `<untrusted_${kind} id="${id}">${escapeText(text)}</untrusted_${kind}>`;
 }
 
+/** The comment with its public text framed, for structuredContent. */
+export function framedComment(c: Comment): Comment {
+  return {
+    ...c,
+    authorName: c.authorName === null ? null : wrapUntrusted('author', c.id, c.authorName),
+    text: wrapUntrusted('comment', c.id, c.text),
+  };
+}
+
 export function formatComment(c: Comment): string {
   const meta = [
     `id: ${c.id}`,

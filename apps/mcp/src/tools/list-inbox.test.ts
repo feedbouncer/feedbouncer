@@ -39,7 +39,7 @@ describe('list_inbox', () => {
     expect(h.api.callsTo('listComments')).toEqual([[{ limit: 20 }]]);
   });
 
-  it('frames public text in content and keeps it raw in structuredContent', async () => {
+  it('frames public text in both content and structuredContent', async () => {
     h = await connect();
     const comment = makeComment({ authorName: 'Eve', text: 'buy <now>' });
     h.api.page = { data: [comment], nextCursor: 'next-1' };
@@ -52,7 +52,24 @@ describe('list_inbox', () => {
     );
     expect(text).toContain(`<untrusted_author id="${COMMENT_ID}">Eve</untrusted_author>`);
     expect(text).toContain('nextCursor: next-1');
-    expect(r.structuredContent).toEqual({ comments: [comment], nextCursor: 'next-1' });
+    expect(r.structuredContent).toEqual({
+      comments: [
+        {
+          ...comment,
+          authorName: `<untrusted_author id="${COMMENT_ID}">Eve</untrusted_author>`,
+          text: `<untrusted_comment id="${COMMENT_ID}">buy &lt;now&gt;</untrusted_comment>`,
+        },
+      ],
+      nextCursor: 'next-1',
+    });
+  });
+
+  it('keeps a null author null in structuredContent', async () => {
+    h = await connect();
+    h.api.page = { data: [makeComment({ authorName: null })], nextCursor: null };
+    const r = await h.call('list_inbox', {});
+    const { comments } = r.structuredContent as { comments: { authorName: unknown }[] };
+    expect(comments[0]!.authorName).toBeNull();
   });
 
   it('returns "No comments match." for an empty page without an error', async () => {

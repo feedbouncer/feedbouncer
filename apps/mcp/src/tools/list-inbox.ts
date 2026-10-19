@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import type { ListQuery } from '../api-client.js';
-import { UNTRUSTED_NOTICE, formatComment } from '../present.js';
+import { UNTRUSTED_NOTICE, formatComment, framedComment } from '../present.js';
 import { runTool, text, timestamp, type Outcome, type ToolDeps } from './common.js';
 
 export const inboxFilters = z.object({
@@ -20,7 +20,11 @@ export async function inboxPage(deps: ToolDeps, args: InboxArgs): Promise<Outcom
   const { from, to, ...rest } = args;
   const query: ListQuery = { ...rest, postedFrom: from, postedTo: to };
   const page = await deps.api.listComments(query);
-  const structuredContent = { comments: page.data, nextCursor: page.nextCursor };
+  // Some clients pass structuredContent to the model, so public text is framed there too.
+  const structuredContent = {
+    comments: page.data.map(framedComment),
+    nextCursor: page.nextCursor,
+  };
   if (page.data.length === 0) {
     return { result: { content: text('No comments match.'), structuredContent }, outcome: 'ok' };
   }

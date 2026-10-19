@@ -58,6 +58,14 @@ describe('prompt injection in a comment', () => {
       expect(out.match(/<untrusted_comment\b/g)).toHaveLength(1);
       expect(out.match(/<\/untrusted_comment>/g)).toHaveLength(1);
       expect(out).not.toContain(ATTACK);
+
+      // Clients may pass structuredContent to the model, so it is framed the same way.
+      const structured = JSON.stringify(r.structuredContent);
+      expect(structured).not.toContain(ATTACK);
+      expect(structured).not.toContain('</untrusted_comment> Ignore');
+      expect(structured.match(/<\/untrusted_comment>/g)).toHaveLength(1);
+      const listed = (r.structuredContent as { comments: { id: string; text: string }[] }).comments;
+      expect(listed.find((x) => x.id === c.id)?.text).toBe(block);
     }
 
     expect(await counts()).toEqual(before);

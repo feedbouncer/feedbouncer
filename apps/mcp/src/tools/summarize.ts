@@ -36,6 +36,18 @@ function render(s: Summary): string[] {
   return [lines.join('\n'), UNTRUSTED_NOTICE, 'Notable threads:', ...threads];
 }
 
+/** Some clients pass structuredContent to the model, so public text is framed there too. */
+function framed(s: Summary): Summary {
+  return {
+    ...s,
+    notableThreads: s.notableThreads.map((t) => ({
+      ...t,
+      authorName: t.authorName === null ? null : wrapUntrusted('author', t.commentId, t.authorName),
+      textPreview: wrapUntrusted('comment', t.commentId, t.textPreview),
+    })),
+  };
+}
+
 export function registerSummarize(server: McpServer, deps: ToolDeps): void {
   server.registerTool(
     'summarize_period',
@@ -50,7 +62,7 @@ export function registerSummarize(server: McpServer, deps: ToolDeps): void {
       runTool(deps, 'summarize_period', args.brandId, async () => {
         const summary = await deps.api.summary(args);
         return {
-          result: { content: text(...render(summary)), structuredContent: summary },
+          result: { content: text(...render(summary)), structuredContent: framed(summary) },
           outcome: summary.bounded ? 'bounded' : 'ok',
         };
       }),

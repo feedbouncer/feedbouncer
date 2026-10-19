@@ -53,7 +53,7 @@ Inputs, all optional:
 | `limit`    | 1 to 50, default 20                                     | Comments per page.                                          |
 | `cursor`   | string                                                  | `nextCursor` from the previous page.                        |
 
-Output: `structuredContent` is `{ "comments": [...], "nextCursor": "..." | null }`, each comment as in `GET /v1/comments` (`id`, `brandId`, `platform`, `parentId`, `authorName`, `text`, `textTruncated`, `postedAt`, `status`, `flagged`, `permalink`, `isOwnAccount`, ...). The text result has one block per comment, with the comment and the author name inside [untrusted-content delimiters](README.md#untrusted-content), followed by `nextCursor: ...` or `No more pages.`. An empty page is `No comments match.`, not an error.
+Output: `structuredContent` is `{ "comments": [...], "nextCursor": "..." | null }`, each comment as in `GET /v1/comments` (`id`, `brandId`, `platform`, `parentId`, `authorName`, `text`, `textTruncated`, `postedAt`, `status`, `flagged`, `permalink`, `isOwnAccount`, ...), except that `text` and `authorName` (when not null) hold the same delimited, escaped strings as the text result. The text result has one block per comment, with the comment and the author name inside [untrusted-content delimiters](README.md#untrusted-content), followed by `nextCursor: ...` or `No more pages.`. An empty page is `No comments match.`, not an error.
 
 Pages are stable: following `nextCursor` neither repeats nor skips comments when new ones arrive in between.
 
@@ -152,7 +152,7 @@ Summarizes comment activity. Read-only.
 
 A period longer than 92 days is cut to the last 92 days; the result then says `Range was limited to the last 92 days of the requested period` and `structuredContent.bounded` is set. A `to` before `from`, or in the future, is `invalid_request`.
 
-Output: `structuredContent` is the `GET /v1/summary` body: `period`, `bounded`, `totals` (`comments`, `hidden`, `replied`, `unanswered`), `categories`, `topRules` (`ruleId`, `name`, `matches`) and `notableThreads` (comments with the most replies, with a text preview inside delimiters).
+Output: `structuredContent` is the `GET /v1/summary` body: `period`, `bounded`, `totals` (`comments`, `hidden`, `replied`, `unanswered`), `categories`, `topRules` (`ruleId`, `name`, `matches`) and `notableThreads` (comments with the most replies). In `notableThreads`, `textPreview` and `authorName` (when not null) hold the same delimited, escaped strings as the text result.
 
 ```json
 {
