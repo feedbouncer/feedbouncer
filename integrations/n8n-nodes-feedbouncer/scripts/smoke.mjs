@@ -18,7 +18,7 @@ const docker = async (...args) => {
   try {
     return (await run('docker', args, { maxBuffer: 64 * 1024 * 1024 })).stdout;
   } catch (error) {
-    throw new Error(`docker ${args[0]} failed: ${error.stderr || error.message}`.trim());
+    throw new Error(`docker ${args[0]} failed: ${error.message}\n${error.stdout ?? ''}\n${error.stderr ?? ''}`.trim());
   }
 };
 // `docker logs` writes the container's stderr to ours, so keep both streams.
@@ -66,6 +66,8 @@ async function main() {
     // First boot creates the community nodes directory; install only after it exists.
     await waitForHealth(name);
     await docker('cp', tarball, `${name}:/tmp/pkg.tgz`);
+    // docker cp keeps the host owner and mode (mktemp files are 0600), which the node user cannot read.
+    await docker('exec', '-u', 'root', name, 'chmod', '644', '/tmp/pkg.tgz');
     // Same flags n8n uses for community installs; scripts stay off because the image has no build toolchain.
     await docker(
       'exec', '-w', NODES_DIR, name,
