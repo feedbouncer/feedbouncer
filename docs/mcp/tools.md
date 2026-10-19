@@ -102,10 +102,12 @@ The tool queues the reply, then waits up to 15 seconds for the worker to post it
 
 - Posted: `Reply posted (action <id>).`, with `structuredContent` `{ "status": "posted", "replyId": "<platform id>", "actionId": "<id>" }`.
 - Still queued after 15 seconds: `Queued; calling again with the same text will not post twice.`, with `{ "status": "queued", "actionId": "<id>" }`. The reply is still posted when the worker gets to it.
-- Refused by the platform: an error from the table above, followed by `Nothing was posted.`
+- Refused by FeedBouncer or the platform, or failed: an error from the table above, followed by `Nothing was posted.` and `To retry after fixing this, call again with a new idempotencyKey.` (A comment deleted on the platform gets only `Nothing was posted.`; there is nothing to retry.)
 - Queued, but its status could not be read: the error, followed by a note that retrying is safe.
 
-Without `idempotencyKey`, the key is derived from the comment ID and the text, so calling again with the same text returns the first reply instead of posting a second one. This holds for 24 hours. To post the same text twice on purpose, pass a different `idempotencyKey`.
+Without `idempotencyKey`, the key is derived from the comment ID and the text, so calling again with the same text returns the first reply instead of posting a second one. The API keeps the outcome under that key for good: a call with the same comment, text and key, at any later time, returns the first result and never posts again. To post the same text twice on purpose, pass a different `idempotencyKey`.
+
+The same applies to a refusal or failure: retrying with the same key (or, without one, the same text) returns the stored refusal again, even after the cause is fixed (for example after the comment was unhidden or the account reconnected). To try again, pass a new `idempotencyKey`. Reusing a key with a different comment or text is refused with `idempotency_key_reused`.
 
 ```json
 {

@@ -58,6 +58,53 @@ describe('reply_to_comment', () => {
     expect(textOf(r)).toContain('comments_closed');
   });
 
+  // The API keeps a refused or failed reply under its key, so retrying with the same key (or,
+  // without one, the same text) returns the same refusal. The result must say to use a new key.
+  const RETRY = 'To retry after fixing this, call again with a new idempotencyKey.';
+
+  it.each([
+    { status: 'failed' as const, code: 'platform_error' },
+    { status: 'not_eligible' as const, code: 'reply_to_hidden_comment' },
+  ])('tells the caller to retry a $status action with a new key', async (action) => {
+    h = await connect();
+    h.api.replyAction = action;
+    const r = await h.call('reply_to_comment', args);
+    expect(r.isError).toBe(true);
+    expect(textOf(r).split('\n').slice(-2)).toEqual(['Nothing was posted.', RETRY]);
+    expect(r.structuredContent).toBeUndefined();
+  });
+
+  it.each([
+    new ApiCallError(409, 'connection_inactive', 'x'),
+    new ApiCallError(422, 'reply_not_allowed', 'x', { reason: 'review_mode_active' }),
+    new ApiCallError(422, 'text_too_long', 'x', { max: 2200 }),
+    new ApiCallError(422, 'unsupported_action', 'x', { platform: 'Instagram' }),
+  ])('tells the caller to retry a refused reply ($code) with a new key', async (err) => {
+    h = await connect();
+    h.api.error = err;
+    const r = await h.call('reply_to_comment', args);
+    expect(r.isError).toBe(true);
+    expect(textOf(r).split('\n').slice(-2)).toEqual(['Nothing was posted.', RETRY]);
+  });
+
+  it.each([
+    new ApiCallError(404, 'not_found', 'x'),
+    new ApiCallError(429, 'rate_limited', 'x', undefined, 3),
+    new ApiCallError(503, 'unreachable', 'x'),
+  ])('does not suggest a new key for $code', async (err) => {
+    h = await connect();
+    h.api.error = err;
+    const r = await h.call('reply_to_comment', args);
+    expect(r.isError).toBe(true);
+    expect(textOf(r)).not.toContain('idempotencyKey');
+  });
+
+  it('a success does not mention a new key', async () => {
+    h = await connect();
+    const r = await h.call('reply_to_comment', args);
+    expect(textOf(r)).not.toContain('new idempotencyKey');
+  });
+
   it('says a deleted comment was not replied to', async () => {
     h = await connect();
     h.api.replyAction = { status: 'noop', code: 'already_deleted' };
