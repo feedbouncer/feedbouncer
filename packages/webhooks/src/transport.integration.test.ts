@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import dns from 'node:dns';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildGuardedTransport, createGuardedTransport } from './transport.js';
+import { createGuardedTransport } from './transport.js';
 
 const run = promisify(execFile);
 let dir: string;
@@ -73,18 +73,16 @@ const reset = () => {
   connections = 0;
 };
 
-// The transport sees a URL with a non-443 port only in tests, so pass it through a
-// transport that is otherwise identical to production.
+// The receiver listens on a random port, so the injected connector dials that port. The URL the
+// policy sees keeps port 443, and the guarded connector still runs the address lookup and TLS checks.
 const make = (o: Record<string, unknown> = {}) =>
-  buildGuardedTransport(
-    {
-      allowedPrivateCidrs: ['127.0.0.0/8'],
-      lookup: toLoopback,
-      ca: cert,
-      ...o,
-    },
-    { dialPort: port },
-  );
+  createGuardedTransport({
+    allowedPrivateCidrs: ['127.0.0.0/8'],
+    lookup: toLoopback,
+    ca: cert,
+    connect: (guarded) => (opts, cb) => guarded({ ...opts, port: String(port) }, cb),
+    ...o,
+  });
 const send = (t: ReturnType<typeof make>, url = target()) =>
   t.send({ url, headers: { 'content-type': 'application/json' }, body: '{}' });
 

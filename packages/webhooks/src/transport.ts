@@ -1,5 +1,5 @@
 import dns from 'node:dns';
-import { Agent, fetch } from 'undici';
+import { Agent, buildConnector, fetch } from 'undici';
 import { DELIVERY_TIMEOUT_MS } from './constants.js';
 import { checkSyntax, compileAddressPolicy } from './destination.js';
 
@@ -48,18 +48,14 @@ interface TransportOptions {
   lookup?: typeof dns.lookup;
   ca?: string;
   timeoutMs?: number;
+  /**
+   * Wraps the guarded connector the dispatcher dials with (dependency injection of the socket
+   * layer). A wrapper must dial through `guarded`, which applies the address policy and TLS checks.
+   */
+  connect?: (guarded: buildConnector.connector) => buildConnector.connector;
 }
 
 export function createGuardedTransport(o: TransportOptions): WebhookTransport {
-  return buildGuardedTransport(o);
-}
-
-// Not exported from the package index. `dialPort` lets tests reach a local server while the
-// policy (including port 443) is still enforced on the URL as given.
-export function buildGuardedTransport(
-  o: TransportOptions,
-  testOnly?: { dialPort: number },
-): WebhookTransport {
   const isAllowed = compileAddressPolicy(o.allowedPrivateCidrs);
   const timeoutMs = o.timeoutMs ?? DELIVERY_TIMEOUT_MS;
   const baseLookup = o.lookup ?? dns.lookup;
@@ -86,8 +82,13 @@ export function buildGuardedTransport(
     );
   };
 
+  const guarded = buildConnector({
+    timeout: 5000,
+    lookup: guardedLookup as never,
+    ...(o.ca ? { ca: o.ca } : {}),
+  });
   const dispatcher = new Agent({
-    connect: { timeout: 5000, lookup: guardedLookup as never, ...(o.ca ? { ca: o.ca } : {}) },
+    connect: o.connect ? o.connect(guarded) : guarded,
     headersTimeout: timeoutMs,
     bodyTimeout: timeoutMs,
   });
@@ -100,10 +101,8 @@ export function buildGuardedTransport(
       if (!syntax.ok) {
         return { ok: false, status: null, code: 'blocked_destination', durationMs: elapsed() };
       }
-      const target = new URL(syntax.url);
-      if (testOnly) target.port = String(testOnly.dialPort);
       try {
-        const res = await fetch(target, {
+        const res = await fetch(syntax.url, {
           method: 'POST',
           headers,
           body,
