@@ -10,7 +10,7 @@ Create an API key in the dashboard (owners and admins only) and send it as a bea
 Authorization: Bearer fbk_<id>_<secret>
 ```
 
-- A key belongs to one organization and can only see that organization's brands, comments and flagged items. Asking for another organization's ids, an archived brand or a deleted comment returns `404`.
+- A key belongs to one organization and can only see that organization's brands, comments and flagged items. Asking for another organization's ids, an archived brand or a deleted comment returns `404`. The exception is list filters: `GET /v1/comments?brandId=` with a brand outside the organization returns an empty page.
 - Scopes: `read` keys can call every `GET` route except the webhook endpoint ones; `write` keys can also hide, unhide and reply to comments, propose rule changes and manage webhook endpoints. Reading webhook endpoints needs a `write` key because it reveals where events are sent.
 - `GET /v1/key` describes the key making the request (`organizationId`, `name`, `scope`). Use it to check a key before doing anything else.
 - The secret is shown once and only a hash is stored. Revoking a key takes effect on its next request. Keys keep working after the admin who created them leaves, so revoke them when someone leaves.

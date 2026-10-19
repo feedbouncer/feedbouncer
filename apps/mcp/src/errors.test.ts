@@ -31,7 +31,7 @@ describe('toToolError', () => {
     ],
     [
       new ApiCallError(403, 'insufficient_scope', 'x'),
-      'This API key is read-only. Create a write key in Settings → API keys.',
+      "This API key is read-only. Create a write key on the organization's API keys page.",
     ],
     [
       new ApiCallError(422, 'text_too_long', 'x', { max: 2200 }),

@@ -16,7 +16,7 @@ function messageFor(e: ApiCallError): string {
         ? 'Rate limited. Retry later.'
         : `Rate limited. Retry after ${e.retryAfterSeconds} seconds.`;
     case 'insufficient_scope':
-      return 'This API key is read-only. Create a write key in Settings → API keys.';
+      return "This API key is read-only. Create a write key on the organization's API keys page.";
     case 'text_too_long':
       return `Reply is longer than the platform allows (max ${typeof d.max === 'number' ? d.max : 'unknown'}).`;
     case 'reply_not_allowed':

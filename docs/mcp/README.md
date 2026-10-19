@@ -1,6 +1,6 @@
 # MCP server
 
-`apps/mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server that lets an MCP client (Claude Desktop, an IDE assistant, any other LLM assistant that speaks MCP) work with a FeedBouncer workspace: read and search the comment inbox, reply to comments, hide and unhide them, summarize a period, read the moderation rules and propose rule changes.
+`apps/mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server that lets an MCP client (a desktop MCP client, an IDE assistant or any other LLM assistant that speaks MCP) work with a FeedBouncer workspace: read and search the comment inbox, reply to comments, hide and unhide them, summarize a period, read the moderation rules and propose rule changes.
 
 It runs locally over stdio, started by the MCP client. It has no database or secrets of its own: it is a thin client of the [public REST API](../api/README.md) and authenticates with one workspace API key. Everything it can do, the key can do through `/v1`, and nothing more.
 
@@ -40,7 +40,7 @@ The server reads two environment variables:
 
 `FEEDBOUNCER_API_URL` must use `https`. Plain `http` is accepted only for `localhost`, `127.0.0.1` and `[::1]`. The URL may not contain a user name, password, query string or fragment.
 
-Most clients take a JSON entry like this one (for Claude Desktop it goes under `mcpServers` in `claude_desktop_config.json`):
+Most clients take a JSON entry like this one, usually under `mcpServers` in the client's configuration file:
 
 ```json
 {
@@ -53,19 +53,6 @@ Most clients take a JSON entry like this one (for Claude Desktop it goes under `
         "FEEDBOUNCER_API_KEY": "fbk_..."
       }
     }
-  }
-}
-```
-
-If you make the `feedbouncer-mcp` command available on your `PATH` (for example with `pnpm link --global` in `apps/mcp`), the entry can use it instead:
-
-```json
-{
-  "command": "npx",
-  "args": ["feedbouncer-mcp"],
-  "env": {
-    "FEEDBOUNCER_API_URL": "https://api.feedbouncer.example.com",
-    "FEEDBOUNCER_API_KEY": "fbk_..."
   }
 }
 ```
