@@ -11,5 +11,5 @@ const nodeGlobals = Object.fromEntries(
 export default [
   ...baseConfig,
   { files: ['scripts/**/*.mjs'], languageOptions: { globals: nodeGlobals } },
-  { ignores: ['apps/**', 'packages/**'] },
+  { ignores: ['apps/**', 'packages/**', 'integrations/**'] },
 ];
