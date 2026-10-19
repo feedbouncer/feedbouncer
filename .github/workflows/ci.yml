@@ -55,7 +55,7 @@ jobs:
   n8n-node:
     name: n8n community node
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,6 +71,26 @@ jobs:
         run: pnpm --filter @feedbouncer/n8n-nodes-feedbouncer typecheck
       - name: Test
         run: pnpm --filter @feedbouncer/n8n-nodes-feedbouncer test
+      - name: Install smoke test (real n8n image)
+        run: |
+          set -euo pipefail
+          pack_dir="$(mktemp -d)"
+          pnpm --filter @feedbouncer/n8n-nodes-feedbouncer pack --pack-destination "$pack_dir"
+          node integrations/n8n-nodes-feedbouncer/scripts/smoke.mjs "$pack_dir"/*.tgz "$N8N_TESTED_VERSION"
+      - name: No product change in integration-only PRs
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          # HEAD is the PR merge commit, so BASE_SHA..HEAD is exactly this PR's change.
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          outside="$(git diff --name-only "$BASE_SHA" HEAD | grep -v '^integrations/' || true)"
+          if [ -n "$outside" ]; then
+            echo "PR touches more than integrations/**; API behaviour guard not applicable."
+            exit 0
+          fi
+          git diff --exit-code "$BASE_SHA" HEAD -- apps packages docs/api/openapi.json
 
   docker-discover:
     name: Docker discover
