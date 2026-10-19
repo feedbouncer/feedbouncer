@@ -28,6 +28,16 @@ describe('collectPages', () => {
     ]);
   });
 
+  it('stops on an empty page even when a cursor is returned', async () => {
+    const { calls, fetchPage } = pager([
+      { data: range(3), nextCursor: 'c1' },
+      { data: [], nextCursor: 'c2' },
+      { data: range(5), nextCursor: null },
+    ]);
+    expect(await collectPages(fetchPage, { returnAll: true, limit: 1 })).toHaveLength(3);
+    expect(calls).toHaveLength(2);
+  });
+
   it('return all follows nextCursor until null', async () => {
     const { calls, fetchPage } = pager([
       { data: range(100), nextCursor: 'c1' },

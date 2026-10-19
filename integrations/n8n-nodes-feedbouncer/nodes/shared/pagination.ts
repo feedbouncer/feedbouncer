@@ -18,7 +18,7 @@ export async function collectPages<T>(
   for (;;) {
     const page = await fetchPage(cursor, Math.min(PAGE_SIZE, cap - items.length));
     items.push(...page.data);
-    if (!page.nextCursor) return items;
+    if (!page.nextCursor || page.data.length === 0) return items;
     if (items.length >= cap) {
       if (opts.returnAll) throw new ReturnAllLimitError('Return All stopped at the maximum.');
       return items.slice(0, cap);
