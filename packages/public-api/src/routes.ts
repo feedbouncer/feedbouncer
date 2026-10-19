@@ -30,6 +30,7 @@ export const PUBLIC_ERROR_CODES = [
   'webhook_endpoint_limit_reached',
   'webhook_endpoint_disabled',
   'webhook_event_unavailable',
+  'webhook_delivery_in_progress',
 ] as const;
 export type PublicErrorCode = (typeof PUBLIC_ERROR_CODES)[number];
 
@@ -45,6 +46,7 @@ export const PUBLIC_ERROR_STATUS: Readonly<Record<PublicErrorCode, number>> = {
   webhook_endpoint_limit_reached: 409,
   webhook_endpoint_disabled: 409,
   webhook_event_unavailable: 409,
+  webhook_delivery_in_progress: 409,
   idempotency_key_reused: 422,
   unsupported_action: 422,
   invalid_webhook_url: 422,
@@ -293,7 +295,7 @@ function webhookEndpointSpecs(): readonly RouteSpec[] {
       method: 'POST',
       path: '/v1/webhook-endpoints/{id}/deliveries/{deliveryId}/redeliver',
       summary:
-        'Send the event of a finished delivery again. Answers 409 `invalid_request` while the delivery is still being attempted',
+        'Send the event of a finished delivery again. Answers 409 `webhook_delivery_in_progress` while the delivery is still being attempted',
       idempotent: true,
       params: z.object({ id: z.uuid(), deliveryId: z.uuid() }),
       body: z.strictObject({}),
@@ -304,6 +306,7 @@ function webhookEndpointSpecs(): readonly RouteSpec[] {
         'not_found',
         'webhook_endpoint_disabled',
         'webhook_event_unavailable',
+        'webhook_delivery_in_progress',
         ...IDEMPOTENCY_ERRORS,
       ],
     },

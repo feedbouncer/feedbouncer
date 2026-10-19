@@ -80,7 +80,7 @@ const make = (o: Record<string, unknown> = {}) =>
     allowedPrivateCidrs: ['127.0.0.0/8'],
     lookup: toLoopback,
     ca: cert,
-    connect: (guarded) => (opts, cb) => guarded({ ...opts, port: String(port) }, cb),
+    dialPort: port,
     ...o,
   });
 const send = (t: ReturnType<typeof make>, url = target()) =>

@@ -410,7 +410,7 @@ describe('redelivery', () => {
   });
 
   it.each(['pending', 'sending', 'retrying'])(
-    'refuses a delivery that is still %s with 409 invalid_request',
+    'refuses a delivery that is still %s with 409 webhook_delivery_in_progress',
     async (status) => {
       const s = await succeededTest();
       await api.pool.query(
@@ -422,7 +422,7 @@ describe('redelivery', () => {
       const r = await redeliver(s.endpointId, s.deliveryId);
       expect(r.status).toBe(409);
       expect(r.body.error).toEqual({
-        code: 'invalid_request',
+        code: 'webhook_delivery_in_progress',
         message: 'This delivery is still being attempted.',
       });
       expect(await deliveries(s.endpointId)).toHaveLength(1);

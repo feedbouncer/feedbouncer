@@ -88,7 +88,8 @@ export type ErrorCode =
   | 'invalid_idempotency_key'
   | 'webhook_endpoint_limit_reached'
   | 'webhook_endpoint_disabled'
-  | 'webhook_event_unavailable';
+  | 'webhook_event_unavailable'
+  | 'webhook_delivery_in_progress';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
@@ -179,6 +180,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
     'This workspace already has 10 webhook endpoints. Delete one to create another.',
   webhook_endpoint_disabled: 'This webhook endpoint is disabled. Re-enable it first.',
   webhook_event_unavailable: 'The comment of this event is no longer available.',
+  webhook_delivery_in_progress: 'This delivery is still being attempted.',
 };
 
 export interface ErrorIssue {

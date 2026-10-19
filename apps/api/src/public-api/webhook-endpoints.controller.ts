@@ -62,7 +62,7 @@ function toApiError(err: unknown): unknown {
   if (err instanceof EndpointDisabledError) return new ApiError(409, 'webhook_endpoint_disabled');
   if (err instanceof EventUnavailableError) return new ApiError(409, 'webhook_event_unavailable');
   if (err instanceof DeliveryInProgressError)
-    return new ApiError(409, 'invalid_request', 'This delivery is still being attempted.');
+    return new ApiError(409, 'webhook_delivery_in_progress');
   return err;
 }
 
