@@ -97,6 +97,12 @@ describe('describeFailure', () => {
     const info = describeFailure({ ...base, status: 400, body: echoed });
     expect(`${info.message}${info.description}`).not.toMatch(/AAAAAAAA|fbk_|Bearer/);
   });
+
+  it('removes webhook signing secrets from API messages and codes', () => {
+    const echoed = envelope('invalid_request', 'bad secret whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw here');
+    const info = describeFailure({ ...base, status: 400, body: echoed });
+    expect(`${info.message}${info.description}`).not.toMatch(/whsec_|MfKQ9r8/);
+  });
 });
 
 describe('toNodeApiError', () => {

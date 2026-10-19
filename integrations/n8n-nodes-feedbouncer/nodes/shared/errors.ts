@@ -34,7 +34,7 @@ const DEFAULT_RETRY_AFTER_SECONDS = 60;
 
 /** Server text is untrusted: make sure nothing key-shaped survives into an error. */
 function scrub(text: string): string {
-  return text.replace(/Bearer\s+\S+/gi, '[redacted]').replace(/fbk_\S+/g, '[redacted]');
+  return text.replace(/Bearer\s+\S+/gi, '[redacted]').replace(/(?:fbk|whsec)_\S+/g, '[redacted]');
 }
 
 export function apiErrorEnvelope(body: unknown): { code: string; message: string } | null {
