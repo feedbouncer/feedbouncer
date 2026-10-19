@@ -67,3 +67,12 @@ export {
   type RuleEvaluatedEvent,
   type RuleEvaluatedHook,
 } from './hooks.js';
+export {
+  ruleDiff,
+  validateRuleProposal,
+  type ProposalRejection,
+  type ProposalResult,
+  type RuleProposalInput,
+  type RuleSnapshot,
+} from './proposal.js';
+export { PROBE_TEXTS, checkOverbroad } from './overbroad.js';
