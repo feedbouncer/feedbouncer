@@ -1,7 +1,10 @@
 import { NodeConnectionTypes } from 'n8n-workflow';
-import type { IHookFunctions, INodeType, INodeTypeDescription, IWebhookFunctions, IWebhookResponseData } from 'n8n-workflow';
+import type { IDataObject, IHookFunctions, INodeType, INodeTypeDescription, IWebhookFunctions, IWebhookResponseData } from 'n8n-workflow';
 import { CREDENTIAL_NAME } from '../shared/constants';
+import { rememberEvent } from './dedupe';
 import { checkExists, create, remove } from './lifecycle';
+import type { TriggerStaticData } from './lifecycle';
+import { verifySignature } from './signature';
 
 export class FeedBouncerTrigger implements INodeType {
   description: INodeTypeDescription = {
@@ -48,9 +51,45 @@ export class FeedBouncerTrigger implements INodeType {
     },
   };
 
-  // Placeholder until deliveries are verified and emitted.
   async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
-    this.getResponseObject().status(501).end();
-    return { noWebhookResponse: true };
+    const reject = (status: number, error: string): IWebhookResponseData => {
+      this.getResponseObject().status(status).json({ error });
+      return { noWebhookResponse: true };
+    };
+
+    const { rawBody } = this.getRequestObject();
+    if (!Buffer.isBuffer(rawBody)) return reject(401, 'invalid_signature');
+
+    const data = this.getWorkflowStaticData('node') as TriggerStaticData;
+    const headers = this.getHeaderData();
+    const header = (name: string) => (typeof headers[name] === 'string' ? headers[name] : undefined);
+    const id = header('webhook-id');
+
+    const verified = verifySignature({
+      secret: data.secret,
+      id,
+      timestamp: header('webhook-timestamp'),
+      signatureHeader: header('webhook-signature'),
+      rawBody,
+      nowSec: Math.floor(Date.now() / 1000),
+    });
+    if (!verified.ok || !id) return reject(401, 'invalid_signature');
+
+    let event: IDataObject;
+    try {
+      const parsed: unknown = JSON.parse(rawBody.toString('utf8'));
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return reject(400, 'invalid_body');
+      event = parsed as IDataObject;
+    } catch {
+      return reject(400, 'invalid_body');
+    }
+
+    const selected = this.getNodeParameter('events', []) as string[];
+    if (event.type === 'webhook.test' || typeof event.type !== 'string' || !selected.includes(event.type)) {
+      return { webhookResponse: 'ok' };
+    }
+    if (!rememberEvent(data, id, Date.now())) return { webhookResponse: 'ok' };
+
+    return { workflowData: [[{ json: { ...event, deliveryId: header('feedbouncer-delivery-id') ?? null } }]] };
   }
 }

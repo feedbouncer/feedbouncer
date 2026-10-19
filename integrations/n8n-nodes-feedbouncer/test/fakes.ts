@@ -137,14 +137,27 @@ export function fakeHook(init: FakeInit & { webhookUrl?: string } = {}): IHookFu
 }
 
 export function fakeWebhook(
-  init: FakeInit & { headers?: Record<string, string>; rawBody?: string | Buffer } = {},
-): IWebhookFunctions & FakeContext {
+  init: FakeInit & { headers?: Record<string, string>; rawBody?: unknown } = {},
+): IWebhookFunctions & FakeContext & { response: { status?: number; body?: unknown } } {
   const ctx = build(init);
-  const rawBody = Buffer.from(init.rawBody ?? '');
+  const rawBody = typeof init.rawBody === 'string' ? Buffer.from(init.rawBody) : (init.rawBody ?? Buffer.alloc(0));
   const headers = init.headers ?? {};
+  const response: { status?: number; body?: unknown } = {};
+  const res = {
+    status: (code: number) => {
+      response.status = code;
+      return res;
+    },
+    json: (body: unknown) => {
+      response.body = body;
+      return res;
+    },
+    end: () => res,
+  };
   return Object.assign(ctx, {
+    response,
     getHeaderData: () => headers,
     getRequestObject: () => ({ rawBody, headers }),
-    getBodyData: () => JSON.parse(rawBody.toString('utf8') || '{}') as IDataObject,
-  }) as unknown as IWebhookFunctions & FakeContext;
+    getResponseObject: () => res,
+  }) as unknown as IWebhookFunctions & FakeContext & { response: typeof response };
 }
