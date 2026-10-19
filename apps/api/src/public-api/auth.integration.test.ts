@@ -64,6 +64,12 @@ describe('API key authentication', () => {
     expect(r.headers['x-ratelimit-remaining']).toBe('59');
   });
 
+  it('matches the Bearer scheme case-insensitively', async () => {
+    const { token } = await newKey('read');
+    const r = await call('GET', null, { authorization: `bearer ${token}` });
+    expect(r.status).toBe(200);
+  });
+
   it('answers 401 with a challenge when there is no Authorization header', async () => {
     const r = await call('GET', null);
     expect(r.status).toBe(401);

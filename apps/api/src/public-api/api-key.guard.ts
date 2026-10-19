@@ -16,7 +16,7 @@ export interface ApiKeyRequest extends FastifyRequest {
   apiKey: ApiKeyContext;
 }
 
-const BEARER = /^Bearer (\S+)$/;
+const BEARER = /^Bearer (\S+)$/i;
 
 const unauthenticated = () =>
   new ApiError(401, 'unauthenticated', undefined, undefined, {
