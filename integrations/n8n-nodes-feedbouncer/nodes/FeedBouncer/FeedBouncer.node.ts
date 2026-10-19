@@ -4,8 +4,10 @@ import { CREDENTIAL_NAME } from '../shared/constants';
 import { ReturnAllLimitError } from '../shared/pagination';
 import { commentDescription } from './descriptions/comment';
 import { decisionDescription } from './descriptions/decision';
+import { ruleDescription } from './descriptions/rule';
 import { executeComment } from './operations/comment';
 import { executeDecision } from './operations/decision';
+import { executeRule } from './operations/rule';
 
 export class FeedBouncer implements INodeType {
   description: INodeTypeDescription = {
@@ -36,6 +38,7 @@ export class FeedBouncer implements INodeType {
       },
       ...commentDescription,
       ...decisionDescription,
+      ...ruleDescription,
     ],
   };
 
@@ -50,8 +53,10 @@ export class FeedBouncer implements INodeType {
           out.push(...(await executeComment.call(this, operation, i)));
         } else if (resource === 'decision' && (operation === 'hide' || operation === 'undoHide')) {
           out.push(...(await executeDecision.call(this, operation, i)));
+        } else if (resource === 'rule' && (operation === 'get' || operation === 'list')) {
+          out.push(...(await executeRule.call(this, operation, i)));
         } else {
-          const what = resource === 'comment' || resource === 'decision' ? `operation: ${operation}` : `resource: ${resource}`;
+          const what = resource === 'comment' || resource === 'decision' || resource === 'rule' ? `operation: ${operation}` : `resource: ${resource}`;
           throw new NodeOperationError(this.getNode(), `Unsupported ${what}.`, { itemIndex: i });
         }
       } catch (error) {
