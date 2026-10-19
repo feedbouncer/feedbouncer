@@ -11,6 +11,9 @@ import { ApiKeyGuard } from './public-api/api-key.guard.js';
 import { PublicCommentsController } from './public-api/comments.controller.js';
 import { PublicFlaggedItemsController } from './public-api/flagged-items.controller.js';
 import { PublicModerationController } from './public-api/moderation.controller.js';
+import { PublicRepliesController } from './public-api/replies.controller.js';
+import { PublicActionsController } from './public-api/actions.controller.js';
+import { PublicKeyController } from './public-api/key.controller.js';
 import { PublicModerationService } from './public-api/moderation.service.js';
 import { PublicWebhookEndpointsController } from './public-api/webhook-endpoints.controller.js';
 import { OpenApiController } from './public-api/openapi.controller.js';
@@ -140,6 +143,9 @@ export class AppModule {
         PublicCommentsController,
         PublicFlaggedItemsController,
         PublicModerationController,
+        PublicRepliesController,
+        PublicActionsController,
+        PublicKeyController,
         PublicWebhookEndpointsController,
       ],
       providers: [

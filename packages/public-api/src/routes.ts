@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './constants.js';
 import type { ApiKeyScope } from './keys/token.js';
+import { ACTION_STATUSES, ActionResource } from './resources/action.js';
 import { CommentResource } from './resources/comment.js';
 import { FlaggedItemResource } from './resources/flagged-item.js';
 import { pageOf } from './resources/page.js';
@@ -31,6 +32,11 @@ export const PUBLIC_ERROR_CODES = [
   'webhook_endpoint_disabled',
   'webhook_event_unavailable',
   'webhook_delivery_in_progress',
+  'text_too_long',
+  'reply_not_allowed',
+  'rule_rejected',
+  'rule_limit_reached',
+  'pending_limit_reached',
 ] as const;
 export type PublicErrorCode = (typeof PUBLIC_ERROR_CODES)[number];
 
@@ -47,9 +53,14 @@ export const PUBLIC_ERROR_STATUS: Readonly<Record<PublicErrorCode, number>> = {
   webhook_endpoint_disabled: 409,
   webhook_event_unavailable: 409,
   webhook_delivery_in_progress: 409,
+  rule_limit_reached: 409,
+  pending_limit_reached: 409,
   idempotency_key_reused: 422,
   unsupported_action: 422,
   invalid_webhook_url: 422,
+  text_too_long: 422,
+  reply_not_allowed: 422,
+  rule_rejected: 422,
   rate_limited: 429,
   internal_error: 500,
   temporarily_unavailable: 503,
@@ -155,8 +166,6 @@ export const ListWebhookDeliveriesQuery = z.strictObject({
   cursor: z.string().max(512).optional(),
 });
 
-const ACTION_STATUSES = ['pending', 'applied', 'noop', 'not_eligible', 'failed'] as const;
-
 export const ModerationResult = z
   .object({
     action: z.object({
@@ -170,6 +179,18 @@ export const ModerationResult = z
     comment: CommentResource,
   })
   .meta({ id: 'ModerationResult' });
+
+export const CreateReplyBody = z
+  .strictObject({ text: z.string().trim().min(1).max(8000) })
+  .meta({ id: 'CreateReplyRequest' });
+
+export const ReplyResult = z
+  .object({ action: ActionResource, comment: CommentResource })
+  .meta({ id: 'ReplyResult' });
+
+export const KeyResource = z
+  .object({ organizationId: z.uuid(), name: z.string(), scope: z.enum(['read', 'write']) })
+  .meta({ id: 'Key' });
 
 const moderationSpec = (kind: 'hide' | 'unhide'): RouteSpec => ({
   id: `${kind}Comment`,
@@ -356,6 +377,50 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
   },
   moderationSpec('hide'),
   moderationSpec('unhide'),
+  {
+    id: 'replyToComment',
+    method: 'POST',
+    path: '/v1/comments/{id}/replies',
+    scope: 'write',
+    summary:
+      'Post a public reply to a comment. Answers 202 when queued, 200 when the outcome was known up front; poll `getAction` for the result',
+    params: z.object({ id: z.uuid() }),
+    body: CreateReplyBody,
+    idempotent: true,
+    responses: { 200: ReplyResult, 202: ReplyResult },
+    errors: [
+      'invalid_request',
+      'not_found',
+      'connection_inactive',
+      'unsupported_action',
+      'text_too_long',
+      'reply_not_allowed',
+      'idempotency_key_reused',
+      'idempotency_request_in_progress',
+      'invalid_idempotency_key',
+    ],
+  },
+  {
+    id: 'getAction',
+    method: 'GET',
+    path: '/v1/actions/{id}',
+    scope: 'read',
+    summary: 'Fetch the status of a hide, unhide or reply',
+    params: z.object({ id: z.uuid() }),
+    idempotent: false,
+    responses: { 200: ActionResource },
+    errors: ['not_found'],
+  },
+  {
+    id: 'getApiKey',
+    method: 'GET',
+    path: '/v1/key',
+    scope: 'read',
+    summary: 'Describe the API key making the request',
+    idempotent: false,
+    responses: { 200: KeyResource },
+    errors: [],
+  },
   {
     id: 'listFlaggedItems',
     method: 'GET',

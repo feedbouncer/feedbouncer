@@ -125,6 +125,14 @@ export class PgApiKeys {
     return rows.map(toKey);
   }
 
+  async get(org: string, keyId: string): Promise<ApiKeyRow | null> {
+    const { rows } = await this.pool.query<Row>(
+      `${SELECT} WHERE k.organization_id = $1 AND k.id = $2`,
+      [org, keyId],
+    );
+    return rows[0] ? toKey(rows[0]) : null;
+  }
+
   async revoke(org: string, actorUserId: string, keyId: string): Promise<ApiKeyRow | null> {
     return withTransaction(this.pool, async (tx) => {
       const revoked = await tx.query<{ public_id: string }>(

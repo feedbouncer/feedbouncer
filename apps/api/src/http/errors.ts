@@ -89,7 +89,10 @@ export type ErrorCode =
   | 'webhook_endpoint_limit_reached'
   | 'webhook_endpoint_disabled'
   | 'webhook_event_unavailable'
-  | 'webhook_delivery_in_progress';
+  | 'webhook_delivery_in_progress'
+  | 'reply_not_allowed'
+  | 'rule_rejected'
+  | 'pending_limit_reached';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
@@ -181,6 +184,9 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   webhook_endpoint_disabled: 'This webhook endpoint is disabled. Re-enable it first.',
   webhook_event_unavailable: 'The comment of this event is no longer available.',
   webhook_delivery_in_progress: 'This delivery is still being attempted.',
+  reply_not_allowed: 'A reply cannot be posted to this comment right now.',
+  rule_rejected: 'The rule was rejected.',
+  pending_limit_reached: 'Too many proposals are waiting for review.',
 };
 
 export interface ErrorIssue {
