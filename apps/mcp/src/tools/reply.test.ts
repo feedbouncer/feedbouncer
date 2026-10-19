@@ -111,6 +111,14 @@ describe('reply_to_comment', () => {
     expect(textOf(r)).not.toContain('new idempotencyKey');
   });
 
+  it('names an unknown platform as the API reports it', async () => {
+    h = await connect();
+    h.api.replyAction = { status: 'not_eligible', code: 'reply_to_hidden_comment' };
+    h.api.replyComment = { platform: 'threads' };
+    const r = await h.call('reply_to_comment', args);
+    expect(textOf(r)).toContain('threads does not allow replies to hidden comments.');
+  });
+
   it('says a deleted comment was not replied to', async () => {
     h = await connect();
     h.api.replyAction = { status: 'noop', code: 'already_deleted' };

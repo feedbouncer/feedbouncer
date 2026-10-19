@@ -21,7 +21,9 @@ export class ApiCallError extends Error {
 }
 
 const timestamp = z.iso.datetime({ offset: true });
-const platform = z.enum(['facebook', 'instagram']);
+// Responses take any string for values the tools only display, so a platform, status or
+// operation the API adds later does not break parsing. Inputs stay strict.
+const platform = z.string();
 
 const CommentSchema = z.object({
   id: z.uuid(),
@@ -35,7 +37,7 @@ const CommentSchema = z.object({
   textTruncated: z.boolean(),
   postedAt: timestamp,
   ingestedAt: timestamp,
-  status: z.enum(['visible', 'hidden', 'flagged']),
+  status: z.string(),
   flagged: z.boolean(),
   permalink: z.string().nullable(),
   isOwnAccount: z.boolean(),
@@ -98,8 +100,8 @@ const SummarySchema = z.object({
   ),
 });
 
-const proposalOperation = z.enum(['create', 'update', 'archive']);
-const proposalStatus = z.enum(['pending', 'approved', 'rejected', 'expired', 'stale']);
+const proposalOperation = z.string();
+const proposalStatus = z.string();
 
 const RulesSchema = z.object({
   brands: z.array(
@@ -113,7 +115,7 @@ const RulesSchema = z.object({
           name: z.string(),
           conditions: z.record(z.string(), z.unknown()),
           actions: z.array(z.record(z.string(), z.unknown())),
-          mode: z.enum(['enforce', 'suggest']),
+          mode: z.string(),
           priority: z.int(),
           enabled: z.boolean(),
         }),

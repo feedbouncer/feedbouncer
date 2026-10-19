@@ -18,15 +18,22 @@ export const idempotencyKey = z
   .optional()
   .describe('Optional retry key; reuse it to make a retried call safe.');
 
-export const PLATFORM_NAME = { facebook: 'Facebook', instagram: 'Instagram' } as const;
+const PLATFORM_NAME: Readonly<Record<string, string>> = {
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+};
+
+/** Display name of a platform; one the server does not know yet is shown as the API names it. */
+export const platformName = (platform: string): string =>
+  Object.hasOwn(PLATFORM_NAME, platform) ? PLATFORM_NAME[platform]! : platform;
 
 /** Turns a failed or not-eligible action into the same error text an API error would get. */
 export function actionError(
   action: { status: string; code: string | null },
-  platform: keyof typeof PLATFORM_NAME,
+  platform: string,
 ): { result: CallToolResult; code: string } {
   const code = action.code ?? action.status;
-  const err = new ApiCallError(422, code, code, { platform: PLATFORM_NAME[platform] });
+  const err = new ApiCallError(422, code, code, { platform: platformName(platform) });
   return { result: toToolError(err), code };
 }
 

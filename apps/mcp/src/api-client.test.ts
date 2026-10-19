@@ -156,6 +156,59 @@ describe('FeedBouncerApi requests', () => {
   });
 });
 
+describe('FeedBouncerApi response parsing tolerates values added later', () => {
+  it('parses a comment with an unknown platform and status', async () => {
+    const odd = { ...comment, platform: 'tiktok', status: 'archived' };
+    const { api } = setup(() => json({ data: [odd], nextCursor: null }));
+    const page = await api.listComments({});
+    expect(page.data[0]).toMatchObject({ platform: 'tiktok', status: 'archived' });
+
+    const reply = setup(() => json({ action, comment: odd }, { status: 202 }));
+    await expect(reply.api.reply(ID, 'hi', 'k')).resolves.toMatchObject({
+      body: { comment: { platform: 'tiktok' } },
+    });
+  });
+
+  it('parses a notable thread on an unknown platform', async () => {
+    const summary = {
+      period: { from: '2026-10-01T00:00:00.000Z', to: '2026-10-08T00:00:00.000Z' },
+      bounded: null,
+      totals: { comments: 1, hidden: 0, replied: 0, unanswered: 1 },
+      categories: [],
+      topRules: [],
+      notableThreads: [
+        {
+          commentId: ID,
+          platform: 'threads',
+          authorName: null,
+          textPreview: 'hi',
+          replies: 2,
+          postedAt: '2026-10-01T10:00:00.000Z',
+        },
+      ],
+    };
+    const { api } = setup(() => json(summary));
+    expect((await api.summary({})).notableThreads[0]!.platform).toBe('threads');
+  });
+
+  it('parses unknown proposal statuses and operations', async () => {
+    const change = {
+      id: ID,
+      operation: 'merge',
+      ruleId: null,
+      status: 'superseded',
+      expiresAt: '2026-10-08T00:00:00.000Z',
+      decidedAt: null,
+    };
+    const brand = { id: ID, name: 'Acme', ruleRevision: 1, rules: [], changes: [change] };
+    const { api } = setup(() => json({ brands: [brand] }));
+    expect((await api.rules()).brands[0]!.changes[0]).toMatchObject({
+      operation: 'merge',
+      status: 'superseded',
+    });
+  });
+});
+
 describe('FeedBouncerApi errors', () => {
   it('maps a 429 with retry-after', async () => {
     const { api } = setup(() =>

@@ -71,6 +71,8 @@ export class FakeApi implements ApiPort {
   page: CommentPage = { data: [], nextCursor: null };
   /** Fields of a newly created reply action. */
   replyAction: Partial<Action> = { status: 'applied', platformRef: 'fb_reply_1' };
+  /** Fields of the comment returned with a reply. */
+  replyComment: Partial<Comment> = {};
   /** Successive getAction updates; the last one repeats. */
   actionUpdates: Partial<Action>[] = [];
   visibilityAction: Partial<ModerationResult['action']> = { status: 'applied', code: null };
@@ -145,7 +147,7 @@ export class FakeApi implements ApiPort {
     idempotencyKey: string,
   ): Promise<{ status: number; body: ReplyResult }> {
     this.record('reply', [commentId, text, idempotencyKey]);
-    const comment = makeComment({ id: commentId });
+    const comment = makeComment({ ...this.replyComment, id: commentId });
     const existing = this.posts.get(idempotencyKey);
     if (existing) return { status: 200, body: { action: existing, comment } };
     const action: Action = {
