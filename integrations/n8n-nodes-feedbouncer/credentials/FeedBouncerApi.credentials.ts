@@ -1,4 +1,9 @@
+import { REQUEST_TIMEOUT_MS } from '../nodes/shared/constants';
 import type { IAuthenticateGeneric, ICredentialTestRequest, ICredentialType, INodeProperties } from 'n8n-workflow';
+
+// Mirrors normalizeBaseUrl: https (http only with Allow Plain HTTP), no user info, query or fragment.
+// Anything else becomes an address no request can reach, so the key is never sent anywhere unsafe.
+const TEST_BASE_URL = String.raw`={{(/^https:\/\/[^@?#\\\s]+$/.test($credentials.baseUrl.trim()) || ($credentials.allowHttp === true && /^http:\/\/[^@?#\\\s]+$/.test($credentials.baseUrl.trim()))) ? $credentials.baseUrl.trim().replace(/\/+$/, "").replace(/\/v1$/, "") : "invalid://address"}}`;
 
 export class FeedBouncerApi implements ICredentialType {
   name = 'feedBouncerApi';
@@ -58,9 +63,11 @@ export class FeedBouncerApi implements ICredentialType {
 
   test: ICredentialTestRequest = {
     request: {
-      baseURL: '={{$credentials.baseUrl.trim().replace(/\\/+$/, "").replace(/\\/v1$/, "")}}',
+      baseURL: TEST_BASE_URL,
       url: '/v1/key',
       method: 'GET',
+      disableFollowRedirect: true,
+      timeout: REQUEST_TIMEOUT_MS,
       skipSslCertificateValidation: '={{$credentials.allowUnauthorizedCerts}}',
     },
     rules: [

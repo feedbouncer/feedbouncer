@@ -23,12 +23,40 @@ describe('FeedBouncerApi credential', () => {
     expect(credential.test.request.url).toBe('/v1/key');
   });
 
-  it('builds the test base URL without trailing slashes or /v1', () => {
+  const testBaseUrl = (credentials: Record<string, unknown>): unknown => {
     const expression = String(credential.test.request.baseURL).replace(/^=\{\{|\}\}$/g, '');
     // eslint-disable-next-line @n8n/community-nodes/no-dangerous-functions -- evaluates the credential's own expression
-    const evaluate = new Function('$credentials', `return ${expression};`);
-    expect(evaluate({ baseUrl: 'https://fb.acme.io/x/' })).toBe('https://fb.acme.io/x');
-    expect(evaluate({ baseUrl: ' https://fb.acme.io/v1/ ' })).toBe('https://fb.acme.io');
+    return new Function('$credentials', `return ${expression};`)(credentials);
+  };
+  const UNUSABLE = 'invalid://address';
+
+  it('builds the test base URL without trailing slashes or /v1', () => {
+    expect(testBaseUrl({ baseUrl: 'https://fb.acme.io/x/' })).toBe('https://fb.acme.io/x');
+    expect(testBaseUrl({ baseUrl: ' https://fb.acme.io/v1/ ' })).toBe('https://fb.acme.io');
+    expect(testBaseUrl({ baseUrl: 'https://fb.acme.io' })).toBe('https://fb.acme.io');
+    expect(testBaseUrl({ baseUrl: 'https://fb.acme.io/x/v1' })).toBe('https://fb.acme.io/x');
+  });
+
+  it('only sends over http when Allow Plain HTTP is on', () => {
+    expect(testBaseUrl({ baseUrl: 'http://fb.acme.io', allowHttp: false })).toBe(UNUSABLE);
+    expect(testBaseUrl({ baseUrl: 'http://fb.acme.io' })).toBe(UNUSABLE);
+    expect(testBaseUrl({ baseUrl: 'http://fb.acme.io/v1/', allowHttp: true })).toBe('http://fb.acme.io');
+  });
+
+  it.each([
+    'https://user:pw@fb.acme.io',
+    'https://user@fb.acme.io',
+    'https://fb.acme.io?a=1',
+    'https://fb.acme.io/x#frag',
+    'ftp://fb.acme.io',
+    'fb.acme.io',
+    '',
+  ])('refuses to send the key to %j', (baseUrl) => {
+    expect(testBaseUrl({ baseUrl, allowHttp: true })).toBe(UNUSABLE);
+  });
+
+  it('does not follow redirects and times out', () => {
+    expect(credential.test.request).toMatchObject({ disableFollowRedirect: true, timeout: 30000 });
   });
 
   it('explains 401 and 404 test failures', () => {
