@@ -42,7 +42,7 @@ Requests time out after 30 seconds and redirects are never followed, so the key 
 
 ## FeedBouncer Trigger
 
-The node registers a webhook endpoint in FeedBouncer when the workflow is activated and removes it when the workflow is deactivated. Nothing is created while you only test the node manually.
+The node registers a webhook endpoint in FeedBouncer when the workflow is activated and removes it when the workflow is deactivated. Using **Listen for test event** also registers a real endpoint (for the test URL) and removes it when the test ends. It counts toward the endpoint limit below and can fail with the same errors as activation.
 
 **Events** (default: Comment Flagged for Review):
 
@@ -80,7 +80,7 @@ Operations on **FeedBouncer** run once per input item. IDs are FeedBouncer UUIDs
 | Hide | Comment ID | One item: `action` (`id`, `kind`, `status`, `code`), `comment`, and `changed`. |
 | Undo Hide | Comment ID | The same, for making a hidden comment visible again. |
 
-Options for both: **Wait for Result** (on by default) polls up to 15 seconds for the platform to confirm the change, and **Idempotency Key** overrides the key sent with the request. By default the key is derived from the execution, node and item, so a retried run cannot repeat the action. A custom key may use 1 to 128 letters, digits and `. _ : -`. A custom key is reused for every input item of a run, so when processing several items build it with an expression that includes the item index (for example `{{ 'hide-' + $itemIndex }}`). If the platform does not apply the change, the node fails with the platform's code. An Undo Hide that the platform cannot perform fails with a message saying so.
+Options for both: **Wait for Result** (on by default) polls up to 15 seconds for the platform to confirm the change, and **Idempotency Key** overrides the key sent with the request. By default the key is derived from the execution, node and item, so a retry within the same execution (Retry On Fail) cannot repeat the action. Retrying a failed execution from the executions list starts a new execution with a new key; to protect that case set your own Idempotency Key. A custom key may use 1 to 128 letters, digits and `. _ : -`. A custom key is reused for every input item of a run, so when processing several items build it with an expression that includes the item index (for example `{{ 'hide-' + $itemIndex }}`). If the platform does not apply the change, the node fails with the platform's code. An Undo Hide that the platform cannot perform fails with a message saying so.
 
 ### Rule
 
@@ -110,11 +110,11 @@ Get Many fetches pages of 100. Return All stops at 10,000 items and then fails w
 - Submitting a comment for moderation, approving a flagged item and deleting a comment are not available yet, because the public API has no such routes.
 - Undo covers hides only.
 - De-duplication is per workflow and relies on n8n static data. With queue mode and several webhook processors, a simultaneous duplicate delivery can rarely run twice. FeedBouncer delivers at least once, so keep downstream steps idempotent.
-- n8n does not save static data in manual test runs, so de-duplication and the stored endpoint apply to active workflows only.
+- n8n does not save static data in manual test runs, so de-duplication does not apply to test events.
 
 ## Security
 
-The API key lives only in the n8n credential store. The trigger's signing secret is kept in the workflow's static data, so treat workflow exports as sensitive. It can only be used to forge deliveries to that one n8n webhook address, and it is not your API key. Deactivating and reactivating the workflow removes the endpoint and issues a new secret.
+The API key lives only in the n8n credential store. The trigger's signing secret is kept in the workflow's static data, which n8n stores unencrypted and includes in workflow exports and backups, so treat both as sensitive. n8n gives community nodes no encrypted store for per-workflow secrets; this risk is accepted and documented. It can only be used to forge deliveries to that one n8n webhook address, and it is not your API key. Deactivating and reactivating the workflow removes the endpoint and issues a new secret.
 
 Report vulnerabilities as described in the [security policy](https://github.com/feedbouncer/feedbouncer/blob/main/SECURITY.md).
 

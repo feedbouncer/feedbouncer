@@ -43,7 +43,7 @@ export const decisionDescription: INodeProperties[] = [
         type: 'string',
         default: '',
         description:
-          'Sent as the Idempotency-Key header so a retry cannot repeat the action. Leave empty to derive one from the execution, node and item.',
+          'Sent as the Idempotency-Key header. Leave empty to derive one from the execution, node and item, which protects retries within one execution (Retry On Fail). Retrying a failed execution from the executions list is a new execution; set a fixed key to protect that too.',
       },
       {
         displayName: 'Wait for Result',

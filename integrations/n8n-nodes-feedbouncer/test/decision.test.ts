@@ -53,7 +53,7 @@ describe('decision hide', () => {
     expect(ctx.calls[0].body).toBeUndefined();
   });
 
-  it('a retried execution sends an identical Idempotency-Key', async () => {
+  it('a retry within the same execution (Retry On Fail) sends an identical Idempotency-Key', async () => {
     const keys: string[] = [];
     for (let attempt = 0; attempt < 2; attempt++) {
       const { ctx, result } = run({ http: [ok(moderation('noop', 'already_hidden'))] });
