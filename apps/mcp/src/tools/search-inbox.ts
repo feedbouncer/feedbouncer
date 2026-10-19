@@ -4,7 +4,7 @@ import { runTool, type ToolDeps } from './common.js';
 import { inboxFilters, inboxPage } from './list-inbox.js';
 
 const input = inboxFilters.extend({
-  query: z.string().min(2).max(200).describe('Words to search for in comment text.'),
+  query: z.string().trim().min(2).max(200).describe('Words to search for in comment text.'),
 });
 
 export function registerSearchInbox(server: McpServer, deps: ToolDeps): void {

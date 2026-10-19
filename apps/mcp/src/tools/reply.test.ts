@@ -34,6 +34,12 @@ describe('reply_to_comment', () => {
     expect(h.api.posts.size).toBe(1);
   });
 
+  it('trims the text before sending it, as the API does', async () => {
+    h = await connect();
+    await h.call('reply_to_comment', { ...args, text: `  ${args.text}\n` });
+    expect(h.api.callsTo('reply')[0]![1]).toBe(args.text);
+  });
+
   it('uses a caller-supplied Idempotency-Key', async () => {
     h = await connect();
     await h.call('reply_to_comment', { ...args, idempotencyKey: 'my-key.1' });
@@ -151,6 +157,7 @@ describe('reply_to_comment', () => {
   it.each([
     { commentId: 'nope', text: 'hi' },
     { commentId: COMMENT_ID, text: '' },
+    { commentId: COMMENT_ID, text: '   \n\t ' },
     { commentId: COMMENT_ID, text: 'x'.repeat(8001) },
     { commentId: COMMENT_ID, text: 'hi', idempotencyKey: 'has space' },
   ])('rejects invalid input without calling the API', async (bad) => {

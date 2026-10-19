@@ -15,7 +15,13 @@ describe('search_inbox', () => {
     expect(h.api.callsTo('listComments')).toEqual([[{ q: 'refund', status: 'flagged', limit: 3 }]]);
   });
 
-  it.each([{}, { query: 'a' }, { query: 'x'.repeat(201) }])(
+  it('trims the query before sending it', async () => {
+    h = await connect();
+    await h.call('search_inbox', { query: '  refund \n' });
+    expect(h.api.callsTo('listComments')).toEqual([[{ q: 'refund', limit: 20 }]]);
+  });
+
+  it.each([{}, { query: 'a' }, { query: ' a ' }, { query: '     ' }, { query: 'x'.repeat(201) }])(
     'rejects %o without calling the API',
     async (args) => {
       h = await connect();

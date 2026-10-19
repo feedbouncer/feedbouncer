@@ -82,9 +82,9 @@ nextCursor: eyJ2Ijo...
 
 Searches the inbox. Read-only. Takes every `list_inbox` input plus:
 
-| Field   | Type                          | Meaning                                                            |
-| ------- | ----------------------------- | ------------------------------------------------------------------ |
-| `query` | 2 to 200 characters, required | Case-insensitive substring of the comment text or the author name. |
+| Field   | Type                                         | Meaning                                                            |
+| ------- | -------------------------------------------- | ------------------------------------------------------------------ |
+| `query` | 2 to 200 characters after trimming, required | Case-insensitive substring of the comment text or the author name. |
 
 Output and paging are the same as `list_inbox`. Nothing found is `No comments match.`, not an error.
 
@@ -96,11 +96,11 @@ Output and paging are the same as `list_inbox`. Nothing found is `No comments ma
 
 Posts a public reply as the brand under a comment, on Facebook or Instagram.
 
-| Field            | Type                                       | Meaning                                                   |
-| ---------------- | ------------------------------------------ | --------------------------------------------------------- |
-| `commentId`      | UUID, required                             | The comment to reply to.                                  |
-| `text`           | 1 to 8000 characters, required             | The reply. The platform may allow less (`text_too_long`). |
-| `idempotencyKey` | 1 to 64 of `A-Z a-z 0-9 . _ : -`, optional | Retry key; see below.                                     |
+| Field            | Type                                          | Meaning                                                   |
+| ---------------- | --------------------------------------------- | --------------------------------------------------------- |
+| `commentId`      | UUID, required                                | The comment to reply to.                                  |
+| `text`           | 1 to 8000 characters after trimming, required | The reply. The platform may allow less (`text_too_long`). |
+| `idempotencyKey` | 1 to 64 of `A-Z a-z 0-9 . _ : -`, optional    | Retry key; see below.                                     |
 
 The tool queues the reply, then waits up to 15 seconds for the worker to post it:
 

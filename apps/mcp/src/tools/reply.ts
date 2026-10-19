@@ -8,7 +8,7 @@ import { actionError, idempotencyKey, runTool, text, type ToolDeps } from './com
 
 const input = z.object({
   commentId: z.uuid().describe('ID of the comment to reply to (from list_inbox).'),
-  text: z.string().min(1).max(8000).describe('Reply text, posted publicly as the brand.'),
+  text: z.string().trim().min(1).max(8000).describe('Reply text, posted publicly as the brand.'),
   idempotencyKey,
 });
 
