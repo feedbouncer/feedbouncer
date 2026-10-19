@@ -62,6 +62,8 @@ pnpm test
 | `scripts/`                           | CI guard tests and dev-stack smoke scripts                                                                   |
 | `integrations/n8n-nodes-feedbouncer` | n8n community nodes (MIT): a webhook trigger and moderation actions, a client of the public API              |
 
+The n8n nodes are documented in [their README](integrations/n8n-nodes-feedbouncer/README.md).
+
 ## Local stack with Docker Compose
 
 Runs everything locally: Postgres, Redis, the API, the background worker, the web app and Mailpit (a dev mail inbox). **This stack is for development and evaluation only.** It is not a production deployment.

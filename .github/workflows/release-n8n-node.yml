@@ -1,0 +1,89 @@
+# Publishes @feedbouncer/n8n-nodes-feedbouncer to npm with provenance when a tag
+# `n8n-nodes-feedbouncer-v<version>` is pushed. The version in the tag must equal the
+# version in the package's package.json.
+#
+# The `npm-publish` environment has required reviewers, so every release is approved.
+# Publishing uses npm trusted publishing (OIDC), so no long-lived token is stored.
+# One-time fallback: until trusted publishing is configured for the package on npmjs.com,
+# add `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` to the publish step's env, with the
+# secret held in the `npm-publish` environment, and remove it after the first release.
+name: Release n8n node
+
+on:
+  push:
+    tags: ['n8n-nodes-feedbouncer-v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-n8n-node
+  cancel-in-progress: false
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+  PACKAGE: '@feedbouncer/n8n-nodes-feedbouncer'
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-scope: release-n8n-node
+      # Adds the npm registry settings that publishing needs, on top of the pinned Node.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+
+      - name: Tag must match the package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./integrations/n8n-nodes-feedbouncer/package.json').version")"
+          if [ "$TAG" != "n8n-nodes-feedbouncer-v${version}" ]; then
+            echo "tag ${TAG#n8n-nodes-feedbouncer-v} does not match package version ${version}" >&2
+            exit 1
+          fi
+
+      - name: Build
+        run: pnpm --filter "$PACKAGE" build
+      - name: Lint
+        run: pnpm --filter "$PACKAGE" lint
+      - name: Test
+        run: pnpm --filter "$PACKAGE" test
+      - name: Install smoke test (real n8n image)
+        run: |
+          set -euo pipefail
+          # Same n8n release the CI smoke test uses.
+          n8n_version="$(sed -n "s/^  N8N_TESTED_VERSION: '\(.*\)'$/\1/p" .github/workflows/ci.yml)"
+          pack_dir="$(mktemp -d)"
+          pnpm --filter "$PACKAGE" pack --pack-destination "$pack_dir"
+          node integrations/n8n-nodes-feedbouncer/scripts/smoke.mjs "$pack_dir"/*.tgz "$n8n_version"
+
+      - name: Publish with provenance
+        working-directory: integrations/n8n-nodes-feedbouncer
+        run: npm publish --provenance --access public
+
+      # Fails the release job if the published package does not pass n8n's community checks.
+      - name: Scan the published package
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./integrations/n8n-nodes-feedbouncer/package.json').version")"
+          # The registry can take a moment to serve a new version.
+          for attempt in 1 2 3 4 5 6; do
+            npm view "${PACKAGE}@${version}" version >/dev/null 2>&1 && break
+            [ "$attempt" -lt 6 ] && sleep 10
+          done
+          npx --yes @n8n/scan-community-package "${PACKAGE}@${version}"

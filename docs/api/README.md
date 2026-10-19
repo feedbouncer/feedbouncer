@@ -41,6 +41,8 @@ Authorization: Bearer fbk_<id>_<secret>
 
 The MCP server in `apps/mcp` wraps these routes as tools for MCP clients: see [docs/mcp](../mcp/README.md).
 
+The n8n community node in integrations/n8n-nodes-feedbouncer wraps these routes and webhooks for n8n: see its [README](../../integrations/n8n-nodes-feedbouncer/README.md).
+
 ## Webhook endpoints
 
 Register an endpoint with `POST /v1/webhook-endpoints`. The response contains the signing secret (`whsec_...`) once; store it.

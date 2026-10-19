@@ -416,14 +416,9 @@ test('n8n package has no runtime dependencies and the community keyword', () => 
   assert.deepEqual(p.files, ['dist']);
 });
 
-// Task 10 creates the package README and removes `todo`.
-test(
-  'README states the n8n version CI tests against',
-  { todo: 'package README is written with the docs task' },
-  () => {
-    const ci = parse(read('.github/workflows/ci.yml'));
-    const version = ci.env.N8N_TESTED_VERSION;
-    assert.match(version, /^\d+\.\d+\.\d+$/, 'N8N_TESTED_VERSION in ci.yml');
-    assert.ok(read(`${N8N_PACKAGE}/README.md`).includes(version), 'README must state the version');
-  },
-);
+test('README states the n8n version CI tests against', () => {
+  const ci = parse(read('.github/workflows/ci.yml'));
+  const version = ci.env.N8N_TESTED_VERSION;
+  assert.match(version, /^\d+\.\d+\.\d+$/, 'N8N_TESTED_VERSION in ci.yml');
+  assert.ok(read(`${N8N_PACKAGE}/README.md`).includes(version), 'README must state the version');
+});
