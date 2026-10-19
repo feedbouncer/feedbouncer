@@ -22,9 +22,11 @@
   },
   "dependencies": {
     "@feedbouncer/db": "workspace:*",
+    "@feedbouncer/mailer": "workspace:*",
     "@feedbouncer/public-api": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
+    "@prometheus-io/client": "0.16.1",
     "ipaddr.js": "2.5.0",
     "pg": "8.23.1",
     "undici": "8.12.2",

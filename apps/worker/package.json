@@ -37,6 +37,7 @@
     "@feedbouncer/rules": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
+    "@feedbouncer/webhooks": "workspace:*",
     "bullmq": "6.3.12",
     "ioredis": "5.11.1"
   },

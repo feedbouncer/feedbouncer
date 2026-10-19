@@ -374,6 +374,9 @@ importers:
       '@feedbouncer/service-runtime':
         specifier: workspace:*
         version: link:../../packages/service-runtime
+      '@feedbouncer/webhooks':
+        specifier: workspace:*
+        version: link:../../packages/webhooks
       bullmq:
         specifier: 6.3.12
         version: 6.3.12(ioredis@5.11.1)(pg@8.23.1)
@@ -1032,6 +1035,9 @@ importers:
       '@feedbouncer/db':
         specifier: workspace:*
         version: link:../db
+      '@feedbouncer/mailer':
+        specifier: workspace:*
+        version: link:../mailer
       '@feedbouncer/public-api':
         specifier: workspace:*
         version: link:../public-api
@@ -1041,6 +1047,9 @@ importers:
       '@feedbouncer/service-runtime':
         specifier: workspace:*
         version: link:../service-runtime
+      '@prometheus-io/client':
+        specifier: 0.16.1
+        version: 0.16.1
       ipaddr.js:
         specifier: 2.5.0
         version: 2.5.0
