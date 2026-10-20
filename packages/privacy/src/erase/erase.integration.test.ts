@@ -705,8 +705,8 @@ describe('eraseSubject', () => {
 
     const r = await erase(A.organizationId, [fb(X)], {
       batchSize: 1,
-      afterBatch: async () => {
-        if (ingested) return;
+      onStep: async (step) => {
+        if (step !== 'comment_batch' || ingested) return;
         ingested = true;
         await store.upsertFromPlatform(
           { organizationId: A.organizationId, brandId: A.brandId, connectionId: A.connectionId },
@@ -734,6 +734,68 @@ describe('eraseSubject', () => {
         [A.organizationId, X],
       ),
     ).toBe(0);
+  });
+
+  it('goes back to the comments when one arrives just before the author rows are deleted', async () => {
+    const s = await seedSubject();
+    let late: { id: string } | null = null;
+
+    const r = await erase(A.organizationId, [fb(X)], {
+      onStep: async (step) => {
+        if (step === 'before_authors' && !late) late = await comment(connA(), s.xa1);
+      },
+    });
+
+    expect(late).not.toBeNull();
+    expect(r.counts.comments).toBe(4);
+    expect(r.counts.authors).toBe(2);
+    expect(await subjectComments(A.organizationId, X)).toBe(0);
+  });
+
+  it('also erases an author row the subject gets on another connection meanwhile', async () => {
+    await seedSubject();
+    const connectionId = await one(
+      `INSERT INTO connection (organization_id, brand_id, platform, external_account_id)
+       VALUES ($1, $2, 'facebook', 'page-a3') RETURNING id`,
+      [A.organizationId, A.brandId],
+    );
+    const sourceId = await one(
+      `INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id)
+       VALUES ($1, $2, $3, 'ad_post', 'post-a3-1') RETURNING id`,
+      [A.organizationId, A.brandId, connectionId],
+    );
+    const a3: Conn = { ...A, connectionId, sourceId };
+    let lateAuthor: string | null = null;
+
+    const r = await erase(A.organizationId, [fb(X)], {
+      onStep: async (step) => {
+        if (step !== 'before_authors' || lateAuthor) return;
+        lateAuthor = await author(a3, X);
+        await comment(a3, lateAuthor);
+      },
+    });
+
+    expect(lateAuthor).not.toBeNull();
+    expect(await exists('author', lateAuthor!)).toBe(false);
+    expect(r.counts).toMatchObject({ comments: 4, authors: 3 });
+    expect(await subjectComments(A.organizationId, X)).toBe(0);
+  });
+
+  it('completes when the author rows are deleted, not after the later steps', async () => {
+    await seedSubject();
+    await authorRule(A, [{ externalId: X }]);
+    let authorsDeletedBy = new Date(0);
+
+    const r = await erase(A.organizationId, [fb(X)], {
+      onStep: async (step) => {
+        if (step !== 'authors_deleted') return;
+        authorsDeletedBy = new Date();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      },
+    });
+
+    expect(authorsDeletedBy.getTime()).toBeGreaterThan(0);
+    expect(r.completedAt.getTime()).toBeLessThanOrEqual(authorsDeletedBy.getTime());
   });
 
   it('leaves the count-only aggregates alone', async () => {

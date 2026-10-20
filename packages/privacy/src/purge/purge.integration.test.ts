@@ -597,6 +597,18 @@ describe('runPurge', () => {
     expect(await count('SELECT count(*) AS n FROM comment')).toBe(11);
   });
 
+  it('forgets a confirmation when the category is kept forever in between', async () => {
+    await comments(A, 11, 31);
+    const at30 = settings({ comments: 30 }, { confirmAbove: 10 });
+
+    await confirmRetention(pool, at30, 'comments', 30, 'ops');
+    await publishRetentionStatus(pool, settings({}, { confirmAbove: 10 }));
+
+    expect(await count('SELECT count(*) AS n FROM retention_confirmation')).toBe(0);
+    expect((await purge(at30)).held).toEqual(['comments']);
+    expect(await count('SELECT count(*) AS n FROM comment')).toBe(11);
+  });
+
   it('keeps a comment whose webhook event still has a delivery in flight', async () => {
     const c = await comment(A, 40);
     const endpoint = await one(

@@ -54,9 +54,14 @@ export interface ErasureOptions {
   keepRuleEntries: { reason: string } | null;
   batchSize: number;
   log: Logger;
-  /** Called after each committed batch of comments, e.g. to report progress. */
-  afterBatch?: () => Promise<void>;
+  /**
+   * Progress callback: after each committed batch of comments, before the final author
+   * transaction, and once the author rows are deleted.
+   */
+  onStep?: (step: ErasureStep) => Promise<void>;
 }
+
+export type ErasureStep = 'comment_batch' | 'before_authors' | 'authors_deleted';
 
 const zeroCounts = (): ErasureCounts => ({
   comments: 0,
@@ -465,7 +470,7 @@ async function execute(
   organizationId: string,
   subjects: readonly SubjectIdentifierT[],
   o: ErasureOptions,
-): Promise<{ counts: ErasureCounts; authorIds: string[] }> {
+): Promise<{ counts: ErasureCounts; authorIds: string[]; completedAt: Date }> {
   const counts = zeroCounts();
   const matches = entryMatches(subjects);
   const erased: SubjectComment[] = [];
@@ -478,8 +483,9 @@ async function execute(
       erased.push(...batch.comments);
       add(counts, batch.counts);
       o.log.debug('privacy.erasure_batch', { organizationId, comments: batch.comments.length });
-      await o.afterBatch?.();
+      await o.onStep?.('comment_batch');
     }
+    await o.onStep?.('before_authors');
     const authors = await deleteAuthors(pool, organizationId, subjects, authorIds);
     if ('deleted' in authors) {
       counts.authors = authors.deleted;
@@ -487,6 +493,8 @@ async function execute(
     }
     authorIds = authors.retryWith;
   }
+  const completedAt = new Date();
+  await o.onStep?.('authors_deleted');
 
   add(
     counts,
@@ -516,7 +524,7 @@ async function execute(
     p.ledger,
     o.batchSize,
   );
-  return { counts, authorIds };
+  return { counts, authorIds, completedAt };
 }
 
 /** The same predicates as `execute`, counted in one read-only snapshot. */
@@ -525,7 +533,7 @@ async function dryRun(
   organizationId: string,
   subjects: readonly SubjectIdentifierT[],
   o: ErasureOptions,
-): Promise<{ counts: ErasureCounts; authorIds: string[] }> {
+): Promise<{ counts: ErasureCounts; authorIds: string[]; completedAt: Date }> {
   return withTransaction(
     pool,
     async (tx) => {
@@ -565,7 +573,7 @@ async function dryRun(
         p.idempotency,
       );
       counts.jobLedgerRows = await countWhere(tx, 'job_ledger', LEDGER_MATCH, p.ledger);
-      return { counts, authorIds };
+      return { counts, authorIds, completedAt: new Date() };
     },
     { isolation: 'repeatable read', readOnly: true },
   );
@@ -597,7 +605,7 @@ export async function eraseSubject(
   o: ErasureOptions,
 ): Promise<ErasureResult> {
   const startedAt = performance.now();
-  const { counts, authorIds } = o.dryRun
+  const { counts, authorIds, completedAt } = o.dryRun
     ? await dryRun(pool, organizationId, subjects, o)
     : await execute(pool, organizationId, subjects, o);
   const found = authorIds.length > 0 || counts.ruleEntriesRemoved + counts.ruleEntriesKept > 0;
@@ -608,5 +616,5 @@ export async function eraseSubject(
     ...counts,
     durationMs: Math.round(performance.now() - startedAt),
   });
-  return { found, counts, coverage: 'all_ingested_before_completed_at', completedAt: new Date() };
+  return { found, counts, coverage: 'all_ingested_before_completed_at', completedAt };
 }

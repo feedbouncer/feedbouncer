@@ -48,6 +48,13 @@ describe('pnpm ops retention', () => {
     expect((await h.c.query('SELECT 1 FROM retention_confirmation')).rowCount).toBe(0);
   });
 
+  it('refuses a confirmation for a category kept forever', async () => {
+    const r = await run('confirm', '--category', 'decisions', '--days', '30', '--as', 'ops');
+    expect(r.code).toBe(2);
+    expect(r.err).toEqual(['Setting for decisions is forever, not 30; nothing confirmed.']);
+    expect((await h.c.query('SELECT 1 FROM retention_confirmation')).rowCount).toBe(0);
+  });
+
   it('records a confirmation that matches', async () => {
     const r = await run('confirm', '--category', 'comments', '--days', '30', '--as', 'ops');
     expect(r.code).toBe(0);
