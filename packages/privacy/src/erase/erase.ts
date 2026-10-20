@@ -12,7 +12,7 @@ import type { Logger } from '@feedbouncer/service-runtime';
 import { FINISHED_JOB_STATES } from '../purge/categories.js';
 import { countReplies, markRepliesParentRemoved } from '../replies.js';
 import type { SubjectIdentifierT } from '../subject/identifier.js';
-import { locateSubject } from '../subject/locate.js';
+import { locateAuthorIds } from '../subject/locate.js';
 import {
   AUTHOR_NODE,
   authorRules,
@@ -420,7 +420,7 @@ async function deleteAuthors(
       'SELECT 1 FROM author WHERE organization_id = $1 AND id = ANY($2::uuid[]) FOR UPDATE',
       [organizationId, authorIds],
     );
-    const found = (await locateSubject(tx, organizationId, subjects)).authorIds;
+    const found = await locateAuthorIds(tx, organizationId, subjects);
     const all = [...new Set([...authorIds, ...found])];
     const left = await tx.query(`${SUBJECT_COMMENTS} LIMIT 1`, [organizationId, all]);
     if (all.length > authorIds.length || (left.rowCount ?? 0) > 0) return { retryWith: all };
@@ -441,7 +441,7 @@ async function execute(
   const counts = zeroCounts();
   const matches = entryMatches(subjects);
   const erased: SubjectComment[] = [];
-  let authorIds = (await locateSubject(pool, organizationId, subjects)).authorIds;
+  let authorIds = await locateAuthorIds(pool, organizationId, subjects);
 
   for (;;) {
     for (;;) {
@@ -506,7 +506,7 @@ async function dryRun(
     async (tx) => {
       const counts = zeroCounts();
       const matches = entryMatches(subjects);
-      const { authorIds } = await locateSubject(tx, organizationId, subjects);
+      const authorIds = await locateAuthorIds(tx, organizationId, subjects);
       const { rows } = await tx.query<SubjectComment>(SUBJECT_COMMENTS, [
         organizationId,
         authorIds,

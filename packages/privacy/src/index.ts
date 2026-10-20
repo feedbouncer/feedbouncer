@@ -6,3 +6,6 @@ export * from './subject/locate.js';
 export * from './erase/erase.js';
 export * from './export/export.js';
 export * from './export/json-array-stream.js';
+export * from './requests/store.js';
+export * from './requests/transport.js';
+export * from './requests/process.js';

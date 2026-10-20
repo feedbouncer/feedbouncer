@@ -26,6 +26,7 @@
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/jobs": "workspace:*",
     "@feedbouncer/rules": "workspace:*",
+    "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
     "pg": "8.23.1",
     "yazl": "3.3.1",

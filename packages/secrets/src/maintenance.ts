@@ -1,7 +1,7 @@
 // Operator maintenance. These functions read across tenants by design: they
 // run only from the operator CLI (never over HTTP), and each row is decrypted
 // with its own organization/connection as AAD.
-import { open, rewrap, type CredentialKind } from './envelope.js';
+import { open, rewrap, type EnvelopeKind } from './envelope.js';
 import { CredentialUnreadableError, type UnreadableReason } from './errors.js';
 import type { KeyProvider } from './key-provider.js';
 import type { Keyring } from './keyring.js';
@@ -37,9 +37,15 @@ interface SecretRow {
   id: string;
   organization_id: string;
   connection_id: string;
-  kind: CredentialKind;
+  kind: EnvelopeKind;
   encrypted_value: Buffer;
 }
+
+// Sealed privacy request identifiers live outside connection_secret. The key id is read from
+// the envelope header (there is no column), and the bound record id is the request id.
+const PRIVACY_KEY_ID = `convert_from(substring(subjects_sealed FROM 3 FOR get_byte(subjects_sealed, 1)), 'LATIN1')`;
+const PRIVACY_COLUMNS = `id, organization_id, id AS connection_id, 'privacy_subject'::text AS kind,
+       subjects_sealed AS encrypted_value`;
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
 const ctxOf = (r: SecretRow) => ({
@@ -57,7 +63,9 @@ const unreadableOf = (r: SecretRow, err: CredentialUnreadableError): UnreadableR
 
 async function countNotOnActive(db: Queryable, activeKeyId: string): Promise<number> {
   const r = await db.query<{ n: number }>(
-    'SELECT count(*)::int AS n FROM connection_secret WHERE key_id <> $1',
+    `SELECT (SELECT count(*) FROM connection_secret WHERE key_id <> $1)::int
+          + (SELECT count(*) FROM privacy_request
+              WHERE subjects_sealed IS NOT NULL AND ${PRIVACY_KEY_ID} <> $1)::int AS n`,
     [activeKeyId],
   );
   return r.rows[0]!.n;
@@ -76,43 +84,63 @@ export async function reencryptAll(
     remainingOnOldKeys: 0,
     interrupted: false,
   };
-  let cursor = ZERO_UUID;
-  for (;;) {
-    if (opts.signal?.aborted) {
-      report.interrupted = true;
-      break;
-    }
-    const { rows } = await db.query<SecretRow>(
-      `SELECT id, organization_id, connection_id, kind, encrypted_value FROM connection_secret
-        WHERE key_id <> $1 AND id > $2 ORDER BY id LIMIT $3`,
-      [keys.activeKeyId, cursor, opts.batchSize],
-    );
-    if (rows.length === 0) break;
-    for (const row of rows) {
-      cursor = row.id;
-      report.scanned++;
-      let next: { keyId: string; blob: Buffer };
-      try {
-        next = await rewrap(keys, row.encrypted_value, ctxOf(row));
-      } catch (err) {
-        if (!(err instanceof CredentialUnreadableError)) throw err;
-        report.unreadable.push(unreadableOf(row, err));
-        continue;
+  const sources = [
+    {
+      select: `SELECT id, organization_id, connection_id, kind, encrypted_value FROM connection_secret
+                WHERE key_id <> $1 AND id > $2 ORDER BY id LIMIT $3`,
+      write: (row: SecretRow, next: { keyId: string; blob: Buffer }) =>
+        db.query(
+          'UPDATE connection_secret SET key_id = $2, encrypted_value = $3 WHERE id = $1 AND encrypted_value = $4',
+          [row.id, next.keyId, next.blob, row.encrypted_value],
+        ),
+    },
+    {
+      select: `SELECT ${PRIVACY_COLUMNS} FROM privacy_request
+                WHERE subjects_sealed IS NOT NULL AND ${PRIVACY_KEY_ID} <> $1 AND id > $2
+                ORDER BY id LIMIT $3`,
+      write: (row: SecretRow, next: { keyId: string; blob: Buffer }) =>
+        db.query(
+          'UPDATE privacy_request SET subjects_sealed = $2 WHERE id = $1 AND subjects_sealed = $3',
+          [row.id, next.blob, row.encrypted_value],
+        ),
+    },
+  ];
+  for (const source of sources) {
+    let cursor = ZERO_UUID;
+    for (;;) {
+      if (opts.signal?.aborted) {
+        report.interrupted = true;
+        break;
       }
-      if (opts.dryRun) {
-        report.rewrapped++;
-        continue;
+      const { rows } = await db.query<SecretRow>(source.select, [
+        keys.activeKeyId,
+        cursor,
+        opts.batchSize,
+      ]);
+      if (rows.length === 0) break;
+      for (const row of rows) {
+        cursor = row.id;
+        report.scanned++;
+        let next: { keyId: string; blob: Buffer };
+        try {
+          next = await rewrap(keys, row.encrypted_value, ctxOf(row));
+        } catch (err) {
+          if (!(err instanceof CredentialUnreadableError)) throw err;
+          report.unreadable.push(unreadableOf(row, err));
+          continue;
+        }
+        if (opts.dryRun) {
+          report.rewrapped++;
+          continue;
+        }
+        await opts.beforeWrite?.({ id: row.id, connectionId: row.connection_id });
+        // Compare-and-swap: a concurrent token refresh wins; the next run picks the row up if it is still old.
+        const u = await source.write(row, next);
+        if (u.rowCount === 1) report.rewrapped++;
+        else report.skippedConcurrent++;
       }
-      await opts.beforeWrite?.({ id: row.id, connectionId: row.connection_id });
-      // Compare-and-swap: a concurrent token refresh wins; the next run picks the row up if it is still old.
-      const u = await db.query(
-        'UPDATE connection_secret SET key_id = $2, encrypted_value = $3 WHERE id = $1 AND encrypted_value = $4',
-        [row.id, next.keyId, next.blob, row.encrypted_value],
-      );
-      if (u.rowCount === 1) report.rewrapped++;
-      else report.skippedConcurrent++;
+      opts.onBatch?.({ ...report });
     }
-    opts.onBatch?.({ ...report });
   }
   report.remainingOnOldKeys = await countNotOnActive(db, keys.activeKeyId);
   return report;
@@ -124,25 +152,30 @@ export async function verifyAll(
   opts: { batchSize?: number } = {},
 ): Promise<{ scanned: number; unreadable: UnreadableRow[] }> {
   const out = { scanned: 0, unreadable: [] as UnreadableRow[] };
-  let cursor = ZERO_UUID;
-  for (;;) {
-    const { rows } = await db.query<SecretRow>(
-      `SELECT id, organization_id, connection_id, kind, encrypted_value FROM connection_secret
-        WHERE id > $1 ORDER BY id LIMIT $2`,
-      [cursor, opts.batchSize ?? 200],
-    );
-    if (rows.length === 0) return out;
-    for (const row of rows) {
-      cursor = row.id;
-      out.scanned++;
-      try {
-        await open(keys, row.encrypted_value, ctxOf(row)); // value discarded immediately
-      } catch (err) {
-        if (!(err instanceof CredentialUnreadableError)) throw err;
-        out.unreadable.push(unreadableOf(row, err));
+  const selects = [
+    `SELECT id, organization_id, connection_id, kind, encrypted_value FROM connection_secret
+      WHERE id > $1 ORDER BY id LIMIT $2`,
+    `SELECT ${PRIVACY_COLUMNS} FROM privacy_request
+      WHERE subjects_sealed IS NOT NULL AND id > $1 ORDER BY id LIMIT $2`,
+  ];
+  for (const select of selects) {
+    let cursor = ZERO_UUID;
+    for (;;) {
+      const { rows } = await db.query<SecretRow>(select, [cursor, opts.batchSize ?? 200]);
+      if (rows.length === 0) break;
+      for (const row of rows) {
+        cursor = row.id;
+        out.scanned++;
+        try {
+          await open(keys, row.encrypted_value, ctxOf(row)); // value discarded immediately
+        } catch (err) {
+          if (!(err instanceof CredentialUnreadableError)) throw err;
+          out.unreadable.push(unreadableOf(row, err));
+        }
       }
     }
   }
+  return out;
 }
 
 export interface SecretsStatus {
@@ -169,12 +202,17 @@ SELECT c.relname || '.' || a.attname AS col FROM pg_attribute a JOIN pg_class c 
      'comment_classification.cache_read_tokens', 'policy_evaluation.input_tokens',
      'policy_evaluation.output_tokens', 'policy_evaluation.cache_read_tokens',
      'api_key.secret_sha256', 'moderation_action.actor_api_key_id',
-     'api_idempotency_record.api_key_id', 'webhook_endpoint.created_by_api_key_id')
+     'api_idempotency_record.api_key_id', 'webhook_endpoint.created_by_api_key_id',
+     'rule_change_proposal.proposed_by_api_key_id')
  ORDER BY 1`;
 
 export async function secretsStatus(db: Queryable, keys: Keyring): Promise<SecretsStatus> {
   const counts = await db.query<{ key_id: string; rows: number }>(
-    'SELECT key_id, count(*)::int AS rows FROM connection_secret GROUP BY key_id',
+    `SELECT key_id, count(*)::int AS rows FROM (
+       SELECT key_id FROM connection_secret
+       UNION ALL
+       SELECT ${PRIVACY_KEY_ID} FROM privacy_request WHERE subjects_sealed IS NOT NULL
+     ) k GROUP BY key_id`,
   );
   const byKey = new Map(counts.rows.map((r) => [r.key_id, r.rows]));
   const ids = new Set([...keys.keyIds(), ...byKey.keys()]);

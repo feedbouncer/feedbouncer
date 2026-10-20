@@ -7,7 +7,7 @@ import { commentFingerprint, createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import type { Logger } from '@feedbouncer/service-runtime';
 import type { SubjectIdentifierT } from '../subject/identifier.js';
-import { locateSubject } from '../subject/locate.js';
+import { locateAuthorIds } from '../subject/locate.js';
 import { eraseSubject, type ErasureCounts, type ErasureResult } from './erase.js';
 
 const X = 'X-psid-4411';
@@ -337,34 +337,31 @@ const subjectComments = (organizationId: string, externalId: string) =>
     [organizationId, externalId],
   );
 
-describe('locateSubject', () => {
+describe('locateAuthorIds', () => {
   it('finds the subject on every connection of the organization, and nowhere else', async () => {
     const s = await seedSubject();
-    const m = await locateSubject(ctx.c, A.organizationId, [fb(X)]);
-    expect(new Set(m.authorIds)).toEqual(new Set([s.xa1, s.xa2]));
-    expect(new Set(m.connectionIds)).toEqual(new Set([A.connectionId, A2.connectionId]));
-    expect(m.externalIds).toEqual([X]);
+    const ids = await locateAuthorIds(ctx.c, A.organizationId, [fb(X)]);
+    expect(new Set(ids)).toEqual(new Set([s.xa1, s.xa2]));
   });
 
   it('narrows to one connection when one is given, and ignores other platforms', async () => {
     const s = await seedSubject();
-    const narrowed = await locateSubject(ctx.c, A.organizationId, [
+    const narrowed = await locateAuthorIds(ctx.c, A.organizationId, [
       { ...fb(X), connectionId: A2.connectionId },
     ]);
-    expect(narrowed.authorIds).toEqual([s.xa2]);
-    const instagram = await locateSubject(ctx.c, A.organizationId, [
+    expect(narrowed).toEqual([s.xa2]);
+    const instagram = await locateAuthorIds(ctx.c, A.organizationId, [
       { platform: 'instagram', externalId: X },
     ]);
-    expect(instagram.authorIds).toEqual([]);
+    expect(instagram).toEqual([]);
   });
 
   it('never matches handles against authors', async () => {
     await author(connA(), HANDLE);
-    const m = await locateSubject(ctx.c, A.organizationId, [
+    const ids = await locateAuthorIds(ctx.c, A.organizationId, [
       { platform: 'facebook', handle: HANDLE },
     ]);
-    expect(m.authorIds).toEqual([]);
-    expect(m.handles).toEqual([HANDLE]);
+    expect(ids).toEqual([]);
   });
 });
 

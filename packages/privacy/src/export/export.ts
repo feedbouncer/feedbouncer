@@ -10,7 +10,7 @@ import { UUID } from '@feedbouncer/jobs';
 import { authorRules, entryMatches, findAuthorEntries } from '../erase/rule-entries.js';
 import { FINISHED_JOB_STATES } from '../purge/categories.js';
 import type { SubjectIdentifierT } from '../subject/identifier.js';
-import { locateSubject } from '../subject/locate.js';
+import { locateAuthorIds } from '../subject/locate.js';
 import { jsonArrayStream } from './json-array-stream.js';
 
 export const EXPORT_MEMBERS = [
@@ -357,7 +357,7 @@ async function writeArchive(
   input: ArchiveInput,
 ): Promise<ExportResult> {
   const { organizationId, requestId, subjects, generatedAt } = input;
-  const { authorIds } = await locateSubject(c, organizationId, subjects);
+  const authorIds = await locateAuthorIds(c, organizationId, subjects);
   const sources = memberRows(c, organizationId, authorIds, subjects);
   const counts = Object.fromEntries(EXPORT_MEMBERS.map((m) => [m, 0])) as Record<
     ExportMember,

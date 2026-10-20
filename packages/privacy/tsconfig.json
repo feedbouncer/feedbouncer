@@ -9,6 +9,7 @@
     { "path": "../actions/tsconfig.build.json" },
     { "path": "../connectors/tsconfig.build.json" },
     { "path": "../comments/tsconfig.build.json" },
-    { "path": "../rules/tsconfig.build.json" }
+    { "path": "../rules/tsconfig.build.json" },
+    { "path": "../secrets/tsconfig.build.json" }
   ]
 }

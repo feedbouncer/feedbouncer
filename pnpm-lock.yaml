@@ -1022,6 +1022,9 @@ importers:
       '@feedbouncer/rules':
         specifier: workspace:*
         version: link:../rules
+      '@feedbouncer/secrets':
+        specifier: workspace:*
+        version: link:../secrets
       '@feedbouncer/service-runtime':
         specifier: workspace:*
         version: link:../service-runtime
