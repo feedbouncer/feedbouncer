@@ -28,3 +28,16 @@ export async function markRepliesParentRemoved(
   );
   return r.rowCount ?? 0;
 }
+
+/** How many replies markRepliesParentRemoved would mark. */
+export async function countReplies(
+  c: pg.ClientBase,
+  commentIds: readonly string[],
+  exceptAuthorIds: readonly string[] = [],
+): Promise<number> {
+  const { rows } = await c.query<{ n: string }>(
+    `SELECT count(*) AS n FROM comment r WHERE ${REPLIES}`,
+    [commentIds, exceptAuthorIds],
+  );
+  return Number(rows[0]?.n ?? 0);
+}

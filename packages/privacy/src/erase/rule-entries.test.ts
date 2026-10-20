@@ -4,7 +4,9 @@ import { redactAuthorEntries, removeAuthorEntries, type EntryMatch } from './rul
 
 const block = (entries: { externalId?: string; handle?: string }[], platform = 'facebook') =>
   ({ type: 'author', list: 'block', platform, entries }) as RuleConditions;
-const match = (o: Partial<{ platform: 'facebook' | 'instagram'; ids: string[]; handles: string[] }>): EntryMatch => ({
+const match = (
+  o: Partial<{ platform: 'facebook' | 'instagram'; ids: string[]; handles: string[] }>,
+): EntryMatch => ({
   platform: o.platform ?? 'facebook',
   externalIds: new Set(o.ids ?? []),
   handles: new Set(o.handles ?? []),
@@ -12,7 +14,10 @@ const match = (o: Partial<{ platform: 'facebook' | 'instagram'; ids: string[]; h
 
 describe('removeAuthorEntries', () => {
   it('removes one matching entry and keeps the rest', () => {
-    const r = removeAuthorEntries(block([{ externalId: '1' }, { externalId: '2' }]), match({ ids: ['1'] }));
+    const r = removeAuthorEntries(
+      block([{ externalId: '1' }, { externalId: '2' }]),
+      match({ ids: ['1'] }),
+    );
     expect(r).toEqual({ conditions: block([{ externalId: '2' }]), removed: 1, emptied: false });
   });
   it('reports emptied when the last entry goes', () => {
@@ -25,7 +30,10 @@ describe('removeAuthorEntries', () => {
   it('walks a nested combinator tree', () => {
     const nested = {
       type: 'all',
-      conditions: [block([{ externalId: '1' }, { externalId: '3' }]), { type: 'any', conditions: [block([{ externalId: '1' }])] }],
+      conditions: [
+        block([{ externalId: '1' }, { externalId: '3' }]),
+        { type: 'any', conditions: [block([{ externalId: '1' }])] },
+      ],
     } as unknown as RuleConditions;
     const r = removeAuthorEntries(nested, match({ ids: ['1'] }));
     expect(r.removed).toBe(2);
@@ -37,7 +45,11 @@ describe('removeAuthorEntries', () => {
   });
   it('leaves an entry on another platform untouched', () => {
     const c = block([{ externalId: '1' }], 'instagram');
-    expect(removeAuthorEntries(c, match({ ids: ['1'] }))).toEqual({ conditions: c, removed: 0, emptied: false });
+    expect(removeAuthorEntries(c, match({ ids: ['1'] }))).toEqual({
+      conditions: c,
+      removed: 0,
+      emptied: false,
+    });
   });
   it('matches external ids exactly', () => {
     const c = block([{ externalId: 'abc' }, { externalId: 'ABC' }, { externalId: ' abc' }]);
@@ -55,22 +67,34 @@ describe('removeAuthorEntries', () => {
   });
   it('leaves conditions of other kinds alone', () => {
     const c = { type: 'keyword', terms: ['1'], match: 'whole_word' } as RuleConditions;
-    expect(removeAuthorEntries(c, match({ ids: ['1'] }))).toEqual({ conditions: c, removed: 0, emptied: false });
+    expect(removeAuthorEntries(c, match({ ids: ['1'] }))).toEqual({
+      conditions: c,
+      removed: 0,
+      emptied: false,
+    });
   });
 });
 
 describe('redactAuthorEntries', () => {
   it('replaces the id and handle of each matching entry with [erased], at any depth', () => {
-    const snapshot = { name: 'r', conditions: block([{ externalId: '1', handle: 'foo' }, { externalId: '2' }]) };
+    const snapshot = {
+      name: 'r',
+      conditions: block([{ externalId: '1', handle: 'foo' }, { externalId: '2' }]),
+    };
     const diff = [{ field: 'conditions', before: block([{ handle: 'Foo' }]), after: block([]) }];
     const r = redactAuthorEntries({ snapshot, diff }, [match({ ids: ['1'], handles: ['foo'] })]);
     expect(r.redacted).toBe(2);
     expect(r.value).toEqual({
-      snapshot: { name: 'r', conditions: block([{ externalId: '[erased]', handle: '[erased]' }, { externalId: '2' }]) },
+      snapshot: {
+        name: 'r',
+        conditions: block([{ externalId: '[erased]', handle: '[erased]' }, { externalId: '2' }]),
+      },
       diff: [{ field: 'conditions', before: block([{ handle: '[erased]' }]), after: block([]) }],
     });
   });
   it('counts nothing when no entry matches', () => {
-    expect(redactAuthorEntries(block([{ externalId: '2' }]), [match({ ids: ['1'] })]).redacted).toBe(0);
+    expect(
+      redactAuthorEntries(block([{ externalId: '2' }]), [match({ ids: ['1'] })]).redacted,
+    ).toBe(0);
   });
 });

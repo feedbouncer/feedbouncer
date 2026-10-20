@@ -94,9 +94,7 @@ export function mapAuthorConditions(
   if (Array.isArray(value)) return value.map((v) => mapAuthorConditions(v, fn));
   if (typeof value !== 'object' || value === null) return value;
   if (isAuthorNode(value)) return fn({ ...value, entries: value.entries.map((e) => ({ ...e })) });
-  return Object.fromEntries(
-    Object.entries(value).map(([k, v]) => [k, mapAuthorConditions(v, fn)]),
-  );
+  return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, mapAuthorConditions(v, fn)]));
 }
 
 export const keywordConditions = z.strictObject({

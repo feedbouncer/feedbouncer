@@ -19,9 +19,9 @@ export interface SubjectMatch {
  * are never used.
  */
 export async function locateSubject(
-  c: pg.ClientBase,
+  c: pg.Pool | pg.ClientBase,
   organizationId: string,
-  subjects: SubjectIdentifierT[],
+  subjects: readonly SubjectIdentifierT[],
 ): Promise<SubjectMatch> {
   const authors = new Map<string, string>();
   const externalIds = new Set<string>();

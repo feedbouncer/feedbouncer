@@ -236,25 +236,38 @@ export class PgRuleStore {
   }
 
   /**
-   * Writes conditions a subject erasure has already filtered and, when `disable`, turns the
-   * rule off. Skips validation on purpose: an author list the erasure emptied is not a valid
-   * rule, which is why it is disabled. Archived rules are written too, since their conditions
-   * still hold the subject's identifiers. Bumps the brand's revision like every rule write.
+   * Rewrites a rule's conditions for a subject erasure. `erase` gets the stored conditions
+   * and enabled flag, read under the brand and rule locks, and returns the filtered ones (with `disable` when
+   * the rule must be turned off) or null to leave the rule alone. Skips validation on
+   * purpose: an author list the erasure emptied is not a valid rule, which is why it is
+   * disabled. Archived rules are written too, since their conditions still hold the
+   * subject's identifiers. Bumps the brand's revision like every rule write. Returns the
+   * rule as written, or null when nothing was written.
    */
   async writeErasedConditions(
     tx: pg.PoolClient,
     scope: BrandScope,
     ruleId: string,
-    conditions: unknown,
-    o: { disable: boolean },
-  ): Promise<boolean> {
-    if (!(await this.#lockBrand(tx, scope))) return false;
-    const { rowCount } = await tx.query(
-      `UPDATE rule SET conditions = $4::jsonb, enabled = enabled AND NOT $5::boolean
-        WHERE organization_id = $1 AND brand_id = $2 AND id = $3`,
-      [scope.organizationId, scope.brandId, ruleId, JSON.stringify(conditions), o.disable],
+    erase: (current: {
+      conditions: unknown;
+      enabled: boolean;
+    }) => { conditions: unknown; disable: boolean } | null,
+  ): Promise<StoredRule | null> {
+    if (!(await this.#lockBrand(tx, scope))) return null;
+    const { rows: cur } = await tx.query<{ conditions: unknown; enabled: boolean }>(
+      `SELECT conditions, enabled FROM rule
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3 FOR UPDATE`,
+      [scope.organizationId, scope.brandId, ruleId],
     );
-    return (rowCount ?? 0) > 0;
+    const next = cur[0] ? erase(cur[0]) : null;
+    if (!next) return null;
+    const { rows } = await tx.query<RuleRow>(
+      `UPDATE rule SET conditions = $4::jsonb, enabled = enabled AND NOT $5::boolean
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3
+        RETURNING ${COLS}`,
+      [scope.organizationId, scope.brandId, ruleId, JSON.stringify(next.conditions), next.disable],
+    );
+    return rows[0] ? toRule(rows[0]) : null;
   }
 
   /** Delete is archive: decisions keep citing the rule. */

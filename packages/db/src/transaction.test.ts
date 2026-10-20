@@ -26,6 +26,17 @@ describe('withTransaction', () => {
     await withTransaction(f.pool, async () => 1, { isolation: 'repeatable read' });
     expect(f.calls).toEqual(['BEGIN ISOLATION LEVEL REPEATABLE READ', 'COMMIT']);
   });
+  it('opens a read-only transaction when asked', async () => {
+    const f = fakePool();
+    await withTransaction(f.pool, async () => 1, { isolation: 'repeatable read', readOnly: true });
+    await withTransaction(f.pool, async () => 1, { readOnly: true });
+    expect(f.calls).toEqual([
+      'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY',
+      'COMMIT',
+      'BEGIN READ ONLY',
+      'COMMIT',
+    ]);
+  });
   it('rolls back and rethrows when work throws', async () => {
     const f = fakePool();
     await expect(

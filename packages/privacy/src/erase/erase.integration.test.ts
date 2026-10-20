@@ -428,7 +428,7 @@ describe('eraseSubject', () => {
       ),
     );
 
-    // Org B: same platform id, untouched (Review Focus 2).
+    // Org B: same platform id, untouched.
     expect(await exists('author', s.xb)).toBe(true);
     expect(await exists('comment', s.cb.id)).toBe(true);
     expect(await exists('review_item', s.cbChildren.review)).toBe(true);
@@ -487,12 +487,16 @@ describe('eraseSubject', () => {
     await seedSubject();
     const shared = await authorRule(A, [{ externalId: X }, { externalId: 'someone-else' }]);
     const only = await authorRule(A, [{ externalId: X }]);
+    const archived = await authorRule(A, [{ externalId: X }, { externalId: 'someone-else' }]);
+    await ctx.c.query('UPDATE rule SET archived_at = now(), enabled = false WHERE id = $1', [
+      archived,
+    ]);
     const otherOrg = await authorRule(B, [{ externalId: X }]);
     const rev = await revision(A);
 
     const r = await erase(A.organizationId, [fb(X)]);
 
-    expect(r.counts.ruleEntriesRemoved).toBe(2);
+    expect(r.counts.ruleEntriesRemoved).toBe(3);
     expect(r.counts.rulesDisabled).toBe(1);
     expect(r.counts.ruleEntriesKept).toBe(0);
     expect(await ruleRow(shared)).toMatchObject({
@@ -503,6 +507,10 @@ describe('eraseSubject', () => {
     expect(emptied.enabled).toBe(false);
     expect(JSON.stringify(emptied.conditions)).not.toContain(X);
     expect(await revision(A)).toBeGreaterThan(rev);
+    expect(await ruleRow(archived)).toMatchObject({
+      enabled: false,
+      conditions: { entries: [{ externalId: 'someone-else' }] },
+    });
     expect(await ruleRow(otherOrg)).toMatchObject({
       enabled: true,
       conditions: { entries: [{ externalId: X }] },
@@ -511,7 +519,7 @@ describe('eraseSubject', () => {
       "SELECT details, actor_type FROM audit_event WHERE organization_id = $1 AND action = 'rule.updated'",
       [A.organizationId],
     );
-    expect(audits.rows).toHaveLength(2);
+    expect(audits.rows).toHaveLength(3);
     expect(audits.rows.every((a) => a.actor_type === 'system')).toBe(true);
     expect(JSON.stringify(audits.rows)).not.toContain(X);
   });
