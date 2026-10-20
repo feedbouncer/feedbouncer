@@ -1,6 +1,9 @@
 import type pg from 'pg';
+import { withTransaction } from '@feedbouncer/db';
 import {
+  RETENTION_CATEGORIES,
   effectiveDays,
+  purgeDays,
   retentionWarnings,
   type RetentionCategory,
   type RetentionDays,
@@ -26,15 +29,39 @@ export interface RetentionStatus {
   lastRun: RetentionRunSummary | null;
 }
 
-/** Records the worker's configuration so the API and CLI can show it without reading worker env. */
-export async function publishRetentionStatus(pool: pg.Pool, s: RetentionSettings): Promise<void> {
-  await pool.query(
-    `INSERT INTO retention_status (id, settings, effective, warnings)
-     VALUES (1, $1::jsonb, $2::jsonb, $3::text[])
-     ON CONFLICT (id) DO UPDATE
-       SET settings = EXCLUDED.settings, effective = EXCLUDED.effective, warnings = EXCLUDED.warnings`,
-    [JSON.stringify(s), JSON.stringify(effectiveDays(s)), retentionWarnings(s)],
+/**
+ * A large-deletion confirmation holds only while its category keeps the period it was
+ * given for: once another period applies, it is deleted, so changing back needs a new one.
+ */
+export async function forgetStaleConfirmations(
+  db: pg.Pool | pg.PoolClient,
+  s: RetentionSettings,
+): Promise<void> {
+  const days = purgeDays(s);
+  const current = RETENTION_CATEGORIES.map((c) => (days[c] === 'forever' ? null : days[c]));
+  await db.query(
+    `DELETE FROM retention_confirmation r
+      USING unnest($1::text[], $2::int[]) AS cur(category, days)
+      WHERE r.category = cur.category AND r.days IS DISTINCT FROM cur.days`,
+    [RETENTION_CATEGORIES, current],
   );
+}
+
+/**
+ * Records the worker's configuration so the API and CLI can show it without reading worker
+ * env, and drops the confirmations it no longer honours.
+ */
+export async function publishRetentionStatus(pool: pg.Pool, s: RetentionSettings): Promise<void> {
+  await withTransaction(pool, async (tx) => {
+    await tx.query(
+      `INSERT INTO retention_status (id, settings, effective, warnings)
+       VALUES (1, $1::jsonb, $2::jsonb, $3::text[])
+       ON CONFLICT (id) DO UPDATE
+         SET settings = EXCLUDED.settings, effective = EXCLUDED.effective, warnings = EXCLUDED.warnings`,
+      [JSON.stringify(s), JSON.stringify(effectiveDays(s)), retentionWarnings(s)],
+    );
+    await forgetStaleConfirmations(tx, s);
+  });
 }
 
 interface StatusRow {

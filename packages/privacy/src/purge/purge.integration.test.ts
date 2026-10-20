@@ -14,6 +14,7 @@ import {
   type RetentionDays,
   type RetentionSettings,
 } from '../settings.js';
+import { publishRetentionStatus } from '../status.js';
 import { confirmRetention, previewPurge, runPurge } from './purge.js';
 
 const DAY = 86_400_000;
@@ -350,6 +351,25 @@ describe('runPurge', () => {
     expect(rows[0].parent_removed_at).toBeInstanceOf(Date);
   });
 
+  it('also marks a reply linked to the purged parent only by its external id', async () => {
+    const parent = await comment(A, 31);
+    const reply = await comment(A, 1);
+    await ctx.c.query('UPDATE comment SET parent_external_id = $2 WHERE id = $1', [
+      reply.id,
+      parent.externalId,
+    ]);
+
+    await purge(settings({ comments: 30 }));
+
+    expect(await exists('comment', parent.id)).toBe(false);
+    const { rows } = await ctx.c.query(
+      'SELECT parent_comment_id, parent_external_id, parent_removed_at FROM comment WHERE id = $1',
+      [reply.id],
+    );
+    expect(rows[0]).toMatchObject({ parent_comment_id: null, parent_external_id: null });
+    expect(rows[0].parent_removed_at).toBeInstanceOf(Date);
+  });
+
   it('deletes authors left without comments once they are past the period', async () => {
     const gone = await author(A, 'psid-gone');
     const stays = await author(A, 'psid-stays');
@@ -558,6 +578,23 @@ describe('runPurge', () => {
     const confirmed = await purge(s);
     expect(confirmed.held).toEqual([]);
     expect(confirmed.counts.byCategory.comments).toBe(11);
+  });
+
+  it('forgets a confirmation once the setting has changed, even if it changes back', async () => {
+    await comments(A, 11, 31);
+    const at30 = settings({ comments: 30 }, { confirmAbove: 10 });
+    const at60 = settings({ comments: 60 }, { confirmAbove: 10 });
+
+    await confirmRetention(pool, at30, 'comments', 30, 'ops');
+    await purge(at60);
+    expect((await purge(at30)).held).toEqual(['comments']);
+
+    await confirmRetention(pool, at30, 'comments', 30, 'ops');
+    // A worker started with another setting publishes it before any run.
+    await publishRetentionStatus(pool, at60);
+    expect((await previewPurge(pool, at30, NOW)).comments.confirmed).toBe(false);
+    expect((await purge(at30)).held).toEqual(['comments']);
+    expect(await count('SELECT count(*) AS n FROM comment')).toBe(11);
   });
 
   it('keeps a comment whose webhook event still has a delivery in flight', async () => {

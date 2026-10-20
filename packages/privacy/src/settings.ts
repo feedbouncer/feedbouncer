@@ -114,3 +114,14 @@ export function retentionWarnings(s: RetentionSettings): RetentionWarning[] {
 export function effectiveDays(s: RetentionSettings): Record<RetentionCategory, RetentionDays> {
   return { ...s.days, previews: withBuiltinLimit(s.days.previews, 'previews') };
 }
+
+/**
+ * The period the purge applies per category. A category kept forever is not
+ * touched at all (built-in prunes elsewhere still run); otherwise the effective
+ * period, which may be shortened by a built-in limit.
+ */
+export function purgeDays(s: RetentionSettings): Record<RetentionCategory, RetentionDays> {
+  const days = effectiveDays(s);
+  for (const c of RETENTION_CATEGORIES) if (s.days[c] === 'forever') days[c] = 'forever';
+  return days;
+}

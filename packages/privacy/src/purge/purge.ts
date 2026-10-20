@@ -7,13 +7,14 @@ import { withRetentionDelete, withTransaction } from '@feedbouncer/db';
 import type { Logger } from '@feedbouncer/service-runtime';
 import {
   RETENTION_CATEGORIES,
-  effectiveDays,
+  purgeDays,
   withBuiltinLimit,
   type RetentionCategory,
   type RetentionDays,
   type RetentionSettings,
 } from '../settings.js';
-import { publishRetentionStatus } from '../status.js';
+import { markRepliesParentRemoved } from '../replies.js';
+import { forgetStaleConfirmations, publishRetentionStatus } from '../status.js';
 import { PURGE_ORDER, PURGE_TABLES, notPendingReview, type PurgeTable } from './categories.js';
 import { withPurgeLock } from './lock.js';
 
@@ -59,18 +60,6 @@ export class RetentionSettingMismatchError extends Error {
     super(`Setting for ${category} is ${current}, not ${days}; nothing confirmed.`);
     this.name = 'RetentionSettingMismatchError';
   }
-}
-
-/**
- * The period the purge applies per category. A category kept forever is not
- * touched at all (built-in prunes elsewhere still run); otherwise the effective
- * period, which may be shortened by a built-in limit.
- */
-function purgeDays(s: RetentionSettings): Record<RetentionCategory, RetentionDays> {
-  const effective = effectiveDays(s);
-  const days = { ...effective };
-  for (const c of RETENTION_CATEGORIES) if (s.days[c] === 'forever') days[c] = 'forever';
-  return days;
 }
 
 const emptyByCategory = (): Record<RetentionCategory, number> => ({
@@ -307,14 +296,7 @@ async function deleteBatch(run: Run, t: PurgeTable, cutoff: Date, scope: Scope |
       );
       const ids = picked.rows.map((r) => r.id);
       if (ids.length === 0) return 0;
-      if (t.detachesReplies) {
-        await tx.query(
-          `UPDATE comment SET parent_removed_at = now(), parent_external_id = NULL
-            WHERE (connection_id, parent_comment_id) IN
-                  (SELECT connection_id, id FROM comment WHERE id = ANY($1::uuid[]))`,
-          [ids],
-        );
-      }
+      if (t.detachesReplies) await markRepliesParentRemoved(tx, ids);
       const deleted = await tx.query(`DELETE FROM ${t.table} WHERE id = ANY($1::uuid[])`, [ids]);
       return deleted.rowCount ?? 0;
     }),
@@ -441,6 +423,7 @@ async function purgeLocked(
   };
   const held: RetentionCategory[] = [];
   try {
+    await forgetStaleConfirmations(pool, s);
     if (o.exportDir !== undefined) {
       const removed = await removeExpiredExports(pool, o.exportDir, now);
       if (removed > 0) o.log.info('retention.exports_removed', { runId, removed });
