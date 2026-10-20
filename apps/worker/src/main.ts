@@ -27,6 +27,7 @@ import {
   PgPolicyUsage,
   createPolicyEvaluator,
 } from '@feedbouncer/policies';
+import { publishRetentionStatus } from '@feedbouncer/privacy';
 import { PgRuleStore, RuleSetCache } from '@feedbouncer/rules';
 import { BrandSlots, createPool, runJobOnce } from '@feedbouncer/db';
 import {
@@ -323,6 +324,7 @@ try {
   });
 
   await reportKeyCoverage(pool, env.encryption, log);
+  await publishRetentionStatus(pool, env.retention);
 
   await jobWorkers.start();
   log.info('job consumers ready', { platforms: jobWorkers.platforms().join(',') || 'none' });

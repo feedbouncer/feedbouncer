@@ -170,9 +170,12 @@ services:
       # Shown in the classifier settings; the key is held by the worker only.
       CLASSIFIER_PROVIDER: ${CLASSIFIER_PROVIDER:-}
       CLASSIFIER_MODEL: ${CLASSIFIER_MODEL:-}
+      # Subject exports are written by the worker; the api only serves downloads from here.
+      PRIVACY_EXPORT_DIR: /var/lib/feedbouncer/privacy-exports
     ports:
       - '${FB_BIND_ADDRESS:-127.0.0.1}:${API_HOST_PORT:-3001}:3001'
     volumes:
+      - privacy-exports:/var/lib/feedbouncer/privacy-exports:ro
       - ./apps/api/src:/repo/apps/api/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
       - ./packages/authz/src:/repo/packages/authz/src:ro
@@ -273,11 +276,27 @@ services:
       AD_IG_DEEP_SCAN_INTERVAL_SEC: ${AD_IG_DEEP_SCAN_INTERVAL_SEC:-}
       AD_SCHEDULER_TICK_SEC: ${AD_SCHEDULER_TICK_SEC:-}
       AD_SCHEDULER_MAX_CONNECTIONS_PER_TICK: ${AD_SCHEDULER_MAX_CONNECTIONS_PER_TICK:-}
+      # Data retention (docs/operations/data-deletion.md). Each period is a number of days
+      # (1-36500) or "forever"; forever keeps today's behaviour. The tuning values may be empty.
+      RETENTION_COMMENTS_DAYS: ${RETENTION_COMMENTS_DAYS:-forever}
+      RETENTION_DECISIONS_DAYS: ${RETENTION_DECISIONS_DAYS:-forever}
+      RETENTION_PREVIEWS_DAYS: ${RETENTION_PREVIEWS_DAYS:-forever}
+      RETENTION_OPERATIONAL_DAYS: ${RETENTION_OPERATIONAL_DAYS:-forever}
+      RETENTION_AUDIT_DAYS: ${RETENTION_AUDIT_DAYS:-forever}
+      RETENTION_PURGE_INTERVAL_MINUTES: ${RETENTION_PURGE_INTERVAL_MINUTES:-}
+      RETENTION_BATCH_SIZE: ${RETENTION_BATCH_SIZE:-}
+      RETENTION_CONFIRM_ABOVE: ${RETENTION_CONFIRM_ABOVE:-}
+      RETENTION_MAX_RUN_MINUTES: ${RETENTION_MAX_RUN_MINUTES:-}
+      # Subject export and erasure requests.
+      PRIVACY_EXPORT_DIR: /var/lib/feedbouncer/privacy-exports
+      PRIVACY_EXPORT_TTL_HOURS: ${PRIVACY_EXPORT_TTL_HOURS:-}
+      PRIVACY_REQUEST_CONCURRENCY: ${PRIVACY_REQUEST_CONCURRENCY:-}
     # In-flight jobs finish on shutdown, bounded by the handler timeout (60 s default).
     # Keep this above that timeout plus margin so a restart does not kill a job mid-effect.
     stop_grace_period: 100s
     # No ports: the worker is internal. Scale with --scale worker=N.
     volumes:
+      - privacy-exports:/var/lib/feedbouncer/privacy-exports
       - ./apps/worker/src:/repo/apps/worker/src:ro
       - ./packages/actions/src:/repo/packages/actions/src:ro
       - ./packages/alerts/src:/repo/packages/alerts/src:ro
@@ -295,6 +314,7 @@ services:
       - ./packages/mailer/src:/repo/packages/mailer/src:ro
       - ./packages/observability/src:/repo/packages/observability/src:ro
       - ./packages/policies/src:/repo/packages/policies/src:ro
+      - ./packages/privacy/src:/repo/packages/privacy/src:ro
       - ./packages/public-api/src:/repo/packages/public-api/src:ro
       - ./packages/evaluation/src:/repo/packages/evaluation/src:ro
       - ./packages/reports/src:/repo/packages/reports/src:ro
@@ -381,3 +401,4 @@ services:
 
 volumes:
   pgdata:
+  privacy-exports:

@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path';
 import {
   EnvError,
   LOG_LEVELS,
@@ -47,6 +48,7 @@ import {
   type HealthPolicy,
   type TelemetryConfig,
 } from '@feedbouncer/observability';
+import { loadRetentionSettings, type RetentionSettings } from '@feedbouncer/privacy';
 import { ENCRYPTION_FILE_VARS, loadEncryptionKeyring, type Keyring } from '@feedbouncer/secrets';
 
 const SMTP_PROTOCOLS = ['smtp:', 'smtps:'] as const;
@@ -107,6 +109,17 @@ export interface WorkerEnv {
   readonly webhookConcurrency: number;
   /** Private networks webhook endpoints may point at; empty allows only public addresses. */
   readonly webhookAllowedPrivateCidrs: readonly string[];
+  /** Per-category retention periods and purge tuning; every period defaults to forever. */
+  readonly retention: RetentionSettings;
+  readonly privacy: PrivacyConfig;
+}
+
+export interface PrivacyConfig {
+  /** Where finished subject exports are written; the API reads the same directory. */
+  readonly exportDir: string;
+  readonly exportTtlHours: number;
+  /** Subject export and erasure requests processed at once. */
+  readonly requestConcurrency: number;
 }
 
 export interface WorkerAlertsConfig {
@@ -134,6 +147,24 @@ function readPublicWebUrl(env: Env): URL {
     throw new EnvError('PUBLIC_WEB_URL must be an origin only, e.g. https://app.example.com');
   }
   return publicWebUrl;
+}
+
+function readPrivacyConfig(env: Env): PrivacyConfig {
+  const exportDir = readString(env, 'PRIVACY_EXPORT_DIR', {
+    fallback: '/var/lib/feedbouncer/privacy-exports',
+    maxLength: 4096,
+    pattern: /^[^\0]+$/,
+  });
+  if (!isAbsolute(exportDir)) throw new EnvError('PRIVACY_EXPORT_DIR must be an absolute path');
+  return {
+    exportDir,
+    exportTtlHours: readInt(env, 'PRIVACY_EXPORT_TTL_HOURS', { min: 1, max: 720, fallback: 72 }),
+    requestConcurrency: readInt(env, 'PRIVACY_REQUEST_CONCURRENCY', {
+      min: 1,
+      max: 8,
+      fallback: 1,
+    }),
+  };
 }
 
 function readMailConfig(env: Env, publicWebUrl: URL): WorkerMailConfig {
@@ -265,6 +296,8 @@ export function loadWorkerEnv(
       fallback: 32,
     }),
     webhookAllowedPrivateCidrs: readAllowedPrivateCidrs(env),
+    retention: loadRetentionSettings(env),
+    privacy: readPrivacyConfig(env),
   };
   // A whole-config dump (JSON, util.inspect) must never carry URL passwords or keys.
   return redactOnSerialize(config, {
