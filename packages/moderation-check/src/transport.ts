@@ -6,6 +6,9 @@ import type { CheckResult } from './types.js';
 export const MODERATION_CHECK_QUEUE = 'moderation-check';
 export { MAX_CHECK_TEXT_UNITS };
 
+/** Failure reasons the worker throws, so the API can tell a failed job from a timeout. */
+export const CHECK_JOB_FAILURES = ['invalid_check_job', 'moderation_check_failed'] as const;
+
 export const CheckJobData = z.strictObject({
   v: z.literal(1),
   organizationId: z.uuid(),

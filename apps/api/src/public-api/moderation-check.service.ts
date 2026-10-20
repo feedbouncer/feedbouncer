@@ -53,6 +53,7 @@ export class ModerationCheckService {
       timeout,
     );
     if (r === 'unavailable') throw unavailable();
+    if (r === 'failed') throw new ApiError(500, 'internal_error');
     switch (r.kind) {
       case 'done':
         return { ...r.result, brandId, ref: ref ?? null, checkedAt: new Date().toISOString() };

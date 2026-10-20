@@ -482,6 +482,25 @@ describe('POST /v1/moderation/check without a worker', () => {
     expect(api.logLines.join('\n')).not.toContain(REF);
   });
 
+  it('answers 500, not a retryable 503, when the worker fails the job', async () => {
+    const { token } = await newKey(api, org, 'moderate');
+    const deps = checkDeps(api, late);
+    deps.rules = {
+      get: () => Promise.reject(new Error(`boom ${MARKER}`)),
+    } as unknown as CheckDeps['rules'];
+    const worker = startWorker(api, deps);
+    try {
+      const r = await check(api, token, { text: `fails ${MARKER}` });
+      expect(r.status).toBe(500);
+      expect(r.body.error.code).toBe('internal_error');
+      expect(r.headers['retry-after']).toBeUndefined();
+    } finally {
+      await worker.close();
+    }
+    expect(api.logLines.join('\n')).not.toContain(MARKER);
+    await nothingLeft();
+  });
+
   it('answers 503 when the worker reports the job expired', async () => {
     const { token } = await newKey(api, org, 'moderate');
     const worker = startWorker(api, checkDeps(api, late), () => Date.now() + 60_000);

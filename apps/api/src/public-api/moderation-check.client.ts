@@ -8,6 +8,7 @@ import {
   createWorkerConnection,
 } from '@feedbouncer/jobs';
 import {
+  CHECK_JOB_FAILURES,
   MODERATION_CHECK_QUEUE,
   type CheckJobData,
   type CheckJobResult,
@@ -25,6 +26,9 @@ function within<T>(ms: number, p: Promise<T>): Promise<T> {
   });
   return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
 }
+
+const isWorkerFailure = (err: unknown) =>
+  err instanceof Error && (CHECK_JOB_FAILURES as readonly string[]).includes(err.message);
 
 /**
  * Hands text to the worker over the moderation-check queue and waits for its
@@ -80,8 +84,11 @@ export class ModerationCheckClient implements OnModuleInit, OnModuleDestroy {
     this.#queue = this.#events = null;
   }
 
-  /** The worker's answer, or 'unavailable' when there was none within `ttlMs`. Never rejects. */
-  async run(data: CheckJobData, ttlMs: number): Promise<CheckJobResult | 'unavailable'> {
+  /**
+   * The worker's answer, 'unavailable' when there was none within `ttlMs`, or 'failed' when
+   * the worker gave up on the job. Never rejects.
+   */
+  async run(data: CheckJobData, ttlMs: number): Promise<CheckJobResult | 'unavailable' | 'failed'> {
     const deadline = Date.now() + ttlMs;
     const jobId = randomUUID();
     const queue = this.#queue;
@@ -96,7 +103,11 @@ export class ModerationCheckClient implements OnModuleInit, OnModuleDestroy {
         events!,
         Math.max(1, deadline - Date.now()),
       )) as CheckJobResult;
-    } catch {
+    } catch (err) {
+      if (isWorkerFailure(err)) {
+        this.o.log.error('moderation_check.failed', { jobId });
+        return 'failed';
+      }
       // An add that lands late is removed as soon as it does. An active job cannot be
       // removed; the worker removes it when it finishes.
       await within(

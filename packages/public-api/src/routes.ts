@@ -234,7 +234,11 @@ export const ReplyResult = z
   .meta({ id: 'ReplyResult' });
 
 export const KeyResource = z
-  .object({ organizationId: z.uuid(), name: z.string(), scope: z.enum(['moderate', 'read', 'write']) })
+  .object({
+    organizationId: z.uuid(),
+    name: z.string(),
+    scope: z.enum(['moderate', 'read', 'write']),
+  })
   .meta({ id: 'Key' });
 
 export const ListRulesQuery = z.strictObject({ brandId: z.uuid().optional() });

@@ -4,6 +4,7 @@ import type { createPool } from '@feedbouncer/db';
 import { errorFields, type Logger } from '@feedbouncer/service-runtime';
 import { checkText, type CheckDeps } from './check.js';
 import {
+  CHECK_JOB_FAILURES,
   CheckJobData,
   MODERATION_CHECK_QUEUE,
   validateCheckText,
@@ -29,7 +30,7 @@ export function startModerationCheckWorker(d: ModerationCheckWorkerDeps): {
   async function process(job: Job): Promise<CheckJobResult> {
     const parsed = CheckJobData.safeParse(job.data);
     if (!parsed.success || !validateCheckText(parsed.data.text).ok) {
-      throw new Error('invalid_check_job');
+      throw new Error(CHECK_JOB_FAILURES[0]);
     }
     const { organizationId, brandId, text, deadlineAt } = parsed.data;
     try {
@@ -60,7 +61,7 @@ export function startModerationCheckWorker(d: ModerationCheckWorkerDeps): {
         errorCode: errorCode ?? null,
         errorClass: errorClass ?? null,
       });
-      throw new Error('moderation_check_failed');
+      throw new Error(CHECK_JOB_FAILURES[1]);
     }
   }
 
