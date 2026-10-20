@@ -29,6 +29,8 @@ export interface VisibleCommentDto {
   postedAt: string;
   permalink: string | null;
   isReply: boolean;
+  /** The parent comment was erased or purged. */
+  parentRemoved: boolean;
   ads: VisibleCommentAdDto[];
   adCount: number;
   category: string | null;

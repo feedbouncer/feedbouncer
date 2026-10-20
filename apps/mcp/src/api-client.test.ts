@@ -26,6 +26,7 @@ const comment = {
   platform: 'facebook',
   externalId: 'e1',
   parentId: null,
+  parentRemoved: false,
   authorName: null,
   text: 'hello',
   textTruncated: false,

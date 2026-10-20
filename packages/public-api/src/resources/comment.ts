@@ -9,6 +9,7 @@ export const CommentResource = z
     platform: z.enum(['facebook', 'instagram']),
     externalId: z.string(),
     parentId: z.uuid().nullable(),
+    parentRemoved: z.boolean(),
     authorName: z.string().nullable(),
     text: z.string(),
     textTruncated: z.boolean(),
@@ -29,6 +30,7 @@ export interface CommentRow {
   platform: 'facebook' | 'instagram';
   externalId: string;
   parentId: string | null;
+  parentRemoved: boolean;
   authorDisplayName: string | null;
   authorAnonymizedAt: Date | null;
   body: string;
@@ -49,6 +51,7 @@ export function toCommentResource(row: CommentRow): z.output<typeof CommentResou
     platform: row.platform,
     externalId: row.externalId,
     parentId: row.parentId,
+    parentRemoved: row.parentRemoved,
     authorName: row.authorAnonymizedAt ? null : row.authorDisplayName,
     text,
     textTruncated: truncated,

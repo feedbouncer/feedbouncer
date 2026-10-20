@@ -34,6 +34,8 @@ export interface CommentRow {
   readonly externalId: string;
   readonly parentExternalId: string | null;
   readonly parentCommentId: string | null;
+  /** The parent comment was erased or purged; the reply stays. */
+  readonly parentRemoved: boolean;
   readonly authorExternalId: string | null;
   readonly authorName: string | null;
   readonly body: string;
@@ -78,7 +80,8 @@ export const COMMENT_IS_AD_SQL = IS_AD_SQL;
 
 const ROW_SQL = `
   SELECT c.id, c.connection_id, cn.platform, s.external_id AS source_external_id, c.external_id,
-         c.parent_external_id, c.parent_comment_id, a.external_id AS author_external_id,
+         c.parent_external_id, c.parent_comment_id, (c.parent_removed_at IS NOT NULL) AS parent_removed,
+         a.external_id AS author_external_id,
          a.display_name AS author_name, c.body, c.platform_state,
          p.platform_state AS parent_platform_state, c.posted_at, c.permalink,
          c.is_own_account, cn.status AS connection_status,
@@ -114,6 +117,7 @@ const toRow = (r: Record<string, unknown>): CommentRow => ({
   externalId: r.external_id as string,
   parentExternalId: (r.parent_external_id as string | null) ?? null,
   parentCommentId: (r.parent_comment_id as string | null) ?? null,
+  parentRemoved: r.parent_removed as boolean,
   authorExternalId: (r.author_external_id as string | null) ?? null,
   authorName: (r.author_name as string | null) ?? null,
   body: r.body as string,

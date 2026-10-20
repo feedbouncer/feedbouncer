@@ -332,6 +332,7 @@ async function setConnectionStatus(connectionId: string, status: 'reconnect_requ
 interface ListedComment {
   id: string;
   platform: string;
+  parentRemoved: boolean;
   mediaExternalId: string;
   permalink: string | null;
   availability: Record<string, { available: boolean; reason?: string }>;
@@ -380,6 +381,22 @@ describe('comments: instagram platform, media and availability', () => {
       reason: 'private_reply_nested_comment',
     });
     expect(all.get(nested.id)!.availability.public_reply).toEqual({ available: true });
+  });
+
+  it('flags a reply whose parent was erased or purged as parentRemoved', async () => {
+    const ig = await connectedInstagram();
+    const top = await igComment(ig);
+    const kept = await igComment(ig, { parent: top });
+    const orphan = await igComment(ig, { parent: top });
+    await api.pool.query(
+      `UPDATE comment SET parent_removed_at = now(), parent_comment_id = NULL, parent_external_id = NULL
+        WHERE id = $1`,
+      [orphan.id],
+    );
+    const all = await listed();
+    expect(all.get(orphan.id)!.parentRemoved).toBe(true);
+    expect(all.get(kept.id)!.parentRemoved).toBe(false);
+    expect(all.get(top.id)!.parentRemoved).toBe(false);
   });
 
   it('availability for a hidden instagram comment says reply_to_hidden_comment', async () => {

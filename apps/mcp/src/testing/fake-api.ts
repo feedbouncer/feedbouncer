@@ -29,6 +29,7 @@ export function makeComment(over: Partial<Comment> = {}): Comment {
     platform: 'facebook',
     externalId: 'e1',
     parentId: null,
+    parentRemoved: false,
     authorName: 'Eve',
     text: 'hello',
     textTruncated: false,

@@ -217,6 +217,7 @@ describe('PgCommentStore', () => {
       externalId: c.externalId,
       parentExternalId: null,
       parentCommentId: null,
+      parentRemoved: false,
       authorExternalId: 'u1',
       authorName: 'Ann',
       body: 'hello',

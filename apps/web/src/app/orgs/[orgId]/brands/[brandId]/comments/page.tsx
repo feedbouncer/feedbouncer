@@ -22,6 +22,7 @@ interface Comment {
   id: string;
   platform: string;
   parentCommentId: string | null;
+  parentRemoved: boolean;
   authorName: string | null;
   body: string;
   state: 'visible' | 'hidden' | 'deleted';
@@ -122,7 +123,11 @@ export default async function CommentsPage({
                 </>
               ) : null}
             </p>
-            {c.parentCommentId ? <p>Reply to another comment</p> : null}
+            {c.parentRemoved ? (
+              <p>Reply to a removed comment</p>
+            ) : c.parentCommentId ? (
+              <p>Reply to another comment</p>
+            ) : null}
             <CommentBody body={c.body} />
             <CommentLinks
               platform={c.platform}

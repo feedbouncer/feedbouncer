@@ -32,6 +32,8 @@ export interface CommentView {
   connectionId: string;
   platform: string;
   parentCommentId: string | null;
+  /** The parent comment was erased or purged. */
+  parentRemoved: boolean;
   authorName: string | null;
   /** True when the platform gave an author id, so the author can be banned even without a display name. */
   hasAuthor: boolean;
@@ -102,6 +104,7 @@ const toView = (
   connectionId: c.connectionId,
   platform: c.platform,
   parentCommentId: c.parentCommentId,
+  parentRemoved: c.parentRemoved,
   authorName: c.authorName,
   hasAuthor: c.authorExternalId !== null,
   body: c.body,

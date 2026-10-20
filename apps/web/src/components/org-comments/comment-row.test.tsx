@@ -15,6 +15,7 @@ const item = (o: Partial<VisibleCommentDto> = {}): VisibleCommentDto => ({
   postedAt: '2026-10-27T10:04:05.000Z',
   permalink: null,
   isReply: false,
+  parentRemoved: false,
   ads: [{ adId: 'a1', externalId: '123', name: 'Spring sale', deleted: false }],
   adCount: 1,
   category: 'spam',
@@ -46,6 +47,11 @@ describe('CommentRow', () => {
     ])
       expect(html).toContain(t);
     expect(html).toContain('<time dateTime="2026-10-27T10:04:05.000Z" title=');
+  });
+
+  it('says when the parent comment was removed', () => {
+    expect(render({ isReply: false, parentRemoved: true })).toContain('Reply to a removed comment');
+    expect(render({ isReply: true })).not.toContain('Reply to a removed comment');
   });
 
   it('falls back for missing author, account, ad and category', () => {

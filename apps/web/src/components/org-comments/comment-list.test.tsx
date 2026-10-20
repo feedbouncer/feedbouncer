@@ -17,6 +17,7 @@ const item = (id: string, o: Partial<VisibleCommentDto> = {}): VisibleCommentDto
   postedAt: '2026-10-27T10:04:05.000Z',
   permalink: null,
   isReply: false,
+  parentRemoved: false,
   ads: [],
   adCount: 0,
   category: null,

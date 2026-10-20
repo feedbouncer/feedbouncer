@@ -541,6 +541,7 @@ describe('comment ingest job on instagram', () => {
       externalId: reply.commentId,
       parentExternalId: top.commentId,
       parentCommentId: null,
+      parentRemoved: false,
       authorExternalId: '17841400000009999',
       authorName: 'fan.account',
       body: 'agreed',

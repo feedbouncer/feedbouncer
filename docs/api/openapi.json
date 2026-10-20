@@ -3690,6 +3690,9 @@
               }
             ]
           },
+          "parentRemoved": {
+            "type": "boolean"
+          },
           "authorName": {
             "type": [
               "string",
@@ -3740,6 +3743,7 @@
           "platform",
           "externalId",
           "parentId",
+          "parentRemoved",
           "authorName",
           "text",
           "textTruncated",
