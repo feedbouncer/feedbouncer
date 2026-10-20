@@ -482,7 +482,9 @@ describe('retention and privacy settings', () => {
     );
   });
   it('rejects a relative export directory', () => {
-    expect(() => load({ ...base, PRIVACY_EXPORT_DIR: 'exports' })).toThrow(EnvError);
+    expect(messageOf(() => load({ ...base, PRIVACY_EXPORT_DIR: 'exports' }))).toBe(
+      'PRIVACY_EXPORT_DIR must be an absolute path',
+    );
   });
   it.each([
     ['PRIVACY_EXPORT_TTL_HOURS', '0'],

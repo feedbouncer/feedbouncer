@@ -30,7 +30,13 @@ describe('parseRetentionDays', () => {
   it.each(['', '0', '-1', '1.5', '1e3', '+5', ' 5', 'abc', '36501', 'FOREVER'])(
     'rejects %j with the exact message',
     (raw) => {
-      expect(() => parseRetentionDays(NAME, raw)).toThrow(message(raw));
+      let thrown: unknown;
+      try {
+        parseRetentionDays(NAME, raw);
+      } catch (err) {
+        thrown = err;
+      }
+      expect((thrown as Error | undefined)?.message).toBe(message(raw));
     },
   );
 });
@@ -105,12 +111,12 @@ describe('retentionWarnings', () => {
     );
   });
 
-  it('flags previews configured longer than the built-in 7 days', () => {
-    expect(retentionWarnings(withDays({ previews: 30 }))).toContain('builtin_shorter');
-  });
-
-  it('flags operational periods longer than the 30-day webhook limit', () => {
-    expect(retentionWarnings(withDays({ operational: 60 }))).toContain('builtin_shorter');
+  it.each([
+    [{ previews: 7, operational: 1 }, false],
+    [{ previews: 30, operational: 1 }, true],
+    [{ previews: 7, operational: 5 }, true],
+  ] as const)('builtin_shorter for %j is %s', (days, expected) => {
+    expect(retentionWarnings(withDays(days)).includes('builtin_shorter')).toBe(expected);
   });
 });
 
