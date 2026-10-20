@@ -62,7 +62,7 @@ export async function processPrivacyRequest(
       });
       await d.store.finish(req.id, { found: r.found, counts: r.counts, coverage: r.coverage });
     }
-  } catch (e) {
+  } catch {
     d.log.error('privacy.request_failed', {
       requestId,
       errorCode: 'internal_error',
