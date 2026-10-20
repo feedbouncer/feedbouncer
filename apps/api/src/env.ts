@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path';
 import {
   EnvError,
   LOG_LEVELS,
@@ -92,6 +93,8 @@ export interface ApiEnv {
   readonly ruleProposalTtlHours: number;
   /** How long POST /v1/moderation/check waits for the worker's verdict before answering 503. */
   readonly moderationCheckTimeoutMs: number;
+  /** Where the worker writes subject exports; the API only reads them to serve downloads. */
+  readonly privacyExportDir: string;
   /** Private networks, besides public addresses, that webhook endpoints may point at. Empty by default. */
   readonly webhookAllowedPrivateCidrs: readonly string[];
   readonly telemetry: TelemetryConfig;
@@ -149,6 +152,14 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'AUTH_SECRET', authSecret, opts.warn);
   const facebook = parseFacebookEnv(env, opts.warn);
+  const privacyExportDir = readString(env, 'PRIVACY_EXPORT_DIR', {
+    fallback: '/var/lib/feedbouncer/privacy-exports',
+    maxLength: 4096,
+    pattern: /^[^\0]+$/,
+  });
+  if (!isAbsolute(privacyExportDir)) {
+    throw new EnvError('PRIVACY_EXPORT_DIR must be an absolute path');
+  }
   const config: ApiEnv = {
     appEnv,
     databaseUrl,
@@ -190,6 +201,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
       max: 60_000,
       fallback: 20_000,
     }),
+    privacyExportDir,
     webhookAllowedPrivateCidrs: readAllowedPrivateCidrs(env),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),

@@ -54,7 +54,18 @@ export type AuditAction =
   | 'alert.recipient_confirmed'
   | 'alert.recipient_unsubscribed'
   | 'alert.settings_updated'
-  | 'alert.channel_disconnected';
+  | 'alert.channel_disconnected'
+  | 'privacy.export_requested'
+  | 'privacy.export_completed'
+  | 'privacy.export_downloaded'
+  | 'privacy.erasure_requested'
+  | 'privacy.erasure_dry_run_completed'
+  | 'privacy.erasure_completed'
+  | 'privacy.request_failed'
+  | 'privacy.access_denied'
+  | 'retention.purged'
+  | 'retention.held'
+  | 'retention.confirmed';
 
 export interface AuditInput {
   organizationId: string;
@@ -78,7 +89,8 @@ export interface AuditInput {
     | 'policy_run'
     | 'connection'
     | 'action_suggestion'
-    | 'alert_channel';
+    | 'alert_channel'
+    | 'privacy_request';
   subjectId: string | null;
   /** Ids, roles and booleans only: never emails, people's names or tokens. */
   details?: Readonly<Record<string, string | number | boolean | null>>;

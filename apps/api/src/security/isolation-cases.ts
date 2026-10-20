@@ -573,6 +573,32 @@ export const CASES: IsolationCase[] = [
     body: () => ({ role: 'member', capability: 'comment.reply', granted: true }),
   },
   {
+    route: 'GET /api/v1/orgs/:orgId/privacy/retention',
+    name: 'read B retention status',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/privacy/retention`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/privacy/requests',
+    name: 'request an export in B',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/privacy/requests`,
+    body: () => ({ kind: 'export', subjects: [{ platform: 'facebook', externalId: 'x' }] }),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/privacy/requests',
+    name: 'list B privacy requests',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/privacy/requests`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/privacy/requests/:id',
+    name: 'read a B privacy request',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/privacy/requests/${f.A.orgId}`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/privacy/requests/:id/export',
+    name: 'download a B export',
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/privacy/requests/${f.A.orgId}/export`,
+  },
+  {
     route: 'GET /api/v1/orgs/:orgId/invitations',
     name: 'list B invitations',
     url: (f) => `/api/v1/orgs/${f.B.orgId}/invitations`,

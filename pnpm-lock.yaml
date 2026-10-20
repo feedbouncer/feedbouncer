@@ -194,6 +194,9 @@ importers:
       '@feedbouncer/policies':
         specifier: workspace:*
         version: link:../../packages/policies
+      '@feedbouncer/privacy':
+        specifier: workspace:*
+        version: link:../../packages/privacy
       '@feedbouncer/public-api':
         specifier: workspace:*
         version: link:../../packages/public-api

@@ -207,6 +207,16 @@ describe('loadApiEnv', () => {
     });
   });
 
+  describe('PRIVACY_EXPORT_DIR', () => {
+    it('defaults to the compose location and must be an absolute path', () => {
+      expect(load(base).privacyExportDir).toBe('/var/lib/feedbouncer/privacy-exports');
+      expect(load({ ...base, PRIVACY_EXPORT_DIR: '/data/exports' }).privacyExportDir).toBe(
+        '/data/exports',
+      );
+      expect(() => load({ ...base, PRIVACY_EXPORT_DIR: 'exports' })).toThrow(/PRIVACY_EXPORT_DIR/);
+    });
+  });
+
   describe('webhook destinations', () => {
     it('allows no private network by default', () => {
       expect(load(base).webhookAllowedPrivateCidrs).toEqual([]);

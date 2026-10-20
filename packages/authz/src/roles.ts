@@ -27,7 +27,10 @@ export type Capability =
   | 'alert.read'
   | 'alert.manage'
   | 'report.read'
-  | 'api_key.manage';
+  | 'api_key.manage'
+  | 'privacy.read'
+  | 'privacy.export'
+  | 'privacy.erase';
 
 const ALL: readonly Role[] = ROLES;
 const MANAGERS: readonly Role[] = ['owner', 'admin'];
@@ -56,6 +59,9 @@ const GRANTS: Readonly<Record<Capability, readonly Role[]>> = {
   'alert.manage': MANAGERS,
   'report.read': MANAGERS,
   'api_key.manage': MANAGERS,
+  'privacy.read': MANAGERS,
+  'privacy.export': MANAGERS,
+  'privacy.erase': MANAGERS,
   'org.transfer_ownership': OWNERS,
   'org.delete': OWNERS,
 };

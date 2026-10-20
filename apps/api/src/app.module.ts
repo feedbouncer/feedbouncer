@@ -1,6 +1,7 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { PgBackfillStore } from '@feedbouncer/comments';
 import { PgApiKeys } from '@feedbouncer/public-api';
+import { PgPrivacyRequestStore } from '@feedbouncer/privacy';
 import { Reflector } from '@nestjs/core';
 import { createAccountDeletionHooks } from './auth/account-deletion.js';
 import { createAuth, type AuthHooks } from './auth/auth.js';
@@ -71,6 +72,8 @@ import { ClassifierController } from './classifier/classifier.controller.js';
 import { ClassifierService } from './classifier/classifier.service.js';
 import { PoliciesController } from './policies/policies.controller.js';
 import { PoliciesService } from './policies/policies.service.js';
+import { PrivacyController } from './privacy/privacy.controller.js';
+import { PrivacyService } from './privacy/privacy.service.js';
 import { ActivityController } from './rules/activity.controller.js';
 import { DomainsController } from './rules/domains.controller.js';
 import { RuleChangesController } from './rule-changes/rule-changes.controller.js';
@@ -99,6 +102,7 @@ import {
   DEPS,
   JOB_PRODUCER,
   MODERATION_CHECK_CLIENT,
+  PRIVACY_REQUESTS,
   PUBLIC_API_LIMITS,
   RATE_LIMITS,
 } from './tokens.js';
@@ -149,6 +153,7 @@ export class AppModule {
         ReportsController,
         MeReportsController,
         ApiKeysController,
+        PrivacyController,
         OpenApiController,
         PublicCommentsController,
         PublicFlaggedItemsController,
@@ -188,6 +193,7 @@ export class AppModule {
         AlertsService,
         ReportsService,
         ApiKeysService,
+        PrivacyService,
         ApiKeyGuard,
         PublicModerationService,
         PublicRuleProposalsService,
@@ -198,6 +204,11 @@ export class AppModule {
         { provide: JOB_PRODUCER, useValue: deps.producer },
         { provide: COMMENTS, useValue: deps.comments },
         { provide: API_KEYS, useValue: new PgApiKeys(deps.pool) },
+        {
+          provide: PRIVACY_REQUESTS,
+          inject: [DEPS],
+          useFactory: (d: AppDeps) => new PgPrivacyRequestStore(d.pool, d.env.encryption),
+        },
         { provide: BACKFILL_STORE, useValue: new PgBackfillStore(deps.pool) },
         {
           provide: AUTH_EMAILS,

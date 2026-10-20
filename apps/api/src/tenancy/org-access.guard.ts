@@ -5,6 +5,7 @@ import type { AuthedRequest } from '../auth/session.guard.js';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
 import { parseUuidOr404 } from '../http/validation.js';
+import { recordPrivacyDenial } from '../privacy/denial.js';
 import { DEPS } from '../tokens.js';
 import { CAPABILITY } from './capability.decorator.js';
 import { findMembership } from './memberships.repo.js';
@@ -41,7 +42,12 @@ export class OrgAccessGuard implements CanActivate {
     const m = await findMembership(this.deps.pool, organizationId, req.user.id);
     if (!m) throw notFound();
     req.org = { organizationId, actorUserId: req.user.id, role: m.role, grants: m.grants };
-    if (!can(m.role, cap, m.grants)) throw new ApiError(403, 'forbidden');
+    if (!can(m.role, cap, m.grants)) {
+      if (cap.startsWith('privacy.')) {
+        await recordPrivacyDenial(this.deps, req.org, cap, req.routeOptions.url ?? '');
+      }
+      throw new ApiError(403, 'forbidden');
+    }
     return true;
   }
 }
