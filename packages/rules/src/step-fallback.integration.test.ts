@@ -9,6 +9,7 @@ import type { ConnectionScope } from '@feedbouncer/secrets';
 import { createLogger } from '@feedbouncer/service-runtime';
 import { PgEvaluationStore } from './evaluations.js';
 import { RuleStepFallback } from './step-fallback.js';
+import { upsertStored } from '@feedbouncer/comments/testing';
 
 type Settled = Parameters<ActionStepObserver['onStepSettled']>[0];
 
@@ -49,7 +50,8 @@ async function seed(): Promise<Seeded> {
     brandId: t.brandId,
     connectionId: t.connectionId,
   };
-  const c = await comments.upsertFromPlatform(
+  const c = await upsertStored(
+    comments,
     scope,
     {
       externalId: `c_${n}`,

@@ -6,6 +6,7 @@ import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
 import { runExecuteJob } from '../testing/execute.js';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
+import { upsertStored } from '@feedbouncer/comments/testing';
 
 const FACEBOOK = {
   appId: '1112223334',
@@ -42,7 +43,8 @@ async function comment(
   o: { body?: string; source?: string } = {},
 ): Promise<string> {
   const n = ++seq;
-  const r = await api.deps.comments!.store.upsertFromPlatform(
+  const r = await upsertStored(
+    api.deps.comments!.store,
     c.scope,
     {
       externalId: `ext-${n}`,
@@ -247,7 +249,8 @@ describe('GET /orgs/:orgId/comments', () => {
   it('shows a platform comment once after webhook, poll and retry', async () => {
     const at = new Date('2026-10-11T10:00:00Z');
     const run = () =>
-      api.deps.comments!.store.upsertFromPlatform(
+      upsertStored(
+        api.deps.comments!.store,
         fb2.scope,
         {
           externalId: 'dup-1',
@@ -359,7 +362,8 @@ describe('replies, done and tags on the workspace list', () => {
     o: { message?: string } = {},
   ): Promise<{ id: string; externalId: string }> {
     const c = graph.addComment(p.pageId, { message: o.message ?? 'hello' });
-    const r = await api.deps.comments!.store.upsertFromPlatform(
+    const r = await upsertStored(
+      api.deps.comments!.store,
       p.scope,
       {
         externalId: c.commentId,
@@ -608,7 +612,8 @@ describe('replies, done and tags on the workspace list', () => {
     );
     await api.deps.connectors!.stack.store.put(scope, 'access_token', new Secret(pageToken), null);
     const ig = graph.addIgComment(igUserId, { text: 'hello', createdAtMs: Date.now() });
-    const stored = await api.deps.comments!.store.upsertFromPlatform(
+    const stored = await upsertStored(
+      api.deps.comments!.store,
       scope,
       {
         externalId: ig.commentId,

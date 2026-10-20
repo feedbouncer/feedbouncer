@@ -22,6 +22,7 @@ import type { JobContext } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
+import { upsertStored } from '@feedbouncer/comments/testing';
 
 const FACEBOOK = {
   appId: '1112223334',
@@ -232,7 +233,8 @@ describe('decisions', () => {
   const store = () => api.deps.comments!.store;
   async function addComment(scope: ConnectionScope, body: string): Promise<string> {
     const n = ++seq;
-    const r = await store().upsertFromPlatform(
+    const r = await upsertStored(
+      store(),
       scope,
       {
         externalId: `9_${n}_1`,
@@ -531,7 +533,8 @@ describe('rule edits and pending suggestions', () => {
     );
     const ruleId = r.body.id as string;
     const n = ++seq;
-    const { commentId } = await api.deps.comments!.store.upsertFromPlatform(
+    const { commentId } = await upsertStored(
+      api.deps.comments!.store,
       scope,
       {
         externalId: `8_${n}_1`,

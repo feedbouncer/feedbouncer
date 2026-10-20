@@ -6,7 +6,7 @@
 // Every statement is filtered by organization_id + brand_id (+ connection_id).
 import { createHash } from 'node:crypto';
 import type pg from 'pg';
-import { withTransaction } from '@feedbouncer/db';
+import { commentFingerprint, withTransaction } from '@feedbouncer/db';
 import type {
   CommentRef,
   ConnectionStatus,
@@ -154,6 +154,19 @@ export async function setCommentPlatformState(
   );
 }
 
+/** True for a comment erased by a subject request; it must not be stored again. */
+async function isErased(
+  tx: pg.ClientBase,
+  scope: ConnectionScope,
+  externalId: string,
+): Promise<boolean> {
+  const r = await tx.query(
+    'SELECT 1 FROM erased_comment WHERE connection_id = $1 AND fingerprint = $2',
+    [scope.connectionId, commentFingerprint(scope.connectionId, externalId)],
+  );
+  return r.rows.length > 0;
+}
+
 /** An existing source keeps its kind: an ad post is never demoted. */
 async function upsertSource(
   tx: pg.ClientBase,
@@ -275,14 +288,19 @@ export class PgCommentStore {
     scope: ConnectionScope,
     c: NormalizedComment,
     o: { ownAccountExternalId: string; syncedAt: Date; origin?: IngestOrigin },
-  ): Promise<{
-    commentId: string;
-    created: boolean;
-    applied: boolean;
-    /** A live body the rule hook has not yet been told about (new, edited, or a failed delivery). */
-    hookBody: string | null;
-  }> {
+  ): Promise<
+    | { suppressed: true }
+    | {
+        suppressed: false;
+        commentId: string;
+        created: boolean;
+        applied: boolean;
+        /** A live body the rule hook has not yet been told about (new, edited, or a failed delivery). */
+        hookBody: string | null;
+      }
+  > {
     return withTransaction(this.pool, async (tx) => {
+      if (await isErased(tx, scope, c.externalId)) return { suppressed: true };
       const sourceId = await upsertSource(tx, scope, c.sourceExternalId);
       let authorId: string | null = null;
       if (c.author) {
@@ -388,7 +406,7 @@ export class PgCommentStore {
             : prev.rows[0]?.pending === true && !(applied && bodyChanged)
               ? prev.rows[0].body
               : null;
-      return { commentId, created, applied, hookBody };
+      return { suppressed: false, commentId, created, applied, hookBody };
     });
   }
 
@@ -443,13 +461,15 @@ export class PgCommentStore {
    * tombstone when it was never seen, so a stale fetch that lands later (the
    * create event's job running after the delete's) cannot store it as visible.
    * `occurredAt` (the event time) stands in for posted_at until a fetch fills it in.
+   * Returns null, storing nothing, for a comment erased by a subject request.
    */
   async recordDeleted(
     scope: ConnectionScope,
     ref: CommentRef,
     o: { syncedAt: Date; occurredAt: Date },
-  ): Promise<string> {
+  ): Promise<string | null> {
     return withTransaction(this.pool, async (tx) => {
+      if (await isErased(tx, scope, ref.externalId)) return null;
       const sourceId = await upsertSource(tx, scope, ref.sourceExternalId);
       const r = await tx.query<{ id: string }>(
         `INSERT INTO comment (organization_id, brand_id, connection_id, source_id, external_id, body,

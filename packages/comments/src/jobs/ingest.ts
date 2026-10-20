@@ -19,6 +19,8 @@ import { INGEST_JOB, type IngestPayload } from './specs.js';
 
 export type IngestOutcome = 'created' | 'updated' | 'stale' | 'deleted' | 'gone';
 
+const SUPPRESSED = { outcome: 'suppressed', commentId: null } as const;
+
 export type { IngestOrigin };
 
 export interface IngestObserver {
@@ -48,11 +50,16 @@ export function ingestCommentJob(d: {
       const syncedAt = new Date(d.clock.now());
       let outcome: IngestOutcome;
       let commentId: string | null;
+      const suppressed = () => {
+        ctx.log.info('comment.ingest_suppressed', { connectionId: ctx.scope.connectionId });
+        return { ...SUPPRESSED, lagMs: clampLag(p.platformEventSec * 1000, d.clock.now()).lagMs };
+      };
       if (p.event === 'deleted') {
         commentId = await d.store.recordDeleted(ctx.scope, ref, {
           syncedAt,
           occurredAt: new Date(p.platformEventSec * 1000),
         });
+        if (commentId === null) return suppressed();
         outcome = 'deleted';
       } else {
         const client = await d.runtime.connect(ctx.scope);
@@ -66,6 +73,7 @@ export function ingestCommentJob(d: {
             ownAccountExternalId: rec.externalAccountId,
             syncedAt,
           });
+          if (r.suppressed) return suppressed();
           ({ commentId, outcome } = r);
           // The row is committed: a throwing hook retries the job without losing the comment.
           // Delivery is at least once: the pending marker survives a failed or lost hook call.

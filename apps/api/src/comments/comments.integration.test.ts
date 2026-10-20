@@ -9,6 +9,7 @@ import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
 import { runExecuteJob } from '../testing/execute.js';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
+import { upsertStored } from '@feedbouncer/comments/testing';
 
 const SECRET = 'fb-app-secret-0123456789abcdef';
 const APP_ID = '1112223334';
@@ -57,7 +58,8 @@ async function comment(
     ...(o.parent && { parentId: o.parent.externalId, postId: o.parent.postId }),
   });
   const authorId = String(3_000_000_000 + Math.floor(Math.random() * 1_000_000));
-  const r = await api.deps.comments!.store.upsertFromPlatform(
+  const r = await upsertStored(
+    api.deps.comments!.store,
     p.scope,
     {
       externalId: c.commentId,
@@ -301,7 +303,8 @@ async function igComment(
     authorId,
     ...(o.parent && { parentId: o.parent.externalId }),
   });
-  const r = await api.deps.comments!.store.upsertFromPlatform(
+  const r = await upsertStored(
+    api.deps.comments!.store,
     a.scope,
     {
       externalId: c.commentId,

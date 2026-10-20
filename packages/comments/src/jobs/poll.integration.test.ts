@@ -35,6 +35,7 @@ import { ingestCommentJob } from './ingest.js';
 import { executeActionJob } from './execute.js';
 import { adPollJob, type PollSettings } from './poll.js';
 import { DISCOVERY_JOB, EXECUTE_JOB, INGEST_JOB, POLL_JOB } from './specs.js';
+import { upsertStored } from '../testing/index.js';
 
 const APP_SECRET = 'fb-app-secret-SENTINEL-0123456789';
 const log = createLogger('comments-poll-test', 'error', () => {});
@@ -295,7 +296,8 @@ beforeEach(async () => {
 describe('ad poll job: pending hook delivery', () => {
   it('permanently failing rows rotate back and never starve a later pending row', async () => {
     const mk = (i: number, body: string) =>
-      store.upsertFromPlatform(
+      upsertStored(
+        store,
         fbScope,
         {
           externalId: `starve_${i}`,
@@ -387,7 +389,8 @@ describe('ad poll job: pending hook delivery', () => {
       createdAtMs: nowMs - 80 * 86_400_000,
     });
     const mk = (c: { commentId: string }, body: string) =>
-      store.upsertFromPlatform(
+      upsertStored(
+        store,
         fbScope,
         {
           externalId: c.commentId,

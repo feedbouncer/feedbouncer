@@ -19,6 +19,7 @@ import { PgCommentStore } from './store.js';
 import type { ActionActor, ActionKind } from './action-kinds.js';
 import { ModerationActions } from './actions.js';
 import { EXECUTE_JOB } from './jobs/specs.js';
+import { upsertStored } from './testing/index.js';
 
 const PAGE = '1000000001';
 const IG_ACCOUNT = '17841400000000001';
@@ -62,7 +63,8 @@ async function seedComment(
   const tenant = o.tenant ?? t;
   const n = ++seq;
   const authorId = o.authorId === undefined ? String(3_000_000_000 + n) : o.authorId;
-  const r = await store.upsertFromPlatform(
+  const r = await upsertStored(
+    store,
     {
       organizationId: tenant.organizationId,
       brandId: tenant.brandId,
@@ -95,7 +97,8 @@ async function seedIgComment(
 ): Promise<string> {
   const n = ++seq;
   const authorId = o.authorId === undefined ? `178414990${String(n).padStart(8, '0')}` : o.authorId;
-  const r = await store.upsertFromPlatform(
+  const r = await upsertStored(
+    store,
     igScope,
     {
       externalId: `178000000${String(n).padStart(8, '0')}`,
@@ -773,7 +776,8 @@ describe('ModerationActions.request', () => {
     expect(await request(own, 'hide')).toMatchObject({ status: 'accepted' });
     // Facebook private replies are not limited to top-level comments.
     const top = await seedComment();
-    const nested = await store.upsertFromPlatform(
+    const nested = await upsertStored(
+      store,
       scope,
       {
         externalId: `${PAGE}_1_nested_${++seq}`,

@@ -26,6 +26,7 @@ import { PgEvaluationStore } from '../evaluations.js';
 import { RuleStepFallback } from '../step-fallback.js';
 import { ruleEvaluateJob } from './evaluate.js';
 import { RULE_EVALUATE_JOB, RuleEvaluatePayload, bodySha256 } from './specs.js';
+import { upsertStored } from '@feedbouncer/comments/testing';
 
 const PAGE = '1000000001';
 const IG_ACCOUNT = '17841400000000001';
@@ -168,7 +169,8 @@ async function comment(
   const s = o.ig ? e.igScope : e.scope;
   const owner = o.ig ? `${IG_ACCOUNT}${n}` : `${PAGE}${n}`;
   const externalId = o.externalId ?? `c_${++seq}`;
-  const r = await comments.upsertFromPlatform(
+  const r = await upsertStored(
+    comments,
     s,
     {
       externalId,

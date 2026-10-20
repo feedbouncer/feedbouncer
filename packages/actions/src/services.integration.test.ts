@@ -12,6 +12,7 @@ import { PgActionRunStore } from './runs.js';
 import { resolveReviewItem, undoStep, type Audit } from './services.js';
 import type { ActionStep, StepType } from './steps.js';
 import { scopeOf, seedCommentRow, seedEvaluationRow, seedModerationActionRow } from './testing.js';
+import { upsertStored } from '@feedbouncer/comments/testing';
 
 const META = {
   appId: '111',
@@ -474,7 +475,8 @@ describe('resolveReviewItem', () => {
       [f.t.organizationId, f.t.brandId, IG_ACCOUNT + n],
     );
     const igScope = { ...f.scope, connectionId: ig.rows[0]!.id };
-    const { commentId } = await comments.upsertFromPlatform(
+    const { commentId } = await upsertStored(
+      comments,
       igScope,
       {
         externalId: `ig-${randomUUID()}`,
