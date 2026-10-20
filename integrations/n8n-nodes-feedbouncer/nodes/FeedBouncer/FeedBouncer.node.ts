@@ -64,9 +64,7 @@ export class FeedBouncer implements INodeType {
           error instanceof ReturnAllLimitError
             ? new NodeOperationError(
                 this.getNode(),
-                this.getNodeParameter('resource', i, '') === 'rule'
-                  ? 'More than 10,000 rules match. Turn off Return All and set a Limit.'
-                  : 'More than 10,000 comments match. Narrow the filters or turn off Return All and set a Limit.',
+                'More than 10,000 comments match. Narrow the filters or turn off Return All and set a Limit.',
                 { itemIndex: i },
               )
             : error;

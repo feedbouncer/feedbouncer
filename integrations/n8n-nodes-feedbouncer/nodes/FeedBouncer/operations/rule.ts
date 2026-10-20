@@ -1,8 +1,7 @@
 import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-workflow';
-import { CREDENTIAL_NAME, DEFAULT_LIMIT, RETURN_ALL_MAX } from '../../shared/constants';
-import { describeFailure, toNodeApiError } from '../../shared/errors';
+import { DEFAULT_LIMIT } from '../../shared/constants';
+import { toNodeApiError } from '../../shared/errors';
 import { assertUuid } from '../../shared/ids';
-import { ReturnAllLimitError } from '../../shared/pagination';
 import { feedBouncerRequest } from '../../shared/transport';
 
 interface RuleSet {
@@ -39,20 +38,21 @@ export async function executeRule(
   if (ruleId !== undefined) {
     const found = rules.find((rule) => rule.id === ruleId);
     if (!found) {
-      const info = describeFailure({
-        status: 404,
-        body: { error: { code: 'not_found', message: '' } },
-        credentialName: this.getNode().credentials?.[CREDENTIAL_NAME]?.name ?? 'FeedBouncer API',
-        resourceLabel: 'rule',
-        id: ruleId,
-      });
-      throw toNodeApiError(this.getNode(), info, i);
+      throw toNodeApiError(
+        this.getNode(),
+        {
+          httpCode: 404,
+          code: 'not_found',
+          message: `No rule with ID ${ruleId} in this FeedBouncer workspace.`,
+          description: 'Check the ID, or list rules to find current IDs.',
+        },
+        i,
+      );
     }
     return [{ json: found, pairedItem }];
   }
 
   const returnAll = this.getNodeParameter('returnAll', i) as boolean;
-  if (returnAll && rules.length > RETURN_ALL_MAX) throw new ReturnAllLimitError('Return All stopped at the maximum.');
   const limit = returnAll ? rules.length : (this.getNodeParameter('limit', i, DEFAULT_LIMIT) as number);
   return rules.slice(0, limit).map((json) => ({ json, pairedItem }));
 }

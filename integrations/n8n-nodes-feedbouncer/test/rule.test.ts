@@ -32,13 +32,13 @@ const run = (init: FakeInit) => {
 };
 
 describe('rule list', () => {
-  it('names rules, not comments, when Return All hits the cap', async () => {
+  it('returns every rule with Return All, since the endpoint is not paginated', async () => {
     const many = Array.from({ length: 10_001 }, (_, n) => rule(RULE_1, `Rule ${n}`, n));
     const { result } = run({
       params: { resource: 'rule', operation: 'list', returnAll: true },
       http: [ruleSet(brand(BRAND_A, 'Acme', many))],
     });
-    await expect(result).rejects.toThrow('More than 10,000 rules match. Turn off Return All and set a Limit.');
+    expect((await result)[0]).toHaveLength(10_001);
   });
 
   it('flattens brands to one item per rule, keeping evaluation order, without changes', async () => {

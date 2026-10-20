@@ -33,6 +33,14 @@ describe('comment get', () => {
 });
 
 describe('comment list', () => {
+  it('a brand filter the account cannot see (API 404) names the brand', async () => {
+    const { result } = run({
+      params: { resource: 'comment', operation: 'list', returnAll: true, filters: { brandId: ID2 } },
+      http: [{ status: 404, body: { error: { code: 'not_found', message: 'nope' } } }],
+    });
+    await expect(result).rejects.toThrow(`No brand with ID ${ID2} in this FeedBouncer workspace.`);
+  });
+
   it('maps filters to the query string', async () => {
     const brandId = ID2;
     const { ctx, result } = run({

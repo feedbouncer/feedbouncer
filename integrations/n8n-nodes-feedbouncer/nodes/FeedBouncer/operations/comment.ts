@@ -13,7 +13,7 @@ interface CommentPage {
   nextCursor: string | null;
 }
 
-function isoWithOffset(ctx: IExecuteFunctions, value: unknown, label: string, i: number): string {
+function toUtcIso(ctx: IExecuteFunctions, value: unknown, label: string, i: number): string {
   const date = new Date(String(value));
   if (Number.isNaN(date.getTime())) {
     throw new NodeOperationError(ctx.getNode(), `${label} is not a valid date.`, { itemIndex: i });
@@ -35,8 +35,8 @@ function listQuery(ctx: IExecuteFunctions, i: number): IDataObject {
     }
     qs.q = filters.search;
   }
-  if (filters.postedAfter) qs.postedFrom = isoWithOffset(ctx, filters.postedAfter, 'Posted After', i);
-  if (filters.postedBefore) qs.postedTo = isoWithOffset(ctx, filters.postedBefore, 'Posted Before', i);
+  if (filters.postedAfter) qs.postedFrom = toUtcIso(ctx, filters.postedAfter, 'Posted After', i);
+  if (filters.postedBefore) qs.postedTo = toUtcIso(ctx, filters.postedBefore, 'Posted Before', i);
   return qs;
 }
 
@@ -69,6 +69,8 @@ export async function executeComment(
           path: '/v1/comments',
           qs: { ...filters, limit, ...(cursor && { cursor }) },
           operationId: 'listComments',
+          resourceLabel: 'brand',
+          id: filters.brandId as string | undefined,
           itemIndex: i,
         })
       ).body,
