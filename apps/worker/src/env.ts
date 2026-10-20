@@ -149,7 +149,7 @@ function readPublicWebUrl(env: Env): URL {
   return publicWebUrl;
 }
 
-function readPrivacyConfig(env: Env): PrivacyConfig {
+export function readPrivacyConfig(env: Env): PrivacyConfig {
   const exportDir = readString(env, 'PRIVACY_EXPORT_DIR', {
     fallback: '/var/lib/feedbouncer/privacy-exports',
     maxLength: 4096,

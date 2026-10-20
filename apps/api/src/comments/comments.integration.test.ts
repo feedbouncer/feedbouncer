@@ -7,9 +7,9 @@ import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import { ACTION_KINDS } from '@feedbouncer/comments';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import { runExecuteJob } from '../testing/execute.js';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
-import { upsertStored } from '@feedbouncer/comments/testing';
 
 const SECRET = 'fb-app-secret-0123456789abcdef';
 const APP_ID = '1112223334';

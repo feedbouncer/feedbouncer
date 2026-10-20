@@ -4,9 +4,9 @@ import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import type { Platform } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import { runExecuteJob } from '../testing/execute.js';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
-import { upsertStored } from '@feedbouncer/comments/testing';
 
 const FACEBOOK = {
   appId: '1112223334',

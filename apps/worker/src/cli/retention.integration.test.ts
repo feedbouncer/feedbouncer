@@ -1,7 +1,11 @@
+import { existsSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createPool } from '@feedbouncer/db';
 import { UsageError } from '@feedbouncer/jobs';
-import { migratedDb } from '@feedbouncer/db/testing';
+import { migratedDb, seedTenant } from '@feedbouncer/db/testing';
 import {
   RETENTION_CATEGORIES,
   loadRetentionSettings,
@@ -11,7 +15,9 @@ import { runRetention } from './retention.js';
 
 let h: Awaited<ReturnType<typeof migratedDb>>;
 let pool: ReturnType<typeof createPool>;
+let exportDir: string;
 beforeAll(async () => {
+  exportDir = await mkdtemp(join(tmpdir(), 'fb-retention-cli-'));
   h = await migratedDb();
   pool = createPool(h.db.url, { applicationName: 'retention-cli-test', onIdleError: () => {} });
   await publishRetentionStatus(
@@ -20,6 +26,7 @@ beforeAll(async () => {
   );
 });
 afterAll(async () => {
+  await rm(exportDir, { recursive: true, force: true });
   await pool.end();
   await h.close();
 });
@@ -31,7 +38,7 @@ async function run(...argv: string[]) {
   const err: string[] = [];
   const code = await runRetention(
     argv,
-    { pool, log: silent },
+    { pool, log: silent, exportDir },
     {
       out: (l) => out.push(l),
       err: (l) => err.push(l),
@@ -84,6 +91,24 @@ describe('pnpm ops retention', () => {
     expect(text).toContain('comments: 30 days');
     expect(text).toContain('audit_below_recommended');
     expect(text).toMatch(/last run: done/);
+  });
+
+  it('deletes expired exports from the export dir when it runs', async () => {
+    const t = await seedTenant(h.c, 'cli-exports');
+    const { rows } = await h.c.query<{ id: string }>(
+      `INSERT INTO privacy_request (organization_id, kind, mode, status, requested_via, actor_label,
+                                    subject_count, export_sha256, export_bytes, export_expires_at, finished_at)
+       VALUES ($1, 'export', 'execute', 'done', 'cli', 'ops', 1, decode(repeat('aa', 32), 'hex'), 3,
+               now() - interval '1 day', now()) RETURNING id`,
+      [t.organizationId],
+    );
+    expect(rows).toHaveLength(1);
+    const file = join(exportDir, `${rows[0]!.id}.zip`);
+    await writeFile(file, 'zip');
+
+    expect((await run('run')).code).toBe(0);
+
+    expect(existsSync(file)).toBe(false);
   });
 
   it('tells the operator to start the worker when no settings are published yet', async () => {

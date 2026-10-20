@@ -5,9 +5,9 @@ import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { PgCommentStore } from '@feedbouncer/comments';
 import type { ConnectionScope } from '@feedbouncer/secrets';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import { PgEvaluationStore } from './evaluations.js';
 import type { RuleAction, RuleHit, Verdict } from './types.js';
-import { upsertStored } from '@feedbouncer/comments/testing';
 
 let ctx: Awaited<ReturnType<typeof migratedDb>>;
 let pool: pg.Pool;

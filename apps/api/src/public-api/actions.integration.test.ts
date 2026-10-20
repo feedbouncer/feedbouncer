@@ -4,9 +4,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import { ActionResource, KeyResource, PgApiKeys } from '@feedbouncer/public-api';
 import { Secret } from '@feedbouncer/service-runtime';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import { runExecuteJob } from '../testing/execute.js';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
-import { upsertStored } from '@feedbouncer/comments/testing';
 
 const SECRET = 'fb-app-secret-0123456789abcdef';
 const APP_ID = '1112223334';

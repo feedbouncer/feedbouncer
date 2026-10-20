@@ -18,9 +18,9 @@ import {
 import type { JobContext } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { createLogger } from '@feedbouncer/service-runtime';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import { PgEvaluationStore } from './evaluations.js';
 import { RuleActionFallback } from './fallback.js';
-import { upsertStored } from '@feedbouncer/comments/testing';
 
 type Outcome = Parameters<ActionOutcomeObserver['onActionOutcome']>[0];
 

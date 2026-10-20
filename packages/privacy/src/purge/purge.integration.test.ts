@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type pg from 'pg';
+import { PgCommentStore } from '@feedbouncer/comments';
 import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import type { Logger } from '@feedbouncer/service-runtime';
@@ -326,6 +327,39 @@ describe('runPurge', () => {
         await count(`SELECT count(*) AS n FROM ${table} WHERE comment_id = $1`, [recent.id]),
       ).toBe(1);
     }
+  });
+
+  it('fingerprints purged comments so a later poll cannot ingest them again', async () => {
+    const old = await comment(A, 31);
+    const recent = await comment(A, 29);
+
+    await purge(settings({ comments: 30 }));
+
+    const normalized = (externalId: string) => ({
+      externalId,
+      sourceExternalId: 'post-1',
+      parentExternalId: null,
+      author: { externalId: 'u-again', displayName: 'Ann', profileUrl: null },
+      body: 'again',
+      postedAt: NOW,
+      platformState: 'visible' as const,
+      permalink: null,
+    });
+    const scope = {
+      organizationId: A.organizationId,
+      brandId: A.brandId,
+      connectionId: A.connectionId,
+    };
+    const opts = { ownAccountExternalId: 'page', syncedAt: NOW };
+    const store = new PgCommentStore(pool);
+    expect(await store.upsertFromPlatform(scope, normalized(old.externalId), opts)).toEqual({
+      suppressed: true,
+    });
+    expect(await exists('comment', old.id)).toBe(false);
+    expect(await count('SELECT count(*) AS n FROM erased_comment')).toBe(1);
+    expect(
+      (await store.upsertFromPlatform(scope, normalized(recent.externalId), opts)).suppressed,
+    ).toBe(false);
   });
 
   it('keeps a recent reply to a purged parent and marks the parent as removed', async () => {

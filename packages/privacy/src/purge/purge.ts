@@ -3,7 +3,8 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type pg from 'pg';
 import { recordSystemAudit } from '@feedbouncer/actions';
-import { withRetentionDelete, withTransaction } from '@feedbouncer/db';
+import { commentFingerprint, withRetentionDelete, withTransaction } from '@feedbouncer/db';
+import { UUID } from '@feedbouncer/jobs';
 import type { Logger } from '@feedbouncer/service-runtime';
 import {
   RETENTION_CATEGORIES,
@@ -19,7 +20,6 @@ import { PURGE_ORDER, PURGE_TABLES, notPendingReview, type PurgeTable } from './
 import { withPurgeLock } from './lock.js';
 
 const DAY_MS = 86_400_000;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export interface PurgeCounts {
   byCategory: Record<RetentionCategory, number>;
@@ -288,8 +288,8 @@ async function deleteBatch(run: Run, t: PurgeTable, cutoff: Date, scope: Scope |
   const limitParam = `$${s.params.length + 2}`;
   return withTransaction(run.pool, (tx) =>
     withRetentionDelete(tx, async () => {
-      const picked = await tx.query<{ id: string }>(
-        `SELECT x.id FROM ${t.table} x
+      const picked = await tx.query<{ id: string; connection_id: string; external_id: string }>(
+        `SELECT x.id${t.fingerprints ? ', x.connection_id, x.external_id' : ''} FROM ${t.table} x
           WHERE ${s.sql} AND ${aged(t)} AND ${kept(t)}
           ORDER BY x.${t.timeColumn} LIMIT ${limitParam} FOR UPDATE SKIP LOCKED`,
         [cutoff, ...s.params, run.s.batchSize],
@@ -297,6 +297,16 @@ async function deleteBatch(run: Run, t: PurgeTable, cutoff: Date, scope: Scope |
       const ids = picked.rows.map((r) => r.id);
       if (ids.length === 0) return 0;
       if (t.detachesReplies) await markRepliesParentRemoved(tx, ids);
+      if (t.fingerprints) {
+        await tx.query(
+          `INSERT INTO erased_comment (connection_id, fingerprint)
+           SELECT * FROM unnest($1::uuid[], $2::bytea[]) ON CONFLICT DO NOTHING`,
+          [
+            picked.rows.map((r) => r.connection_id),
+            picked.rows.map((r) => commentFingerprint(r.connection_id, r.external_id)),
+          ],
+        );
+      }
       const deleted = await tx.query(`DELETE FROM ${t.table} WHERE id = ANY($1::uuid[])`, [ids]);
       return deleted.rowCount ?? 0;
     }),

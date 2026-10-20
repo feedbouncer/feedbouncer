@@ -21,8 +21,8 @@ import {
 import type { JobContext } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
-import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
 import { upsertStored } from '@feedbouncer/comments/testing';
+import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
 
 const FACEBOOK = {
   appId: '1112223334',

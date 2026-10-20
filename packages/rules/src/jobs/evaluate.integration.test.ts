@@ -19,6 +19,7 @@ import type { ConnectorCapabilities, Platform } from '@feedbouncer/connectors';
 import type { JobContext } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { createLogger, type Logger } from '@feedbouncer/service-runtime';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import type { RuleEvaluatedHook } from '../hooks.js';
 import { PgRuleStore } from '../store.js';
 import { RuleSetCache } from '../cache.js';
@@ -26,7 +27,6 @@ import { PgEvaluationStore } from '../evaluations.js';
 import { RuleStepFallback } from '../step-fallback.js';
 import { ruleEvaluateJob } from './evaluate.js';
 import { RULE_EVALUATE_JOB, RuleEvaluatePayload, bodySha256 } from './specs.js';
-import { upsertStored } from '@feedbouncer/comments/testing';
 
 const PAGE = '1000000001';
 const IG_ACCOUNT = '17841400000000001';

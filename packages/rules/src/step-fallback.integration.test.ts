@@ -7,9 +7,9 @@ import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant } from '@feedbouncer/db/testing';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { createLogger } from '@feedbouncer/service-runtime';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import { PgEvaluationStore } from './evaluations.js';
 import { RuleStepFallback } from './step-fallback.js';
-import { upsertStored } from '@feedbouncer/comments/testing';
 
 type Settled = Parameters<ActionStepObserver['onStepSettled']>[0];
 

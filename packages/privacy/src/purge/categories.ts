@@ -25,6 +25,8 @@ export interface PurgeTable {
   readonly builtinLimit?: BuiltinLimit;
   /** Replies to a deleted comment are marked as having lost their parent first. */
   readonly detachesReplies?: true;
+  /** Deleted comments are fingerprinted, so a later poll cannot ingest them again. */
+  readonly fingerprints?: true;
 }
 
 /** The ledger states a job never leaves. Dead-lettered jobs can still be replayed, so they stay. */
@@ -155,6 +157,7 @@ export const PURGE_TABLES: Readonly<Record<RetentionCategory, readonly PurgeTabl
                           AND a.state IN ('pending', 'sending', 'retrying'))`,
       protected: true,
       detachesReplies: true,
+      fingerprints: true,
     },
     {
       table: 'author',

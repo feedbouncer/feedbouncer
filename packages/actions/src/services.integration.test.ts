@@ -7,12 +7,12 @@ import { createFacebookConnector } from '@feedbouncer/connector-facebook';
 import { createInstagramConnector } from '@feedbouncer/connector-instagram';
 import { ModerationActions, PgCommentStore } from '@feedbouncer/comments';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import { PgReviewQueue } from './review.js';
 import { PgActionRunStore } from './runs.js';
 import { resolveReviewItem, undoStep, type Audit } from './services.js';
 import type { ActionStep, StepType } from './steps.js';
 import { scopeOf, seedCommentRow, seedEvaluationRow, seedModerationActionRow } from './testing.js';
-import { upsertStored } from '@feedbouncer/comments/testing';
 
 const META = {
   appId: '111',

@@ -13,6 +13,7 @@ import {
   type RetentionDays,
 } from '@feedbouncer/privacy';
 import type { Logger } from '@feedbouncer/service-runtime';
+import { readPrivacyConfig } from '../env.js';
 import type { OpsCommand, Pool } from './ops-context.js';
 
 export const RETENTION_USAGE =
@@ -24,6 +25,8 @@ const WHOLE = /^[1-9]\d{0,4}$/;
 export interface RetentionCliDeps {
   pool: Pool;
   log: Logger;
+  /** PRIVACY_EXPORT_DIR: a run also deletes the expired subject exports there. */
+  exportDir: string;
 }
 
 export interface RetentionCliIo {
@@ -60,7 +63,7 @@ export async function runRetention(
   io: RetentionCliIo,
 ): Promise<number> {
   const [sub, ...rest] = argv;
-  const { pool, log } = deps;
+  const { pool, log, exportDir } = deps;
   switch (sub) {
     case 'status': {
       const st = await readPublished(pool);
@@ -129,7 +132,7 @@ export async function runRetention(
       const st = await readPublished(pool);
       if (st === null) return noSettings(io);
       const { settings } = st;
-      const r = await runPurge(pool, settings, { log });
+      const r = await runPurge(pool, settings, { log, exportDir });
       if (r.status === 'skipped_locked') {
         io.out('run skipped: another purge is running');
         return 0;
@@ -148,6 +151,6 @@ export async function runRetention(
 export const retentionCommand: OpsCommand = (argv, ctx) =>
   runRetention(
     argv,
-    { pool: ctx.pool(), log: ctx.log },
+    { pool: ctx.pool(), log: ctx.log, exportDir: readPrivacyConfig(ctx.env).exportDir },
     { out: ctx.out, err: (line) => process.stderr.write(`${line}\n`) },
   );
