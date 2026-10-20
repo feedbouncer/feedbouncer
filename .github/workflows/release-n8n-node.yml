@@ -1,0 +1,135 @@
+# Publishes @feedbouncer/n8n-nodes-feedbouncer to npm with provenance when a tag
+# `n8n-nodes-feedbouncer-v<version>` is pushed. The version in the tag must equal the
+# version in the package's package.json.
+#
+# The `build` job runs the whole build toolchain with read-only permissions and hands the
+# packed tarball to the `publish` job. Only `publish` holds the OIDC permission and it runs
+# no repository or toolchain code, so a compromised build dependency cannot obtain the
+# publishing credential. It could still alter the tarball, so releases rely on the reviewer
+# approval below and on locked dependencies.
+# The `npm-publish` environment has required reviewers, so every release is approved.
+# Publishing uses npm trusted publishing (OIDC), so no long-lived token is stored.
+# One-time fallback: until trusted publishing is configured for the package on npmjs.com,
+# add `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` to the publish step's env, with the
+# secret held in the `npm-publish` environment, and remove it after the first release.
+name: Release n8n node
+
+on:
+  push:
+    tags: ['n8n-nodes-feedbouncer-v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-n8n-node
+  cancel-in-progress: false
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+  PACKAGE: '@feedbouncer/n8n-nodes-feedbouncer'
+
+jobs:
+  build:
+    name: Build and pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-scope: release-n8n-node
+
+      - name: Tagged commit must be on main
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "the tagged commit is not on main" >&2
+            exit 1
+          }
+
+      - name: Tag must match the package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./integrations/n8n-nodes-feedbouncer/package.json').version")"
+          if [ "$TAG" != "n8n-nodes-feedbouncer-v${version}" ]; then
+            echo "tag ${TAG#n8n-nodes-feedbouncer-v} does not match package version ${version}" >&2
+            exit 1
+          fi
+
+      - name: Build
+        run: pnpm --filter "$PACKAGE" build
+      - name: Lint
+        run: pnpm --filter "$PACKAGE" lint
+      - name: Typecheck
+        run: pnpm --filter "$PACKAGE" typecheck
+      - name: Test
+        run: pnpm --filter "$PACKAGE" test
+      - name: Pack
+        run: pnpm --filter "$PACKAGE" pack --pack-destination "$RUNNER_TEMP/pack"
+      - name: Install smoke test (real n8n image)
+        run: |
+          set -euo pipefail
+          # Same n8n release the CI smoke test uses.
+          n8n_version="$(cat integrations/n8n-nodes-feedbouncer/scripts/n8n-tested-version)"
+          node integrations/n8n-nodes-feedbouncer/scripts/smoke.mjs "$RUNNER_TEMP"/pack/*.tgz "$n8n_version"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: n8n-node-tarball
+          path: ${{ runner.temp }}/pack/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish to npm
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Adds the npm registry settings that publishing needs. No repository code is checked out.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: n8n-node-tarball
+          path: ${{ runner.temp }}/pack
+      - name: Publish with provenance
+        run: npm publish "$RUNNER_TEMP"/pack/*.tgz --provenance --access public
+
+  # A separate job so the scanner never runs with the OIDC publishing permission.
+  scan:
+    name: Scan the published package
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Scan with n8n's community package checks
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./integrations/n8n-nodes-feedbouncer/package.json').version")"
+          # The registry can take a moment to serve a new version.
+          for attempt in 1 2 3 4 5 6; do
+            npm view "${PACKAGE}@${version}" version >/dev/null 2>&1 && break
+            [ "$attempt" -lt 6 ] && sleep 10
+          done
+          npx --yes @n8n/scan-community-package@0.39.0 "${PACKAGE}@${version}"

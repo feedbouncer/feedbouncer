@@ -1,12 +1,17 @@
 packages:
   - apps/*
   - packages/*
+  - integrations/*
 allowBuilds:
   '@prisma/engines': true
+  cpu-features: false
   esbuild: false
+  isolated-vm: false
   msgpackr-extract: false
   prisma: true
   re2: true
+  ssh2: false
+  unrs-resolver: false
 # Security floors for transitive dependencies of prisma (via better-auth's
 # optional peer and packages/db), whose own pins lag the fixes. Selectors only
 # match vulnerable versions, so these stop applying once upstream catches up.

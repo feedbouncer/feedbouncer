@@ -1,0 +1,57 @@
+{
+  "name": "@feedbouncer/n8n-nodes-feedbouncer",
+  "version": "0.1.0",
+  "description": "n8n community nodes for FeedBouncer: trigger on comment events and moderate comments.",
+  "license": "MIT",
+  "homepage": "https://github.com/feedbouncer/feedbouncer/tree/main/integrations/n8n-nodes-feedbouncer#readme",
+  "author": {
+    "name": "FeedBouncer",
+    "email": "38005769+Omri-sh@users.noreply.github.com"
+  },
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "feedbouncer"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/feedbouncer/feedbouncer.git",
+    "directory": "integrations/n8n-nodes-feedbouncer"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "test": "vitest run"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": true,
+    "credentials": [
+      "dist/credentials/FeedBouncerApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/FeedBouncer/FeedBouncer.node.js",
+      "dist/nodes/FeedBouncerTrigger/FeedBouncerTrigger.node.js"
+    ]
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@n8n/eslint-plugin-community-nodes": "0.35.1",
+    "@types/node": "24.13.6",
+    "eslint": "10.12.0",
+    "eslint-import-resolver-typescript": "4.4.5",
+    "eslint-plugin-import-x": "4.17.1",
+    "n8n-workflow": "2.43.5",
+    "standardwebhooks": "1.1.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.1",
+    "vitest": "5.0.3"
+  }
+}

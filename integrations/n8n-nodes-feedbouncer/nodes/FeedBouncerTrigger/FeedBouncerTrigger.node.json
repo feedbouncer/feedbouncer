@@ -1,0 +1,18 @@
+{
+  "node": "@feedbouncer/n8n-nodes-feedbouncer.feedBouncerTrigger",
+  "nodeVersion": "1.0",
+  "codexVersion": "1.0",
+  "categories": ["Communication", "Marketing & Content"],
+  "resources": {
+    "credentialDocumentation": [
+      {
+        "url": "https://github.com/feedbouncer/feedbouncer/tree/main/integrations/n8n-nodes-feedbouncer#readme"
+      }
+    ],
+    "primaryDocumentation": [
+      {
+        "url": "https://github.com/feedbouncer/feedbouncer/tree/main/integrations/n8n-nodes-feedbouncer#readme"
+      }
+    ]
+  }
+}

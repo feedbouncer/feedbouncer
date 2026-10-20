@@ -28,38 +28,41 @@ pnpm test
 
 ## Repository layout
 
-| Path                           | What it is                                                                                                   |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `apps/api`                     | HTTP API (NestJS on Fastify): accounts, organizations, brands, health                                        |
-| `apps/web`                     | Web app (Next.js)                                                                                            |
-| `apps/worker`                  | Background worker that runs queued jobs                                                                      |
-| `apps/mcp`                     | MCP server over stdio, a client of the public API                                                            |
-| `apps/placeholder-app`         | Minimal app used as the template for new apps and Docker images                                              |
-| `packages/authz`               | Roles and authorization checks                                                                               |
-| `packages/comments`            | Comments: storage, moderation, lifecycle, webhooks, reconnect emails                                         |
-| `packages/ai`                  | Multi-provider language model configuration and factory                                                      |
-| `packages/classifier`          | AI comment classification: categories, per-brand thresholds and settings schemas                             |
-| `packages/connector-facebook`  | Facebook Pages connector: OAuth, comments, moderation actions                                                |
-| `packages/connector-instagram` | Instagram connector (Facebook Login): comments, moderation actions, replies                                  |
-| `packages/connector-meta-ads`  | Meta Ads connector: ad accounts and active ads; comments are read through the Page and Instagram connections |
-| `packages/connectors`          | Contract and shared services for platform connectors                                                         |
-| `packages/db`                  | Postgres schema, migrations and the migration CLI                                                            |
-| `packages/jobs`                | Job queue: per-platform queues, retries, dead-letter queue, idempotency                                      |
-| `packages/mailer`              | Transactional email                                                                                          |
-| `packages/observability`       | Structured logs, traces, metrics and connector health                                                        |
-| `packages/rules`               | Moderation rules: matchers, evaluation order, rule store and evaluation job                                  |
-| `packages/actions`             | Moderation actions: step model, execution and review queue                                                   |
-| `packages/alerts`              | Alerts: negative-comment spike detection and delivery to Slack and email                                     |
-| `packages/reports`             | Weekly email report: metrics, scheduling, rendering, delivery and unsubscribe links                          |
-| `packages/evaluation`          | Evaluation runs: false-hide rate, time to hide and cost per 1,000 comments from exported items and labels    |
-| `packages/policies`            | Plain-language custom policies: validation, decisions, model evaluation, previews and runs                   |
-| `packages/public-api`          | Public REST API: API key generation, hashed storage and authentication                                       |
-| `packages/webhooks`            | Outgoing webhooks: Standard Webhooks signing, destination policy and SSRF-guarded transport                  |
-| `packages/placeholder`         | Minimal package used as the template for new packages                                                        |
-| `packages/secrets`             | Envelope encryption for stored credentials and key management                                                |
-| `packages/service-runtime`     | Shared service startup, configuration, health and error handling                                             |
-| `docs/`                        | Operations and developer guides                                                                              |
-| `scripts/`                     | CI guard tests and dev-stack smoke scripts                                                                   |
+| Path                                 | What it is                                                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `apps/api`                           | HTTP API (NestJS on Fastify): accounts, organizations, brands, health                                        |
+| `apps/web`                           | Web app (Next.js)                                                                                            |
+| `apps/worker`                        | Background worker that runs queued jobs                                                                      |
+| `apps/mcp`                           | MCP server over stdio, a client of the public API                                                            |
+| `apps/placeholder-app`               | Minimal app used as the template for new apps and Docker images                                              |
+| `packages/authz`                     | Roles and authorization checks                                                                               |
+| `packages/comments`                  | Comments: storage, moderation, lifecycle, webhooks, reconnect emails                                         |
+| `packages/ai`                        | Multi-provider language model configuration and factory                                                      |
+| `packages/classifier`                | AI comment classification: categories, per-brand thresholds and settings schemas                             |
+| `packages/connector-facebook`        | Facebook Pages connector: OAuth, comments, moderation actions                                                |
+| `packages/connector-instagram`       | Instagram connector (Facebook Login): comments, moderation actions, replies                                  |
+| `packages/connector-meta-ads`        | Meta Ads connector: ad accounts and active ads; comments are read through the Page and Instagram connections |
+| `packages/connectors`                | Contract and shared services for platform connectors                                                         |
+| `packages/db`                        | Postgres schema, migrations and the migration CLI                                                            |
+| `packages/jobs`                      | Job queue: per-platform queues, retries, dead-letter queue, idempotency                                      |
+| `packages/mailer`                    | Transactional email                                                                                          |
+| `packages/observability`             | Structured logs, traces, metrics and connector health                                                        |
+| `packages/rules`                     | Moderation rules: matchers, evaluation order, rule store and evaluation job                                  |
+| `packages/actions`                   | Moderation actions: step model, execution and review queue                                                   |
+| `packages/alerts`                    | Alerts: negative-comment spike detection and delivery to Slack and email                                     |
+| `packages/reports`                   | Weekly email report: metrics, scheduling, rendering, delivery and unsubscribe links                          |
+| `packages/evaluation`                | Evaluation runs: false-hide rate, time to hide and cost per 1,000 comments from exported items and labels    |
+| `packages/policies`                  | Plain-language custom policies: validation, decisions, model evaluation, previews and runs                   |
+| `packages/public-api`                | Public REST API: API key generation, hashed storage and authentication                                       |
+| `packages/webhooks`                  | Outgoing webhooks: Standard Webhooks signing, destination policy and SSRF-guarded transport                  |
+| `packages/placeholder`               | Minimal package used as the template for new packages                                                        |
+| `packages/secrets`                   | Envelope encryption for stored credentials and key management                                                |
+| `packages/service-runtime`           | Shared service startup, configuration, health and error handling                                             |
+| `docs/`                              | Operations and developer guides                                                                              |
+| `scripts/`                           | CI guard tests and dev-stack smoke scripts                                                                   |
+| `integrations/n8n-nodes-feedbouncer` | n8n community nodes (MIT): a webhook trigger and moderation actions, a client of the public API              |
+
+The n8n nodes are documented in [their README](integrations/n8n-nodes-feedbouncer/README.md).
 
 ## Local stack with Docker Compose
 

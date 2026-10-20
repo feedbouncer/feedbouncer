@@ -1,0 +1,58 @@
+{
+  "name": "Alert chat when FeedBouncer holds a comment",
+  "nodes": [
+    {
+      "parameters": {
+        "events": [
+          "item.flagged"
+        ]
+      },
+      "id": "5b0f1c1e-3c3a-4f6e-9a55-0d6f2f6c8a01",
+      "name": "FeedBouncer Trigger",
+      "type": "@feedbouncer/n8n-nodes-feedbouncer.feedBouncerTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "7c2d4a0e-8f1b-4b57-a6c3-2e9d1b5f0a02"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#moderation"
+        },
+        "text": "=FeedBouncer is holding a comment for review:\n\n{{ $json.data.flaggedItem.comment.text }}",
+        "otherOptions": {},
+        "resource": "message",
+        "operation": "post"
+      },
+      "id": "a3e8d9b2-6c14-4d0a-b7f5-9c1e2d3f4a03",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        260,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "FeedBouncer Trigger": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {}
+}

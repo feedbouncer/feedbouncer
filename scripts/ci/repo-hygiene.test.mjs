@@ -385,3 +385,48 @@ test('README repository layout lists every app and package', () => {
       if (statSync(abs(`${dir}/${name}`)).isDirectory())
         assert.ok(layout.includes(`\`${dir}/${name}\``), `layout is missing ${dir}/${name}`);
 });
+
+// --- Integrations (separately licensed client packages) ---
+const N8N_PACKAGE = 'integrations/n8n-nodes-feedbouncer';
+
+function integrationDirs() {
+  assert.ok(existsSync(abs('integrations')), 'integrations/ directory is missing');
+  return readdirSync(abs('integrations')).filter((name) =>
+    existsSync(abs(`integrations/${name}/package.json`)),
+  );
+}
+
+test('every integrations/* manifest is MIT with an MIT LICENSE and the copyright line', () => {
+  const dirs = integrationDirs();
+  assert.ok(dirs.length > 0, 'no integrations found');
+  for (const name of dirs) {
+    const dir = `integrations/${name}`;
+    assert.equal(JSON.parse(read(`${dir}/package.json`)).license, 'MIT', `${dir} license field`);
+    const license = read(`${dir}/LICENSE`);
+    assert.ok(license.includes('MIT License'), `${dir}/LICENSE must be the MIT License`);
+    assert.ok(license.includes('Copyright (c) 2026 FeedBouncer'), `${dir}/LICENSE copyright line`);
+  }
+});
+
+test('n8n package has no runtime dependencies and the community keyword', () => {
+  const p = JSON.parse(read(`${N8N_PACKAGE}/package.json`));
+  assert.equal(Object.keys(p.dependencies ?? {}).length, 0, 'runtime dependencies');
+  assert.ok(p.keywords.includes('n8n-community-node-package'), 'community keyword');
+  assert.equal(p.peerDependencies['n8n-workflow'], '*');
+  assert.deepEqual(p.files, ['dist']);
+});
+
+test('n8n build does not emit a tsbuildinfo into the published dist', () => {
+  const { compilerOptions } = JSON.parse(read(`${N8N_PACKAGE}/tsconfig.json`));
+  assert.notEqual(compilerOptions.incremental, true, 'incremental builds write dist/tsconfig.tsbuildinfo');
+});
+
+test('README states the n8n version CI tests against', () => {
+  const versionFile = `${N8N_PACKAGE}/scripts/n8n-tested-version`;
+  const version = read(versionFile).trim();
+  assert.match(version, /^\d+\.\d+\.\d+$/, versionFile);
+  for (const workflow of ['ci.yml', 'release-n8n-node.yml']) {
+    assert.ok(read(`.github/workflows/${workflow}`).includes(versionFile), `${workflow} must read ${versionFile}`);
+  }
+  assert.ok(read(`${N8N_PACKAGE}/README.md`).includes(version), 'README must state the version');
+});
