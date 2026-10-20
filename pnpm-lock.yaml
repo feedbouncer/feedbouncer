@@ -427,6 +427,9 @@ importers:
       '@n8n/eslint-plugin-community-nodes':
         specifier: 0.35.1
         version: 0.35.1(eslint@10.12.0(jiti@2.7.0))(n8n-workflow@2.43.5(debug@4.4.3)(zod@3.25.76))(typescript@6.0.3)
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
       eslint:
         specifier: 10.12.0
         version: 10.12.0(jiti@2.7.0)

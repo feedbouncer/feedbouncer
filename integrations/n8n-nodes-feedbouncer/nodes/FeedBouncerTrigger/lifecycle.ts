@@ -54,14 +54,11 @@ async function deleteEndpoint(ctx: IHookFunctions, id: string): Promise<void> {
   }
 }
 
-const isTestUrl = (url: string) => url.includes('/webhook-test/');
-
 /**
- * Deletes any endpoint registered for exactly this URL, plus the stored one when it was made for the same kind of URL
- * (production or test), so a changed WEBHOOK_URL leaves no orphan while a test listen keeps the production endpoint.
- * Ids that are not UUIDs are skipped.
+ * Deletes any endpoint registered for exactly this URL, plus the stored one when `replaceStored` is set, so a changed
+ * WEBHOOK_URL leaves no orphan while a test listen keeps the production endpoint. Ids that are not UUIDs are skipped.
  */
-async function cleanup(ctx: IHookFunctions, url: string): Promise<void> {
+async function cleanup(ctx: IHookFunctions, url: string, replaceStored: boolean): Promise<void> {
   const all = await collectPages<WebhookEndpoint>(
     async (cursor, limit) =>
       (
@@ -75,10 +72,9 @@ async function cleanup(ctx: IHookFunctions, url: string): Promise<void> {
     { returnAll: true, limit: DEFAULT_LIMIT },
   );
   const stored = staticData(ctx);
-  const replacesStored = stored.url !== undefined && isTestUrl(stored.url) === isTestUrl(url);
   const ids = new Set([
     ...all.filter((endpoint) => endpoint.url === url).map((endpoint) => endpoint.id),
-    ...(replacesStored ? [stored.endpointId] : []),
+    ...(replaceStored ? [stored.endpointId] : []),
   ]);
   for (const id of ids) if (isUuid(id)) await deleteEndpoint(ctx, id);
 }
@@ -132,12 +128,12 @@ function createFailure(ctx: IHookFunctions, error: unknown, url: string): unknow
 export async function create(this: IHookFunctions): Promise<boolean> {
   const url = webhookUrl(this);
   const eventTypes = events(this);
-  await cleanup(this, url);
+  await cleanup(this, url, this.getActivationMode() !== 'manual');
 
   const description = `n8n workflow ${this.getWorkflow().id}, node "${this.getNode().name}"`
     .replace(/[^\x20-\x7E]/g, '')
     .slice(0, MAX_DESCRIPTION_LENGTH);
-  let created: { endpoint: { id: string }; secret: string };
+  let created: { endpoint?: { id: string }; secret: string };
   try {
     ({ body: created } = await feedBouncerRequest<typeof created>(this, {
       method: 'POST',
@@ -149,17 +145,18 @@ export async function create(this: IHookFunctions): Promise<boolean> {
     throw createFailure(this, error, url);
   }
 
-  if (!isValidSecret(created.secret)) {
-    // Without a usable secret no delivery could be verified: remove the endpoint again.
-    if (isUuid(created.endpoint?.id)) await deleteEndpoint(this, created.endpoint.id).catch(() => undefined);
-    throw new NodeOperationError(this.getNode(), 'FeedBouncer returned an invalid webhook signing secret.', {
+  const endpointId = created.endpoint?.id;
+  if (!isUuid(endpointId) || !isValidSecret(created.secret)) {
+    // Without a usable id and secret no delivery could be verified: remove the endpoint again.
+    if (isUuid(endpointId)) await deleteEndpoint(this, endpointId).catch(() => undefined);
+    throw new NodeOperationError(this.getNode(), 'FeedBouncer returned an invalid webhook endpoint response.', {
       description: 'The trigger was not activated. Check that the FeedBouncer server is up to date, then try again.',
     });
   }
 
   const { apiKey } = await this.getCredentials(CREDENTIAL_NAME);
   Object.assign(staticData(this), {
-    endpointId: created.endpoint.id,
+    endpointId,
     sealedSecret: sealSecret(created.secret, String(apiKey)),
     url,
     events: eventTypes,
@@ -171,7 +168,7 @@ export async function create(this: IHookFunctions): Promise<boolean> {
 export async function remove(this: IHookFunctions): Promise<boolean> {
   const data = staticData(this);
   try {
-    await cleanup(this, data.url ?? webhookUrl(this));
+    await cleanup(this, data.url ?? webhookUrl(this), true);
   } catch {
     // Deliberately ignored.
   }

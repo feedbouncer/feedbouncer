@@ -41,6 +41,7 @@ export interface FakeInit {
   executionId?: string;
   runIndex?: number;
   staticData?: IDataObject;
+  activationMode?: 'activate' | 'manual';
 }
 
 const NODE: INode = {
@@ -133,8 +134,8 @@ export function fakeHook(init: FakeInit & { webhookUrl?: string } = {}): IHookFu
   return Object.assign(ctx, {
     getWorkflow: () => ({ id: 'wf-1' }),
     getNodeWebhookUrl: () => init.webhookUrl ?? 'https://n8n.example.com/webhook/abc',
-    getMode: () => 'trigger',
-    getActivationMode: () => 'activate',
+    getMode: () => (init.activationMode === 'manual' ? 'manual' : 'trigger'),
+    getActivationMode: () => init.activationMode ?? 'activate',
   }) as unknown as IHookFunctions & FakeContext;
 }
 

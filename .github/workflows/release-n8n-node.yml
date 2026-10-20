@@ -4,7 +4,9 @@
 #
 # The `build` job runs the whole build toolchain with read-only permissions and hands the
 # packed tarball to the `publish` job. Only `publish` holds the OIDC permission and it runs
-# no repository or toolchain code, so a compromised build dependency cannot publish.
+# no repository or toolchain code, so a compromised build dependency cannot obtain the
+# publishing credential. It could still alter the tarball, so releases rely on the reviewer
+# approval below and on locked dependencies.
 # The `npm-publish` environment has required reviewers, so every release is approved.
 # Publishing uses npm trusted publishing (OIDC), so no long-lived token is stored.
 # One-time fallback: until trusted publishing is configured for the package on npmjs.com,

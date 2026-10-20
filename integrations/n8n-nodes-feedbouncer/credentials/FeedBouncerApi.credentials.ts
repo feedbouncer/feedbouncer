@@ -51,6 +51,7 @@ export class FeedBouncerApi implements ICredentialType {
       name: 'httpNotice',
       type: 'notice',
       default: '',
+      displayOptions: { show: { allowHttp: [true] } },
     },
   ];
 

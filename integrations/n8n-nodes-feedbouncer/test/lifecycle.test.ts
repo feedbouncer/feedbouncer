@@ -68,12 +68,20 @@ describe('create', () => {
       const ctx = hook({ http: [page([]), { status: 201, body: { endpoint: endpoint(ID_1, URL_A), secret } }, gone] });
       const error = await create.call(ctx).catch((e: unknown) => e as Error);
       expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).toBe('FeedBouncer returned an invalid webhook signing secret.');
+      expect((error as Error).message).toBe('FeedBouncer returned an invalid webhook endpoint response.');
       expect(methods(ctx)).toEqual(['GET', 'POST', 'DELETE']);
       expect(ctx.calls[2].url).toBe(`https://fb.acme.io/v1/webhook-endpoints/${ID_1}`);
       expect(ctx.staticData.endpointId).toBeUndefined();
     },
   );
+
+  it('fails readably when the response has no endpoint', async () => {
+    const ctx = hook({ http: [page([]), { status: 201, body: { secret: SIGNING } }] });
+    const error = await create.call(ctx).catch((e: unknown) => e as Error);
+    expect((error as Error).message).toBe('FeedBouncer returned an invalid webhook endpoint response.');
+    expect(methods(ctx)).toEqual(['GET', 'POST']);
+    expect(ctx.staticData.endpointId).toBeUndefined();
+  });
 
   it('keeps the dedupe record in static data', async () => {
     const ctx = hook({ http: [page([]), created(ID_1)], staticData: { seen: { x: 1 } } });
@@ -97,7 +105,8 @@ describe('create', () => {
 
   it('leaves the stored endpoint of another URL alone, as when a test listen starts on an active workflow', async () => {
     const ctx = hook({
-      webhookUrl: 'https://n8n.example.com/webhook-test/aaa',
+      webhookUrl: 'https://n8n.example.com/custom-test-path/aaa',
+      activationMode: 'manual',
       staticData: stored({ url: URL_A }),
       http: [page([endpoint(ID_1, URL_A)]), created(ID_2)],
     });
@@ -120,7 +129,8 @@ describe('create', () => {
 
   it('leaves a stored production endpoint alone when a test listen starts on a changed host', async () => {
     const ctx = hook({
-      webhookUrl: 'https://new.example.com/webhook-test/aaa',
+      webhookUrl: 'https://new.example.com/custom-test-path/aaa',
+      activationMode: 'manual',
       staticData: stored({ url: URL_A }),
       http: [page([endpoint(ID_1, URL_A)]), created(ID_2)],
     });
