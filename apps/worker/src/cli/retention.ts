@@ -36,6 +36,20 @@ const isCategory = (v: string): v is RetentionCategory =>
 const showDays = (d: RetentionDays) => (d === 'forever' ? 'forever' : `${d} days`);
 const yesNo = (b: boolean) => (b ? 'yes' : 'no');
 
+const NO_SETTINGS = 'No retention settings published yet: start the worker once, then retry.';
+
+/** The published status, or null when no worker has published settings yet. */
+async function readPublished(pool: Pool) {
+  const st = await readRetentionStatus(pool);
+  const days = (st.settings as { days?: unknown } | null)?.days;
+  return days === undefined || days === null ? null : st;
+}
+
+function noSettings(io: RetentionCliIo): number {
+  io.err(NO_SETTINGS);
+  return 1;
+}
+
 /**
  * `pnpm ops retention`. Settings come from what the worker last published
  * (retention_status), so the operator sees and confirms the periods actually in force.
@@ -49,11 +63,10 @@ export async function runRetention(
   const { pool, log } = deps;
   switch (sub) {
     case 'status': {
-      const st = await readRetentionStatus(pool);
+      const st = await readPublished(pool);
+      if (st === null) return noSettings(io);
       for (const c of RETENTION_CATEGORIES) io.out(`${c}: ${showDays(st.effective[c])}`);
-      const limits = shorterBuiltinLimits(st.settings).map(
-        (l) => `${l} ${BUILTIN_LIMIT_DAYS[l]}d`,
-      );
+      const limits = shorterBuiltinLimits(st.settings).map((l) => `${l} ${BUILTIN_LIMIT_DAYS[l]}d`);
       io.out(`warnings: ${st.warnings.join(', ') || 'none'}`);
       if (limits.length > 0) io.out(`built-in limits in force: ${limits.join(', ')}`);
       const r = st.lastRun;
@@ -65,7 +78,9 @@ export async function runRetention(
       return 0;
     }
     case 'preview': {
-      const { settings } = await readRetentionStatus(pool);
+      const st = await readPublished(pool);
+      if (st === null) return noSettings(io);
+      const { settings } = st;
       const p = await previewPurge(pool, settings);
       for (const c of RETENTION_CATEGORIES) {
         const e = p[c];
@@ -97,7 +112,9 @@ export async function runRetention(
         throw new UsageError('--days must be a whole number of days');
       if (as === undefined || !LABEL.test(as))
         throw new UsageError('--as must be 1-64 letters, digits or . _ @ -');
-      const { settings } = await readRetentionStatus(pool);
+      const st = await readPublished(pool);
+      if (st === null) return noSettings(io);
+      const { settings } = st;
       try {
         const r = await confirmRetention(pool, settings, category, Number(days), as);
         io.out(`confirmed ${category} at ${days} days: eligible=${r.eligible}`);
@@ -109,7 +126,9 @@ export async function runRetention(
       }
     }
     case 'run': {
-      const { settings } = await readRetentionStatus(pool);
+      const st = await readPublished(pool);
+      if (st === null) return noSettings(io);
+      const { settings } = st;
       const r = await runPurge(pool, settings, { log });
       if (r.status === 'skipped_locked') {
         io.out('run skipped: another purge is running');

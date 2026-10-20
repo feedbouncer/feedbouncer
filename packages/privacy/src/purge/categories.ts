@@ -17,6 +17,8 @@ export interface PurgeTable {
   readonly scopeColumn: 'brand_id' | 'organization_id' | null;
   /** Further conditions every eligible row must meet. */
   readonly extraWhere?: string;
+  /** Extra protection: rows are only deleted when this holds; the rest count as skipped. */
+  readonly deleteOnlyIf?: string;
   /** Rows of a comment with an open review item or a pending suggestion are kept. */
   readonly protected: boolean;
   /** A built-in limit that already prunes this table; the shorter period applies. */
@@ -137,6 +139,17 @@ export const PURGE_TABLES: Readonly<Record<RetentionCategory, readonly PurgeTabl
       // An action still being carried out on the platform keeps its comment.
       extraWhere: `NOT EXISTS (SELECT 1 FROM moderation_action m WHERE m.brand_id = x.brand_id
                      AND m.comment_id = x.id AND m.completed_at IS NULL)`,
+      // Deleting a comment cascades to its webhook events and alert flag items, so a
+      // delivery still in flight for either keeps the comment, as it keeps the event itself.
+      // Counted as skipped, like a comment waiting in the review queue.
+      deleteOnlyIf: `NOT EXISTS (SELECT 1 FROM webhook_event e
+                         JOIN webhook_delivery w ON w.event_id = e.id
+                        WHERE e.brand_id = x.brand_id AND e.comment_id = x.id
+                          AND w.status IN ('pending', 'sending', 'retrying'))
+        AND NOT EXISTS (SELECT 1 FROM alert_flag_item f
+                         JOIN alert_delivery a ON a.alert_event_id = f.alert_event_id
+                        WHERE f.brand_id = x.brand_id AND f.comment_id = x.id
+                          AND a.state IN ('pending', 'sending', 'retrying'))`,
       protected: true,
       detachesReplies: true,
     },

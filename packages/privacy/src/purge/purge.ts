@@ -96,7 +96,11 @@ function tableCutoff(t: PurgeTable, days: number, now: Date): Date {
 /** `x.<time> < $1 AND <extra>`: eligible by age, before review-queue protection. */
 const aged = (t: PurgeTable) =>
   `x.${t.timeColumn} < $1${t.extraWhere ? ` AND (${t.extraWhere})` : ''}`;
-const kept = (t: PurgeTable) => (t.protected ? notPendingReview(t) : 'TRUE');
+const kept = (t: PurgeTable) =>
+  [t.protected ? notPendingReview(t) : null, t.deleteOnlyIf ?? null]
+    .filter((c) => c !== null)
+    .map((c) => `(${c})`)
+    .join(' AND ') || 'TRUE';
 
 interface Scope {
   organizationId: string;
@@ -202,7 +206,13 @@ export async function previewPurge(
   for (const c of RETENTION_CATEGORIES) {
     const d = days[c];
     if (d === 'forever') {
-      out[c] = { days: d, eligible: 0, skippedPendingReview: 0, confirmed: false, wouldHold: false };
+      out[c] = {
+        days: d,
+        eligible: 0,
+        skippedPendingReview: 0,
+        confirmed: false,
+        wouldHold: false,
+      };
       continue;
     }
     const eligible = await countEligible(pool, c, d, now);
@@ -254,11 +264,7 @@ export async function confirmRetention(
 }
 
 /** Deletes expired export archives and clears their columns, so the request can age out. */
-async function removeExpiredExports(
-  pool: pg.Pool,
-  exportDir: string,
-  now: Date,
-): Promise<number> {
+async function removeExpiredExports(pool: pg.Pool, exportDir: string, now: Date): Promise<number> {
   const { rows } = await pool.query<{ id: string }>(
     'SELECT id FROM privacy_request WHERE export_expires_at < $1',
     [now],
@@ -373,11 +379,19 @@ async function purgeCategory(run: Run, c: RetentionCategory, days: number): Prom
   return true;
 }
 
-/** Holds the category: nothing is deleted, and each affected organization is told why. */
+/** Holds the category: nothing is deleted, and each affected organization is told why once. */
 async function hold(run: Run, c: RetentionCategory, days: number, eligibleAtLeast: number) {
   const orgs = await affectedOrganizations(run.pool, c, days, run.now);
   await withTransaction(run.pool, async (tx) => {
     for (const organizationId of orgs) {
+      // Once per category and period: the hold is repeated on every run until confirmed.
+      const prior = await tx.query(
+        `SELECT 1 FROM audit_event
+          WHERE organization_id = $1 AND action = 'retention.held'
+            AND details->>'category' = $2 AND details->>'days' = $3 LIMIT 1`,
+        [organizationId, c, String(days)],
+      );
+      if (prior.rowCount === 1) continue;
       await recordSystemAudit(tx, {
         organizationId,
         action: 'retention.held',

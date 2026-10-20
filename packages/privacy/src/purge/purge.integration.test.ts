@@ -318,9 +318,9 @@ describe('runPurge', () => {
       'comment_tag',
       'policy_preview_result',
     ]) {
-      expect(await count(`SELECT count(*) AS n FROM ${table} WHERE comment_id = $1`, [old.id])).toBe(
-        0,
-      );
+      expect(
+        await count(`SELECT count(*) AS n FROM ${table} WHERE comment_id = $1`, [old.id]),
+      ).toBe(0);
       expect(
         await count(`SELECT count(*) AS n FROM ${table} WHERE comment_id = $1`, [recent.id]),
       ).toBe(1);
@@ -353,10 +353,16 @@ describe('runPurge', () => {
   it('deletes authors left without comments once they are past the period', async () => {
     const gone = await author(A, 'psid-gone');
     const stays = await author(A, 'psid-stays');
-    await ctx.c.query('UPDATE author SET updated_at = $2 WHERE id = ANY($1::uuid[])', [
-      [gone, stays],
-      ago(31),
-    ]);
+    // The updated_at trigger would overwrite the backdated value.
+    await ctx.c.query('ALTER TABLE author DISABLE TRIGGER USER');
+    try {
+      await ctx.c.query('UPDATE author SET updated_at = $2 WHERE id = ANY($1::uuid[])', [
+        [gone, stays],
+        ago(31),
+      ]);
+    } finally {
+      await ctx.c.query('ALTER TABLE author ENABLE TRIGGER USER');
+    }
     await comment(A, 31, { authorId: gone });
     await comment(A, 1, { authorId: stays });
 
@@ -487,9 +493,12 @@ describe('runPurge', () => {
   });
 
   it('stops at the deadline and the next run finishes the work', async () => {
-    await comments(A, 250, 31);
+    // Organizations are walked in id order and a zero deadline stops after the first table,
+    // so the data goes to the organization that is walked first.
+    const T = A.organizationId < B.organizationId ? A : B;
+    await comments(T, 250, 31);
     for (const c of (await ctx.c.query<{ id: string }>('SELECT id FROM comment')).rows)
-      await decision(A, c.id, 31);
+      await decision(T, c.id, 31);
     const s = settings({ comments: 30 }, { batchSize: 100 });
 
     const first = await purge(s, { deadlineMs: 0 });
@@ -551,6 +560,54 @@ describe('runPurge', () => {
     expect(confirmed.counts.byCategory.comments).toBe(11);
   });
 
+  it('keeps a comment whose webhook event still has a delivery in flight', async () => {
+    const c = await comment(A, 40);
+    const endpoint = await one(
+      `INSERT INTO webhook_endpoint (organization_id, url, event_types, signing_key_id, encrypted_signing_secret)
+       VALUES ($1, 'https://example.test/hook', ARRAY['comment.received'], 'k1', '\\x00') RETURNING id`,
+      [A.organizationId],
+    );
+    const event = await one(
+      `INSERT INTO webhook_event (organization_id, brand_id, type, dedupe_key, comment_id, occurred_at)
+       VALUES ($1, $2, 'comment.received', $3, $4, $5) RETURNING id`,
+      [A.organizationId, A.brandId, `seed:${c.id}`, c.id, ago(40)],
+    );
+    const delivery = await one(
+      `INSERT INTO webhook_delivery (organization_id, endpoint_id, event_id, kind, status)
+       VALUES ($1, $2, $3, 'event', 'retrying') RETURNING id`,
+      [A.organizationId, endpoint, event],
+    );
+    const s = settings({ comments: 30 });
+
+    const first = await purge(s);
+    expect(first.counts.byCategory.comments).toBe(0);
+    expect(first.counts.skippedPendingReview).toBe(1);
+    expect(await exists('comment', c.id)).toBe(true);
+    expect(await exists('webhook_event', event)).toBe(true);
+    expect((await previewPurge(pool, s, NOW)).comments).toMatchObject({
+      eligible: 0,
+      skippedPendingReview: 1,
+    });
+
+    await ctx.c.query("UPDATE webhook_delivery SET status = 'succeeded' WHERE id = $1", [delivery]);
+    const second = await purge(s);
+    expect(second.counts.byCategory.comments).toBe(1);
+    expect(await exists('comment', c.id)).toBe(false);
+    expect(await exists('webhook_event', event)).toBe(false);
+  });
+
+  it('records a hold once per organization while the category stays unconfirmed', async () => {
+    await comments(A, 11, 40);
+    const s = settings({ comments: 30 }, { confirmAbove: 10 });
+
+    await purge(s);
+    await purge(s);
+    expect(await retentionAudits(A.organizationId, 'retention.held')).toHaveLength(1);
+
+    await purge(settings({ comments: 31 }, { confirmAbove: 10 }));
+    expect(await retentionAudits(A.organizationId, 'retention.held')).toHaveLength(2);
+  });
+
   it('attributes counts and audit events to each organization', async () => {
     await comments(A, 2, 31);
     await comments(B, 1, 31);
@@ -578,7 +635,9 @@ describe('runPurge', () => {
 
     expect(results.filter((r) => r.status === 'skipped_locked')).toHaveLength(1);
     expect(results.reduce((sum, r) => sum + r.counts.byCategory.comments, 0)).toBe(200);
-    expect(logs.flatMap((l) => l.lines).filter((l) => l.msg === 'retention.skipped_locked')).toHaveLength(1);
+    expect(
+      logs.flatMap((l) => l.lines).filter((l) => l.msg === 'retention.skipped_locked'),
+    ).toHaveLength(1);
     expect(await count('SELECT count(*) AS n FROM retention_run')).toBe(1);
   });
 
@@ -642,7 +701,11 @@ describe('export cleanup', () => {
       'SELECT id, export_sha256, export_bytes, export_expires_at FROM privacy_request WHERE id = $1',
       [expired],
     );
-    expect(rows[0]).toMatchObject({ export_sha256: null, export_bytes: null, export_expires_at: null });
+    expect(rows[0]).toMatchObject({
+      export_sha256: null,
+      export_bytes: null,
+      export_expires_at: null,
+    });
     expect(await exists('privacy_request', live)).toBe(true);
   });
 });

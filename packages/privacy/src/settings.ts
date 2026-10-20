@@ -81,7 +81,10 @@ export function loadRetentionSettings(env: Env): RetentionSettings {
 const length = (d: RetentionDays) => (d === 'forever' ? Infinity : d);
 
 /** A configured period, shortened to the built-in limit of the rows it applies to (if any). */
-export function withBuiltinLimit(days: RetentionDays, limit: BuiltinLimit | undefined): RetentionDays {
+export function withBuiltinLimit(
+  days: RetentionDays,
+  limit: BuiltinLimit | undefined,
+): RetentionDays {
   if (limit === undefined) return days;
   return Math.min(length(days), BUILTIN_LIMIT_DAYS[limit]);
 }

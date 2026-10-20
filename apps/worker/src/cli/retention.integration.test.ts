@@ -2,7 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createPool } from '@feedbouncer/db';
 import { UsageError } from '@feedbouncer/jobs';
 import { migratedDb } from '@feedbouncer/db/testing';
-import { RETENTION_CATEGORIES, loadRetentionSettings, publishRetentionStatus } from '@feedbouncer/privacy';
+import {
+  RETENTION_CATEGORIES,
+  loadRetentionSettings,
+  publishRetentionStatus,
+} from '@feedbouncer/privacy';
 import { runRetention } from './retention.js';
 
 let h: Awaited<ReturnType<typeof migratedDb>>;
@@ -25,10 +29,14 @@ const silent = { debug() {}, info() {}, warn() {}, error() {} };
 async function run(...argv: string[]) {
   const out: string[] = [];
   const err: string[] = [];
-  const code = await runRetention(argv, { pool, log: silent }, {
-    out: (l) => out.push(l),
-    err: (l) => err.push(l),
-  });
+  const code = await runRetention(
+    argv,
+    { pool, log: silent },
+    {
+      out: (l) => out.push(l),
+      err: (l) => err.push(l),
+    },
+  );
   return { code, out, err };
 }
 
@@ -37,15 +45,15 @@ describe('pnpm ops retention', () => {
     const r = await run('confirm', '--category', 'comments', '--days', '31', '--as', 'ops');
     expect(r.code).toBe(2);
     expect(r.err).toEqual(['Setting for comments is 30, not 31; nothing confirmed.']);
-    expect(
-      (await h.c.query('SELECT 1 FROM retention_confirmation')).rowCount,
-    ).toBe(0);
+    expect((await h.c.query('SELECT 1 FROM retention_confirmation')).rowCount).toBe(0);
   });
 
   it('records a confirmation that matches', async () => {
     const r = await run('confirm', '--category', 'comments', '--days', '30', '--as', 'ops');
     expect(r.code).toBe(0);
-    const { rows } = await h.c.query('SELECT category, days, confirmed_by FROM retention_confirmation');
+    const { rows } = await h.c.query(
+      'SELECT category, days, confirmed_by FROM retention_confirmation',
+    );
     expect(rows).toEqual([{ category: 'comments', days: 30, confirmed_by: 'ops' }]);
   });
 
@@ -69,6 +77,31 @@ describe('pnpm ops retention', () => {
     expect(text).toContain('comments: 30 days');
     expect(text).toContain('audit_below_recommended');
     expect(text).toMatch(/last run: done/);
+  });
+
+  it('tells the operator to start the worker when no settings are published yet', async () => {
+    await h.c.query("UPDATE retention_status SET settings = '{}'::jsonb WHERE id = 1");
+    try {
+      const calls: string[][] = [
+        ['status'],
+        ['preview'],
+        ['run'],
+        ['confirm', '--category', 'comments', '--days', '30', '--as', 'ops'],
+      ];
+      for (const argv of calls) {
+        const r = await run(...argv);
+        expect(r.code).toBe(1);
+        expect(r.out).toEqual([]);
+        expect(r.err).toEqual([
+          'No retention settings published yet: start the worker once, then retry.',
+        ]);
+      }
+    } finally {
+      await publishRetentionStatus(
+        pool,
+        loadRetentionSettings({ RETENTION_COMMENTS_DAYS: '30', RETENTION_AUDIT_DAYS: '90' }),
+      );
+    }
   });
 
   it('rejects an unknown subcommand as a usage error', async () => {
