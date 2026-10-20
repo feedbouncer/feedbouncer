@@ -191,6 +191,22 @@ describe('loadApiEnv', () => {
     });
   });
 
+  describe('moderation check timeout', () => {
+    it('defaults to 20 seconds', () => {
+      expect(load(base).moderationCheckTimeoutMs).toBe(20_000);
+    });
+    it('reads the timeout and rejects values outside 2000-60000', () => {
+      expect(load({ ...base, MODERATION_CHECK_TIMEOUT_MS: '2000' }).moderationCheckTimeoutMs).toBe(
+        2000,
+      );
+      for (const bad of ['1999', '60001', 'abc', '2500.5']) {
+        expect(() => load({ ...base, MODERATION_CHECK_TIMEOUT_MS: bad })).toThrow(
+          /MODERATION_CHECK_TIMEOUT_MS/,
+        );
+      }
+    });
+  });
+
   describe('webhook destinations', () => {
     it('allows no private network by default', () => {
       expect(load(base).webhookAllowedPrivateCidrs).toEqual([]);

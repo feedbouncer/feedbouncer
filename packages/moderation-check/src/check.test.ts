@@ -85,13 +85,11 @@ function deps(o: Partial<CheckDeps> = {}, records: RuleRecord[] = []): CheckDeps
     rules: { get: async () => set },
     thresholds: { policy: async () => DEFAULT_THRESHOLDS },
     policies: { enabledForEvaluation: async () => [] },
-    usage: { consume: vi.fn(async () => true) },
     classifier: new FakeProvider(),
     policyEvaluator: new DisabledPolicyEvaluator(),
     languages: LANGS,
     classifierTimeoutMs: 5000,
     policyTimeoutMs: 5000,
-    policyMonthlyCallsPerBrand: 100,
     sleep: async () => {},
     ...o,
   };
@@ -171,14 +169,12 @@ describe('checkText', () => {
   it('skips the policy stage when the evaluator is disabled', async () => {
     const d = deps({ policies: { enabledForEvaluation: async () => [active] } });
     const r = await checkText(d, scope, 'hello there', later());
-    expect(d.usage.consume).not.toHaveBeenCalled();
     expect(r).toMatchObject({ verdict: 'allow', degraded: false });
   });
 
   it('skips the policy stage when there are no enabled policies', async () => {
     const d = deps({ policyEvaluator: evaluator() });
     await checkText(d, scope, 'hello there', later());
-    expect(d.usage.consume).not.toHaveBeenCalled();
     expect(d.policyEvaluator.evaluate).not.toHaveBeenCalled();
   });
 
@@ -188,7 +184,6 @@ describe('checkText', () => {
       policyEvaluator: evaluator(),
     });
     const r = await checkText(d, scope, 'I want a refund', later());
-    expect(d.usage.consume).toHaveBeenCalledWith(scope, 100);
     expect(r).toMatchObject({
       verdict: 'block',
       reasonCode: 'policy_matched',
@@ -196,17 +191,6 @@ describe('checkText', () => {
       evidence: { policyId: 'pol-1', policyRevision: 2 },
       models: { policy: { provider: 'pe', model: 'pe-1' } },
     });
-  });
-
-  it('degrades when the policy budget is used up', async () => {
-    const d = deps({
-      policies: { enabledForEvaluation: async () => [active] },
-      policyEvaluator: evaluator(),
-      usage: { consume: vi.fn(async () => false) },
-    });
-    const r = await checkText(d, scope, 'I want a refund', later());
-    expect(d.policyEvaluator.evaluate).not.toHaveBeenCalled();
-    expect(r).toMatchObject({ verdict: 'review', reasonCode: 'policy_quota_exhausted' });
   });
 
   it('sends the whole text to the classifier without truncation', async () => {
@@ -269,20 +253,18 @@ describe('checkText stage failures', () => {
     expect(JSON.stringify(r)).not.toContain('db down');
   });
 
-  it('degrades the policy stage when the usage lookup fails, keeping the classifier result', async () => {
+  it('degrades the policy stage when the policy lookup fails, keeping the classifier result', async () => {
     const d = deps({
       classifier: new FakeProvider([S({ spam: 0.99 })]),
-      policies: { enabledForEvaluation: async () => [active] },
+      policies: { enabledForEvaluation: async () => Promise.reject(new Error('db down')) },
       policyEvaluator: evaluator(),
-      usage: { consume: async () => Promise.reject(new Error('db down')) },
     });
     const r = await checkText(d, scope, 'buy now', later());
     expect(r).toMatchObject({ decidedBy: 'classifier', degraded: true });
 
     const quiet = deps({
-      policies: { enabledForEvaluation: async () => [active] },
+      policies: { enabledForEvaluation: async () => Promise.reject(new Error('db down')) },
       policyEvaluator: evaluator(),
-      usage: { consume: async () => Promise.reject(new Error('db down')) },
     });
     expect(await checkText(quiet, scope, 'hello', later())).toMatchObject({
       verdict: 'review',

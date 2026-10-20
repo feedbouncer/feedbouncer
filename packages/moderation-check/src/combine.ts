@@ -11,8 +11,7 @@ export type ClassifierStage =
 export type PolicyStage =
   | { kind: 'ok'; decision: PolicyDecision; provider: string; model: string }
   | { kind: 'skipped' }
-  | { kind: 'failed'; code: string }
-  | { kind: 'quota_exhausted' };
+  | { kind: 'failed'; code: string };
 
 const NO_EVIDENCE: CheckResult['evidence'] = {
   ruleId: null,
@@ -45,12 +44,6 @@ function degradedReason(
     return {
       reasonCode: 'policy_unavailable',
       reason: `Held for review: the policy check could not be completed (${policy.code}).`,
-    };
-  }
-  if (policy?.kind === 'quota_exhausted') {
-    return {
-      reasonCode: 'policy_quota_exhausted',
-      reason: "Held for review: this brand's monthly policy-check budget is used up.",
     };
   }
   return null;

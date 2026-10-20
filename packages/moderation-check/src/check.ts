@@ -14,13 +14,11 @@ export interface CheckDeps {
   rules: { get(scope: BrandScope): Promise<CompiledRuleSet> };
   thresholds: { policy(scope: BrandScope): Promise<ThresholdPolicy> };
   policies: { enabledForEvaluation(scope: BrandScope): Promise<ActivePolicy[]> };
-  usage: { consume(scope: BrandScope, monthlyCallsPerBrand: number): Promise<boolean> };
   classifier: ClassifierProvider;
   policyEvaluator: PolicyEvaluator;
   languages: readonly string[];
   classifierTimeoutMs: number;
   policyTimeoutMs: number;
-  policyMonthlyCallsPerBrand: number;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -89,13 +87,8 @@ async function policyStage(
   if (!d.policyEvaluator.enabled) return { kind: 'skipped' };
   const policies = await d.policies.enabledForEvaluation(scope);
   if (policies.length === 0) return { kind: 'skipped' };
-  if (!(await d.usage.consume(scope, d.policyMonthlyCallsPerBrand))) {
-    return { kind: 'quota_exhausted' };
-  }
   const out = await runStage(d, deadlineAt, d.policyTimeoutMs, (signal) =>
-    runPolicyCheck(d.policyEvaluator, input, policies, signal, {
-      moderatorActed: async () => false,
-    }),
+    runPolicyCheck(d.policyEvaluator, input, policies, signal, { moderatorActed: false }),
   );
   if (!out.ok) return { kind: 'failed', code: out.code };
   const { decision, provider, model } = out.value;

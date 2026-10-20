@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { MAX_INPUT_CHARS, prepareInput } from '@feedbouncer/ai';
+import { prepareInput } from '@feedbouncer/ai';
+import { MAX_CHECK_TEXT_UNITS } from '@feedbouncer/moderation-contract';
 import type { CheckResult } from './types.js';
 
 export const MODERATION_CHECK_QUEUE = 'moderation-check';
-export const MAX_CHECK_TEXT_UNITS = MAX_INPUT_CHARS;
+export { MAX_CHECK_TEXT_UNITS };
 
 export const CheckJobData = z.strictObject({
   v: z.literal(1),

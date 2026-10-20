@@ -6,6 +6,9 @@
     { "path": "../rules/tsconfig.build.json" },
     { "path": "../ai/tsconfig.build.json" },
     { "path": "../classifier/tsconfig.build.json" },
-    { "path": "../policies/tsconfig.build.json" }
+    { "path": "../policies/tsconfig.build.json" },
+    { "path": "../db/tsconfig.build.json" },
+    { "path": "../service-runtime/tsconfig.build.json" },
+    { "path": "../moderation-contract/tsconfig.build.json" }
   ]
 }

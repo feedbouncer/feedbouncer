@@ -1,18 +1,9 @@
+import type { ReasonCode } from '@feedbouncer/moderation-contract';
 import type { RuleAction } from '@feedbouncer/rules';
 
 export type CheckVerdict = 'allow' | 'review' | 'block';
 export type DecidedBy = 'rule' | 'classifier' | 'policy' | 'none' | 'degraded';
-export const REASON_CODES = [
-  'rule_matched',
-  'classifier_threshold',
-  'policy_matched',
-  'no_match',
-  'classifier_unavailable',
-  'classifier_not_configured',
-  'policy_unavailable',
-  'policy_quota_exhausted',
-] as const;
-export type ReasonCode = (typeof REASON_CODES)[number];
+export { REASON_CODES, type ReasonCode } from '@feedbouncer/moderation-contract';
 
 export interface CheckResult {
   verdict: CheckVerdict;

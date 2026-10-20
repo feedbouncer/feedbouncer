@@ -22,8 +22,13 @@
   "dependencies": {
     "@feedbouncer/ai": "workspace:*",
     "@feedbouncer/classifier": "workspace:*",
+    "@feedbouncer/db": "workspace:*",
+    "@feedbouncer/moderation-contract": "workspace:*",
     "@feedbouncer/policies": "workspace:*",
     "@feedbouncer/rules": "workspace:*",
+    "@feedbouncer/service-runtime": "workspace:*",
+    "bullmq": "6.3.12",
+    "ioredis": "5.11.1",
     "zod": "4.6.5"
   },
   "devDependencies": {

@@ -24,7 +24,6 @@ import {
   POLICY_LANE,
   PgPolicyPreviewStore,
   PgPolicyStore,
-  PgPolicyUsage,
   createPolicyEvaluator,
 } from '@feedbouncer/policies';
 import { PgRuleStore, RuleSetCache } from '@feedbouncer/rules';
@@ -57,11 +56,11 @@ import {
   waitUntil,
   writeStartupConfigError,
 } from '@feedbouncer/service-runtime';
+import { startModerationCheckWorker } from '@feedbouncer/moderation-check';
 import { startAlertLoops } from './alerts.js';
 import { startIdempotencyPurge } from './idempotency.js';
 import { startWebhookLoops } from './webhooks.js';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
-import { startModerationCheckWorker } from './moderation-check.js';
 import { startReportLoops } from './reports.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
 import { buildConnectorRegistry, buildJobRegistry } from './registries.js';
@@ -256,13 +255,11 @@ try {
       rules: new RuleSetCache(new PgRuleStore(pool)),
       thresholds: new PgThresholdStore(pool),
       policies: new PgPolicyStore(pool),
-      usage: new PgPolicyUsage(pool),
       classifier: createClassifierProvider(env.classifier),
       policyEvaluator: createPolicyEvaluator(env.policy),
       languages: env.classifier.languages,
       classifierTimeoutMs: env.classifier.timeoutMs,
       policyTimeoutMs: env.policy.timeoutMs,
-      policyMonthlyCallsPerBrand: env.policy.monthlyCallsPerBrand,
     },
   });
   const health = await startHealthServer({

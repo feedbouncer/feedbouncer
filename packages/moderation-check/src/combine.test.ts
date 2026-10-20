@@ -139,16 +139,6 @@ describe('combine', () => {
       'degraded',
       true,
     ],
-    [
-      'exhausted policy budget',
-      null,
-      cls(null),
-      { kind: 'quota_exhausted' },
-      'review',
-      'policy_quota_exhausted',
-      'degraded',
-      true,
-    ],
   ] as const)('%s', (_, rule, classifier, policy, verdict, reasonCode, decidedBy, degraded) => {
     expect(combine(rule, classifier, policy)).toMatchObject({
       verdict,
@@ -174,9 +164,6 @@ describe('combine', () => {
   it('uses the exact policy and no-match copy', () => {
     expect(combine(null, cls(null), { kind: 'failed', code: 'unavailable' }).reason).toBe(
       'Held for review: the policy check could not be completed (unavailable).',
-    );
-    expect(combine(null, cls(null), { kind: 'quota_exhausted' }).reason).toBe(
-      "Held for review: this brand's monthly policy-check budget is used up.",
     );
     expect(combine(null, cls(null), skipped).reason).toBe(
       'No rule, classifier category or policy matched.',

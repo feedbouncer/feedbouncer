@@ -131,17 +131,8 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
 
     const input = prepareInput(row.body);
     // A run must not undo a person's decision by hiding or deleting again.
-    let lookupError: unknown;
-    const moderatorActed = async () => {
-      try {
-        return (
-          p.trigger !== 'ingest' && (await d.comments.latestActionActor(brand, row.id)) === 'user'
-        );
-      } catch (e) {
-        lookupError = e;
-        throw e;
-      }
-    };
+    const moderatorActed =
+      p.trigger !== 'ingest' && (await d.comments.latestActionActor(brand, row.id)) === 'user';
     const check = () =>
       runPolicyCheck(d.evaluator, input, policies, ctx.signal, { moderatorActed });
     let checked: Awaited<ReturnType<typeof check>>;
@@ -162,7 +153,6 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
           };
         checked = await check();
       } catch (e) {
-        if (e === lookupError) throw e;
         const err = mapProviderError(e);
         if (err.retryable && ctx.attempt < MAX_POLICY_PROVIDER_ATTEMPTS) {
           ctx.log.warn('policy.evaluation_retry', {

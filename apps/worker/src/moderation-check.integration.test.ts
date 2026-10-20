@@ -7,6 +7,7 @@ import { migratedDb } from '@feedbouncer/db/testing';
 import { testRedis, type TestRedis } from '@feedbouncer/jobs/testing';
 import {
   MODERATION_CHECK_QUEUE,
+  startModerationCheckWorker,
   type CheckDeps,
   type CheckJobData,
   type CheckJobResult,
@@ -14,7 +15,6 @@ import {
 import { DisabledPolicyEvaluator } from '@feedbouncer/policies';
 import { compileRuleSet } from '@feedbouncer/rules';
 import type { Logger } from '@feedbouncer/service-runtime';
-import { startModerationCheckWorker } from './moderation-check.js';
 
 const MARKER = 'zq-secret-marker';
 const TABLES = [
@@ -109,13 +109,11 @@ function deps(o: Partial<CheckDeps> = {}): CheckDeps & { classifier: FakeClassif
     rules: { get: async () => set },
     thresholds: { policy: async () => DEFAULT_THRESHOLDS },
     policies: { enabledForEvaluation: async () => [] },
-    usage: { consume: async () => true },
     classifier: new FakeClassifier(),
     policyEvaluator: new DisabledPolicyEvaluator(),
     languages: ['en'],
     classifierTimeoutMs: 5000,
     policyTimeoutMs: 5000,
-    policyMonthlyCallsPerBrand: 100,
     ...o,
   } as CheckDeps & { classifier: FakeClassifier };
 }

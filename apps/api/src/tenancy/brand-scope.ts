@@ -14,7 +14,7 @@ export interface BrandScope {
  */
 export async function requireBrand(
   pool: pg.Pool,
-  org: OrgContext,
+  org: Pick<OrgContext, 'organizationId'>,
   rawBrandId: unknown,
 ): Promise<BrandScope> {
   const brandId = parseUuidOr404(rawBrandId);
@@ -24,4 +24,16 @@ export async function requireBrand(
   );
   if (r.rowCount === 0) throw notFound();
   return { organizationId: org.organizationId, brandId };
+}
+
+/** The organization's only live brand, or null when it has none or several. */
+export async function soleActiveBrand(
+  pool: pg.Pool,
+  organizationId: string,
+): Promise<string | null> {
+  const r = await pool.query<{ id: string }>(
+    'SELECT id FROM brand WHERE organization_id = $1 AND archived_at IS NULL LIMIT 2',
+    [organizationId],
+  );
+  return r.rows.length === 1 ? r.rows[0]!.id : null;
 }

@@ -1,15 +1,14 @@
 import { Worker, type Job } from 'bullmq';
 import type { Redis } from 'ioredis';
 import type { createPool } from '@feedbouncer/db';
+import { errorFields, type Logger } from '@feedbouncer/service-runtime';
+import { checkText, type CheckDeps } from './check.js';
 import {
   CheckJobData,
   MODERATION_CHECK_QUEUE,
-  checkText,
   validateCheckText,
-  type CheckDeps,
   type CheckJobResult,
-} from '@feedbouncer/moderation-check';
-import { errorFields, type Logger } from '@feedbouncer/service-runtime';
+} from './transport.js';
 
 export interface ModerationCheckWorkerDeps {
   connection: Redis;

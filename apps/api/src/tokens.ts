@@ -18,3 +18,5 @@ export const BACKFILL_STORE = Symbol('BACKFILL_STORE');
 export const API_KEYS = Symbol('API_KEYS');
 /** Per-key and per-address rate limits of the public API. */
 export const PUBLIC_API_LIMITS = Symbol('PUBLIC_API_LIMITS');
+/** The moderation-check queue client: enqueues text checks and waits for the worker. */
+export const MODERATION_CHECK_CLIENT = Symbol('MODERATION_CHECK_CLIENT');

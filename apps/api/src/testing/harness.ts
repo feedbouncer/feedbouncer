@@ -124,6 +124,7 @@ export async function startTestApi(
     policy: { monthlyCallsPerBrand: 20_000, evaluatorConfigured: true },
     publicApiRateLimitPerMinute: 60,
     ruleProposalTtlHours: 24,
+    moderationCheckTimeoutMs: 20_000,
     webhookAllowedPrivateCidrs: [],
     alerts: { slack: false, email: false, capPerHour: 30, emailPerMinute: 60 },
     // A random queue prefix per app keeps tests from sharing BullMQ keys.

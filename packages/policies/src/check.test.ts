@@ -19,7 +19,7 @@ const fake = (evaluate: PolicyEvaluator['evaluate']): PolicyEvaluator => ({
   evaluate,
 });
 const signal = new AbortController().signal;
-const plain = { moderatorActed: async () => false };
+const plain = { moderatorActed: false };
 
 describe('runPolicyCheck', () => {
   it('makes no call for empty input and matches nothing', async () => {
@@ -58,26 +58,18 @@ describe('runPolicyCheck', () => {
       runPolicyCheck(evaluator, prepareInput('some words here'), [pol(1)], signal, plain),
     ).rejects.toBe(boom);
   });
-  it('reads moderatorActed after the evaluator call, also for empty input', async () => {
-    const order: string[] = [];
-    const evaluate = vi.fn<PolicyEvaluator['evaluate']>(async () => {
-      order.push('evaluate');
-      return { verdicts: { p1: 'clear_match' }, usage: UNKNOWN_USAGE };
-    });
-    const moderatorActed = async () => {
-      order.push('moderatorActed');
-      return true;
-    };
+  it('downgrades the winner when a moderator already acted', async () => {
+    const evaluate = vi.fn<PolicyEvaluator['evaluate']>(async () => ({
+      verdicts: { p1: 'clear_match' },
+      usage: UNKNOWN_USAGE,
+    }));
     const r = await runPolicyCheck(
       fake(evaluate),
       prepareInput('some words here'),
       [pol(1)],
       signal,
-      { moderatorActed },
+      { moderatorActed: true },
     );
-    expect(order).toEqual(['evaluate', 'moderatorActed']);
     expect(r.decision.winner?.downgrade).toBe('moderator_acted');
-    await runPolicyCheck(fake(evaluate), prepareInput(''), [pol(1)], signal, { moderatorActed });
-    expect(order).toEqual(['evaluate', 'moderatorActed', 'moderatorActed']);
   });
 });
