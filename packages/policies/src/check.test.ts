@@ -19,7 +19,7 @@ const fake = (evaluate: PolicyEvaluator['evaluate']): PolicyEvaluator => ({
   evaluate,
 });
 const signal = new AbortController().signal;
-const plain = { moderatorActed: false };
+const plain = { moderatorActed: async () => false };
 
 describe('runPolicyCheck', () => {
   it('makes no call for empty input and matches nothing', async () => {
@@ -68,8 +68,22 @@ describe('runPolicyCheck', () => {
       prepareInput('some words here'),
       [pol(1)],
       signal,
-      { moderatorActed: true },
+      { moderatorActed: async () => true },
     );
     expect(r.decision.winner?.downgrade).toBe('moderator_acted');
+  });
+  it('reads whether a moderator acted only after the evaluator answered', async () => {
+    const order: string[] = [];
+    const evaluator = fake(async () => {
+      order.push('evaluate');
+      return { verdicts: { p1: 'clear_match' }, usage: UNKNOWN_USAGE };
+    });
+    await runPolicyCheck(evaluator, prepareInput('some words here'), [pol(1)], signal, {
+      moderatorActed: async () => {
+        order.push('lookup');
+        return false;
+      },
+    });
+    expect(order).toEqual(['evaluate', 'lookup']);
   });
 });

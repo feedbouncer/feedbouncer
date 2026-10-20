@@ -9,7 +9,8 @@ export async function runPolicyCheck(
   input: PreparedInput,
   policies: readonly ActivePolicy[],
   signal: AbortSignal,
-  o: { moderatorActed: boolean },
+  /** Called after the evaluator answers, so an action taken during the call still counts. */
+  o: { moderatorActed: () => Promise<boolean> },
 ): Promise<{
   decision: PolicyDecision;
   provider: string;
@@ -32,7 +33,7 @@ export async function runPolicyCheck(
   const verdicts = new Map(policies.map((x, i) => [x.revisionId, byKey[keys[i]!]!]));
   const decision = decidePolicies(policies, verdicts, {
     lowSignal: input.lowSignal,
-    moderatorActed: o.moderatorActed,
+    moderatorActed: await o.moderatorActed(),
   });
   return { decision, provider, model, usage };
 }

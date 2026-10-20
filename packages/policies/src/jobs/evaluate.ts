@@ -131,7 +131,7 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
 
     const input = prepareInput(row.body);
     // A run must not undo a person's decision by hiding or deleting again.
-    const moderatorActed =
+    const moderatorActed = async () =>
       p.trigger !== 'ingest' && (await d.comments.latestActionActor(brand, row.id)) === 'user';
     const check = () =>
       runPolicyCheck(d.evaluator, input, policies, ctx.signal, { moderatorActed });
