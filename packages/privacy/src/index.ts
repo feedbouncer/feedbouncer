@@ -4,3 +4,5 @@ export * from './purge/purge.js';
 export * from './subject/identifier.js';
 export * from './subject/locate.js';
 export * from './erase/erase.js';
+export * from './export/export.js';
+export * from './export/json-array-stream.js';

@@ -1,7 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import type pg from 'pg';
 import { recordSystemAudit } from '@feedbouncer/actions';
-import type { Platform } from '@feedbouncer/connectors';
 import {
   commentFingerprint,
   withPrivacyRedaction,
@@ -15,9 +14,13 @@ import { countReplies, markRepliesParentRemoved } from '../replies.js';
 import type { SubjectIdentifierT } from '../subject/identifier.js';
 import { locateSubject } from '../subject/locate.js';
 import {
+  AUTHOR_NODE,
+  authorRules,
+  entryMatches,
   ERASED,
   redactAuthorEntries,
   removeAuthorEntries,
+  type AuthorRule,
   type EntryMatch,
 } from './rule-entries.js';
 
@@ -115,42 +118,6 @@ async function countChildren(c: pg.ClientBase, organizationId: string, ids: read
     previewResults: Number(r.preview_results),
     moderationActions: Number(r.moderation_actions),
   } satisfies Partial<ErasureCounts>;
-}
-
-/** Any author condition, at any depth of a stored JSON value. */
-const AUTHOR_NODE = `'$.** ? (@.type == "author")'`;
-
-interface AuthorRule {
-  id: string;
-  brand_id: string;
-  conditions: unknown;
-  enabled: boolean;
-}
-
-/** Every rule of the organization (every brand, archived too) that can hold author entries. */
-async function authorRules(
-  c: pg.Pool | pg.ClientBase,
-  organizationId: string,
-): Promise<AuthorRule[]> {
-  const { rows } = await c.query<AuthorRule>(
-    `SELECT id, brand_id, conditions, enabled FROM rule
-      WHERE organization_id = $1 AND (kind = 'author' OR conditions @? ${AUTHOR_NODE})
-      ORDER BY id`,
-    [organizationId],
-  );
-  return rows;
-}
-
-/** One EntryMatch per platform named in the request. */
-function entryMatches(subjects: readonly SubjectIdentifierT[]): EntryMatch[] {
-  const by = new Map<Platform, { externalIds: Set<string>; handles: Set<string> }>();
-  for (const s of subjects) {
-    let m = by.get(s.platform);
-    if (!m) by.set(s.platform, (m = { externalIds: new Set(), handles: new Set() }));
-    if (s.externalId !== undefined) m.externalIds.add(s.externalId);
-    if (s.handle !== undefined) m.handles.add(s.handle);
-  }
-  return [...by].map(([platform, m]) => ({ platform, ...m }));
 }
 
 function withoutSubject(conditions: unknown, matches: readonly EntryMatch[]) {
