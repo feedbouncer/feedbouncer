@@ -66,7 +66,7 @@ export class FeedBouncerTrigger implements INodeType {
     const id = header('webhook-id');
 
     const verified = verifySignature({
-      secret: await readSigningSecret(this),
+      secret: await readSigningSecret(this, this.getMode() === 'manual'),
       id,
       timestamp: header('webhook-timestamp'),
       signatureHeader: header('webhook-signature'),

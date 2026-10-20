@@ -46,7 +46,7 @@ describe('comment list', () => {
       params: { resource: 'comment', operation: 'list', returnAll: true, filters: {} },
       http: [{ status: 404, body: { error: { code: 'not_found', message: 'nope' } } }],
     });
-    await expect(result).rejects.toThrow(/No item with ID/);
+    await expect(result).rejects.toThrow('FeedBouncer could not find what was requested.');
     await expect(result).rejects.not.toThrow(/brand/);
   });
 

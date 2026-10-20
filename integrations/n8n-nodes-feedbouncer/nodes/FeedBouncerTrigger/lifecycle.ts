@@ -32,12 +32,14 @@ const staticData = (ctx: IHookFunctions | IWebhookFunctions) => ctx.getWorkflowS
 const webhookUrl = (ctx: IHookFunctions) => ctx.getNodeWebhookUrl('default') as string;
 const events = (ctx: IHookFunctions) => ctx.getNodeParameter('events') as string[];
 
-/** The signing secret, or undefined when none is stored or the API key changed since it was sealed. */
-export async function readSigningSecret(ctx: IHookFunctions | IWebhookFunctions): Promise<string | undefined> {
+/**
+ * The signing secret of the production endpoint, or of the test-listen endpoint when `forTestListen` is set.
+ * Undefined when none is stored or the API key changed since it was sealed.
+ */
+export async function readSigningSecret(ctx: IHookFunctions | IWebhookFunctions, forTestListen = false): Promise<string | undefined> {
   const { apiKey } = await ctx.getCredentials(CREDENTIAL_NAME);
   const data = staticData(ctx);
-  const isTestDelivery = data.test !== undefined && data.test.url === ctx.getNodeWebhookUrl('default');
-  const sealed = isTestDelivery ? data.test?.sealedSecret : data.sealedSecret;
+  const sealed = forTestListen ? data.test?.sealedSecret : data.sealedSecret;
   return typeof apiKey === 'string' ? openSecret(sealed, apiKey) : undefined;
 }
 

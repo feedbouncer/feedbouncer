@@ -162,6 +162,7 @@ export function fakeWebhook(
   return Object.assign(ctx, {
     response,
     getNodeWebhookUrl: () => init.webhookUrl ?? 'https://n8n.example.com/webhook/abc',
+    getMode: () => (init.activationMode === 'manual' ? 'manual' : 'webhook'),
     getHeaderData: () => headers,
     getRequestObject: () => ({ rawBody, headers }),
     getResponseObject: () => res,

@@ -102,8 +102,11 @@ export function describeFailure(input: FailureInput): FeedBouncerErrorInfo {
   }
   if (status === 404 && envelope) {
     const label = input.resourceLabel ?? 'item';
+    if (input.id === undefined) {
+      return info('FeedBouncer could not find what was requested.', 'Check the node settings and that the credential points to the right workspace.');
+    }
     return info(
-      `No ${label} with ID ${input.id ?? ''} in this FeedBouncer workspace.`,
+      `No ${label} with ID ${input.id} in this FeedBouncer workspace.`,
       `Check the ID, or list ${label}s to find current IDs.`,
     );
   }

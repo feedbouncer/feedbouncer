@@ -10,7 +10,7 @@ const SECRET = `whsec_${randomBytes(32).toString('base64')}`;
 const node = new FeedBouncerTrigger();
 const SEALED = sealSecret(SECRET, API_KEY);
 
-function delivery(event: Record<string, unknown>, over: { id?: string; events?: string[]; staticData?: IDataObject; tamper?: boolean; rawBody?: unknown; text?: string; unsigned?: boolean } = {}) {
+function delivery(event: Record<string, unknown>, over: { id?: string; events?: string[]; staticData?: IDataObject; tamper?: boolean; rawBody?: unknown; text?: string; unsigned?: boolean; activationMode?: 'manual' } = {}) {
   const id = over.id ?? 'evt_1';
   const body = over.text ?? JSON.stringify(event);
   const ts = new Date();
@@ -27,6 +27,7 @@ function delivery(event: Record<string, unknown>, over: { id?: string; events?: 
     params: { events: over.events ?? ['comment.hidden'] },
     staticData: over.staticData ?? { sealedSecret: SEALED },
     headers,
+    activationMode: over.activationMode,
     rawBody: 'rawBody' in over ? over.rawBody : body,
   });
 }
@@ -34,15 +35,19 @@ function delivery(event: Record<string, unknown>, over: { id?: string; events?: 
 const HIDDEN = { id: 'evt_1', type: 'comment.hidden', data: { comment: { text: 'hi' } } };
 
 describe('FeedBouncerTrigger.webhook', () => {
-  it('accepts a test-listen delivery signed with the test secret and keeps the production secret for production', async () => {
-    const url = 'https://n8n.example.com/webhook/abc';
-    const testStatic = { sealedSecret: sealSecret('whsec_other', 'fbk_test'), test: { endpointId: 'x', sealedSecret: SEALED, url } };
-    const result = await node.webhook.call(delivery(HIDDEN, { staticData: testStatic }));
-    expect(result.workflowData).toBeDefined();
-    const other = { ...testStatic, test: { ...testStatic.test, url: 'https://n8n.example.com/webhook-test/abc' } };
-    const rejected = delivery(HIDDEN, { staticData: other });
-    await node.webhook.call(rejected);
-    expect(rejected.response.status).toBe(401);
+  it('checks a test-listen delivery against the test secret and a production delivery against the production secret', async () => {
+    const staticData = { sealedSecret: sealSecret('whsec_other', 'fbk_test'), test: { endpointId: 'x', sealedSecret: SEALED, url: 'https://n8n.example.com/webhook-test/abc' } };
+    const test = delivery(HIDDEN, { staticData, activationMode: 'manual' });
+    expect((await node.webhook.call(test)).workflowData).toBeDefined();
+    const production = delivery(HIDDEN, { staticData });
+    await node.webhook.call(production);
+    expect(production.response.status).toBe(401);
+  });
+
+  it('rejects a test-listen delivery when no test endpoint is stored', async () => {
+    const ctx = delivery(HIDDEN, { staticData: { sealedSecret: SEALED }, activationMode: 'manual' });
+    await node.webhook.call(ctx);
+    expect(ctx.response.status).toBe(401);
   });
 
   it('emits the parsed event with the delivery id', async () => {
