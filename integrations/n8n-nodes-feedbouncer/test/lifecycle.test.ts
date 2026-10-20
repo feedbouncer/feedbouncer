@@ -91,6 +91,16 @@ describe('create', () => {
     expect(methods(ctx)).toEqual(['GET', 'DELETE', 'DELETE', 'POST']);
   });
 
+  it('leaves the stored endpoint of another URL alone, as when a test listen starts on an active workflow', async () => {
+    const ctx = hook({
+      webhookUrl: URL_B,
+      staticData: stored({ url: URL_A }),
+      http: [page([endpoint(ID_1, URL_A)]), created(ID_2)],
+    });
+    expect(await create.call(ctx)).toBe(true);
+    expect(methods(ctx)).toEqual(['GET', 'POST']);
+  });
+
   it('deletes the stored endpoint even when it is no longer listed, and tolerates a 404', async () => {
     const ctx = hook({
       staticData: stored(),

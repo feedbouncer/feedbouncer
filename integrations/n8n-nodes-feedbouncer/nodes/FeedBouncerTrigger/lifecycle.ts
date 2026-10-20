@@ -48,7 +48,7 @@ async function deleteEndpoint(ctx: IHookFunctions, id: string): Promise<void> {
   }
 }
 
-/** Deletes the stored endpoint and any endpoint registered for exactly this node's URL. Ids that are not UUIDs are skipped. */
+/** Deletes any endpoint registered for exactly this URL, including the stored one if it was stored for this URL. Ids that are not UUIDs are skipped. */
 async function cleanup(ctx: IHookFunctions, url: string): Promise<void> {
   const all = await collectPages<WebhookEndpoint>(
     async (cursor, limit) =>
@@ -62,8 +62,11 @@ async function cleanup(ctx: IHookFunctions, url: string): Promise<void> {
       ).body,
     { returnAll: true, limit: DEFAULT_LIMIT },
   );
-  const { endpointId } = staticData(ctx);
-  const ids = new Set([...all.filter((endpoint) => endpoint.url === url).map((endpoint) => endpoint.id), endpointId]);
+  const stored = staticData(ctx);
+  const ids = new Set([
+    ...all.filter((endpoint) => endpoint.url === url).map((endpoint) => endpoint.id),
+    ...(stored.url === url ? [stored.endpointId] : []),
+  ]);
   for (const id of ids) if (isUuid(id)) await deleteEndpoint(ctx, id);
 }
 

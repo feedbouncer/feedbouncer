@@ -12,6 +12,7 @@ const PACKAGE = '@feedbouncer/n8n-nodes-feedbouncer';
 const NODE_TYPES = [`${PACKAGE}.feedBouncer`, `${PACKAGE}.feedBouncerTrigger`];
 const NODES_DIR = '/home/node/.n8n/nodes';
 const HEALTH_TIMEOUT_MS = 120_000;
+const INSTALL_ATTEMPTS = 3;
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 const docker = async (...args) => {
@@ -26,6 +27,19 @@ const dockerLogs = async (name) => {
   const { stdout, stderr } = await run('docker', ['logs', name], { maxBuffer: 64 * 1024 * 1024 });
   return stdout + stderr;
 };
+
+// npm fetches the n8n-workflow peer dependency from the public registry, which can fail transiently on CI runners.
+async function withRetries(attempts, action) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await action();
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      console.error(`attempt ${attempt} failed, retrying:\n${error.message}`);
+      await sleep(5000);
+    }
+  }
+}
 
 function parseArgs([tarball, version, ...rest]) {
   if (!tarball || !version || rest.length > 0) {
@@ -69,9 +83,11 @@ async function main() {
     // docker cp keeps the host owner and mode (mktemp files are 0600), which the node user cannot read.
     await docker('exec', '-u', 'root', name, 'chmod', '644', '/tmp/pkg.tgz');
     // Same flags n8n uses for community installs; scripts stay off because the image has no build toolchain.
-    await docker(
-      'exec', '-w', NODES_DIR, name,
-      'npm', 'install', '--ignore-scripts', '--audit=false', '--fund=false', '--package-lock=false', '/tmp/pkg.tgz',
+    await withRetries(INSTALL_ATTEMPTS, () =>
+      docker(
+        'exec', '-w', NODES_DIR, name,
+        'npm', 'install', '--ignore-scripts', '--audit=false', '--fund=false', '--package-lock=false', '/tmp/pkg.tgz',
+      ),
     );
     await docker('restart', name);
     await waitForHealth(name);
