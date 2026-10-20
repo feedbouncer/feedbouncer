@@ -3,6 +3,15 @@
 How an organization's data is deleted at the end of the private beta, or on
 request.
 
+This page is about deleting a whole organization. Two other documents cover
+narrower cases:
+
+- [data-retention.md](data-retention.md): delete data automatically once it is
+  older than a period you choose.
+- [subject-requests.md](subject-requests.md): export or erase the data of one
+  person (a comment author) inside an organization, which leaves the
+  organization and everyone else's data in place.
+
 ## Owner
 
 The **Beta operator**. The named person is recorded in the team's ops roster,

@@ -182,4 +182,8 @@ metric reference and trace propagation through `job_ledger.trace_context`:
 Payloads can contain comment text. They are kept for the lifetime of the row (see
 [Retention](#retention-and-the-dedupe-window)) and never contain
 credentials: enqueue rejects secret-like fields, and only error kinds and codes are
-stored or logged. Erasing a comment does not yet scrub it from `job_ledger`.
+stored or logged. Erasing a person's data ([subject-requests.md](subject-requests.md))
+deletes finished ledger rows that refer to their comments; rows still queued or running
+are left, and the worker skips them because the comment is gone. The retention purge
+deletes finished rows by age (`RETENTION_OPERATIONAL_DAYS`, see
+[data-retention.md](data-retention.md)).

@@ -423,7 +423,8 @@ In practice:
   `parent_external_id`. Write `commentFingerprint(connectionId, externalId)` to
   `erased_comment` in the same transaction so a re-delivery is not re-ingested.
   The retention purge fingerprints the comments it deletes the same way, so a
-  later poll cannot bring them back.
+  later poll cannot bring them back. Replies by other people keep their text and
+  get `parent_removed_at`.
 - Normalizers must strip NUL bytes (`\u0000`) from text before writing. Postgres
   rejects them with SQLSTATE `22021` rather than truncating.
 
