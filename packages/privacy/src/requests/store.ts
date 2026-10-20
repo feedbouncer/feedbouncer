@@ -227,7 +227,14 @@ export class PgPrivacyRequestStore {
       id,
       `status = 'done', found = $2, counts = $3::jsonb, coverage = $4,
        export_bytes = $5, export_sha256 = $6, export_expires_at = $7`,
-      [r.found, JSON.stringify(r.counts), r.coverage, r.export?.bytes ?? null, r.export?.sha256 ?? null, r.export?.expiresAt ?? null],
+      [
+        r.found,
+        JSON.stringify(r.counts),
+        r.coverage,
+        r.export?.bytes ?? null,
+        r.export?.sha256 ?? null,
+        r.export?.expiresAt ?? null,
+      ],
       (q) => ({
         action: completedAction(q),
         details: { found: r.found, counts: r.counts, coverage: r.coverage },

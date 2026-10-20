@@ -286,11 +286,16 @@ describe('writeSubjectExport', () => {
         .map((m) => m.replace('.json', ''))
         .sort(),
     );
-    for (const [member, n] of Object.entries(counts)) expect(json(`${member}.json`)).toHaveLength(n);
+    for (const [member, n] of Object.entries(counts))
+      expect(json(`${member}.json`)).toHaveLength(n);
     expect(result.counts).toEqual(counts);
 
     const comments = json('comments.json');
-    expect(comments.map((c) => c.body).sort()).toEqual(['X body one', 'X body three', 'X body two']);
+    expect(comments.map((c) => c.body).sort()).toEqual([
+      'X body one',
+      'X body three',
+      'X body two',
+    ]);
     const reply = comments.find((c) => c.id === s.c2.id)!;
     expect(reply.inReplyTo).toEqual({ commentId: s.yParent.id, removed: false });
     expect(comments.find((c) => c.id === s.c1.id)!.inReplyTo).toBeNull();
@@ -340,10 +345,18 @@ describe('writeSubjectExport', () => {
       expect.objectContaining({ commentId: s.c1.id, status: 'open', source: 'user' }),
     ]);
     expect(json('moderation_actions.json')).toEqual([
-      expect.objectContaining({ kind: 'public_reply', replyText: 'X own reply', status: 'applied' }),
+      expect.objectContaining({
+        kind: 'public_reply',
+        replyText: 'X own reply',
+        status: 'applied',
+      }),
     ]);
     expect(json('policy_previews.json')).toEqual([
-      expect.objectContaining({ verdict: 'clear_match', proposedAction: 'hide', reason: 'X own preview' }),
+      expect.objectContaining({
+        verdict: 'clear_match',
+        proposedAction: 'hide',
+        reason: 'X own preview',
+      }),
     ]);
     expect(json('rule_entries.json')).toEqual([
       {
@@ -460,9 +473,9 @@ describe('writeSubjectExport', () => {
 
   it('refuses a request id that is not a uuid before touching the filesystem', async () => {
     for (const id of ['../x', '..', `${randomUUID()}/../x`, `${randomUUID()}x`, ''])
-      await expect(writeSubjectExport(pool, A.organizationId, id, [fb(X)], { dir })).rejects.toThrow(
-        /request id/i,
-      );
+      await expect(
+        writeSubjectExport(pool, A.organizationId, id, [fb(X)], { dir }),
+      ).rejects.toThrow(/request id/i);
     expect(await readdir(dir)).toEqual([]);
     for (const leaked of ['x.zip.part', 'x.zip'])
       await expect(stat(path.join(dir, '..', leaked))).rejects.toMatchObject({ code: 'ENOENT' });

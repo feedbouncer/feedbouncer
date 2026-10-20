@@ -2,6 +2,7 @@
 -- content, decisions and audit events are untouched.
 DROP INDEX api_idempotency_record_created_at_idx;
 DROP INDEX alert_event_created_at_idx;
+DROP INDEX audit_event_retention_held_idx;
 DROP INDEX audit_event_organization_id_created_at_idx;
 DROP INDEX action_run_brand_id_created_at_idx;
 DROP INDEX moderation_action_brand_id_completed_at_idx;

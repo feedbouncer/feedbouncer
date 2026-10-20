@@ -98,7 +98,6 @@ async function until(check: () => Promise<boolean>, timeoutMs = 20_000) {
   const end = Date.now() + timeoutMs;
   while (!(await check())) {
     if (Date.now() > end) {
-      console.error('DBG', JSON.stringify(await queue.getJobCounts()), lines.join('\n'));
       throw new Error('timed out');
     }
     await new Promise((r) => setTimeout(r, 50));

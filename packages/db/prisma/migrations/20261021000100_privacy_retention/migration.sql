@@ -166,6 +166,8 @@ CREATE INDEX moderation_action_brand_id_completed_at_idx ON moderation_action (b
   WHERE completed_at IS NOT NULL;
 CREATE INDEX action_run_brand_id_created_at_idx ON action_run (brand_id, created_at);
 CREATE INDEX audit_event_organization_id_created_at_idx ON audit_event (organization_id, created_at);
+CREATE INDEX audit_event_retention_held_idx ON audit_event (organization_id, (details->>'category'), (details->>'days'))
+  WHERE action = 'retention.held';
 CREATE INDEX alert_event_created_at_idx ON alert_event (created_at);
 CREATE INDEX api_idempotency_record_created_at_idx ON api_idempotency_record (created_at);
 

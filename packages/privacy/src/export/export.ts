@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { open, rename, stat, unlink, type FileHandle } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
+import { open, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
-import { Transform, type Readable } from 'node:stream';
+import { Transform, type Readable, type Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type pg from 'pg';
 import { ZipFile } from 'yazl';
@@ -353,7 +354,7 @@ interface ArchiveInput {
 /** Streams the archive into `file` from one snapshot; the manifest goes last, with the counts. */
 async function writeArchive(
   c: pg.PoolClient,
-  file: FileHandle,
+  sink: Writable,
   input: ArchiveInput,
 ): Promise<ExportResult> {
   const { organizationId, requestId, subjects, generatedAt } = input;
@@ -404,7 +405,7 @@ async function writeArchive(
       done(null, chunk);
     },
   });
-  await pipeline(output, measure, file.createWriteStream({ autoClose: false }));
+  await pipeline(output, measure, sink);
   const found = authorIds.length > 0 || counts.rule_entries > 0;
   return { found, counts, bytes, sha256: hash.digest() };
 }
@@ -436,20 +437,25 @@ export async function writeSubjectExport(
   const target = path.join(o.dir, `${requestId}.zip`);
   const part = `${target}.part`;
   await assertAbsent(target);
-  const file = await open(part, 'wx', 0o600);
+  await (await open(part, 'wx', 0o600)).close();
   try {
     const generatedAt = (o.now ?? (() => new Date()))();
     const result = await withTransaction(
       pool,
-      (c) => writeArchive(c, file, { organizationId, requestId, subjects, generatedAt }),
+      (c) =>
+        writeArchive(c, createWriteStream(part), {
+          organizationId,
+          requestId,
+          subjects,
+          generatedAt,
+        }),
       { isolation: 'repeatable read', readOnly: true },
     );
-    await file.sync();
-    await file.close();
+    const written = await open(part, 'r');
+    await written.sync().finally(() => written.close());
     await rename(part, target);
     return result;
   } catch (err) {
-    await file.close().catch(() => {});
     await unlink(part).catch(() => {});
     throw err;
   }

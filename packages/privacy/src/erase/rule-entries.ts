@@ -64,7 +64,8 @@ function matcher(m: EntryMatch): (e: Entry) => MatchedBy | null {
   const handles = new Set([...m.handles].map(normalizeAuthorHandle));
   return (e) => {
     if (typeof e.externalId === 'string' && m.externalIds.has(e.externalId)) return 'externalId';
-    if (typeof e.handle === 'string' && handles.has(normalizeAuthorHandle(e.handle))) return 'handle';
+    if (typeof e.handle === 'string' && handles.has(normalizeAuthorHandle(e.handle)))
+      return 'handle';
     return null;
   };
 }

@@ -63,7 +63,6 @@ export async function processPrivacyRequest(
       await d.store.finish(req.id, { found: r.found, counts: r.counts, coverage: r.coverage });
     }
   } catch (e) {
-    console.error('DBG', e);
     d.log.error('privacy.request_failed', {
       requestId,
       errorCode: 'internal_error',

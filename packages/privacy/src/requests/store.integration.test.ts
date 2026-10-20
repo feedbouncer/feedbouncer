@@ -196,7 +196,12 @@ describe('PgPrivacyRequestStore', () => {
     const b = await store.create(request(B));
     expect(await store.get(B.organizationId, a1.id)).toBeNull();
     const got = await store.get(A.organizationId, a1.id);
-    expect(got).toMatchObject({ id: a1.id, kind: 'erasure', status: 'queued', reference: 'TICKET-7' });
+    expect(got).toMatchObject({
+      id: a1.id,
+      kind: 'erasure',
+      status: 'queued',
+      reference: 'TICKET-7',
+    });
     expect(JSON.stringify(got)).not.toContain(X);
     expect(Object.keys(got!)).not.toContain('subjects');
     const list = await store.list(A.organizationId, { limit: 10 });
@@ -213,10 +218,18 @@ describe('PgPrivacyRequestStore', () => {
     const b = await store.create(request(B));
     const blob = (await row(a.id)).subjects_sealed as Buffer;
     await expect(
-      open(keys, blob, { organizationId: B.organizationId, connectionId: b.id, kind: 'privacy_subject' }),
+      open(keys, blob, {
+        organizationId: B.organizationId,
+        connectionId: b.id,
+        kind: 'privacy_subject',
+      }),
     ).rejects.toThrow();
     await expect(
-      open(keys, blob, { organizationId: A.organizationId, connectionId: b.id, kind: 'privacy_subject' }),
+      open(keys, blob, {
+        organizationId: A.organizationId,
+        connectionId: b.id,
+        kind: 'privacy_subject',
+      }),
     ).rejects.toThrow();
   });
 
