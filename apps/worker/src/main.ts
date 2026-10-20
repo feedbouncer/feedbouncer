@@ -24,10 +24,11 @@ import {
   POLICY_LANE,
   PgPolicyPreviewStore,
   PgPolicyStore,
+  PgPolicyUsage,
   createPolicyEvaluator,
 } from '@feedbouncer/policies';
 import { PgRuleStore, RuleSetCache } from '@feedbouncer/rules';
-import { createPool, runJobOnce } from '@feedbouncer/db';
+import { BrandSlots, createPool, runJobOnce } from '@feedbouncer/db';
 import {
   JobMetrics,
   JobProducer,
@@ -260,6 +261,11 @@ try {
       languages: env.classifier.languages,
       classifierTimeoutMs: env.classifier.timeoutMs,
       policyTimeoutMs: env.policy.timeoutMs,
+      policyBudget: {
+        slots: new BrandSlots(slotsPool, env.policy.perBrandInFlight, 'fb.policy'),
+        usage: new PgPolicyUsage(pool),
+        monthlyCallsPerBrand: env.policy.monthlyCallsPerBrand,
+      },
     },
   });
   const health = await startHealthServer({

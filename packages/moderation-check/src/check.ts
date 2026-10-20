@@ -5,7 +5,13 @@ import {
   type ClassifierProvider,
   type ThresholdPolicy,
 } from '@feedbouncer/classifier';
-import { runPolicyCheck, type ActivePolicy, type PolicyEvaluator } from '@feedbouncer/policies';
+import type { BrandSlots } from '@feedbouncer/db';
+import {
+  runPolicyCheck,
+  type ActivePolicy,
+  type PgPolicyUsage,
+  type PolicyEvaluator,
+} from '@feedbouncer/policies';
 import { evaluate, type BrandScope, type CompiledRuleSet } from '@feedbouncer/rules';
 import { combine, type ClassifierStage, type PolicyStage } from './combine.js';
 import type { CheckResult } from './types.js';
@@ -19,6 +25,12 @@ export interface CheckDeps {
   languages: readonly string[];
   classifierTimeoutMs: number;
   policyTimeoutMs: number;
+  /** The same per-brand limits the connected-platform policy job enforces. */
+  policyBudget: {
+    slots: Pick<BrandSlots, 'acquire'>;
+    usage: Pick<PgPolicyUsage, 'consume'>;
+    monthlyCallsPerBrand: number;
+  };
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -87,9 +99,22 @@ async function policyStage(
   if (!d.policyEvaluator.enabled) return { kind: 'skipped' };
   const policies = await d.policies.enabledForEvaluation(scope);
   if (policies.length === 0) return { kind: 'skipped' };
-  const out = await runStage(d, deadlineAt, d.policyTimeoutMs, (signal) =>
-    runPolicyCheck(d.policyEvaluator, input, policies, signal, { moderatorActed: false }),
-  );
+  const { slots, usage, monthlyCallsPerBrand } = d.policyBudget;
+  const lease = await slots.acquire(scope.brandId);
+  if (!lease) return { kind: 'failed', code: 'brand_busy' };
+  let out: Outcome<Awaited<ReturnType<typeof runPolicyCheck>>>;
+  try {
+    if (!(await usage.consume(scope, monthlyCallsPerBrand))) {
+      return { kind: 'failed', code: 'quota_exhausted' };
+    }
+    out = await runStage(d, deadlineAt, d.policyTimeoutMs, (signal) =>
+      runPolicyCheck(d.policyEvaluator, input, policies, signal, {
+        moderatorActed: async () => false,
+      }),
+    );
+  } finally {
+    await lease.release().catch(() => {});
+  }
   if (!out.ok) return { kind: 'failed', code: out.code };
   const { decision, provider, model } = out.value;
   return { kind: 'ok', decision, provider, model };

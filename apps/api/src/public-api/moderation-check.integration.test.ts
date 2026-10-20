@@ -12,12 +12,13 @@ import {
   type ClassifierProvider,
   type RawClassification,
 } from '@feedbouncer/classifier';
+import { BrandSlots } from '@feedbouncer/db';
 import {
   MODERATION_CHECK_QUEUE,
   startModerationCheckWorker,
   type CheckDeps,
 } from '@feedbouncer/moderation-check';
-import { DisabledPolicyEvaluator, PgPolicyStore } from '@feedbouncer/policies';
+import { DisabledPolicyEvaluator, PgPolicyStore, PgPolicyUsage } from '@feedbouncer/policies';
 import { ModerationCheckResult, PgApiKeys, type ApiKeyScope } from '@feedbouncer/public-api';
 import { PgRuleStore, RuleSetCache } from '@feedbouncer/rules';
 import { createLogger } from '@feedbouncer/service-runtime';
@@ -80,6 +81,11 @@ function checkDeps(api: TestApi, classifier: ClassifierProvider): CheckDeps {
     languages: ['en'],
     classifierTimeoutMs: 2000,
     policyTimeoutMs: 2000,
+    policyBudget: {
+      slots: new BrandSlots(api.pool, 2, 'fb.policy'),
+      usage: new PgPolicyUsage(api.pool),
+      monthlyCallsPerBrand: 100,
+    },
   };
 }
 

@@ -79,6 +79,15 @@ const evaluator = (verdict: 'clear_match' | 'no_match' = 'clear_match'): PolicyE
   })),
 });
 
+function openSlots(released: string[] = []): CheckDeps['policyBudget']['slots'] {
+  return {
+    acquire: async () => ({
+      release: async () => void released.push('released'),
+      destroy: async () => {},
+    }),
+  };
+}
+
 function deps(o: Partial<CheckDeps> = {}, records: RuleRecord[] = []): CheckDeps {
   const set = compileRuleSet(records, { ownDomains: [] }, 'v1');
   return {
@@ -90,6 +99,11 @@ function deps(o: Partial<CheckDeps> = {}, records: RuleRecord[] = []): CheckDeps
     languages: LANGS,
     classifierTimeoutMs: 5000,
     policyTimeoutMs: 5000,
+    policyBudget: {
+      slots: openSlots(),
+      usage: { consume: async () => true },
+      monthlyCallsPerBrand: 100,
+    },
     sleep: async () => {},
     ...o,
   };
@@ -190,6 +204,75 @@ describe('checkText', () => {
       decidedBy: 'policy',
       evidence: { policyId: 'pol-1', policyRevision: 2 },
       models: { policy: { provider: 'pe', model: 'pe-1' } },
+    });
+  });
+
+  describe('policy budget', () => {
+    const withPolicy = (o: Partial<CheckDeps>) =>
+      deps({
+        policies: { enabledForEvaluation: async () => [active] },
+        policyEvaluator: evaluator(),
+        ...o,
+      });
+
+    it('degrades to review without a model call when the monthly budget is spent', async () => {
+      const d = withPolicy({
+        policyBudget: {
+          slots: openSlots(),
+          usage: { consume: async () => false },
+          monthlyCallsPerBrand: 100,
+        },
+      });
+      const r = await checkText(d, scope, 'I want a refund', later());
+      expect(d.policyEvaluator.evaluate).not.toHaveBeenCalled();
+      expect(r).toMatchObject({
+        verdict: 'review',
+        reasonCode: 'policy_unavailable',
+        degraded: true,
+      });
+    });
+
+    it('degrades to review without a model call when the brand has no free slot', async () => {
+      const d = withPolicy({
+        policyBudget: {
+          slots: { acquire: async () => null },
+          usage: { consume: async () => true },
+          monthlyCallsPerBrand: 100,
+        },
+      });
+      const r = await checkText(d, scope, 'I want a refund', later());
+      expect(d.policyEvaluator.evaluate).not.toHaveBeenCalled();
+      expect(r).toMatchObject({ verdict: 'review', reasonCode: 'policy_unavailable' });
+    });
+
+    it('takes one call from the brand budget and releases the slot afterwards', async () => {
+      const released: string[] = [];
+      const consume = vi.fn(async () => true);
+      const d = withPolicy({
+        policyBudget: { slots: openSlots(released), usage: { consume }, monthlyCallsPerBrand: 7 },
+      });
+      await checkText(d, scope, 'I want a refund', later());
+      expect(consume).toHaveBeenCalledWith(scope, 7);
+      expect(released).toEqual(['released']);
+    });
+
+    it('releases the slot when the evaluator fails', async () => {
+      const released: string[] = [];
+      const d = withPolicy({
+        policyEvaluator: {
+          ...evaluator(),
+          evaluate: async () => {
+            throw new ProviderError('unavailable', false);
+          },
+        },
+        policyBudget: {
+          slots: openSlots(released),
+          usage: { consume: async () => true },
+          monthlyCallsPerBrand: 7,
+        },
+      });
+      await checkText(d, scope, 'I want a refund', later());
+      expect(released).toEqual(['released']);
     });
   });
 

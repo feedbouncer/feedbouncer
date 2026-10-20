@@ -234,7 +234,7 @@ export const ReplyResult = z
   .meta({ id: 'ReplyResult' });
 
 export const KeyResource = z
-  .object({ organizationId: z.uuid(), name: z.string(), scope: z.enum(['read', 'write']) })
+  .object({ organizationId: z.uuid(), name: z.string(), scope: z.enum(['moderate', 'read', 'write']) })
   .meta({ id: 'Key' });
 
 export const ListRulesQuery = z.strictObject({ brandId: z.uuid().optional() });
@@ -639,7 +639,7 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     id: 'getApiKey',
     method: 'GET',
     path: '/v1/key',
-    scope: 'read',
+    scope: 'moderate',
     summary: 'Describe the API key making the request',
     idempotent: false,
     responses: { 200: KeyResource },

@@ -11,7 +11,7 @@ Authorization: Bearer fbk_<id>_<secret>
 ```
 
 - A key belongs to one organization and can only see that organization's brands, comments and flagged items. Asking for another organization's ids, an archived brand or a deleted comment returns `404`. The exception is list filters: `GET /v1/comments?brandId=` with a brand outside the organization returns an empty page.
-- Scopes: `read` keys can call every `GET` route except the webhook endpoint ones; `moderate` keys can only call `POST /v1/moderation/check` (no route reads comments or any other data); `write` keys can also hide, unhide and reply to comments, propose rule changes and manage webhook endpoints. Reading webhook endpoints needs a `write` key because it reveals where events are sent.
+- Scopes: `read` keys can call every `GET` route except the webhook endpoint ones; `moderate` keys can only call `POST /v1/moderation/check` and `GET /v1/key` (no route reads comments or any other data); `write` keys can also hide, unhide and reply to comments, propose rule changes and manage webhook endpoints. Reading webhook endpoints needs a `write` key because it reveals where events are sent.
 - `GET /v1/key` describes the key making the request (`organizationId`, `name`, `scope`). Use it to check a key before doing anything else.
 - The secret is shown once and only a hash is stored. Revoking a key takes effect on its next request. Keys keep working after the admin who created them leaves, so revoke them when someone leaves.
 
@@ -30,7 +30,7 @@ Authorization: Bearer fbk_<id>_<secret>
 
 ## Checking text before you publish it
 
-`POST /v1/moderation/check` judges any text against a brand's rules, classifier and policies and answers `allow`, `review` or `block`. It needs a `moderate`, `read` or `write` key. Nothing is stored in the database: the text waits in Redis only until the check finishes or times out.
+`POST /v1/moderation/check` judges any text against a brand's rules, classifier and policies and answers `allow`, `review` or `block`. It needs a `moderate`, `read` or `write` key. Nothing is stored in the database and nothing is retained: the text waits in Redis only until the check finishes or times out, then it is deleted. It is not logged. Retention settings do not apply because there is nothing to retain.
 
 ```bash
 curl -X POST https://api.example.com/v1/moderation/check \
@@ -69,7 +69,7 @@ curl -X POST https://api.example.com/v1/moderation/check \
 - `reasonCode` is one of `rule_matched`, `classifier_threshold`, `policy_matched`, `no_match`, `classifier_unavailable`, `classifier_not_configured`, `policy_unavailable`. Codes are only ever added, never renamed. Match on them rather than on `reason`.
 - A check that could not fully run is never `allow`: you get `review`, `degraded: true` and the matching `*_unavailable` or `classifier_not_configured` code (an instance without a classifier holds every text no rule decided).
 - Errors: `400 invalid_request` (bad body, text that is not well-formed or has no visible characters, missing `brandId`), `401`, `403 insufficient_scope`, `404 not_found` (unknown or archived brand, or one of another organization), `413`, `422 text_too_long` (with `maxLength`), `429 rate_limited` and `503 temporarily_unavailable` with `Retry-After: 5` when the worker did not answer in time (`MODERATION_CHECK_TIMEOUT_MS`, default 20000). A retry is always safe.
-- The usual per-key rate limit applies (`PUBLIC_API_RATE_LIMIT_PER_MINUTE`, default 60). Calls to this route do not use a brand's monthly policy-check budget.
+- The usual per-key rate limit applies (`PUBLIC_API_RATE_LIMIT_PER_MINUTE`, default 60). Policy checks made through this route count against the brand's monthly policy-check budget and its concurrent policy-call limit, like connected comments do. When either is exhausted the answer is `review` with `reasonCode: "policy_unavailable"` and `degraded: true`, never `allow`.
 
 ## Summaries
 

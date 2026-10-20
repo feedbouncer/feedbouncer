@@ -1578,7 +1578,7 @@
       "get": {
         "operationId": "getApiKey",
         "summary": "Describe the API key making the request",
-        "description": "Requires an API key with the `read` scope.",
+        "description": "Requires an API key with the `moderate` scope.",
         "security": [
           {
             "apiKey": []
@@ -4497,6 +4497,7 @@
           "scope": {
             "type": "string",
             "enum": [
+              "moderate",
               "read",
               "write"
             ]

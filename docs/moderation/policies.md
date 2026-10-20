@@ -138,8 +138,8 @@ Comments longer than 4,000 characters are cut at that point before they are
 sent, and the decision's reason says so. Text after the cut is never seen by
 the model.
 
-The monthly budget counts model calls and is shared by live checks, previews
-and runs. Retries count, because they cost money. Empty comments never call
+The monthly budget counts model calls and is shared by live checks, previews,
+runs and `POST /v1/moderation/check`. Retries count, because they cost money. Empty comments never call
 the model and are not counted. When the budget is used up, comments are
 recorded as "not checked: monthly limit reached" and left unchanged, and
 previews stop. The budget resets at the start of each UTC month.

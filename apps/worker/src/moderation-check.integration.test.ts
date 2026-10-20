@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Queue, QueueEvents } from 'bullmq';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_THRESHOLDS, ZERO_SCORES, type ClassifierProvider } from '@feedbouncer/classifier';
-import { createPool } from '@feedbouncer/db';
+import { BrandSlots, createPool } from '@feedbouncer/db';
 import { migratedDb } from '@feedbouncer/db/testing';
 import { testRedis, type TestRedis } from '@feedbouncer/jobs/testing';
 import {
@@ -12,7 +12,7 @@ import {
   type CheckJobData,
   type CheckJobResult,
 } from '@feedbouncer/moderation-check';
-import { DisabledPolicyEvaluator } from '@feedbouncer/policies';
+import { DisabledPolicyEvaluator, PgPolicyUsage } from '@feedbouncer/policies';
 import { compileRuleSet } from '@feedbouncer/rules';
 import type { Logger } from '@feedbouncer/service-runtime';
 
@@ -114,6 +114,11 @@ function deps(o: Partial<CheckDeps> = {}): CheckDeps & { classifier: FakeClassif
     languages: ['en'],
     classifierTimeoutMs: 5000,
     policyTimeoutMs: 5000,
+    policyBudget: {
+      slots: new BrandSlots(pool, 2, 'fb.policy'),
+      usage: new PgPolicyUsage(pool),
+      monthlyCallsPerBrand: 100,
+    },
     ...o,
   } as CheckDeps & { classifier: FakeClassifier };
 }

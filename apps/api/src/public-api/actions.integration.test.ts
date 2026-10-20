@@ -28,7 +28,7 @@ const headers = (token: string) => ({
 });
 const get = (path: string, token: string) => api.req('GET', path, { headers: headers(token) });
 
-async function newKey(scope: 'read' | 'write', name = `k-${randomUUID()}`) {
+async function newKey(scope: 'moderate' | 'read' | 'write', name = `k-${randomUUID()}`) {
   const { key, token } = await keys.create(A.orgId, A.owner.userId, { name, scope });
   return { id: key.id, name, token: token.reveal() };
 }
@@ -111,5 +111,12 @@ describe('GET /v1/key', () => {
   it('works for a write key too', async () => {
     const k = await newKey('write');
     expect((await get('/v1/key', k.token)).body).toMatchObject({ scope: 'write' });
+  });
+
+  it('works for a moderate key, so it can check itself', async () => {
+    const k = await newKey('moderate');
+    const r = await get('/v1/key', k.token);
+    expect(r.status).toBe(200);
+    expect(KeyResource.parse(r.body)).toMatchObject({ scope: 'moderate' });
   });
 });
