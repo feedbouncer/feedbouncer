@@ -2,7 +2,7 @@ import { NodeConnectionTypes } from 'n8n-workflow';
 import type { IDataObject, IHookFunctions, INodeType, INodeTypeDescription, IWebhookFunctions, IWebhookResponseData } from 'n8n-workflow';
 import { CREDENTIAL_NAME } from '../shared/constants';
 import { rememberEvent } from './dedupe';
-import { checkExists, create, remove } from './lifecycle';
+import { checkExists, create, readSigningSecret, remove } from './lifecycle';
 import type { TriggerStaticData } from './lifecycle';
 import { verifySignature } from './signature';
 
@@ -66,7 +66,7 @@ export class FeedBouncerTrigger implements INodeType {
     const id = header('webhook-id');
 
     const verified = verifySignature({
-      secret: data.secret,
+      secret: await readSigningSecret(this),
       id,
       timestamp: header('webhook-timestamp'),
       signatureHeader: header('webhook-signature'),

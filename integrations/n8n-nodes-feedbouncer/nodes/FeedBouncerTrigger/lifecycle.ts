@@ -1,22 +1,22 @@
 import { NodeOperationError } from 'n8n-workflow';
-import type { IHookFunctions } from 'n8n-workflow';
-import { DEFAULT_LIMIT } from '../shared/constants';
+import type { IHookFunctions, IWebhookFunctions } from 'n8n-workflow';
+import { CREDENTIAL_NAME, DEFAULT_LIMIT } from '../shared/constants';
 import { toNodeApiError } from '../shared/errors';
 import { isUuid } from '../shared/ids';
 import { collectPages } from '../shared/pagination';
 import { feedBouncerRequest } from '../shared/transport';
+import { openSecret, sealSecret } from './secretBox';
 import { isValidSecret } from './signature';
 
 export interface TriggerStaticData {
   endpointId?: string;
-  secret?: string;
+  /** The signing secret, encrypted under the API key; see secretBox. */
+  sealedSecret?: string;
   url?: string;
   events?: string[];
   /** Delivery ids already handled, with the time they were seen. */
   seen?: Record<string, number>;
 }
-
-export const TRIGGER_EVENTS = ['item.flagged', 'comment.hidden', 'comment.received'] as const;
 
 const MAX_DESCRIPTION_LENGTH = 500;
 
@@ -26,9 +26,15 @@ interface WebhookEndpoint {
   status: string;
 }
 
-const staticData = (ctx: IHookFunctions) => ctx.getWorkflowStaticData('node') as TriggerStaticData;
+const staticData = (ctx: IHookFunctions | IWebhookFunctions) => ctx.getWorkflowStaticData('node') as TriggerStaticData;
 const webhookUrl = (ctx: IHookFunctions) => ctx.getNodeWebhookUrl('default') as string;
 const events = (ctx: IHookFunctions) => ctx.getNodeParameter('events') as string[];
+
+/** The signing secret, or undefined when none is stored or the API key changed since it was sealed. */
+export async function readSigningSecret(ctx: IHookFunctions | IWebhookFunctions): Promise<string | undefined> {
+  const { apiKey } = await ctx.getCredentials(CREDENTIAL_NAME);
+  return typeof apiKey === 'string' ? openSecret(staticData(ctx).sealedSecret, apiKey) : undefined;
+}
 
 const isStatus = (error: unknown, status: number) => (error as { httpCode?: unknown } | null)?.httpCode === String(status);
 
@@ -81,7 +87,7 @@ export async function checkExists(this: IHookFunctions): Promise<boolean> {
   const data = staticData(this);
   const url = webhookUrl(this);
   const wanted = [...events(this)].sort();
-  if (!isUuid(data.endpointId) || !data.secret || data.url !== url) return false;
+  if (!isUuid(data.endpointId) || !(await readSigningSecret(this)) || data.url !== url) return false;
   if (JSON.stringify([...(data.events ?? [])].sort()) !== JSON.stringify(wanted)) return false;
 
   try {
@@ -151,7 +157,13 @@ export async function create(this: IHookFunctions): Promise<boolean> {
     });
   }
 
-  Object.assign(staticData(this), { endpointId: created.endpoint.id, secret: created.secret, url, events: eventTypes });
+  const { apiKey } = await this.getCredentials(CREDENTIAL_NAME);
+  Object.assign(staticData(this), {
+    endpointId: created.endpoint.id,
+    sealedSecret: sealSecret(created.secret, String(apiKey)),
+    url,
+    events: eventTypes,
+  });
   return true;
 }
 
@@ -164,7 +176,7 @@ export async function remove(this: IHookFunctions): Promise<boolean> {
     // Deliberately ignored.
   }
   delete data.endpointId;
-  delete data.secret;
+  delete data.sealedSecret;
   delete data.url;
   delete data.events;
   return true;

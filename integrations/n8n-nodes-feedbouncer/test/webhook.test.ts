@@ -3,10 +3,12 @@ import type { IDataObject } from 'n8n-workflow';
 import { Webhook } from 'standardwebhooks';
 import { describe, expect, it } from 'vitest';
 import { FeedBouncerTrigger } from '../nodes/FeedBouncerTrigger/FeedBouncerTrigger.node';
-import { fakeWebhook } from './fakes';
+import { sealSecret } from '../nodes/FeedBouncerTrigger/secretBox';
+import { API_KEY, fakeWebhook } from './fakes';
 
 const SECRET = `whsec_${randomBytes(32).toString('base64')}`;
 const node = new FeedBouncerTrigger();
+const SEALED = sealSecret(SECRET, API_KEY);
 
 function delivery(event: Record<string, unknown>, over: { id?: string; events?: string[]; staticData?: IDataObject; tamper?: boolean; rawBody?: unknown; text?: string; unsigned?: boolean } = {}) {
   const id = over.id ?? 'evt_1';
@@ -23,7 +25,7 @@ function delivery(event: Record<string, unknown>, over: { id?: string; events?: 
       };
   return fakeWebhook({
     params: { events: over.events ?? ['comment.hidden'] },
-    staticData: over.staticData ?? { secret: SECRET },
+    staticData: over.staticData ?? { sealedSecret: SEALED },
     headers,
     rawBody: 'rawBody' in over ? over.rawBody : body,
   });
@@ -53,6 +55,20 @@ describe('FeedBouncerTrigger.webhook', () => {
     expect(ctx.response.status).toBe(401);
   });
 
+  it('rejects when the stored secret was sealed under another api key', async () => {
+    const ctx = delivery(HIDDEN, { staticData: { sealedSecret: sealSecret(SECRET, 'fbk_rotated') } });
+    const result = await node.webhook.call(ctx);
+    expect(result.workflowData).toBeUndefined();
+    expect(ctx.response.status).toBe(401);
+  });
+
+  it('rejects a clear-text secret left by an older version', async () => {
+    const ctx = delivery(HIDDEN, { staticData: { secret: SECRET } });
+    const result = await node.webhook.call(ctx);
+    expect(result.workflowData).toBeUndefined();
+    expect(ctx.response.status).toBe(401);
+  });
+
   it('rejects when no signing secret is stored', async () => {
     const ctx = delivery(HIDDEN, { staticData: {} });
     const result = await node.webhook.call(ctx);
@@ -71,7 +87,7 @@ describe('FeedBouncerTrigger.webhook', () => {
   );
 
   it('does not mark a rejected delivery as seen', async () => {
-    const staticData: { secret: string; seen?: object } = { secret: SECRET };
+    const staticData: { sealedSecret: string; seen?: object } = { sealedSecret: SEALED };
     await node.webhook.call(delivery(HIDDEN, { staticData, tamper: true }));
     expect(staticData.seen).toBeUndefined();
     const result = await node.webhook.call(delivery(HIDDEN, { staticData }));
@@ -79,7 +95,7 @@ describe('FeedBouncerTrigger.webhook', () => {
   });
 
   it('delivers a repeated webhook-id once', async () => {
-    const staticData = { secret: SECRET };
+    const staticData = { sealedSecret: SEALED };
     const first = await node.webhook.call(delivery(HIDDEN, { staticData }));
     const ctx = delivery(HIDDEN, { staticData });
     const second = await node.webhook.call(ctx);
@@ -89,14 +105,14 @@ describe('FeedBouncerTrigger.webhook', () => {
   });
 
   it('acknowledges webhook.test without starting the workflow', async () => {
-    const staticData: { secret: string; seen?: object } = { secret: SECRET };
+    const staticData: { sealedSecret: string; seen?: object } = { sealedSecret: SEALED };
     const result = await node.webhook.call(delivery({ id: 'evt_1', type: 'webhook.test', data: {} }, { staticData, events: ['webhook.test'] }));
     expect(result).toEqual({ webhookResponse: 'ok' });
     expect(staticData.seen).toBeUndefined();
   });
 
   it('acknowledges event types the node did not select, without marking them seen', async () => {
-    const staticData: { secret: string; seen?: object } = { secret: SECRET };
+    const staticData: { sealedSecret: string; seen?: object } = { sealedSecret: SEALED };
     const result = await node.webhook.call(delivery({ ...HIDDEN, type: 'comment.received' }, { staticData }));
     expect(result).toEqual({ webhookResponse: 'ok' });
     expect(staticData.seen).toBeUndefined();

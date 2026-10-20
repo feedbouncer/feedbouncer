@@ -2,7 +2,8 @@ import type { IDataObject } from 'n8n-workflow';
 import { describe, expect, it } from 'vitest';
 import { checkExists, create, remove } from '../nodes/FeedBouncerTrigger/lifecycle';
 import type { TriggerStaticData } from '../nodes/FeedBouncerTrigger/lifecycle';
-import { fakeHook } from './fakes';
+import { openSecret, sealSecret } from '../nodes/FeedBouncerTrigger/secretBox';
+import { API_KEY, fakeHook } from './fakes';
 import type { FakeInit, Scripted } from './fakes';
 
 const URL_A = 'https://n8n.example.com/webhook/aaa';
@@ -32,7 +33,7 @@ const hook = (init: FakeInit & { webhookUrl?: string } = {}) =>
   fakeHook({ webhookUrl: URL_A, params: { events: ['item.flagged'] }, ...init });
 const stored = (over: Partial<TriggerStaticData> = {}): IDataObject => ({
   endpointId: ID_1,
-  secret: SIGNING,
+  sealedSecret: sealSecret(SIGNING, API_KEY),
   url: URL_A,
   events: ['item.flagged'],
   ...over,
@@ -40,7 +41,7 @@ const stored = (over: Partial<TriggerStaticData> = {}): IDataObject => ({
 const methods = (ctx: { calls: Array<{ method: string }> }) => ctx.calls.map((c) => c.method);
 
 describe('create', () => {
-  it('registers url+events, stores endpointId and secret, request body has no apiKey', async () => {
+  it('registers url+events, stores endpointId and the sealed secret, request body has no apiKey', async () => {
     const ctx = hook({
       params: { events: ['item.flagged', 'comment.hidden'] },
       http: [page([]), created(ID_1)],
@@ -55,7 +56,10 @@ describe('create', () => {
       description: 'n8n workflow wf-1, node "FeedBouncer"',
     });
     expect(JSON.stringify(post.body)).not.toMatch(/fbk_|apiKey/);
-    expect(ctx.staticData).toMatchObject({ endpointId: ID_1, secret: SIGNING, url: URL_A, events: ['item.flagged', 'comment.hidden'] });
+    expect(ctx.staticData).toMatchObject({ endpointId: ID_1, url: URL_A, events: ['item.flagged', 'comment.hidden'] });
+    expect(openSecret(ctx.staticData.sealedSecret, API_KEY)).toBe(SIGNING);
+    expect(JSON.stringify(ctx.staticData)).not.toContain(SIGNING.slice('whsec_'.length));
+    expect(ctx.staticData).not.toHaveProperty('secret');
   });
 
   it.each([['only the prefix', 'whsec_'], ['a short key', 'whsec_AAAA'], ['no prefix', 'MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw'], ['no value', undefined]])(
@@ -217,7 +221,9 @@ describe('checkExists', () => {
     ['static data is empty', {}, URL_A, ['item.flagged'], []],
     ['the url changed', stored(), URL_B, ['item.flagged'], []],
     ['the events changed', stored(), URL_A, ['item.flagged', 'comment.hidden'], []],
-    ['the secret is missing', stored({ secret: undefined }), URL_A, ['item.flagged'], []],
+    ['the secret is missing', stored({ sealedSecret: undefined }), URL_A, ['item.flagged'], []],
+    ['the secret was sealed under another api key', stored({ sealedSecret: sealSecret(SIGNING, 'fbk_other') }), URL_A, ['item.flagged'], []],
+    ['only a clear-text secret is stored', stored({ sealedSecret: undefined, secret: SIGNING } as Partial<TriggerStaticData>), URL_A, ['item.flagged'], []],
     ['the endpoint is disabled', stored(), URL_A, ['item.flagged'], [active({ status: 'disabled' })]],
     ['the endpoint url differs', stored(), URL_A, ['item.flagged'], [active({ url: URL_B })]],
     ['the endpoint is gone (404)', stored(), URL_A, ['item.flagged'], [apiError(404, 'not_found')]],
@@ -259,7 +265,7 @@ describe('remove', () => {
     const ctx = hook({ staticData: stored(), http: [page([]), apiError(404, 'not_found')] });
     expect(await remove.call(ctx)).toBe(true);
     expect(ctx.staticData.endpointId).toBeUndefined();
-    expect(ctx.staticData.secret).toBeUndefined();
+    expect(ctx.staticData.sealedSecret).toBeUndefined();
   });
 
   it('skips a non-UUID stored id and still clears and returns true', async () => {

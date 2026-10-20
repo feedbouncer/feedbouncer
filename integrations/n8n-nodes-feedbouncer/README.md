@@ -114,7 +114,7 @@ Get Many fetches pages of 100. Return All stops at 10,000 items and then fails w
 
 ## Security
 
-The API key lives only in the n8n credential store. The trigger's signing secret is kept in the workflow's static data, which n8n stores unencrypted and includes in workflow exports and backups, so treat both as sensitive. n8n gives community nodes no encrypted store for per-workflow secrets; this risk is accepted and documented. It can only be used to forge deliveries to that one n8n webhook address, and it is not your API key. Deactivating and reactivating the workflow removes the endpoint and issues a new secret.
+The API key lives only in the n8n credential store. The trigger's signing secret is kept in the workflow's static data, which n8n stores unencrypted, so the secret is encrypted first (AES-256-GCM, with a key derived from your API key). Workflow exports and backups therefore do not expose it, but they still contain the encrypted value, so treat them as sensitive. If you replace the API key in the credential, the stored secret can no longer be read: deliveries are rejected until you deactivate and reactivate the workflow, which registers a new endpoint and issues a new secret. Deactivating the workflow also removes the endpoint.
 
 Report vulnerabilities as described in the [security policy](https://github.com/feedbouncer/feedbouncer/blob/main/SECURITY.md).
 
