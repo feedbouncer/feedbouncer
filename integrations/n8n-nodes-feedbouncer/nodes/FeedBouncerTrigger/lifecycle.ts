@@ -14,6 +14,8 @@ export interface TriggerStaticData {
   sealedSecret?: string;
   url?: string;
   events?: string[];
+  /** The endpoint of a running test listen, kept apart so the production fields stay intact. */
+  test?: { endpointId: string; sealedSecret: string; url: string };
   /** Delivery ids already handled, with the time they were seen. */
   seen?: Record<string, number>;
 }
@@ -33,10 +35,15 @@ const events = (ctx: IHookFunctions) => ctx.getNodeParameter('events') as string
 /** The signing secret, or undefined when none is stored or the API key changed since it was sealed. */
 export async function readSigningSecret(ctx: IHookFunctions | IWebhookFunctions): Promise<string | undefined> {
   const { apiKey } = await ctx.getCredentials(CREDENTIAL_NAME);
-  return typeof apiKey === 'string' ? openSecret(staticData(ctx).sealedSecret, apiKey) : undefined;
+  const data = staticData(ctx);
+  const isTestDelivery = data.test !== undefined && data.test.url === ctx.getNodeWebhookUrl('default');
+  const sealed = isTestDelivery ? data.test?.sealedSecret : data.sealedSecret;
+  return typeof apiKey === 'string' ? openSecret(sealed, apiKey) : undefined;
 }
 
 const isStatus = (error: unknown, status: number) => (error as { httpCode?: unknown } | null)?.httpCode === String(status);
+const hasApiCode = (error: unknown, code: string) =>
+  (error as { context?: { code?: unknown } } | null)?.context?.code === code;
 
 async function deleteEndpoint(ctx: IHookFunctions, id: string): Promise<void> {
   try {
@@ -105,7 +112,7 @@ export async function checkExists(this: IHookFunctions): Promise<boolean> {
 
 /** Messages here are plain strings: the API's own text and the secret never reach them. */
 function createFailure(ctx: IHookFunctions, error: unknown, url: string): unknown {
-  if (isStatus(error, 422)) {
+  if (isStatus(error, 422) && hasApiCode(error, 'invalid_webhook_url')) {
     return toNodeApiError(ctx.getNode(), {
       httpCode: 422,
       code: 'invalid_webhook_url',
@@ -114,7 +121,7 @@ function createFailure(ctx: IHookFunctions, error: unknown, url: string): unknow
         "Set n8n's public webhook URL (WEBHOOK_URL) to such an address, or ask your FeedBouncer operator to allow your network in WEBHOOK_ALLOWED_PRIVATE_CIDRS.",
     });
   }
-  if (isStatus(error, 409)) {
+  if (isStatus(error, 409) && hasApiCode(error, 'webhook_endpoint_limit_reached')) {
     return toNodeApiError(ctx.getNode(), {
       httpCode: 409,
       code: 'webhook_endpoint_limit_reached',
@@ -128,7 +135,8 @@ function createFailure(ctx: IHookFunctions, error: unknown, url: string): unknow
 export async function create(this: IHookFunctions): Promise<boolean> {
   const url = webhookUrl(this);
   const eventTypes = events(this);
-  await cleanup(this, url, this.getActivationMode() !== 'manual');
+  const isTestListen = this.getActivationMode() === 'manual';
+  await cleanup(this, url, !isTestListen);
 
   const description = `n8n workflow ${this.getWorkflow().id}, node "${this.getNode().name}"`
     .replace(/[^\x20-\x7E]/g, '')
@@ -155,12 +163,9 @@ export async function create(this: IHookFunctions): Promise<boolean> {
   }
 
   const { apiKey } = await this.getCredentials(CREDENTIAL_NAME);
-  Object.assign(staticData(this), {
-    endpointId,
-    sealedSecret: sealSecret(created.secret, String(apiKey)),
-    url,
-    events: eventTypes,
-  });
+  const sealedSecret = sealSecret(created.secret, String(apiKey));
+  if (isTestListen) staticData(this).test = { endpointId, sealedSecret, url };
+  else Object.assign(staticData(this), { endpointId, sealedSecret, url, events: eventTypes });
   return true;
 }
 
@@ -177,7 +182,10 @@ export async function remove(this: IHookFunctions): Promise<boolean> {
   } catch {
     // Deliberately ignored.
   }
-  if (isTestListen && data.url !== url) return true;
+  if (isTestListen) {
+    delete data.test;
+    return true;
+  }
   delete data.endpointId;
   delete data.sealedSecret;
   delete data.url;

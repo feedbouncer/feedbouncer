@@ -34,6 +34,17 @@ function delivery(event: Record<string, unknown>, over: { id?: string; events?: 
 const HIDDEN = { id: 'evt_1', type: 'comment.hidden', data: { comment: { text: 'hi' } } };
 
 describe('FeedBouncerTrigger.webhook', () => {
+  it('accepts a test-listen delivery signed with the test secret and keeps the production secret for production', async () => {
+    const url = 'https://n8n.example.com/webhook/abc';
+    const testStatic = { sealedSecret: sealSecret('whsec_other', 'fbk_test'), test: { endpointId: 'x', sealedSecret: SEALED, url } };
+    const result = await node.webhook.call(delivery(HIDDEN, { staticData: testStatic }));
+    expect(result.workflowData).toBeDefined();
+    const other = { ...testStatic, test: { ...testStatic.test, url: 'https://n8n.example.com/webhook-test/abc' } };
+    const rejected = delivery(HIDDEN, { staticData: other });
+    await node.webhook.call(rejected);
+    expect(rejected.response.status).toBe(401);
+  });
+
   it('emits the parsed event with the delivery id', async () => {
     const ctx = delivery(HIDDEN);
     const result = await node.webhook.call(ctx);

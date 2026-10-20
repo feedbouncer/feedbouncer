@@ -112,6 +112,7 @@ describe('create', () => {
     });
     expect(await create.call(ctx)).toBe(true);
     expect(methods(ctx)).toEqual(['GET', 'POST']);
+    expect(ctx.staticData).toMatchObject({ endpointId: ID_1, url: URL_A, test: { endpointId: ID_2 } });
   });
 
   it('deletes the stored endpoint of an old production URL when the production URL changes', async () => {
@@ -196,6 +197,15 @@ describe('create', () => {
       message: 'This FeedBouncer workspace already has 10 webhook endpoints.',
       description: 'Deactivate another FeedBouncer Trigger workflow or delete unused endpoints in FeedBouncer.',
     });
+  });
+
+  it.each([
+    [422, 'invalid_request'],
+    [409, 'conflict'],
+  ])('a %i %s on create is not described as a URL or limit problem', async (status, code) => {
+    const ctx = hook({ http: [page([]), apiError(status, code)] });
+    const error = await create.call(ctx).catch((e: unknown) => e);
+    expect((error as Error).message).not.toMatch(/public https|10 webhook endpoints/);
   });
 
   it('403 insufficient_scope on create gives the read-only key message', async () => {
@@ -286,28 +296,17 @@ describe('remove', () => {
   });
 
   it('keeps the production endpoint and its static data when a test listen is torn down', async () => {
-    const ctx = hook({
-      webhookUrl: 'https://n8n.example.com/custom-test-path/aaa',
-      activationMode: 'manual',
-      staticData: stored({ url: URL_A }),
-      http: [page([endpoint(ID_1, URL_A)])],
-    });
-    expect(await remove.call(ctx)).toBe(true);
-    expect(methods(ctx)).toEqual(['GET']);
-    expect(ctx.staticData).toMatchObject({ endpointId: ID_1, url: URL_A });
-  });
-
-  it('deletes the test endpoint and clears static data when the test listen created it', async () => {
     const testUrl = 'https://n8n.example.com/custom-test-path/aaa';
     const ctx = hook({
       webhookUrl: testUrl,
       activationMode: 'manual',
-      staticData: stored({ url: testUrl }),
-      http: [page([endpoint(ID_1, testUrl)]), gone],
+      staticData: { ...stored({ url: URL_A }), test: { endpointId: ID_2, sealedSecret: 'x', url: testUrl } },
+      http: [page([endpoint(ID_2, testUrl)]), gone],
     });
     expect(await remove.call(ctx)).toBe(true);
     expect(methods(ctx)).toEqual(['GET', 'DELETE']);
-    expect(ctx.staticData).toEqual({});
+    expect(ctx.staticData).toMatchObject({ endpointId: ID_1, url: URL_A });
+    expect(ctx.staticData.test).toBeUndefined();
   });
 
   it.each([

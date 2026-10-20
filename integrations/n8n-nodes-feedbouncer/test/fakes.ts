@@ -142,7 +142,7 @@ export function fakeHook(init: FakeInit & { webhookUrl?: string } = {}): IHookFu
 }
 
 export function fakeWebhook(
-  init: FakeInit & { headers?: Record<string, string>; rawBody?: unknown } = {},
+  init: FakeInit & { headers?: Record<string, string>; rawBody?: unknown; webhookUrl?: string } = {},
 ): IWebhookFunctions & FakeContext & { response: { status?: number; body?: unknown } } {
   const ctx = build(init);
   const rawBody = typeof init.rawBody === 'string' ? Buffer.from(init.rawBody) : (init.rawBody ?? Buffer.alloc(0));
@@ -161,6 +161,7 @@ export function fakeWebhook(
   };
   return Object.assign(ctx, {
     response,
+    getNodeWebhookUrl: () => init.webhookUrl ?? 'https://n8n.example.com/webhook/abc',
     getHeaderData: () => headers,
     getRequestObject: () => ({ rawBody, headers }),
     getResponseObject: () => res,
