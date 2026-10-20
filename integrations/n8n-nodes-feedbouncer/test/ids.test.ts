@@ -4,13 +4,12 @@ import { fakeExecute } from './fakes';
 
 describe('idempotencyKey', () => {
   it('joins the parts and replaces unsafe characters', () => {
-    expect(idempotencyKey({ executionId: '123', nodeId: 'a b/c', itemIndex: 2, operation: 'hide' })).toBe(
-      'n8n.123.a-b-c.2.hide',
-    );
+    expect(idempotencyKey({ executionId: '123', nodeId: 'a b/c', runIndex: 1, itemIndex: 2, operation: 'hide', targetId: 'c1' }),
+    ).toBe('n8n.123.a-b-c.1.2.hide.c1');
   });
 
   it('truncates to 128 characters and still matches the API pattern', () => {
-    const key = idempotencyKey({ executionId: 'é'.repeat(300), nodeId: 'n', itemIndex: 0, operation: 'hide' });
+    const key = idempotencyKey({ executionId: 'é'.repeat(300), nodeId: 'n', runIndex: 0, itemIndex: 0, operation: 'hide', targetId: 'c1' });
     expect(key).toHaveLength(128);
     expect(key).toMatch(IDEMPOTENCY_KEY_PATTERN);
   });

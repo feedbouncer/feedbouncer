@@ -49,8 +49,18 @@ describe('decision hide', () => {
     const { ctx, result } = run({ http: [ok(moderation('noop', 'already_hidden'))] });
     await result;
     expect(ctx.calls[0]).toMatchObject({ method: 'POST', url: `https://fb.acme.io/v1/comments/${ID}/hide` });
-    expect(ctx.calls[0].headers['Idempotency-Key']).toBe('n8n.123.node-1.0.hide');
+    expect(ctx.calls[0].headers['Idempotency-Key']).toBe(`n8n.123.node-1.0.0.hide.${ID}`);
     expect(ctx.calls[0].body).toBeUndefined();
+  });
+
+  it('differs between runs of the node in one execution, as inside Loop Over Items', async () => {
+    const keys: string[] = [];
+    for (const runIndex of [0, 1]) {
+      const { ctx, result } = run({ runIndex, http: [ok(moderation('noop', 'already_hidden'))] });
+      await result;
+      keys.push(ctx.calls[0].headers['Idempotency-Key']);
+    }
+    expect(keys[0]).not.toBe(keys[1]);
   });
 
   it('a retry within the same execution (Retry On Fail) sends an identical Idempotency-Key', async () => {
@@ -159,7 +169,7 @@ describe('decision undoHide', () => {
     const { ctx, result } = run({ http: [ok(moderation('failed', 'platform_rejected', 'unhide'))] }, 'undoHide');
     await expect(result).rejects.toThrow(`FeedBouncer could not undo the hide of comment ${ID}: platform_rejected.`);
     expect(ctx.calls[0]).toMatchObject({ method: 'POST', url: `https://fb.acme.io/v1/comments/${ID}/unhide` });
-    expect(ctx.calls[0].headers['Idempotency-Key']).toBe('n8n.123.node-1.0.undoHide');
+    expect(ctx.calls[0].headers['Idempotency-Key']).toBe(`n8n.123.node-1.0.0.undoHide.${ID}`);
   });
 
   it('422 unsupported_action becomes a handled error carrying the API message', async () => {

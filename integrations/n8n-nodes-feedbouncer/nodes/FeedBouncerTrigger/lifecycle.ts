@@ -48,7 +48,13 @@ async function deleteEndpoint(ctx: IHookFunctions, id: string): Promise<void> {
   }
 }
 
-/** Deletes any endpoint registered for exactly this URL, including the stored one if it was stored for this URL. Ids that are not UUIDs are skipped. */
+const isTestUrl = (url: string) => url.includes('/webhook-test/');
+
+/**
+ * Deletes any endpoint registered for exactly this URL, plus the stored one when it was made for the same kind of URL
+ * (production or test), so a changed WEBHOOK_URL leaves no orphan while a test listen keeps the production endpoint.
+ * Ids that are not UUIDs are skipped.
+ */
 async function cleanup(ctx: IHookFunctions, url: string): Promise<void> {
   const all = await collectPages<WebhookEndpoint>(
     async (cursor, limit) =>
@@ -63,9 +69,10 @@ async function cleanup(ctx: IHookFunctions, url: string): Promise<void> {
     { returnAll: true, limit: DEFAULT_LIMIT },
   );
   const stored = staticData(ctx);
+  const replacesStored = stored.url !== undefined && isTestUrl(stored.url) === isTestUrl(url);
   const ids = new Set([
     ...all.filter((endpoint) => endpoint.url === url).map((endpoint) => endpoint.id),
-    ...(stored.url === url ? [stored.endpointId] : []),
+    ...(replacesStored ? [stored.endpointId] : []),
   ]);
   for (const id of ids) if (isUuid(id)) await deleteEndpoint(ctx, id);
 }

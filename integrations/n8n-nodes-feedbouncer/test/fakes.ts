@@ -39,6 +39,7 @@ export interface FakeInit {
   http?: Scripted[];
   credentialName?: string;
   executionId?: string;
+  runIndex?: number;
   staticData?: IDataObject;
 }
 
@@ -107,6 +108,7 @@ function build(init: FakeInit) {
     getNodeParameter: (name: string, _index?: unknown, fallback?: unknown) =>
       init.params && name in init.params ? init.params[name] : fallback,
     getExecutionId: () => init.executionId ?? '123',
+    getExecuteData: () => ({ runIndex: init.runIndex }),
     getWorkflowStaticData: () => staticData,
     getInputData: () => (init.items ?? [{}]).map((json) => ({ json })),
     continueOnFail: () => false,

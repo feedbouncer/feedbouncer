@@ -22,9 +22,13 @@ export function assertUuid(
 export function idempotencyKey(parts: {
   executionId: string;
   nodeId: string;
+  runIndex: number;
   itemIndex: number;
   operation: string;
+  targetId: string;
 }): string {
-  const { executionId, nodeId, itemIndex, operation } = parts;
-  return `n8n.${executionId}.${nodeId}.${itemIndex}.${operation}`.replace(/[^A-Za-z0-9._:-]/g, '-').slice(0, 128);
+  const { executionId, nodeId, runIndex, itemIndex, operation, targetId } = parts;
+  return `n8n.${executionId}.${nodeId}.${runIndex}.${itemIndex}.${operation}.${targetId}`
+    .replace(/[^A-Za-z0-9._:-]/g, '-')
+    .slice(0, 128);
 }

@@ -23,14 +23,22 @@ const PATH_SUFFIX = { hide: 'hide', undoHide: 'unhide' } as const;
 const OPERATION_ID = { hide: 'hideComment', undoHide: 'unhideComment' } as const;
 const VERB = { hide: 'hide', undoHide: 'undo the hide of' } as const;
 
-function requestKey(ctx: IExecuteFunctions, options: IDataObject, operation: DecisionOperation, i: number): string {
+function requestKey(
+  ctx: IExecuteFunctions,
+  options: IDataObject,
+  operation: DecisionOperation,
+  i: number,
+  commentId: string,
+): string {
   const override = options.idempotencyKey;
   if (override === undefined || override === '') {
     return idempotencyKey({
       executionId: ctx.getExecutionId(),
       nodeId: ctx.getNode().id,
+      runIndex: ctx.getExecuteData().runIndex ?? 0,
       itemIndex: i,
       operation,
+      targetId: commentId,
     });
   }
   if (typeof override !== 'string' || !IDEMPOTENCY_KEY_PATTERN.test(override)) {
@@ -77,7 +85,7 @@ export async function executeDecision(
 ): Promise<INodeExecutionData[]> {
   const id = assertUuid(this, this.getNodeParameter('commentId', i), 'Comment ID', i);
   const options = this.getNodeParameter('options', i, {}) as IDataObject;
-  const key = requestKey(this, options, operation, i);
+  const key = requestKey(this, options, operation, i, id);
 
   let result: ModerationResult;
   let status: number;

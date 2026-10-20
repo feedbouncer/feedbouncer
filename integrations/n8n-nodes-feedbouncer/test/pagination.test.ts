@@ -68,4 +68,9 @@ describe('collectPages', () => {
     expect(await collectPages(fetchPage, { returnAll: false, limit: 50 })).toEqual([]);
     expect(calls).toHaveLength(1);
   });
+
+  it('trims to the limit when the last page holds more than was asked for', async () => {
+    const items = await collectPages(async () => ({ data: [1, 2, 3], nextCursor: null }), { returnAll: false, limit: 2 });
+    expect(items).toEqual([1, 2]);
+  });
 });

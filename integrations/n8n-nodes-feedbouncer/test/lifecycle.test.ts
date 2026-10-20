@@ -93,11 +93,34 @@ describe('create', () => {
 
   it('leaves the stored endpoint of another URL alone, as when a test listen starts on an active workflow', async () => {
     const ctx = hook({
-      webhookUrl: URL_B,
+      webhookUrl: 'https://n8n.example.com/webhook-test/aaa',
       staticData: stored({ url: URL_A }),
       http: [page([endpoint(ID_1, URL_A)]), created(ID_2)],
     });
     expect(await create.call(ctx)).toBe(true);
+    expect(methods(ctx)).toEqual(['GET', 'POST']);
+  });
+
+  it('deletes the stored endpoint of an old production URL when the production URL changes', async () => {
+    const ctx = hook({
+      webhookUrl: URL_B,
+      staticData: stored({ url: URL_A }),
+      http: [page([endpoint(ID_1, URL_A)]), gone, created(ID_2)],
+    });
+    expect(await create.call(ctx)).toBe(true);
+    expect(ctx.calls.filter((c) => c.method === 'DELETE').map((c) => c.url)).toEqual([
+      `https://fb.acme.io/v1/webhook-endpoints/${ID_1}`,
+    ]);
+    expect(ctx.staticData).toMatchObject({ endpointId: ID_2, url: URL_B });
+  });
+
+  it('leaves a stored production endpoint alone when a test listen starts on a changed host', async () => {
+    const ctx = hook({
+      webhookUrl: 'https://new.example.com/webhook-test/aaa',
+      staticData: stored({ url: URL_A }),
+      http: [page([endpoint(ID_1, URL_A)]), created(ID_2)],
+    });
+    await create.call(ctx);
     expect(methods(ctx)).toEqual(['GET', 'POST']);
   });
 
