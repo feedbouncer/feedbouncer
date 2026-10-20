@@ -235,6 +235,28 @@ export class PgRuleStore {
     return rows[0] ? toRule(rows[0]) : null;
   }
 
+  /**
+   * Writes conditions a subject erasure has already filtered and, when `disable`, turns the
+   * rule off. Skips validation on purpose: an author list the erasure emptied is not a valid
+   * rule, which is why it is disabled. Archived rules are written too, since their conditions
+   * still hold the subject's identifiers. Bumps the brand's revision like every rule write.
+   */
+  async writeErasedConditions(
+    tx: pg.PoolClient,
+    scope: BrandScope,
+    ruleId: string,
+    conditions: unknown,
+    o: { disable: boolean },
+  ): Promise<boolean> {
+    if (!(await this.#lockBrand(tx, scope))) return false;
+    const { rowCount } = await tx.query(
+      `UPDATE rule SET conditions = $4::jsonb, enabled = enabled AND NOT $5::boolean
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3`,
+      [scope.organizationId, scope.brandId, ruleId, JSON.stringify(conditions), o.disable],
+    );
+    return (rowCount ?? 0) > 0;
+  }
+
   /** Delete is archive: decisions keep citing the rule. */
   async archive(tx: pg.PoolClient, scope: BrandScope, ruleId: string): Promise<boolean> {
     if (!(await this.#lockBrand(tx, scope))) return false;

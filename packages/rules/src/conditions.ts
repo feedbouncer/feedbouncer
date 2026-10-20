@@ -59,6 +59,46 @@ const handle = z
   .transform((h) => h.replace(/^@/, ''))
   .pipe(z.string().min(1).max(L.handleChars));
 
+/** How the author matcher compares handles: leading '@' dropped, case and accents folded. */
+export const normalizeAuthorHandle = (h: string): string =>
+  normalizeText(h.replace(/^@/, '')).trim();
+
+/** An author condition as found in stored JSON, before (or without) schema validation. */
+export interface AuthorConditionNode {
+  type: 'author';
+  platform: string;
+  entries: { externalId?: unknown; handle?: unknown }[];
+  [key: string]: unknown;
+}
+
+const isAuthorNode = (v: unknown): v is AuthorConditionNode => {
+  const o = v as Partial<AuthorConditionNode> | null;
+  return (
+    typeof o === 'object' &&
+    o !== null &&
+    o.type === 'author' &&
+    typeof o.platform === 'string' &&
+    Array.isArray(o.entries)
+  );
+};
+
+/**
+ * Pure structural walk over stored JSON (a rule's conditions, a proposal snapshot or its
+ * diff): every author condition node, at any depth, is replaced by `fn(node)`. Returns a
+ * new value and never mutates the input.
+ */
+export function mapAuthorConditions(
+  value: unknown,
+  fn: (node: AuthorConditionNode) => AuthorConditionNode,
+): unknown {
+  if (Array.isArray(value)) return value.map((v) => mapAuthorConditions(v, fn));
+  if (typeof value !== 'object' || value === null) return value;
+  if (isAuthorNode(value)) return fn({ ...value, entries: value.entries.map((e) => ({ ...e })) });
+  return Object.fromEntries(
+    Object.entries(value).map(([k, v]) => [k, mapAuthorConditions(v, fn)]),
+  );
+}
+
 export const keywordConditions = z.strictObject({
   type: z.literal('keyword'),
   terms: termList(L.terms, L.termChars),

@@ -22,12 +22,16 @@
   },
   "dependencies": {
     "@feedbouncer/actions": "workspace:*",
+    "@feedbouncer/connectors": "workspace:*",
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/jobs": "workspace:*",
+    "@feedbouncer/rules": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "zod": "4.6.5"
   },
   "devDependencies": {
+    "@feedbouncer/comments": "workspace:*",
     "@types/node": "24.13.6",
     "@types/pg": "8.23.1"
   }

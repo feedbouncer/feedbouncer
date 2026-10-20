@@ -28,7 +28,7 @@ export interface PurgeTable {
 }
 
 /** The ledger states a job never leaves. Dead-lettered jobs can still be replayed, so they stay. */
-const FINISHED_JOB_STATES = ['completed', 'resolved'] as const satisfies readonly LedgerState[];
+export const FINISHED_JOB_STATES = ['completed', 'resolved'] as const satisfies readonly LedgerState[];
 
 const noDecisionRefers = (column: string) =>
   `NOT EXISTS (SELECT 1 FROM decision d WHERE d.brand_id = x.brand_id AND d.${column} = x.id)`;

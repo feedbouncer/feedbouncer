@@ -1010,19 +1010,31 @@ importers:
       '@feedbouncer/actions':
         specifier: workspace:*
         version: link:../actions
+      '@feedbouncer/connectors':
+        specifier: workspace:*
+        version: link:../connectors
       '@feedbouncer/db':
         specifier: workspace:*
         version: link:../db
       '@feedbouncer/jobs':
         specifier: workspace:*
         version: link:../jobs
+      '@feedbouncer/rules':
+        specifier: workspace:*
+        version: link:../rules
       '@feedbouncer/service-runtime':
         specifier: workspace:*
         version: link:../service-runtime
       pg:
         specifier: 8.23.1
         version: 8.23.1
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
     devDependencies:
+      '@feedbouncer/comments':
+        specifier: workspace:*
+        version: link:../comments
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6

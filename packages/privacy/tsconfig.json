@@ -6,6 +6,9 @@
     { "path": "../service-runtime/tsconfig.build.json" },
     { "path": "../db/tsconfig.build.json" },
     { "path": "../jobs/tsconfig.build.json" },
-    { "path": "../actions/tsconfig.build.json" }
+    { "path": "../actions/tsconfig.build.json" },
+    { "path": "../connectors/tsconfig.build.json" },
+    { "path": "../comments/tsconfig.build.json" },
+    { "path": "../rules/tsconfig.build.json" }
   ]
 }
