@@ -90,6 +90,8 @@ export interface ApiEnv {
   readonly publicApiRateLimitPerMinute: number;
   /** Hours a rule-change proposal made through the public API waits for review before it expires. */
   readonly ruleProposalTtlHours: number;
+  /** How long POST /v1/moderation/check waits for the worker's verdict before answering 503. */
+  readonly moderationCheckTimeoutMs: number;
   /** Private networks, besides public addresses, that webhook endpoints may point at. Empty by default. */
   readonly webhookAllowedPrivateCidrs: readonly string[];
   readonly telemetry: TelemetryConfig;
@@ -183,6 +185,11 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
       max: 168,
       fallback: 24,
     }),
+    moderationCheckTimeoutMs: readInt(env, 'MODERATION_CHECK_TIMEOUT_MS', {
+      min: 2000,
+      max: 60_000,
+      fallback: 20_000,
+    }),
     webhookAllowedPrivateCidrs: readAllowedPrivateCidrs(env),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),
@@ -197,6 +204,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     port: config.port,
     publicApiRateLimitPerMinute: config.publicApiRateLimitPerMinute,
     ruleProposalTtlHours: config.ruleProposalTtlHours,
+    moderationCheckTimeoutMs: config.moderationCheckTimeoutMs,
     logLevel: config.logLevel,
     publicWebUrl: publicWebUrl.origin,
     trustProxyHops: config.trustProxyHops,

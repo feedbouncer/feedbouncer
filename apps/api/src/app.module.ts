@@ -11,6 +11,9 @@ import { ApiKeyGuard } from './public-api/api-key.guard.js';
 import { PublicCommentsController } from './public-api/comments.controller.js';
 import { PublicFlaggedItemsController } from './public-api/flagged-items.controller.js';
 import { PublicModerationController } from './public-api/moderation.controller.js';
+import { PublicModerationCheckController } from './public-api/moderation-check.controller.js';
+import { ModerationCheckClient } from './public-api/moderation-check.client.js';
+import { ModerationCheckService } from './public-api/moderation-check.service.js';
 import { PublicRepliesController } from './public-api/replies.controller.js';
 import { PublicActionsController } from './public-api/actions.controller.js';
 import { PublicKeyController } from './public-api/key.controller.js';
@@ -95,6 +98,7 @@ import {
   CONNECTOR_STACK,
   DEPS,
   JOB_PRODUCER,
+  MODERATION_CHECK_CLIENT,
   PUBLIC_API_LIMITS,
   RATE_LIMITS,
 } from './tokens.js';
@@ -149,6 +153,7 @@ export class AppModule {
         PublicCommentsController,
         PublicFlaggedItemsController,
         PublicModerationController,
+        PublicModerationCheckController,
         PublicRepliesController,
         PublicActionsController,
         PublicKeyController,
@@ -186,6 +191,7 @@ export class AppModule {
         ApiKeyGuard,
         PublicModerationService,
         PublicRuleProposalsService,
+        ModerationCheckService,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.
         { provide: CONNECTOR_STACK, useValue: deps.connectors?.stack ?? null },
@@ -209,6 +215,17 @@ export class AppModule {
           inject: [DEPS],
           useFactory: (d: AppDeps) =>
             createPublicApiLimits(d.redis, d.redisKeyPrefix, d.env.publicApiRateLimitPerMinute),
+        },
+        {
+          // Started and stopped by Nest (onModuleInit / onModuleDestroy).
+          provide: MODERATION_CHECK_CLIENT,
+          inject: [DEPS],
+          useFactory: (d: AppDeps) =>
+            new ModerationCheckClient({
+              redisUrl: d.env.redisUrl.href,
+              prefix: d.env.jobs.prefix,
+              log: d.log,
+            }),
         },
         {
           provide: ACCOUNT_DELETION,

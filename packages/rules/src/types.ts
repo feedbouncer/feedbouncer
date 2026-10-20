@@ -37,7 +37,7 @@ export interface RuleRecord {
 
 export interface CommentFacts {
   body: string;
-  platform: Platform;
+  platform: Platform | null;
   authorExternalId: string | null;
   authorName: string | null;
 }

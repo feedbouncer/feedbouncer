@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_CHECK_TEXT_UNITS, REASON_CODES } from '@feedbouncer/moderation-contract';
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './constants.js';
 import type { ApiKeyScope } from './keys/token.js';
 import { ACTION_STATUSES, ActionResource } from './resources/action.js';
@@ -233,7 +234,11 @@ export const ReplyResult = z
   .meta({ id: 'ReplyResult' });
 
 export const KeyResource = z
-  .object({ organizationId: z.uuid(), name: z.string(), scope: z.enum(['read', 'write']) })
+  .object({
+    organizationId: z.uuid(),
+    name: z.string(),
+    scope: z.enum(['moderate', 'read', 'write']),
+  })
   .meta({ id: 'Key' });
 
 export const ListRulesQuery = z.strictObject({ brandId: z.uuid().optional() });
@@ -322,6 +327,56 @@ export const RuleChangeProposalResource = z
     reviewUrl: z.url().meta({ description: 'Where a person approves or rejects the change.' }),
   })
   .meta({ id: 'RuleChangeProposal' });
+
+export const ModerationCheckRequest = z
+  .strictObject({
+    text: z.string().meta({
+      description: `At most ${MAX_CHECK_TEXT_UNITS} UTF-16 code units, with at least one visible character.`,
+    }),
+    brandId: z.uuid().optional().meta({
+      description:
+        'The brand whose rules, thresholds and policies apply. Required unless the workspace has exactly one active brand.',
+    }),
+    ref: z
+      .string()
+      .regex(/^[\x21-\x7E]{1,128}$/)
+      .optional()
+      .meta({
+        description: 'Your own reference, echoed back. 1 to 128 printable ASCII characters.',
+      }),
+  })
+  .meta({ id: 'ModerationCheckRequest' });
+
+const nullableString = z.string().nullable();
+const modelInfo = z.object({ provider: z.string(), model: z.string() }).nullable();
+
+export const ModerationCheckResult = z
+  .object({
+    verdict: z.enum(['allow', 'review', 'block']),
+    reasonCode: z.enum(REASON_CODES).meta({
+      description: 'Stable machine-readable reason. New codes may be added; none is renamed.',
+    }),
+    reason: z.string(),
+    decidedBy: z.enum(['rule', 'classifier', 'policy', 'none', 'degraded']),
+    degraded: z.boolean().meta({
+      description: 'True when a check could not run; the verdict is then never `allow`.',
+    }),
+    evidence: z.object({
+      ruleId: z.uuid().nullable(),
+      ruleName: nullableString,
+      category: nullableString,
+      score: z.number().nullable(),
+      threshold: z.number().nullable(),
+      policyId: z.uuid().nullable(),
+      policyRevision: z.int().nullable(),
+      language: nullableString,
+    }),
+    models: z.object({ classifier: modelInfo, policy: modelInfo }),
+    brandId: z.uuid(),
+    ref: nullableString,
+    checkedAt: z.iso.datetime(),
+  })
+  .meta({ id: 'ModerationCheckResult' });
 
 const moderationSpec = (kind: 'hide' | 'unhide'): RouteSpec => ({
   id: `${kind}Comment`,
@@ -588,7 +643,7 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     id: 'getApiKey',
     method: 'GET',
     path: '/v1/key',
-    scope: 'read',
+    scope: 'moderate',
     summary: 'Describe the API key making the request',
     idempotent: false,
     responses: { 200: KeyResource },
@@ -615,6 +670,18 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     idempotent: false,
     responses: { 200: FlaggedItemResource },
     errors: ['not_found'],
+  },
+  {
+    id: 'checkModeration',
+    method: 'POST',
+    path: '/v1/moderation/check',
+    scope: 'moderate',
+    summary:
+      "Check arbitrary text against a brand's rules, classifier and policies and get `allow`, `review` or `block`. Nothing is stored. Answers 503 `temporarily_unavailable` with `Retry-After: 5` when no verdict could be computed in time; a retry is always safe",
+    body: ModerationCheckRequest,
+    idempotent: false,
+    responses: { 200: ModerationCheckResult },
+    errors: ['invalid_request', 'not_found', 'text_too_long', 'temporarily_unavailable'],
   },
   ...webhookEndpointSpecs(),
 ];

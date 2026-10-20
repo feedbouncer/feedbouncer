@@ -57,7 +57,7 @@ const ActionSchema = z.object({
 const KeySchema = z.object({
   organizationId: z.uuid(),
   name: z.string(),
-  scope: z.enum(['read', 'write']),
+  scope: z.enum(['moderate', 'read', 'write']),
 });
 
 const CommentPageSchema = z.object({

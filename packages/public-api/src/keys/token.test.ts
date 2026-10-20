@@ -43,4 +43,12 @@ describe('scopeAllows', () => {
     expect(scopeAllows('write', 'write')).toBe(true);
     expect(scopeAllows('read', 'write')).toBe(false);
   });
+
+  it('moderate is the lowest scope', () => {
+    for (const have of ['moderate', 'read', 'write'] as const) {
+      expect(scopeAllows(have, 'moderate')).toBe(true);
+    }
+    expect(scopeAllows('moderate', 'read')).toBe(false);
+    expect(scopeAllows('moderate', 'write')).toBe(false);
+  });
 });

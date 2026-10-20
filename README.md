@@ -53,6 +53,8 @@ pnpm test
 | `packages/reports`                   | Weekly email report: metrics, scheduling, rendering, delivery and unsubscribe links                          |
 | `packages/evaluation`                | Evaluation runs: false-hide rate, time to hide and cost per 1,000 comments from exported items and labels    |
 | `packages/policies`                  | Plain-language custom policies: validation, decisions, model evaluation, previews and runs                   |
+| `packages/moderation-check`          | Stateless text check: rules, classifier and policies combined into one verdict, plus the queue consumer      |
+| `packages/moderation-contract`       | Constants of the text check shared with the public API contract: size limit and reason codes                 |
 | `packages/public-api`                | Public REST API: API key generation, hashed storage and authentication                                       |
 | `packages/webhooks`                  | Outgoing webhooks: Standard Webhooks signing, destination policy and SSRF-guarded transport                  |
 | `packages/placeholder`               | Minimal package used as the template for new packages                                                        |

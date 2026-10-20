@@ -30,6 +30,7 @@
     "@feedbouncer/evaluation": "workspace:*",
     "@feedbouncer/jobs": "workspace:*",
     "@feedbouncer/mailer": "workspace:*",
+    "@feedbouncer/moderation-check": "workspace:*",
     "@feedbouncer/observability": "workspace:*",
     "@feedbouncer/policies": "workspace:*",
     "@feedbouncer/public-api": "workspace:*",

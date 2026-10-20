@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module.js';
 import { ApiError, ApiErrorFilter, errorBody } from './http/errors.js';
+import { registerStrictJsonParser } from './http/json-parser.js';
 import { isTrustedOrigin } from './http/origin.guard.js';
 import { registerRequestLog } from './http/request-log.js';
 import { TraceInterceptor } from './http/trace.interceptor.js';
@@ -34,6 +35,7 @@ export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
   });
   const fastify = app.getHttpAdapter().getInstance();
   fastify.removeContentTypeParser('text/plain');
+  registerStrictJsonParser(fastify);
 
   // The /v1 routes authenticate by bearer key and never read cookies, so the
   // browser Origin check does not apply. Marked here, before Nest registers any

@@ -185,6 +185,9 @@ importers:
       '@feedbouncer/mailer':
         specifier: workspace:*
         version: link:../../packages/mailer
+      '@feedbouncer/moderation-check':
+        specifier: workspace:*
+        version: link:../../packages/moderation-check
       '@feedbouncer/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -230,6 +233,9 @@ importers:
       better-auth:
         specifier: 1.7.7
         version: 1.7.7(@opentelemetry/api@1.9.1)(mysql2@3.24.5(@types/node@24.13.6))(next@16.3.8(@opentelemetry/api@1.9.1)(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(prisma@7.10.0(@types/node@24.13.6)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@5.0.3(@opentelemetry/api@1.9.1)(@types/node@24.13.6)(vite@8.3.4(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))
+      bullmq:
+        specifier: 6.3.12
+        version: 6.3.12(ioredis@5.11.1)(pg@8.23.1)
       fastify:
         specifier: 5.12.5
         version: 5.12.5
@@ -381,6 +387,9 @@ importers:
       '@feedbouncer/mailer':
         specifier: workspace:*
         version: link:../../packages/mailer
+      '@feedbouncer/moderation-check':
+        specifier: workspace:*
+        version: link:../../packages/moderation-check
       '@feedbouncer/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -857,6 +866,45 @@ importers:
         specifier: 8.0.2
         version: 8.0.2
 
+  packages/moderation-check:
+    dependencies:
+      '@feedbouncer/ai':
+        specifier: workspace:*
+        version: link:../ai
+      '@feedbouncer/classifier':
+        specifier: workspace:*
+        version: link:../classifier
+      '@feedbouncer/db':
+        specifier: workspace:*
+        version: link:../db
+      '@feedbouncer/moderation-contract':
+        specifier: workspace:*
+        version: link:../moderation-contract
+      '@feedbouncer/policies':
+        specifier: workspace:*
+        version: link:../policies
+      '@feedbouncer/rules':
+        specifier: workspace:*
+        version: link:../rules
+      '@feedbouncer/service-runtime':
+        specifier: workspace:*
+        version: link:../service-runtime
+      bullmq:
+        specifier: 6.3.12
+        version: 6.3.12(ioredis@5.11.1)(pg@8.23.1)
+      ioredis:
+        specifier: 5.11.1
+        version: 5.11.1
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+
+  packages/moderation-contract: {}
+
   packages/observability:
     dependencies:
       '@feedbouncer/connectors':
@@ -962,6 +1010,9 @@ importers:
       '@feedbouncer/db':
         specifier: workspace:*
         version: link:../db
+      '@feedbouncer/moderation-contract':
+        specifier: workspace:*
+        version: link:../moderation-contract
       '@feedbouncer/service-runtime':
         specifier: workspace:*
         version: link:../service-runtime

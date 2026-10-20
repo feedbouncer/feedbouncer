@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Secret } from '@feedbouncer/service-runtime';
 
-export type ApiKeyScope = 'read' | 'write';
+export type ApiKeyScope = 'moderate' | 'read' | 'write';
 
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
 const KEY_RE = /^fbk_([a-z2-7]{16})_([A-Za-z0-9_-]{43})$/;
@@ -34,6 +34,8 @@ export function parseApiKey(raw: string): { publicId: string; secretSha256: Buff
   return m ? { publicId: m[1]!, secretSha256: sha256(m[2]!) } : null;
 }
 
+const RANK: Record<ApiKeyScope, number> = { moderate: 0, read: 1, write: 2 };
+
 export function scopeAllows(have: ApiKeyScope, need: ApiKeyScope): boolean {
-  return have === 'write' || need === 'read';
+  return RANK[have] >= RANK[need];
 }

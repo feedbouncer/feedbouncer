@@ -15,9 +15,20 @@ import {
   type ConnectionDirectory,
 } from '@feedbouncer/connectors';
 import { ReviewModeSweeper } from '@feedbouncer/actions';
-import { CLASSIFIER_LANE } from '@feedbouncer/classifier';
-import { POLICY_LANE, PgPolicyPreviewStore } from '@feedbouncer/policies';
-import { createPool, runJobOnce } from '@feedbouncer/db';
+import {
+  CLASSIFIER_LANE,
+  PgThresholdStore,
+  createClassifierProvider,
+} from '@feedbouncer/classifier';
+import {
+  POLICY_LANE,
+  PgPolicyPreviewStore,
+  PgPolicyStore,
+  PgPolicyUsage,
+  createPolicyEvaluator,
+} from '@feedbouncer/policies';
+import { PgRuleStore, RuleSetCache } from '@feedbouncer/rules';
+import { BrandSlots, createPool, runJobOnce } from '@feedbouncer/db';
 import {
   JobMetrics,
   JobProducer,
@@ -46,6 +57,7 @@ import {
   waitUntil,
   writeStartupConfigError,
 } from '@feedbouncer/service-runtime';
+import { startModerationCheckWorker } from '@feedbouncer/moderation-check';
 import { startAlertLoops } from './alerts.js';
 import { startIdempotencyPurge } from './idempotency.js';
 import { startWebhookLoops } from './webhooks.js';
@@ -234,6 +246,28 @@ try {
     log,
     metrics,
   });
+  const moderationCheck = startModerationCheckWorker({
+    connection: redis,
+    prefix: env.jobs.prefix,
+    concurrency: env.moderationCheckConcurrency,
+    pool,
+    log,
+    deps: {
+      rules: new RuleSetCache(new PgRuleStore(pool)),
+      thresholds: new PgThresholdStore(pool),
+      policies: new PgPolicyStore(pool),
+      classifier: createClassifierProvider(env.classifier),
+      policyEvaluator: createPolicyEvaluator(env.policy),
+      languages: env.classifier.languages,
+      classifierTimeoutMs: env.classifier.timeoutMs,
+      policyTimeoutMs: env.policy.timeoutMs,
+      policyBudget: {
+        slots: new BrandSlots(slotsPool, env.policy.perBrandInFlight, 'fb.policy'),
+        usage: new PgPolicyUsage(pool),
+        monthlyCallsPerBrand: env.policy.monthlyCallsPerBrand,
+      },
+    },
+  });
   const health = await startHealthServer({
     host: '127.0.0.1',
     port: env.healthPort,
@@ -265,7 +299,7 @@ try {
     idempotencyPurge?.stop();
     await webhookLoops?.stop();
     await scheduler?.stop();
-    await Promise.all([worker.close(), jobWorkers.close()]);
+    await Promise.all([worker.close(), jobWorkers.close(), moderationCheck.close()]);
     await queues.close();
     await health.close();
     mailer?.close();

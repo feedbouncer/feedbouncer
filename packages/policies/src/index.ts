@@ -15,3 +15,4 @@ export * from './candidates.js';
 export * from './previews.js';
 export * from './jobs/preview.js';
 export * from './jobs/run.js';
+export * from './check.js';

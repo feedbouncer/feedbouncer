@@ -12,7 +12,7 @@ export class PublicKeyController {
 
   /** Never the public id or the secret: the caller already holds the key. */
   @Get()
-  @RequireScope('read')
+  @RequireScope('moderate')
   async get(@Req() req: ApiKeyRequest) {
     const { organizationId, apiKeyId } = req.apiKey;
     const key = await this.keys.get(organizationId, apiKeyId);

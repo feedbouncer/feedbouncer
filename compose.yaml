@@ -165,6 +165,7 @@ services:
       TRUST_PROXY_HOPS: '1'
       PUBLIC_API_RATE_LIMIT_PER_MINUTE: ${PUBLIC_API_RATE_LIMIT_PER_MINUTE:-}
       RULE_PROPOSAL_TTL_HOURS: ${RULE_PROPOSAL_TTL_HOURS:-}
+      MODERATION_CHECK_TIMEOUT_MS: ${MODERATION_CHECK_TIMEOUT_MS:-}
       WEBHOOK_ALLOWED_PRIVATE_CIDRS: ${WEBHOOK_ALLOWED_PRIVATE_CIDRS:-}
       # Shown in the classifier settings; the key is held by the worker only.
       CLASSIFIER_PROVIDER: ${CLASSIFIER_PROVIDER:-}
@@ -183,6 +184,8 @@ services:
       - ./packages/ai/src:/repo/packages/ai/src:ro
       - ./packages/classifier/src:/repo/packages/classifier/src:ro
       - ./packages/comments/src:/repo/packages/comments/src:ro
+      - ./packages/moderation-check/src:/repo/packages/moderation-check/src:ro
+      - ./packages/moderation-contract/src:/repo/packages/moderation-contract/src:ro
       - ./packages/policies/src:/repo/packages/policies/src:ro
       - ./packages/public-api/src:/repo/packages/public-api/src:ro
       - ./packages/reports/src:/repo/packages/reports/src:ro
@@ -241,6 +244,7 @@ services:
       WEBHOOK_ALLOWED_PRIVATE_CIDRS: ${WEBHOOK_ALLOWED_PRIVATE_CIDRS:-}
       WEBHOOK_DISPATCH_CONCURRENCY: ${WEBHOOK_DISPATCH_CONCURRENCY:-}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+      MODERATION_CHECK_CONCURRENCY: ${MODERATION_CHECK_CONCURRENCY:-}
       # Empty means "use the default" (see docs/operations/job-queue.md).
       JOB_QUEUE_PREFIX: ${JOB_QUEUE_PREFIX:-}
       JOB_CONCURRENCY: ${JOB_CONCURRENCY:-}
@@ -281,6 +285,8 @@ services:
       - ./packages/ai/src:/repo/packages/ai/src:ro
       - ./packages/classifier/src:/repo/packages/classifier/src:ro
       - ./packages/comments/src:/repo/packages/comments/src:ro
+      - ./packages/moderation-check/src:/repo/packages/moderation-check/src:ro
+      - ./packages/moderation-contract/src:/repo/packages/moderation-contract/src:ro
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro
       - ./packages/connector-meta-ads/src:/repo/packages/connector-meta-ads/src:ro

@@ -230,6 +230,11 @@ export class ApiError extends Error {
       readonly tag?: unknown;
       /** The current number of comments with the tag, for 409 tag_count_changed. */
       readonly count?: number;
+      /** The request field an invalid_request is about, with what is wrong with it. */
+      readonly field?: string;
+      readonly problem?: string;
+      /** The text limit in UTF-16 code units, for a 422 text_too_long of the moderation check. */
+      readonly maxLength?: number;
     },
     /** Response headers to send with the error (Retry-After, WWW-Authenticate). */
     readonly headers?: Readonly<Record<string, string>>,
@@ -252,6 +257,9 @@ export function errorBody(e: ApiError): {
     ruleId?: string;
     tag?: unknown;
     count?: number;
+    field?: string;
+    problem?: string;
+    maxLength?: number;
   };
 } {
   return { error: { ...e.details, code: e.code, message: e.message } };

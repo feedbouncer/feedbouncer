@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist", "rootDir": "src", "lib": ["ES2024"], "types": ["node"] },
+  "include": ["src"],
+  "references": [
+    { "path": "../rules/tsconfig.build.json" },
+    { "path": "../ai/tsconfig.build.json" },
+    { "path": "../classifier/tsconfig.build.json" },
+    { "path": "../policies/tsconfig.build.json" },
+    { "path": "../db/tsconfig.build.json" },
+    { "path": "../service-runtime/tsconfig.build.json" },
+    { "path": "../moderation-contract/tsconfig.build.json" }
+  ]
+}

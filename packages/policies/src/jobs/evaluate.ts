@@ -23,12 +23,12 @@ import { bodySha256, type BrandScope, type PgEvaluationStore } from '@feedbounce
 import { mapProviderError, prepareInput, type ModelUsage } from '@feedbouncer/ai';
 import type { BrandSlots } from '@feedbouncer/db';
 import type { Logger } from '@feedbouncer/service-runtime';
-import { decidePolicies } from '../decide.js';
+import { askPolicies, decideAnswer, type PolicyAnswer } from '../check.js';
 import { describeDecision, describeFallback } from '../describe.js';
 import type { EvaluationRecord, EvaluationRow, PgPolicyEvaluationStore } from '../evaluations.js';
 import { POLICY_PROMPT_VERSION, type PolicyEvaluator } from '../evaluator.js';
 import type { PgPolicyStore } from '../store.js';
-import type { ActivePolicy, FailureCode, PolicyVerdict } from '../types.js';
+import type { ActivePolicy, FailureCode } from '../types.js';
 import type { PgPolicyUsage } from '../usage.js';
 import {
   MAX_POLICY_PROVIDER_ATTEMPTS,
@@ -130,16 +130,10 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
     });
 
     const input = prepareInput(row.body);
-    const keyed = policies.map((x, i) => ({ key: `p${i + 1}`, text: x.text }));
-    const keys = keyed.map((k) => k.key);
-    let byKey: Readonly<Record<string, PolicyVerdict>>;
-    let provider = d.evaluator.id;
-    let model = d.evaluator.model;
-    let usage: ModelUsage | null = null;
+    const ask = () => askPolicies(d.evaluator, input, policies, ctx.signal);
+    let answer: PolicyAnswer;
     if (input.empty) {
-      byKey = Object.fromEntries(keys.map((k) => [k, 'no_match' as const]));
-      provider = 'builtin';
-      model = 'empty-input';
+      answer = await ask();
     } else {
       if (!d.evaluator.enabled) return failed('disabled');
       if (now() - p.requestedAt > d.maxWaitMs) return failed('queue_timeout');
@@ -153,7 +147,7 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
             skipReason: 'quota_exhausted',
             ruleEvaluationId: ruleEval.id,
           };
-        ({ verdicts: byKey, usage } = await d.evaluator.evaluate(input, keyed, ctx.signal));
+        answer = await ask();
       } catch (e) {
         const err = mapProviderError(e);
         if (err.retryable && ctx.attempt < MAX_POLICY_PROVIDER_ATTEMPTS) {
@@ -176,15 +170,12 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
           .catch(() => ctx.log.warn('policy.slot_release_failed', { commentId: row.id }));
       }
     }
-
-    // A run must not undo a person's decision by hiding or deleting again.
+    // A run must not undo a person's decision by hiding or deleting again. Read after the
+    // model answered, outside the model-error handling: a database error fails the job for retry.
     const moderatorActed =
       p.trigger !== 'ingest' && (await d.comments.latestActionActor(brand, row.id)) === 'user';
-    const verdicts = new Map(policies.map((x, i) => [x.revisionId, byKey[keys[i]!]!]));
-    const decision = decidePolicies(policies, verdicts, {
-      lowSignal: input.lowSignal,
-      moderatorActed,
-    });
+    const decision = decideAnswer(policies, answer, input, moderatorActed);
+    const { provider, model, usage } = answer;
     return {
       ...base,
       status: 'evaluated',

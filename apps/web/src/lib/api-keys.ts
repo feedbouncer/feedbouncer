@@ -1,7 +1,7 @@
 import { ApiRequestError } from './api-client';
 import { formatUtc } from './format';
 
-export type ApiKeyScope = 'read' | 'write';
+export type ApiKeyScope = 'moderate' | 'read' | 'write';
 
 /** A key as the API returns it: the public prefix only, never the secret. */
 export interface ApiKeyDto {
@@ -17,9 +17,14 @@ export interface ApiKeyDto {
 }
 
 export const ACCESS_OPTIONS = [
+  { value: 'moderate', label: 'Moderate only' },
   { value: 'read', label: 'Read only' },
   { value: 'write', label: 'Read and write' },
 ] as const;
+
+export const ACCESS_HELP: Partial<Record<ApiKeyScope, string>> = {
+  moderate: 'Can only send text to the moderation check endpoint. Cannot read or change comments.',
+};
 
 export const accessText = (scope: ApiKeyScope): string =>
   ACCESS_OPTIONS.find((o) => o.value === scope)!.label;

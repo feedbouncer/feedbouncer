@@ -96,6 +96,20 @@ const ERROR_SCHEMA: JsonObject = {
           format: 'uuid',
           description: 'The existing rule a `rule_rejected` change duplicates or conflicts with.',
         },
+        field: {
+          type: 'string',
+          description: 'The request field some `invalid_request` errors are about, with `problem`.',
+        },
+        problem: {
+          type: 'string',
+          description:
+            'What is wrong with `field`, for example `empty`, `malformed` or `required`.',
+        },
+        maxLength: {
+          type: 'integer',
+          description:
+            'The text limit in UTF-16 code units, for `text_too_long` of `checkModeration`.',
+        },
       },
     },
   },

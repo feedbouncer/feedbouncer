@@ -1578,7 +1578,7 @@
       "get": {
         "operationId": "getApiKey",
         "summary": "Describe the API key making the request",
-        "description": "Requires an API key with the `read` scope.",
+        "description": "Requires an API key with the `moderate` scope.",
         "security": [
           {
             "apiKey": []
@@ -1912,6 +1912,142 @@
           },
           "404": {
             "description": "Not found: `not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests: `rate_limited`.",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before retrying (at least 1).",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error: `internal_error`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable: `temporarily_unavailable`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/moderation/check": {
+      "post": {
+        "operationId": "checkModeration",
+        "summary": "Check arbitrary text against a brand's rules, classifier and policies and get `allow`, `review` or `block`. Nothing is stored. Answers 503 `temporarily_unavailable` with `Retry-After: 5` when no verdict could be computed in time; a retry is always safe",
+        "description": "Requires an API key with the `moderate` scope.",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModerationCheckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per minute for this key.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the current window.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerationCheckResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request: `invalid_request`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized: `unauthenticated`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden: `insufficient_scope`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found: `not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable: `text_too_long`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3475,6 +3611,18 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "The existing rule a `rule_rejected` change duplicates or conflicts with."
+              },
+              "field": {
+                "type": "string",
+                "description": "The request field some `invalid_request` errors are about, with `problem`."
+              },
+              "problem": {
+                "type": "string",
+                "description": "What is wrong with `field`, for example `empty`, `malformed` or `required`."
+              },
+              "maxLength": {
+                "type": "integer",
+                "description": "The text limit in UTF-16 code units, for `text_too_long` of `checkModeration`."
               }
             }
           }
@@ -4349,6 +4497,7 @@
           "scope": {
             "type": "string",
             "enum": [
+              "moderate",
               "read",
               "write"
             ]
@@ -4475,6 +4624,240 @@
           "createdAt",
           "resolvedAt",
           "comment"
+        ],
+        "additionalProperties": false
+      },
+      "ModerationCheckRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "At most 4000 UTF-16 code units, with at least one visible character."
+          },
+          "brandId": {
+            "description": "The brand whose rules, thresholds and policies apply. Required unless the workspace has exactly one active brand.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "ref": {
+            "description": "Your own reference, echoed back. 1 to 128 printable ASCII characters.",
+            "type": "string",
+            "pattern": "^[\\x21-\\x7E]{1,128}$"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "ModerationCheckResult": {
+        "type": "object",
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "review",
+              "block"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "enum": [
+              "rule_matched",
+              "classifier_threshold",
+              "policy_matched",
+              "no_match",
+              "classifier_unavailable",
+              "classifier_not_configured",
+              "policy_unavailable"
+            ],
+            "description": "Stable machine-readable reason. New codes may be added; none is renamed."
+          },
+          "reason": {
+            "type": "string"
+          },
+          "decidedBy": {
+            "type": "string",
+            "enum": [
+              "rule",
+              "classifier",
+              "policy",
+              "none",
+              "degraded"
+            ]
+          },
+          "degraded": {
+            "type": "boolean",
+            "description": "True when a check could not run; the verdict is then never `allow`."
+          },
+          "evidence": {
+            "type": "object",
+            "properties": {
+              "ruleId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "ruleName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "category": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "score": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "threshold": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "policyId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "policyRevision": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "language": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "ruleId",
+              "ruleName",
+              "category",
+              "score",
+              "threshold",
+              "policyId",
+              "policyRevision",
+              "language"
+            ],
+            "additionalProperties": false
+          },
+          "models": {
+            "type": "object",
+            "properties": {
+              "classifier": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string"
+                      },
+                      "model": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "provider",
+                      "model"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "policy": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string"
+                      },
+                      "model": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "provider",
+                      "model"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "classifier",
+              "policy"
+            ],
+            "additionalProperties": false
+          },
+          "brandId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "verdict",
+          "reasonCode",
+          "reason",
+          "decidedBy",
+          "degraded",
+          "evidence",
+          "models",
+          "brandId",
+          "ref",
+          "checkedAt"
         ],
         "additionalProperties": false
       },

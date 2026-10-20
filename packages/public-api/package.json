@@ -23,6 +23,7 @@
   "dependencies": {
     "@feedbouncer/comments": "workspace:*",
     "@feedbouncer/db": "workspace:*",
+    "@feedbouncer/moderation-contract": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
     "pg": "8.23.1",
     "zod": "4.6.5"

@@ -75,3 +75,20 @@ it('allow/trusted entries without an id are rejected', () => {
     expect(JSON.stringify(r.error?.issues)).toMatch(/need the author's ID/);
   }
 });
+it('never matches facts without a platform', () => {
+  const fb = compileAuthorRule(
+    authorConditions.parse({
+      type: 'author',
+      list: 'block',
+      platform: 'facebook',
+      entries: [{ externalId: '123' }],
+    }),
+  );
+  const v = new CommentView({
+    body: 'x',
+    platform: null,
+    authorExternalId: '123',
+    authorName: null,
+  });
+  expect(fb(v, b)).toBeNull();
+});

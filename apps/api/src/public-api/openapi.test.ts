@@ -121,7 +121,7 @@ describe('buildOpenApiDocument', () => {
     });
   });
 
-  it('documents the optional error details: max, reason and ruleId', () => {
+  it('documents the optional error details: max, reason, ruleId, field, problem and maxLength', () => {
     const error = (
       doc.components.schemas.Error as {
         properties: { error: { required: string[]; properties: Record<string, unknown> } };
@@ -132,7 +132,36 @@ describe('buildOpenApiDocument', () => {
       max: { type: 'integer' },
       reason: { type: 'string' },
       ruleId: { type: 'string', format: 'uuid' },
+      field: { type: 'string' },
+      problem: { type: 'string' },
+      maxLength: { type: 'integer' },
     });
+  });
+
+  it('documents the moderation check for the moderate scope', () => {
+    const op = (doc.paths['/v1/moderation/check'] as Record<string, Operation>).post!;
+    expect(op).toMatchObject({
+      operationId: 'checkModeration',
+      description: 'Requires an API key with the `moderate` scope.',
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': { schema: { $ref: '#/components/schemas/ModerationCheckRequest' } },
+        },
+      },
+    });
+    expect(Object.keys(op.responses)).toEqual([
+      '200',
+      '400',
+      '401',
+      '403',
+      '404',
+      '422',
+      '429',
+      '500',
+      '503',
+    ]);
+    expect(doc.components.schemas).toHaveProperty('ModerationCheckResult');
   });
 
   it('is deterministic', () => {

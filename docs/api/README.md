@@ -11,7 +11,7 @@ Authorization: Bearer fbk_<id>_<secret>
 ```
 
 - A key belongs to one organization and can only see that organization's brands, comments and flagged items. Asking for another organization's ids, an archived brand or a deleted comment returns `404`. The exception is list filters: `GET /v1/comments?brandId=` with a brand outside the organization returns an empty page.
-- Scopes: `read` keys can call every `GET` route except the webhook endpoint ones; `write` keys can also hide, unhide and reply to comments, propose rule changes and manage webhook endpoints. Reading webhook endpoints needs a `write` key because it reveals where events are sent.
+- Scopes: `read` keys can call every `GET` route except the webhook endpoint ones; `moderate` keys can only call `POST /v1/moderation/check` and `GET /v1/key` (no route reads comments or any other data); `write` keys can also hide, unhide and reply to comments, propose rule changes and manage webhook endpoints. Reading webhook endpoints needs a `write` key because it reveals where events are sent.
 - `GET /v1/key` describes the key making the request (`organizationId`, `name`, `scope`). Use it to check a key before doing anything else.
 - The secret is shown once and only a hash is stored. Revoking a key takes effect on its next request. Keys keep working after the admin who created them leaves, so revoke them when someone leaves.
 
@@ -27,6 +27,49 @@ Authorization: Bearer fbk_<id>_<secret>
 - `POST /v1/comments/{id}/hide` and `/unhide` ask the platform to change a comment's visibility. A comment already in that state answers `200` with action status `noop` and code `already_hidden` or `already_visible`; otherwise the answer is `202` with a `pending` action.
 - `POST /v1/comments/{id}/replies` with `{"text": "..."}` posts a public reply as the brand. It answers `202` with a `pending` action that the worker then posts, or `200` when the outcome is known at once. Errors: `422 text_too_long` (with `max`), `422 reply_not_allowed` (with `reason`), `422 unsupported_action`, `409 connection_inactive`. Send an `Idempotency-Key` so a retry cannot post twice.
 - `GET /v1/actions/{id}` returns the status of a hide, unhide or reply: `pending`, `applied` (for a reply, `platformRef` is the reply's platform ID), `noop`, `not_eligible` or `failed`, with a `code` for the last three.
+
+## Checking text before you publish it
+
+`POST /v1/moderation/check` judges any text against a brand's rules, classifier and policies and answers `allow`, `review` or `block`. It needs a `moderate`, `read` or `write` key. Nothing is stored in the database and nothing is retained: the text waits in Redis only until the check finishes or times out, then it is deleted. It is not logged. Retention settings do not apply because there is nothing to retain.
+
+```bash
+curl -X POST https://api.example.com/v1/moderation/check \
+  -H "Authorization: Bearer $FEEDBOUNCER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Buy followers at spam.example", "brandId": "0b8f2f4e-7a0c-4e0a-9a43-6f3a1d9f6c22", "ref": "post-1234"}'
+```
+
+```json
+{
+  "verdict": "block",
+  "reasonCode": "rule_matched",
+  "reason": "Rule \"Spam links\" (link): spam.example.",
+  "decidedBy": "rule",
+  "degraded": false,
+  "evidence": {
+    "ruleId": "6f1c1e0e-5c5b-4f0e-8d57-0a7f0f6d2b11",
+    "ruleName": "Spam links",
+    "category": null,
+    "score": null,
+    "threshold": null,
+    "policyId": null,
+    "policyRevision": null,
+    "language": null
+  },
+  "models": { "classifier": null, "policy": null },
+  "brandId": "0b8f2f4e-7a0c-4e0a-9a43-6f3a1d9f6c22",
+  "ref": "post-1234",
+  "checkedAt": "2026-10-20T15:00:00.000Z"
+}
+```
+
+- Request: `text` (required), `brandId` (optional when the workspace has exactly one active brand) and `ref` (optional, 1 to 128 printable ASCII characters, echoed back). Unknown fields are rejected.
+- Text is at most 4,000 UTF-16 code units, the amount the classifier reads, so nothing is silently cut. It must be valid UTF-8, free of U+0000 and contain a visible character.
+- Verdicts: a matching rule decides first (including an approving rule). Otherwise the more severe of the classifier and policy outcomes wins; with no match the verdict is `allow`.
+- `reasonCode` is one of `rule_matched`, `classifier_threshold`, `policy_matched`, `no_match`, `classifier_unavailable`, `classifier_not_configured`, `policy_unavailable`. Codes are only ever added, never renamed. Match on them rather than on `reason`.
+- A check that could not fully run is never `allow`: you get `review`, `degraded: true` and the matching `*_unavailable` or `classifier_not_configured` code (an instance without a classifier holds every text no rule decided).
+- Errors: `400 invalid_request` (bad body, text that is not well-formed or has no visible characters, missing `brandId`), `401`, `403 insufficient_scope`, `404 not_found` (unknown or archived brand, or one of another organization), `413`, `422 text_too_long` (with `maxLength`), `429 rate_limited`, `500 internal_error` when the check itself failed, and `503 temporarily_unavailable` with `Retry-After: 5` when the worker did not answer in time (`MODERATION_CHECK_TIMEOUT_MS`, default 20000). A retry is always safe.
+- The usual per-key rate limit applies (`PUBLIC_API_RATE_LIMIT_PER_MINUTE`, default 60). Policy checks made through this route count against the brand's monthly policy-check budget and its concurrent policy-call limit, like connected comments do. When either is exhausted the answer is `review` with `reasonCode: "policy_unavailable"` and `degraded: true`, never `allow`.
 
 ## Summaries
 

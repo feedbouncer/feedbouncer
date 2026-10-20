@@ -35,4 +35,11 @@ describe('public route inventory', () => {
       else expect(scope, h.label).toBe(spec!.scope);
     }
   });
+
+  it('registers the moderation check with the moderate scope', () => {
+    const h = nestHandlers(api.app).find((x) => x.route === 'POST /v1/moderation/check');
+    expect(h).toBeDefined();
+    expect(new Reflector().get<string | undefined>(API_SCOPE, h!.handler)).toBe('moderate');
+    expect(PUBLIC_ROUTE_SPECS.find((s) => s.id === 'checkModeration')?.scope).toBe('moderate');
+  });
 });

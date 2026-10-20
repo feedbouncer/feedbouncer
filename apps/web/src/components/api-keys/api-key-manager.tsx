@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { apiFetch } from '../../lib/api-client';
 import {
+  ACCESS_HELP,
   ACCESS_OPTIONS,
   accessText,
   apiKeyErrorText,
@@ -11,6 +12,7 @@ import {
   revokeConfirmText,
   statusText,
   type ApiKeyDto,
+  type ApiKeyScope,
 } from '../../lib/api-keys';
 import { formatUtc } from '../../lib/format';
 
@@ -21,6 +23,7 @@ export function ApiKeyManager({ orgId, items }: { orgId: string; items: ApiKeyDt
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [copyNote, setCopyNote] = useState<string | null>(null);
+  const [scope, setScope] = useState<ApiKeyScope>('read');
   const base = `/api/v1/orgs/${orgId}/api-keys` as const;
 
   async function run(action: () => Promise<void>) {
@@ -48,6 +51,7 @@ export function ApiKeyManager({ orgId, items }: { orgId: string; items: ApiKeyDt
       setToken(created.token);
       setCopyNote(null);
       form.reset();
+      setScope('read');
     });
   }
 
@@ -66,7 +70,11 @@ export function ApiKeyManager({ orgId, items }: { orgId: string; items: ApiKeyDt
         </label>
         <label style={{ display: 'block', marginBottom: 8 }}>
           Access{' '}
-          <select name="scope" defaultValue="read">
+          <select
+            name="scope"
+            value={scope}
+            onChange={(e) => setScope(e.target.value as ApiKeyScope)}
+          >
             {ACCESS_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -74,6 +82,7 @@ export function ApiKeyManager({ orgId, items }: { orgId: string; items: ApiKeyDt
             ))}
           </select>
         </label>
+        {ACCESS_HELP[scope] ? <p>{ACCESS_HELP[scope]}</p> : null}
         <button type="submit" disabled={busy}>
           Create key
         </button>

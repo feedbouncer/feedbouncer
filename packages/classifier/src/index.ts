@@ -14,3 +14,4 @@ export * from './jobs/classify.js';
 export * from './fallback.js';
 export * from './config.js';
 export * from './jobs/rerun.js';
+export * from './score.js';
