@@ -5,9 +5,11 @@ BEGIN;
 
 SET LOCAL lock_timeout = '10s';
 
--- Same guard as before, with two hatches checked first. Both are settings that
--- only set_config(name, 'on', true) (transaction-local) can turn on, via
--- withRetentionDelete / withPrivacyRedaction in src/privacy-guards.ts.
+-- Same guard as before, with two hatches checked first. Each opens when its
+-- setting is 'on'. This is not a security boundary: any role that can run SQL can
+-- turn a setting on (SET or set_config, session or transaction scope). Application
+-- code uses withRetentionDelete / withPrivacyRedaction in src/privacy-guards.ts,
+-- which guarantee the setting is transaction-local.
 --   fb.retention_delete: a direct DELETE is allowed. UPDATE and TRUNCATE are not.
 --   fb.privacy_redaction: an UPDATE of audit_event that changes only details
 --     (and updated_at) is allowed. Nothing else is.

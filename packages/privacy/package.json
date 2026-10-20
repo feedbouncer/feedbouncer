@@ -23,18 +23,12 @@
   "dependencies": {
     "@feedbouncer/actions": "workspace:*",
     "@feedbouncer/db": "workspace:*",
-    "@feedbouncer/rules": "workspace:*",
-    "@feedbouncer/secrets": "workspace:*",
+    "@feedbouncer/jobs": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
-    "pg": "8.23.1",
-    "yazl": "3.3.1",
-    "zod": "4.6.5"
+    "pg": "8.23.1"
   },
   "devDependencies": {
     "@types/node": "24.13.6",
-    "@types/pg": "8.23.1",
-    "@types/yauzl": "3.4.0",
-    "@types/yazl": "3.3.1",
-    "yauzl": "3.4.0"
+    "@types/pg": "8.23.1"
   }
 }

@@ -64,6 +64,7 @@ import { startIdempotencyPurge } from './idempotency.js';
 import { startWebhookLoops } from './webhooks.js';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { startReportLoops } from './reports.js';
+import { startRetentionLoop } from './retention.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
 import { buildConnectorRegistry, buildJobRegistry } from './registries.js';
 import { reportStartupFailure } from './startup.js';
@@ -151,6 +152,7 @@ try {
   let alertLoops: ReturnType<typeof startAlertLoops> = null;
   let reportLoops: ReturnType<typeof startReportLoops> = null;
   let idempotencyPurge: ReturnType<typeof startIdempotencyPurge> | null = null;
+  let retentionLoop: ReturnType<typeof startRetentionLoop> | null = null;
   let webhookLoops: ReturnType<typeof startWebhookLoops> | null = null;
   if (facebook && mail && mailer) {
     const stack = buildPgConnectorStack({
@@ -298,6 +300,7 @@ try {
     alertLoops?.stop();
     reportLoops?.stop();
     idempotencyPurge?.stop();
+    retentionLoop?.stop();
     await webhookLoops?.stop();
     await scheduler?.stop();
     await Promise.all([worker.close(), jobWorkers.close(), moderationCheck.close()]);
@@ -355,6 +358,12 @@ try {
     { pool, log, keys: env.encryption, mailer, web: env.publicWebUrl },
   );
   idempotencyPurge = startIdempotencyPurge({ pool, log });
+  retentionLoop = startRetentionLoop({
+    pool,
+    settings: env.retention,
+    log,
+    exportDir: env.privacy.exportDir,
+  });
   webhookLoops = startWebhookLoops(
     {
       concurrency: env.webhookConcurrency,

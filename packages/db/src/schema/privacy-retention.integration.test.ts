@@ -167,6 +167,17 @@ describe('guard helpers', () => {
     }
   });
 
+  it('require a transaction even when the session already has the setting on', async () => {
+    await ctx.c.query("SET fb.retention_delete = 'on'");
+    try {
+      await expect(
+        withRetentionDelete(asClient(ctx.c), async () => undefined),
+      ).rejects.toThrow('privacy guard requires a transaction');
+    } finally {
+      await ctx.c.query('RESET fb.retention_delete');
+    }
+  });
+
   it('return the callback result', async () => {
     const r = await inTx(ctx.c, () => withRetentionDelete(asClient(ctx.c), async () => 42));
     expect(r).toBe(42);

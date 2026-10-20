@@ -82,25 +82,44 @@ export interface AuditRecord {
   action: string;
   subjectType: string;
   subjectId: string | null;
-  /** Ids, roles and booleans only: never emails, people's names or tokens. */
-  details?: Readonly<Record<string, string | number | boolean | null>>;
+  /** Ids, roles, booleans and counts only: never emails, people's names or tokens. */
+  details?: Readonly<
+    Record<string, string | number | boolean | null | Readonly<Record<string, number>>>
+  >;
 }
 
-/** Writes inside the caller's transaction, so the event commits or rolls back with the change. */
-export async function recordAudit(tx: pg.PoolClient, e: AuditRecord): Promise<void> {
+async function insertAudit(
+  tx: pg.PoolClient,
+  actor: { type: 'user' | 'system'; userId: string | null },
+  e: Omit<AuditRecord, 'actorUserId'>,
+): Promise<void> {
   await tx.query(
     `INSERT INTO audit_event (organization_id, brand_id, actor_type, actor_user_id, action, subject_type, subject_id, details)
-     VALUES ($1, $2, 'user', $3, $4, $5, $6, $7::jsonb)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
     [
       e.organizationId,
       e.brandId ?? null,
-      e.actorUserId,
+      actor.type,
+      actor.userId,
       e.action,
       e.subjectType,
       e.subjectId,
       JSON.stringify(e.details ?? {}),
     ],
   );
+}
+
+/** Writes inside the caller's transaction, so the event commits or rolls back with the change. */
+export async function recordAudit(tx: pg.PoolClient, e: AuditRecord): Promise<void> {
+  await insertAudit(tx, { type: 'user', userId: e.actorUserId }, e);
+}
+
+/** Same as recordAudit, for work the instance does on its own (actor_type 'system'). */
+export async function recordSystemAudit(
+  tx: pg.PoolClient,
+  e: Omit<AuditRecord, 'actorUserId'>,
+): Promise<void> {
+  await insertAudit(tx, { type: 'system', userId: null }, e);
 }
 
 type Refusal = Extract<RequestActionResult, { status: 'refused' }>['code'];

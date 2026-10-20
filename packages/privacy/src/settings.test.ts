@@ -4,6 +4,8 @@ import {
   loadRetentionSettings,
   parseRetentionDays,
   retentionWarnings,
+  shorterBuiltinLimits,
+  withBuiltinLimit,
   type RetentionSettings,
 } from './settings.js';
 
@@ -120,6 +122,33 @@ describe('retentionWarnings', () => {
   });
 });
 
+describe('shorterBuiltinLimits', () => {
+  it.each([
+    [{ previews: 7, operational: 1 }, []],
+    [{ previews: 8, operational: 1 }, ['previews']],
+    [{ previews: 7, operational: 2 }, ['idempotencyRecords']],
+    [{ previews: 7, operational: 30 }, ['idempotencyRecords']],
+    [{ previews: 7, operational: 31 }, ['webhookEvents', 'idempotencyRecords']],
+    [{}, ['previews', 'webhookEvents', 'idempotencyRecords']],
+  ] as const)('for %j is %j', (days, expected) => {
+    expect(shorterBuiltinLimits(withDays(days))).toEqual(expected);
+  });
+});
+
+describe('withBuiltinLimit', () => {
+  it.each([
+    ['forever', 'webhookEvents', 30],
+    [31, 'webhookEvents', 30],
+    [10, 'webhookEvents', 10],
+    [5, 'idempotencyRecords', 1],
+    ['forever', 'previews', 7],
+    [5, undefined, 5],
+    ['forever', undefined, 'forever'],
+  ] as const)('caps %j by %s to %j', (days, limit, expected) => {
+    expect(withBuiltinLimit(days, limit)).toBe(expected);
+  });
+});
+
 describe('effectiveDays', () => {
   it('caps previews at the built-in limit', () => {
     expect(effectiveDays(withDays({ previews: 30 })).previews).toBe(7);
@@ -130,5 +159,10 @@ describe('effectiveDays', () => {
   it('leaves the other categories as configured', () => {
     expect(effectiveDays(withDays({ comments: 30 })).comments).toBe(30);
     expect(effectiveDays(forever).audit).toBe('forever');
+  });
+
+  it('does not cap operational, whose job and alert records have no built-in limit', () => {
+    expect(effectiveDays(withDays({ operational: 90 })).operational).toBe(90);
+    expect(effectiveDays(forever).operational).toBe('forever');
   });
 });

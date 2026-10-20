@@ -430,10 +430,13 @@ In practice:
 `decision`, `rule_evaluation`, `comment_classification`, `policy_evaluation`,
 `policy_evaluation_match`, `custom_policy_revision` and `audit_event` refuse direct
 `UPDATE`, `DELETE` and `TRUNCATE` (`fb_forbid_direct_mutation()`). Two
-transaction-local settings open a narrow exception. Use the helpers in
-`src/privacy-guards.ts`; they require an open transaction (they throw
-`privacy guard requires a transaction` otherwise) and the setting ends at
-`COMMIT` or `ROLLBACK`, so it cannot leak to a pooled connection.
+settings open a narrow exception: the trigger only checks that the setting is
+`on`, so this is not a security boundary. Any role that can run SQL can open a
+hatch, including with a session-level `SET`. What the helpers in
+`src/privacy-guards.ts` guarantee is transaction scope for application code: they
+require an open transaction (they throw `privacy guard requires a transaction`
+otherwise), set the value transaction-locally, and it ends at `COMMIT` or
+`ROLLBACK`, so it cannot leak to a pooled connection.
 
 - `withRetentionDelete(tx, fn)` sets `fb.retention_delete`: a direct `DELETE` is
   allowed. `UPDATE` and `TRUNCATE` are still refused. Used by the retention purge.

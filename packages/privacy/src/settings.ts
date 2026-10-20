@@ -30,6 +30,14 @@ export const BUILTIN_LIMIT_DAYS = {
   webhookEvents: 30,
   idempotencyRecords: 1,
 } as const;
+export type BuiltinLimit = keyof typeof BUILTIN_LIMIT_DAYS;
+
+/** The category whose rows each built-in limit already prunes. */
+export const BUILTIN_LIMIT_CATEGORY = {
+  previews: 'previews',
+  webhookEvents: 'operational',
+  idempotencyRecords: 'operational',
+} as const satisfies Record<BuiltinLimit, RetentionCategory>;
 
 export const AUDIT_RECOMMENDED_MIN_DAYS = 365;
 
@@ -72,21 +80,34 @@ export function loadRetentionSettings(env: Env): RetentionSettings {
 
 const length = (d: RetentionDays) => (d === 'forever' ? Infinity : d);
 
+/** A configured period, shortened to the built-in limit of the rows it applies to (if any). */
+export function withBuiltinLimit(days: RetentionDays, limit: BuiltinLimit | undefined): RetentionDays {
+  if (limit === undefined) return days;
+  return Math.min(length(days), BUILTIN_LIMIT_DAYS[limit]);
+}
+
+/** Built-in limits shorter than the configured period of their category, in declaration order. */
+export function shorterBuiltinLimits(s: RetentionSettings): BuiltinLimit[] {
+  return (Object.keys(BUILTIN_LIMIT_DAYS) as BuiltinLimit[]).filter(
+    (limit) => length(s.days[BUILTIN_LIMIT_CATEGORY[limit]]) > BUILTIN_LIMIT_DAYS[limit],
+  );
+}
+
 export function retentionWarnings(s: RetentionSettings): RetentionWarning[] {
   const { days } = s;
   const warnings: RetentionWarning[] = [];
   if (length(days.audit) < AUDIT_RECOMMENDED_MIN_DAYS) warnings.push('audit_below_recommended');
   if (length(days.decisions) > length(days.comments)) warnings.push('decisions_capped_by_comments');
-  if (
-    length(days.previews) > BUILTIN_LIMIT_DAYS.previews ||
-    length(days.operational) > BUILTIN_LIMIT_DAYS.idempotencyRecords
-  ) {
-    warnings.push('builtin_shorter');
-  }
+  if (shorterBuiltinLimits(s).length > 0) warnings.push('builtin_shorter');
   return warnings;
 }
 
-/** What actually applies: previews are never kept past their built-in 7 days. */
+/**
+ * What applies per category. Previews is one table with a built-in limit, so the
+ * whole category is capped. Operational is not: only webhook events and
+ * idempotency records have built-in limits (applied per table by the purge via
+ * withBuiltinLimit), while job and alert records keep the configured period.
+ */
 export function effectiveDays(s: RetentionSettings): Record<RetentionCategory, RetentionDays> {
-  return { ...s.days, previews: Math.min(length(s.days.previews), BUILTIN_LIMIT_DAYS.previews) };
+  return { ...s.days, previews: withBuiltinLimit(s.days.previews, 'previews') };
 }

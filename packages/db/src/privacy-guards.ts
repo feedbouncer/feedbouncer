@@ -1,24 +1,35 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type pg from 'pg';
+
+const TX_PROBE = 'fb.tx_probe';
 
 /**
  * Both helpers set a transaction-local setting that fb_forbid_direct_mutation()
  * honours. set_config(..., true) is reset at COMMIT or ROLLBACK, but only if a
  * transaction is open: outside one it would last for the statement alone and the
  * helper would silently do nothing, so that case is refused.
+ *
+ * The check is behavioural, not a timing guess: a random value is set
+ * transaction-locally in one statement and read back in the next. Under
+ * autocommit each statement is its own transaction, so the value is already gone.
+ *
+ * These helpers only guarantee transaction scope for application code. They are
+ * not a security boundary: the trigger only checks that the setting is 'on', so
+ * any role that can run SQL can open the hatch itself (even with a session-level SET).
  */
 async function withGuardSetting<T>(
   tx: pg.PoolClient,
   setting: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  // now() is the transaction start time and statement_timestamp() the current
-  // statement's, so they are equal only when this statement began the transaction.
-  const { rows } = await tx.query<{ autocommit: boolean }>(
-    'SELECT now() = statement_timestamp() AS autocommit',
+  const nonce = randomUUID();
+  await tx.query('SELECT pg_catalog.set_config($1, $2, true)', [TX_PROBE, nonce]);
+  const { rows } = await tx.query<{ probe: string | null }>(
+    'SELECT pg_catalog.current_setting($1, true) AS probe',
+    [TX_PROBE],
   );
-  if (rows[0]?.autocommit !== false) throw new Error('privacy guard requires a transaction');
-  await tx.query('SELECT set_config($1, $2, true)', [setting, 'on']);
+  if (rows[0]?.probe !== nonce) throw new Error('privacy guard requires a transaction');
+  await tx.query('SELECT pg_catalog.set_config($1, $2, true)', [setting, 'on']);
   return fn();
 }
 
