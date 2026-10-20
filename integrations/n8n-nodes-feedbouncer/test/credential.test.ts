@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { normalizeBaseUrl } from '../nodes/shared/baseUrl';
 import { FeedBouncerApi } from '../credentials/FeedBouncerApi.credentials';
 
 const credential = new FeedBouncerApi();
@@ -35,6 +36,16 @@ describe('FeedBouncerApi credential', () => {
     expect(testBaseUrl({ baseUrl: ' https://fb.acme.io/v1/ ' })).toBe('https://fb.acme.io');
     expect(testBaseUrl({ baseUrl: 'https://fb.acme.io' })).toBe('https://fb.acme.io');
     expect(testBaseUrl({ baseUrl: 'https://fb.acme.io/x/v1' })).toBe('https://fb.acme.io/x');
+  });
+
+  it.each([
+    'https://fb.acme.io//v1',
+    'https://fb.acme.io//',
+    'https://fb.acme.io//x///v1//',
+    'https://fb.acme.io/x//y/',
+  ])('builds the same base URL as the node for %s', (baseUrl) => {
+    const normalized = normalizeBaseUrl(baseUrl, false);
+    expect(normalized.ok && testBaseUrl({ baseUrl })).toBe(normalized.ok && normalized.url);
   });
 
   it('only sends over http when Allow Plain HTTP is on', () => {
