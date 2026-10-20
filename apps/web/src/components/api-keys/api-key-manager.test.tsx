@@ -37,6 +37,7 @@ describe('ApiKeyManager', () => {
       }),
     ]);
     expect(html).toContain('Create key');
+    expect(html).toContain('Moderate only');
     expect(html).toContain('Read only');
     expect(html).toContain('Read and write');
     for (const h of ['Name', 'Key', 'Access', 'Created', 'Last used', 'Status']) {

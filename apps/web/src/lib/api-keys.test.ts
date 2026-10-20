@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiRequestError } from './api-client';
 import {
+  ACCESS_HELP,
   accessText,
   apiKeyErrorText,
   copyToken,
@@ -11,6 +12,10 @@ import {
 
 describe('api key text', () => {
   it('labels access, status and last use', () => {
+    expect(accessText('moderate')).toBe('Moderate only');
+    expect(ACCESS_HELP.moderate).toBe(
+      'Can only send text to the moderation check endpoint. Cannot read or change comments.',
+    );
     expect(accessText('read')).toBe('Read only');
     expect(accessText('write')).toBe('Read and write');
     expect(statusText('active')).toBe('Active');

@@ -48,6 +48,7 @@ describe('api key dto', () => {
 
   it('create body is strict, trimmed and bounded', () => {
     expect(CreateApiKeyBody.safeParse({ name: ' CI ', scope: 'write' }).data?.name).toBe('CI');
+    expect(CreateApiKeyBody.safeParse({ name: 'CI', scope: 'moderate' }).success).toBe(true);
     for (const bad of [
       { name: '', scope: 'read' },
       { name: 'x'.repeat(101), scope: 'read' },

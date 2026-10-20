@@ -3,7 +3,7 @@ import type { ApiKeyRow, ApiKeyScope } from '@feedbouncer/public-api';
 
 export const CreateApiKeyBody = z.strictObject({
   name: z.string().trim().min(1).max(100),
-  scope: z.enum(['read', 'write']),
+  scope: z.enum(['moderate', 'read', 'write']),
 });
 
 export interface ApiKeyDto {

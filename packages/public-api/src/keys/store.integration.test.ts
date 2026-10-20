@@ -133,6 +133,26 @@ describe('PgApiKeys.authenticate and revoke', () => {
     await expect(keys.authenticate(raw)).resolves.toBeNull();
   });
 
+  it('authenticates a moderate key with its scope', async () => {
+    const t = await tenant();
+    const { token } = await keys.create(t.organizationId, t.userId, {
+      name: 'mod',
+      scope: 'moderate',
+    });
+    await expect(keys.authenticate(token.reveal())).resolves.toMatchObject({ scope: 'moderate' });
+  });
+
+  it('rejects an unknown scope at the database', async () => {
+    const t = await tenant();
+    await expect(
+      h.c.query(
+        `INSERT INTO api_key (organization_id, name, public_id, secret_sha256, scope)
+         VALUES ($1, 'bad', 'zzzzzzzzzzzzzzzz', '\\x00', 'admin')`,
+        [t.organizationId],
+      ),
+    ).rejects.toMatchObject({ code: '23514', constraint: 'api_key_scope_check' });
+  });
+
   it('revoke is idempotent and keeps the first revocation time', async () => {
     const t = await tenant();
     const { key } = await keys.create(t.organizationId, t.userId, { name: 'r', scope: 'read' });

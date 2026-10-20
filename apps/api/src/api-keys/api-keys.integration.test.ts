@@ -75,6 +75,12 @@ describe('api keys API', () => {
     expect((await create(org.admin.cookie, 'x', 'admin')).status).toBe(400);
   });
 
+  it('creates a moderate-scope key', async () => {
+    const r = await create(org.admin.cookie, 'moderation only', 'moderate');
+    expect(r.status).toBe(201);
+    expect(r.body.key.scope).toBe('moderate');
+  });
+
   it('refuses a duplicate active name, then allows it after revoke', async () => {
     const first = await create(org.admin.cookie, 'dup');
     expect(first.status).toBe(201);
