@@ -41,6 +41,15 @@ describe('comment list', () => {
     await expect(result).rejects.toThrow(`No brand with ID ${ID2} in this FeedBouncer workspace.`);
   });
 
+  it('a 404 without a brand filter does not name a brand', async () => {
+    const { result } = run({
+      params: { resource: 'comment', operation: 'list', returnAll: true, filters: {} },
+      http: [{ status: 404, body: { error: { code: 'not_found', message: 'nope' } } }],
+    });
+    await expect(result).rejects.toThrow(/No item with ID/);
+    await expect(result).rejects.not.toThrow(/brand/);
+  });
+
   it('maps filters to the query string', async () => {
     const brandId = ID2;
     const { ctx, result } = run({
@@ -72,13 +81,30 @@ describe('comment list', () => {
     });
   });
 
-  it('adds an offset to a zone-less date', async () => {
+  it('reads a zone-less date in the workflow timezone', async () => {
+    for (const [timezone, expected] of [
+      ['Europe/Berlin', '2026-10-01T10:30:00.000Z'],
+      ['America/New_York', '2026-10-01T16:30:00.000Z'],
+      ['UTC', '2026-10-01T12:30:00.000Z'],
+    ]) {
+      const { ctx, result } = run({
+        timezone,
+        params: { resource: 'comment', operation: 'list', returnAll: false, limit: 5, filters: { postedAfter: '2026-10-01T12:30:00' } },
+        http: [ok({ data: [], nextCursor: null })],
+      });
+      await result;
+      expect(ctx.calls[0].qs?.postedFrom).toBe(expected);
+    }
+  });
+
+  it('keeps an explicit offset as given', async () => {
     const { ctx, result } = run({
-      params: { resource: 'comment', operation: 'list', returnAll: false, limit: 5, filters: { postedAfter: '2026-10-01T12:30:00' } },
+      timezone: 'Europe/Berlin',
+      params: { resource: 'comment', operation: 'list', returnAll: false, limit: 5, filters: { postedAfter: '2026-10-01T12:30:00+05:00' } },
       http: [ok({ data: [], nextCursor: null })],
     });
     await result;
-    expect(String(ctx.calls[0].qs?.postedFrom)).toMatch(/Z$|[+-]\d\d:\d\d$/);
+    expect(ctx.calls[0].qs?.postedFrom).toBe('2026-10-01T07:30:00.000Z');
   });
 
   it('rejects a search outside 2 to 200 characters before any HTTP call', async () => {

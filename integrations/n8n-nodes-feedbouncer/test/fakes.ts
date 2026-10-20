@@ -39,6 +39,7 @@ export interface FakeInit {
   http?: Scripted[];
   credentialName?: string;
   executionId?: string;
+  timezone?: string;
   runIndex?: number;
   staticData?: IDataObject;
   activationMode?: 'activate' | 'manual';
@@ -102,6 +103,7 @@ function build(init: FakeInit) {
     calls,
     staticData,
     getNode: () => node,
+    getTimezone: () => init.timezone ?? 'UTC',
     getCredentials: async () => {
       if (credentials === null) throw new Error('no credentials');
       return { ...credentials };

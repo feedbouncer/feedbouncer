@@ -13,8 +13,33 @@ interface CommentPage {
   nextCursor: string | null;
 }
 
+const ZONELESS_DATE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?)?$/;
+
+function zoneOffsetMs(utcMs: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+  }).formatToParts(new Date(utcMs));
+  const part = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const wallClockAsUtc = Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'), part('second'));
+  return wallClockAsUtc - Math.floor(utcMs / 1000) * 1000;
+}
+
+function parseInTimezone(value: string, timeZone: string): Date {
+  if (!ZONELESS_DATE.test(value)) return new Date(value);
+  const wallClockAsUtc = Date.parse(value.includes('T') ? `${value}Z` : `${value}T00:00:00Z`);
+  const approximate = wallClockAsUtc - zoneOffsetMs(wallClockAsUtc, timeZone);
+  return new Date(wallClockAsUtc - zoneOffsetMs(approximate, timeZone));
+}
+
 function toUtcIso(ctx: IExecuteFunctions, value: unknown, label: string, i: number): string {
-  const date = new Date(String(value));
+  const date = parseInTimezone(String(value), ctx.getTimezone());
   if (Number.isNaN(date.getTime())) {
     throw new NodeOperationError(ctx.getNode(), `${label} is not a valid date.`, { itemIndex: i });
   }
@@ -69,8 +94,7 @@ export async function executeComment(
           path: '/v1/comments',
           qs: { ...filters, limit, ...(cursor && { cursor }) },
           operationId: 'listComments',
-          resourceLabel: 'brand',
-          id: filters.brandId as string | undefined,
+          ...(filters.brandId ? { resourceLabel: 'brand', id: filters.brandId as string } : {}),
           itemIndex: i,
         })
       ).body,
