@@ -420,9 +420,31 @@ In practice:
 - **User:** delete the `app_user` row. Memberships go; decisions and audit events
   stay with `actor_user_id = NULL`.
 - **Comment:** delete the row. Its decisions go with it; replies keep
-  `parent_external_id`.
+  `parent_external_id`. Write `commentFingerprint(connectionId, externalId)` to
+  `erased_comment` in the same transaction so a re-delivery is not re-ingested.
 - Normalizers must strip NUL bytes (`\u0000`) from text before writing. Postgres
   rejects them with SQLSTATE `22021` rather than truncating.
+
+### Escape hatches for the append-only tables
+
+`decision`, `rule_evaluation`, `comment_classification`, `policy_evaluation`,
+`policy_evaluation_match`, `custom_policy_revision` and `audit_event` refuse direct
+`UPDATE`, `DELETE` and `TRUNCATE` (`fb_forbid_direct_mutation()`). Two
+transaction-local settings open a narrow exception. Use the helpers in
+`src/privacy-guards.ts`; they require an open transaction (they throw
+`privacy guard requires a transaction` otherwise) and the setting ends at
+`COMMIT` or `ROLLBACK`, so it cannot leak to a pooled connection.
+
+- `withRetentionDelete(tx, fn)` sets `fb.retention_delete`: a direct `DELETE` is
+  allowed. `UPDATE` and `TRUNCATE` are still refused. Used by the retention purge.
+- `withPrivacyRedaction(tx, fn)` sets `fb.privacy_redaction`: an `UPDATE` of
+  `audit_event` that changes only `details` (and `updated_at`) is allowed.
+  Anything else, on any table, is still refused.
+
+Rolling back `20261021000100_privacy_retention` drops the privacy and retention
+records it added (`privacy_request`, `retention_*`, `erased_comment`,
+`comment.parent_removed_at`) and restores the original guard. Existing content,
+decisions and audit events are untouched.
 
 ## Security notes
 

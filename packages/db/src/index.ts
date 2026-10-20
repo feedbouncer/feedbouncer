@@ -6,3 +6,4 @@ export * from './bounded-query.js';
 export * from './brand-slots.js';
 export * from './audit.js';
 export * from './organization-delete.js';
+export * from './privacy-guards.js';
