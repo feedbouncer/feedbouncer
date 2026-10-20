@@ -58,6 +58,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
       - uses: ./.github/actions/setup
         with:
           turbo-cache-scope: n8n-node
@@ -77,13 +78,10 @@ jobs:
           node integrations/n8n-nodes-feedbouncer/scripts/smoke.mjs "$pack_dir"/*.tgz "$(cat integrations/n8n-nodes-feedbouncer/scripts/n8n-tested-version)"
       - name: n8n node PRs must not change product code
         if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          # HEAD is the PR merge commit, so BASE_SHA..HEAD is exactly this PR's change.
-          git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          git diff --name-only "$BASE_SHA" HEAD | node scripts/ci/n8n-scope-guard.mjs
+          # HEAD is the PR merge commit, so its first parent is the base and HEAD^1..HEAD is exactly this PR's change.
+          git diff --name-only HEAD^1 HEAD | node scripts/ci/n8n-scope-guard.mjs
 
   docker-discover:
     name: Docker discover
