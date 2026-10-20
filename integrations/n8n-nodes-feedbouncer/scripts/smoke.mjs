@@ -77,11 +77,12 @@ async function main() {
       '-e', 'N8N_COMMUNITY_PACKAGES_ENABLED=true',
       `n8nio/n8n:${version}`,
     );
-    // First boot creates the community nodes directory; install only after it exists.
     await waitForHealth(name);
     await docker('cp', tarball, `${name}:/tmp/pkg.tgz`);
     // docker cp keeps the host owner and mode (mktemp files are 0600), which the node user cannot read.
     await docker('exec', '-u', 'root', name, 'chmod', '644', '/tmp/pkg.tgz');
+    // n8n creates this directory lazily, so do not depend on when it appears.
+    await docker('exec', name, 'mkdir', '-p', NODES_DIR);
     // Same flags n8n uses for community installs; scripts stay off because the image has no build toolchain.
     await withRetries(INSTALL_ATTEMPTS, () =>
       docker(
