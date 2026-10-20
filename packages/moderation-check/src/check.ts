@@ -102,20 +102,20 @@ async function policyStage(
   const { slots, usage, monthlyCallsPerBrand } = d.policyBudget;
   const lease = await slots.acquire(scope.brandId);
   if (!lease) return { kind: 'failed', code: 'brand_busy' };
-  let out: Outcome<Awaited<ReturnType<typeof runPolicyCheck>>>;
+  let out: Outcome<Awaited<ReturnType<typeof runPolicyCheck>> | 'quota_exhausted'>;
   try {
-    if (!(await usage.consume(scope, monthlyCallsPerBrand))) {
-      return { kind: 'failed', code: 'quota_exhausted' };
-    }
-    out = await runStage(d, deadlineAt, d.policyTimeoutMs, (signal) =>
-      runPolicyCheck(d.policyEvaluator, input, policies, signal, {
+    // Every attempt is a model call, so every attempt draws on the budget.
+    out = await runStage(d, deadlineAt, d.policyTimeoutMs, async (signal) => {
+      if (!(await usage.consume(scope, monthlyCallsPerBrand))) return 'quota_exhausted';
+      return runPolicyCheck(d.policyEvaluator, input, policies, signal, {
         moderatorActed: async () => false,
-      }),
-    );
+      });
+    });
   } finally {
     await lease.release().catch(() => {});
   }
   if (!out.ok) return { kind: 'failed', code: out.code };
+  if (out.value === 'quota_exhausted') return { kind: 'failed', code: 'quota_exhausted' };
   const { decision, provider, model } = out.value;
   return { kind: 'ok', decision, provider, model };
 }

@@ -8,6 +8,7 @@ describe('validateCheckText', () => {
     ['a NUL character', 'a\u0000b', 'malformed'],
     ['only invisible characters', '  ​⁦', 'empty'],
     ['more than 4000 UTF-16 units', '😀'.repeat(2000) + 'a', 'too_long'],
+    ['more than 4000 units that start invisible', '\u200b'.repeat(4000) + 'visible', 'too_long'],
   ] as const)('rejects %s', (_, text, problem) => {
     expect(validateCheckText(text)).toEqual({ ok: false, problem });
   });

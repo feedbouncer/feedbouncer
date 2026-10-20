@@ -24,7 +24,7 @@ export function validateCheckText(
   text: string,
 ): { ok: true } | { ok: false; problem: 'malformed' | 'empty' | 'too_long' } {
   if (!text.isWellFormed() || text.includes('\u0000')) return { ok: false, problem: 'malformed' };
-  if (prepareInput(text).empty) return { ok: false, problem: 'empty' };
   if (text.length > MAX_CHECK_TEXT_UNITS) return { ok: false, problem: 'too_long' };
+  if (prepareInput(text).empty) return { ok: false, problem: 'empty' };
   return { ok: true };
 }

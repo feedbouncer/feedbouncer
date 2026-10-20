@@ -23,7 +23,7 @@ import { bodySha256, type BrandScope, type PgEvaluationStore } from '@feedbounce
 import { mapProviderError, prepareInput, type ModelUsage } from '@feedbouncer/ai';
 import type { BrandSlots } from '@feedbouncer/db';
 import type { Logger } from '@feedbouncer/service-runtime';
-import { runPolicyCheck } from '../check.js';
+import { askPolicies, decideAnswer, type PolicyAnswer } from '../check.js';
 import { describeDecision, describeFallback } from '../describe.js';
 import type { EvaluationRecord, EvaluationRow, PgPolicyEvaluationStore } from '../evaluations.js';
 import { POLICY_PROMPT_VERSION, type PolicyEvaluator } from '../evaluator.js';
@@ -130,14 +130,10 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
     });
 
     const input = prepareInput(row.body);
-    // A run must not undo a person's decision by hiding or deleting again.
-    const moderatorActed = async () =>
-      p.trigger !== 'ingest' && (await d.comments.latestActionActor(brand, row.id)) === 'user';
-    const check = () =>
-      runPolicyCheck(d.evaluator, input, policies, ctx.signal, { moderatorActed });
-    let checked: Awaited<ReturnType<typeof check>>;
+    const ask = () => askPolicies(d.evaluator, input, policies, ctx.signal);
+    let answer: PolicyAnswer;
     if (input.empty) {
-      checked = await check();
+      answer = await ask();
     } else {
       if (!d.evaluator.enabled) return failed('disabled');
       if (now() - p.requestedAt > d.maxWaitMs) return failed('queue_timeout');
@@ -151,7 +147,7 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
             skipReason: 'quota_exhausted',
             ruleEvaluationId: ruleEval.id,
           };
-        checked = await check();
+        answer = await ask();
       } catch (e) {
         const err = mapProviderError(e);
         if (err.retryable && ctx.attempt < MAX_POLICY_PROVIDER_ATTEMPTS) {
@@ -174,7 +170,12 @@ export function policyEvaluateJob(d: PolicyEvaluateDeps): JobDefinition<PolicyEv
           .catch(() => ctx.log.warn('policy.slot_release_failed', { commentId: row.id }));
       }
     }
-    const { decision, provider, model, usage } = checked;
+    // A run must not undo a person's decision by hiding or deleting again. Read after the
+    // model answered, outside the model-error handling: a database error fails the job for retry.
+    const moderatorActed =
+      p.trigger !== 'ingest' && (await d.comments.latestActionActor(brand, row.id)) === 'user';
+    const decision = decideAnswer(policies, answer, input, moderatorActed);
+    const { provider, model, usage } = answer;
     return {
       ...base,
       status: 'evaluated',

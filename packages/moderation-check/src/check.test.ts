@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ProviderError, prepareInput, type PreparedInput } from '@feedbouncer/ai';
+import { ProviderError, prepareInput, UNKNOWN_USAGE, type PreparedInput } from '@feedbouncer/ai';
 import {
   DisabledProvider,
   ZERO_SCORES,
@@ -254,6 +254,35 @@ describe('checkText', () => {
       await checkText(d, scope, 'I want a refund', later());
       expect(consume).toHaveBeenCalledWith(scope, 7);
       expect(released).toEqual(['released']);
+    });
+
+    it('takes a call from the budget for each attempt, including the retry', async () => {
+      const consume = vi.fn(async () => true);
+      const evaluate = vi
+        .fn<PolicyEvaluator['evaluate']>()
+        .mockRejectedValueOnce(new ProviderError('timeout', true))
+        .mockResolvedValueOnce({ verdicts: { p1: 'clear_match' }, usage: UNKNOWN_USAGE });
+      const d = withPolicy({
+        policyEvaluator: { ...evaluator(), evaluate },
+        policyBudget: { slots: openSlots(), usage: { consume }, monthlyCallsPerBrand: 7 },
+      });
+      await checkText(d, scope, 'I want a refund', later());
+      expect(evaluate).toHaveBeenCalledTimes(2);
+      expect(consume).toHaveBeenCalledTimes(2);
+    });
+
+    it('stops retrying when the budget runs out between attempts', async () => {
+      const consume = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false);
+      const evaluate = vi
+        .fn<PolicyEvaluator['evaluate']>()
+        .mockRejectedValue(new ProviderError('timeout', true));
+      const d = withPolicy({
+        policyEvaluator: { ...evaluator(), evaluate },
+        policyBudget: { slots: openSlots(), usage: { consume }, monthlyCallsPerBrand: 7 },
+      });
+      const r = await checkText(d, scope, 'I want a refund', later());
+      expect(evaluate).toHaveBeenCalledTimes(1);
+      expect(r).toMatchObject({ verdict: 'review', reasonCode: 'policy_unavailable' });
     });
 
     it('releases the slot when the evaluator fails', async () => {

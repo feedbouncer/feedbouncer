@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { prepareInput, UNKNOWN_USAGE } from '@feedbouncer/ai';
-import { runPolicyCheck } from './check.js';
+import { askPolicies, decideAnswer, runPolicyCheck } from './check.js';
 import type { PolicyEvaluator } from './evaluator.js';
 import type { ActivePolicy } from './types.js';
 
@@ -85,5 +85,18 @@ describe('runPolicyCheck', () => {
       },
     });
     expect(order).toEqual(['evaluate', 'lookup']);
+  });
+});
+
+describe('askPolicies and decideAnswer', () => {
+  it('asks without reading whether a moderator acted, and decides on the given flag', async () => {
+    const evaluate = vi.fn<PolicyEvaluator['evaluate']>(async () => ({
+      verdicts: { p1: 'clear_match' },
+      usage: UNKNOWN_USAGE,
+    }));
+    const input = prepareInput('some words here');
+    const answer = await askPolicies(fake(evaluate), input, [pol(1)], signal);
+    expect(decideAnswer([pol(1)], answer, input, false).winner?.downgrade).toBeNull();
+    expect(decideAnswer([pol(1)], answer, input, true).winner?.downgrade).toBe('moderator_acted');
   });
 });
