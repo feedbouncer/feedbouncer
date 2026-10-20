@@ -46,7 +46,11 @@ async function runStage<T>(
       return { ok: true, value: await call(AbortSignal.timeout(budget)) };
     } catch (e) {
       const err = mapProviderError(e);
-      if (attempt > 0 || !err.retryable || deadlineAt - now() < MIN_REMAINING_MS) {
+      if (
+        attempt > 0 ||
+        !err.retryable ||
+        deadlineAt - now() <= RETRY_DELAY_MS + MIN_REMAINING_MS
+      ) {
         return { ok: false, code: err.code };
       }
       await sleep(RETRY_DELAY_MS);
@@ -98,6 +102,8 @@ async function policyStage(
   return { kind: 'ok', decision, provider, model };
 }
 
+const failed = (e: unknown) => ({ kind: 'failed' as const, code: mapProviderError(e).code });
+
 /** `text` must already pass `validateCheckText`. */
 export async function checkText(
   d: CheckDeps,
@@ -115,8 +121,8 @@ export async function checkText(
   });
   if (decided) return combine(decided, null, null);
   const [classifier, policy] = await Promise.all([
-    classifierStage(d, scope, input, deadlineAt),
-    policyStage(d, scope, input, deadlineAt),
+    classifierStage(d, scope, input, deadlineAt).catch(failed),
+    policyStage(d, scope, input, deadlineAt).catch(failed),
   ]);
   return combine(null, classifier, policy);
 }

@@ -250,3 +250,50 @@ describe('checkText', () => {
     await expect(checkText(deps(), scope, text, later())).rejects.toThrow(RangeError);
   });
 });
+
+describe('checkText stage failures', () => {
+  it('degrades the classifier when the threshold lookup fails, keeping the policy result', async () => {
+    const d = deps({
+      thresholds: { policy: async () => Promise.reject(new Error('db down')) },
+      policies: { enabledForEvaluation: async () => [active] },
+      policyEvaluator: evaluator(),
+    });
+    const r = await checkText(d, scope, 'I want a refund', later());
+    expect(r).toMatchObject({ verdict: 'block', reasonCode: 'policy_matched', degraded: true });
+  });
+
+  it('reports the classifier as unavailable when the threshold lookup fails', async () => {
+    const d = deps({ thresholds: { policy: async () => Promise.reject(new Error('db down')) } });
+    const r = await checkText(d, scope, 'hello there', later());
+    expect(r).toMatchObject({ reasonCode: 'classifier_unavailable', degraded: true });
+    expect(JSON.stringify(r)).not.toContain('db down');
+  });
+
+  it('degrades the policy stage when the usage lookup fails, keeping the classifier result', async () => {
+    const d = deps({
+      classifier: new FakeProvider([S({ spam: 0.99 })]),
+      policies: { enabledForEvaluation: async () => [active] },
+      policyEvaluator: evaluator(),
+      usage: { consume: async () => Promise.reject(new Error('db down')) },
+    });
+    const r = await checkText(d, scope, 'buy now', later());
+    expect(r).toMatchObject({ decidedBy: 'classifier', degraded: true });
+
+    const quiet = deps({
+      policies: { enabledForEvaluation: async () => [active] },
+      policyEvaluator: evaluator(),
+      usage: { consume: async () => Promise.reject(new Error('db down')) },
+    });
+    expect(await checkText(quiet, scope, 'hello', later())).toMatchObject({
+      verdict: 'review',
+      reasonCode: 'policy_unavailable',
+    });
+  });
+
+  it('keeps the original error code when there is no time to retry', async () => {
+    const classifier = new FakeProvider([new ProviderError('unavailable', true)]);
+    const r = await checkText(deps({ classifier }), scope, 'hello there', Date.now() + 1200);
+    expect(classifier.calls).toBe(1);
+    expect(r.reason).toContain('(unavailable)');
+  });
+});
