@@ -164,14 +164,20 @@ export async function create(this: IHookFunctions): Promise<boolean> {
   return true;
 }
 
-/** Never throws: a failed cleanup is retried by the next activation. */
+/**
+ * Never throws: a failed cleanup is retried by the next activation. A test listen only removes endpoints for its own
+ * URL and leaves the stored production endpoint and secret untouched.
+ */
 export async function remove(this: IHookFunctions): Promise<boolean> {
   const data = staticData(this);
+  const url = webhookUrl(this);
+  const isTestListen = this.getActivationMode() === 'manual';
   try {
-    await cleanup(this, data.url ?? webhookUrl(this), true);
+    await cleanup(this, isTestListen ? url : (data.url ?? url), !isTestListen);
   } catch {
     // Deliberately ignored.
   }
+  if (isTestListen && data.url !== url) return true;
   delete data.endpointId;
   delete data.sealedSecret;
   delete data.url;

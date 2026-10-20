@@ -285,6 +285,31 @@ describe('remove', () => {
     expect(ctx.staticData).toEqual({});
   });
 
+  it('keeps the production endpoint and its static data when a test listen is torn down', async () => {
+    const ctx = hook({
+      webhookUrl: 'https://n8n.example.com/custom-test-path/aaa',
+      activationMode: 'manual',
+      staticData: stored({ url: URL_A }),
+      http: [page([endpoint(ID_1, URL_A)])],
+    });
+    expect(await remove.call(ctx)).toBe(true);
+    expect(methods(ctx)).toEqual(['GET']);
+    expect(ctx.staticData).toMatchObject({ endpointId: ID_1, url: URL_A });
+  });
+
+  it('deletes the test endpoint and clears static data when the test listen created it', async () => {
+    const testUrl = 'https://n8n.example.com/custom-test-path/aaa';
+    const ctx = hook({
+      webhookUrl: testUrl,
+      activationMode: 'manual',
+      staticData: stored({ url: testUrl }),
+      http: [page([endpoint(ID_1, testUrl)]), gone],
+    });
+    expect(await remove.call(ctx)).toBe(true);
+    expect(methods(ctx)).toEqual(['GET', 'DELETE']);
+    expect(ctx.staticData).toEqual({});
+  });
+
   it.each([
     ['unreachable', { throw: { code: 'ECONNREFUSED' } }],
     ['401', apiError(401, 'unauthorized')],
