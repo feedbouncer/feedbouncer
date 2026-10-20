@@ -27,7 +27,7 @@ import {
   PgPolicyUsage,
   createPolicyEvaluator,
 } from '@feedbouncer/policies';
-import { publishRetentionStatus } from '@feedbouncer/privacy';
+import { PgPrivacyRequestStore, publishRetentionStatus } from '@feedbouncer/privacy';
 import { PgRuleStore, RuleSetCache } from '@feedbouncer/rules';
 import { BrandSlots, createPool, runJobOnce } from '@feedbouncer/db';
 import {
@@ -64,6 +64,7 @@ import { startIdempotencyPurge } from './idempotency.js';
 import { startWebhookLoops } from './webhooks.js';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { startReportLoops } from './reports.js';
+import { startPrivacyRequestWorker } from './privacy-requests.js';
 import { startRetentionLoop } from './retention.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
 import { buildConnectorRegistry, buildJobRegistry } from './registries.js';
@@ -111,7 +112,12 @@ try {
   );
   const pool = createPool(env.databaseUrl, {
     applicationName: 'feedbouncer-worker',
-    max: env.concurrency + 2 + jobConsumerConnections + Math.min(32, laneConsumerConnections),
+    max:
+      env.concurrency +
+      2 +
+      jobConsumerConnections +
+      Math.min(32, laneConsumerConnections) +
+      env.privacy.requestConcurrency,
     onIdleError: (err) => log.warn('postgres idle client error', errorFields(err)),
   });
   // PgRefreshLock holds a session per refresh, so it gets a small pool of its own.
@@ -271,6 +277,20 @@ try {
       },
     },
   });
+  const privacyRequests = startPrivacyRequestWorker({
+    connection: redis,
+    prefix: env.jobs.prefix,
+    concurrency: env.privacy.requestConcurrency,
+    log,
+    deps: {
+      store: new PgPrivacyRequestStore(pool, env.encryption),
+      pool,
+      exportDir: env.privacy.exportDir,
+      exportTtlHours: env.privacy.exportTtlHours,
+      batchSize: env.retention.batchSize,
+      log,
+    },
+  });
   const health = await startHealthServer({
     host: '127.0.0.1',
     port: env.healthPort,
@@ -303,7 +323,12 @@ try {
     retentionLoop?.stop();
     await webhookLoops?.stop();
     await scheduler?.stop();
-    await Promise.all([worker.close(), jobWorkers.close(), moderationCheck.close()]);
+    await Promise.all([
+      worker.close(),
+      jobWorkers.close(),
+      moderationCheck.close(),
+      privacyRequests.close(),
+    ]);
     await queues.close();
     await health.close();
     mailer?.close();
