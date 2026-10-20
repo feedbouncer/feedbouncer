@@ -2,7 +2,7 @@ import { PAGE_SIZE, RETURN_ALL_MAX } from './constants';
 
 export class ReturnAllLimitError extends Error {}
 
-interface Page<T> {
+export interface Page<T> {
   data: T[];
   nextCursor: string | null;
 }

@@ -1,13 +1,11 @@
 {
   "compilerOptions": {
     "strict": true,
-    "module": "commonjs",
-    "moduleResolution": "node",
-    "ignoreDeprecations": "6.0",
+    "module": "node16",
+    "moduleResolution": "node16",
     "target": "es2019",
     "lib": ["es2019", "es2020", "es2022.error"],
     "removeComments": true,
-    "useUnknownInCatchVariables": false,
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": true,
     "noImplicitReturns": true,

@@ -2,16 +2,11 @@ import { NodeOperationError } from 'n8n-workflow';
 import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-workflow';
 import { DEFAULT_LIMIT } from '../../shared/constants';
 import { assertUuid } from '../../shared/ids';
-import { collectPages } from '../../shared/pagination';
+import { collectPages, type Page } from '../../shared/pagination';
 import { feedBouncerRequest } from '../../shared/transport';
 
 const SEARCH_MIN = 2;
 const SEARCH_MAX = 200;
-
-interface CommentPage {
-  data: IDataObject[];
-  nextCursor: string | null;
-}
 
 const ZONELESS_DATE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?)?$/;
 
@@ -89,7 +84,7 @@ export async function executeComment(
   const comments = await collectPages<IDataObject>(
     async (cursor, limit) =>
       (
-        await feedBouncerRequest<CommentPage>(this, {
+        await feedBouncerRequest<Page<IDataObject>>(this, {
           method: 'GET',
           path: '/v1/comments',
           qs: { ...filters, limit, ...(cursor && { cursor }) },

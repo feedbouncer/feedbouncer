@@ -1,6 +1,6 @@
 import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ensureOperationSupported, feedBouncerRequest } from '../nodes/shared/transport';
+import { isOperationSupported, feedBouncerRequest } from '../nodes/shared/transport';
 import type { FbRequest } from '../nodes/shared/transport';
 import { API_KEY, DEFAULT_CREDENTIALS, fakeExecute, fakeHook, slept } from './fakes';
 import type { Scripted } from './fakes';
@@ -10,7 +10,7 @@ vi.mock('n8n-workflow', async (importOriginal) => {
   return {
     ...actual,
     sleep: async (ms: number) => {
-      (await import('./fakes')).slept.push(ms);
+      (await import('./fakes.js')).slept.push(ms);
     },
   };
 });
@@ -195,17 +195,17 @@ describe('error mapping', () => {
   });
 });
 
-describe('ensureOperationSupported', () => {
+describe('isOperationSupported', () => {
   it('reads operation ids from the OpenAPI document and memoises per context', async () => {
     const ctx = fakeExecute({ http: [openApi('listComments', 'hideComment')] });
-    expect(await ensureOperationSupported(ctx, 'hideComment')).toBe(true);
-    expect(await ensureOperationSupported(ctx, 'getAction')).toBe(false);
+    expect(await isOperationSupported(ctx, 'hideComment')).toBe(true);
+    expect(await isOperationSupported(ctx, 'getAction')).toBe(false);
     expect(ctx.calls).toHaveLength(1);
   });
 
   it('assumes support when the document cannot be read', async () => {
     const ctx = fakeExecute({ http: [{ status: 500, body: 'oops' }] });
-    expect(await ensureOperationSupported(ctx, 'hideComment')).toBe(true);
+    expect(await isOperationSupported(ctx, 'hideComment')).toBe(true);
   });
 });
 

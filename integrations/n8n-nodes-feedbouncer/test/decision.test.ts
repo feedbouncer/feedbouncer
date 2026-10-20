@@ -9,7 +9,7 @@ vi.mock('n8n-workflow', async (importOriginal) => {
   return {
     ...actual,
     sleep: async (ms: number) => {
-      (await import('./fakes')).slept.push(ms);
+      (await import('./fakes.js')).slept.push(ms);
     },
   };
 });

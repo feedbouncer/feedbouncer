@@ -148,7 +148,7 @@ async function fetchOperationIds(ctx: Ctx): Promise<Set<string> | null> {
 }
 
 /** True when the server's OpenAPI document lists the operation, or when it cannot be read. */
-export async function ensureOperationSupported(ctx: Ctx, operationId: string): Promise<boolean> {
+export async function isOperationSupported(ctx: Ctx, operationId: string): Promise<boolean> {
   let lookup = supportCache.get(ctx);
   if (!lookup) {
     lookup = fetchOperationIds(ctx);
@@ -168,7 +168,7 @@ export async function feedBouncerRequest<T>(ctx: Ctx, req: FbRequest): Promise<F
   }
 
   const unsupported =
-    outcome.status === 404 && !apiErrorEnvelope(outcome.body) && !(await ensureOperationSupported(ctx, req.operationId));
+    outcome.status === 404 && !apiErrorEnvelope(outcome.body) && !(await isOperationSupported(ctx, req.operationId));
   const node = ctx.getNode();
   const info = describeFailure({
     status: outcome.status,

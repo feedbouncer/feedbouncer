@@ -3,7 +3,7 @@ import type { IHookFunctions, IWebhookFunctions } from 'n8n-workflow';
 import { CREDENTIAL_NAME, DEFAULT_LIMIT } from '../shared/constants';
 import { toNodeApiError } from '../shared/errors';
 import { isUuid } from '../shared/ids';
-import { collectPages } from '../shared/pagination';
+import { collectPages, type Page } from '../shared/pagination';
 import { feedBouncerRequest } from '../shared/transport';
 import { openSecret, sealSecret } from './secretBox';
 import { isValidSecret } from './signature';
@@ -71,7 +71,7 @@ async function cleanup(ctx: IHookFunctions, url: string, replaceStored: boolean)
   const all = await collectPages<WebhookEndpoint>(
     async (cursor, limit) =>
       (
-        await feedBouncerRequest<{ data: WebhookEndpoint[]; nextCursor: string | null }>(ctx, {
+        await feedBouncerRequest<Page<WebhookEndpoint>>(ctx, {
           method: 'GET',
           path: '/v1/webhook-endpoints',
           qs: { limit, ...(cursor && { cursor }) },
