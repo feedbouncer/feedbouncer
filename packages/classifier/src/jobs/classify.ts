@@ -31,7 +31,7 @@ import {
   MODERATOR_ACTED_NOTE,
 } from '../describe.js';
 import { PROMPT_VERSION } from '../llm-provider.js';
-import { decide, roundScores } from '../policy.js';
+import { scoreClassification } from '../score.js';
 import type { Trigger } from '../types.js';
 import type { ClassifierProvider, RawClassification } from '../provider.js';
 import type { ClassificationRecord, ClassificationRow, PgClassificationStore } from '../store.js';
@@ -159,10 +159,13 @@ export function classifyCommentJob(d: ClassifyDeps): JobDefinition<ClassifyPaylo
       }
     }
 
-    const scores = roundScores(raw.scores);
-    const languageSupported = input.empty || d.languages.includes(raw.language);
     const policy = await d.thresholds.policy(brand);
-    let verdict = decide(scores, policy, { lowSignal: input.lowSignal, languageSupported });
+    const {
+      scores,
+      languageSupported,
+      verdict: scored,
+    } = scoreClassification(raw, input, policy, d.languages);
+    let verdict = scored;
     // A re-run must not undo a person's decision by hiding or deleting again.
     let moderatorActed = false;
     if (
