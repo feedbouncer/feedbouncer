@@ -1,0 +1,122 @@
+import { mapProviderError, prepareInput, type PreparedInput } from '@feedbouncer/ai';
+import {
+  DisabledProvider,
+  scoreClassification,
+  type ClassifierProvider,
+  type ThresholdPolicy,
+} from '@feedbouncer/classifier';
+import { runPolicyCheck, type ActivePolicy, type PolicyEvaluator } from '@feedbouncer/policies';
+import { evaluate, type BrandScope, type CompiledRuleSet } from '@feedbouncer/rules';
+import { combine, type ClassifierStage, type PolicyStage } from './combine.js';
+import type { CheckResult } from './types.js';
+
+export interface CheckDeps {
+  rules: { get(scope: BrandScope): Promise<CompiledRuleSet> };
+  thresholds: { policy(scope: BrandScope): Promise<ThresholdPolicy> };
+  policies: { enabledForEvaluation(scope: BrandScope): Promise<ActivePolicy[]> };
+  usage: { consume(scope: BrandScope, monthlyCallsPerBrand: number): Promise<boolean> };
+  classifier: ClassifierProvider;
+  policyEvaluator: PolicyEvaluator;
+  languages: readonly string[];
+  classifierTimeoutMs: number;
+  policyTimeoutMs: number;
+  policyMonthlyCallsPerBrand: number;
+  now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
+}
+
+const RETRY_DELAY_MS = 250;
+const MIN_REMAINING_MS = 1000;
+
+type Outcome<T> = { ok: true; value: T } | { ok: false; code: string };
+
+/** Runs `call` with a signal that expires before the deadline; retries once on a retryable error. */
+async function runStage<T>(
+  d: CheckDeps,
+  deadlineAt: number,
+  timeoutMs: number,
+  call: (signal: AbortSignal) => Promise<T>,
+): Promise<Outcome<T>> {
+  const now = d.now ?? Date.now;
+  const sleep = d.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  for (let attempt = 0; ; attempt++) {
+    const budget = Math.min(timeoutMs, deadlineAt - now() - MIN_REMAINING_MS);
+    if (budget <= 0) return { ok: false, code: 'timeout' };
+    try {
+      return { ok: true, value: await call(AbortSignal.timeout(budget)) };
+    } catch (e) {
+      const err = mapProviderError(e);
+      if (attempt > 0 || !err.retryable || deadlineAt - now() < MIN_REMAINING_MS) {
+        return { ok: false, code: err.code };
+      }
+      await sleep(RETRY_DELAY_MS);
+    }
+  }
+}
+
+async function classifierStage(
+  d: CheckDeps,
+  scope: BrandScope,
+  input: PreparedInput,
+  deadlineAt: number,
+): Promise<ClassifierStage> {
+  if (d.classifier instanceof DisabledProvider) return { kind: 'not_configured' };
+  const thresholds = await d.thresholds.policy(scope);
+  const out = await runStage(d, deadlineAt, d.classifierTimeoutMs, async (signal) => {
+    const raw = await d.classifier.classify(input, signal);
+    return { language: raw.language, ...scoreClassification(raw, input, thresholds, d.languages) };
+  });
+  if (!out.ok) return { kind: 'failed', code: out.code };
+  return {
+    kind: 'ok',
+    verdict: out.value.verdict,
+    language: out.value.language,
+    provider: d.classifier.id,
+    model: d.classifier.model,
+  };
+}
+
+async function policyStage(
+  d: CheckDeps,
+  scope: BrandScope,
+  input: PreparedInput,
+  deadlineAt: number,
+): Promise<PolicyStage> {
+  if (!d.policyEvaluator.enabled) return { kind: 'skipped' };
+  const policies = await d.policies.enabledForEvaluation(scope);
+  if (policies.length === 0) return { kind: 'skipped' };
+  if (!(await d.usage.consume(scope, d.policyMonthlyCallsPerBrand))) {
+    return { kind: 'quota_exhausted' };
+  }
+  const out = await runStage(d, deadlineAt, d.policyTimeoutMs, (signal) =>
+    runPolicyCheck(d.policyEvaluator, input, policies, signal, {
+      moderatorActed: async () => false,
+    }),
+  );
+  if (!out.ok) return { kind: 'failed', code: out.code };
+  const { decision, provider, model } = out.value;
+  return { kind: 'ok', decision, provider, model };
+}
+
+/** `text` must already pass `validateCheckText`. */
+export async function checkText(
+  d: CheckDeps,
+  scope: BrandScope,
+  text: string,
+  deadlineAt: number,
+): Promise<CheckResult> {
+  const input = prepareInput(text);
+  if (input.truncated || input.empty) throw new RangeError('check text not validated');
+  const { decided } = evaluate(await d.rules.get(scope), {
+    body: text,
+    platform: null,
+    authorExternalId: null,
+    authorName: null,
+  });
+  if (decided) return combine(decided, null, null);
+  const [classifier, policy] = await Promise.all([
+    classifierStage(d, scope, input, deadlineAt),
+    policyStage(d, scope, input, deadlineAt),
+  ]);
+  return combine(null, classifier, policy);
+}
