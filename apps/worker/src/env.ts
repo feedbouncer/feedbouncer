@@ -77,6 +77,8 @@ export interface WorkerEnv {
   readonly databaseUrl: URL;
   readonly redisUrl: URL;
   readonly concurrency: number;
+  /** Consumers of the moderation-check queue (text checked by API callers). */
+  readonly moderationCheckConcurrency: number;
   readonly healthPort: number;
   readonly logLevel: LogLevel;
   readonly encryption: Keyring;
@@ -236,6 +238,11 @@ export function loadWorkerEnv(
     databaseUrl,
     redisUrl,
     concurrency: readInt(env, 'WORKER_CONCURRENCY', { min: 1, max: 64, fallback: 4 }),
+    moderationCheckConcurrency: readInt(env, 'MODERATION_CHECK_CONCURRENCY', {
+      min: 1,
+      max: 64,
+      fallback: 4,
+    }),
     healthPort: readInt(env, 'HEALTH_PORT', { min: 1, max: 65_535, fallback: 3002 }),
     logLevel: readEnum(env, 'LOG_LEVEL', LOG_LEVELS, 'info'),
     encryption: loadEncryptionKeyring(env, appEnv, opts.warn),

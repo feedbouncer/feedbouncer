@@ -93,6 +93,17 @@ describe('loadWorkerEnv', () => {
     expect(() => load({ ...base, WORKER_CONCURRENCY: '0' })).toThrow(/WORKER_CONCURRENCY/);
     expect(() => load({ ...base, WORKER_CONCURRENCY: '65' })).toThrow(/WORKER_CONCURRENCY/);
   });
+  it('bounds MODERATION_CHECK_CONCURRENCY and defaults it to 4', () => {
+    expect(load(base).moderationCheckConcurrency).toBe(4);
+    expect(load({ ...base, MODERATION_CHECK_CONCURRENCY: '64' }).moderationCheckConcurrency).toBe(
+      64,
+    );
+    for (const bad of ['0', '65']) {
+      expect(() => load({ ...base, MODERATION_CHECK_CONCURRENCY: bad })).toThrow(
+        /MODERATION_CHECK_CONCURRENCY/,
+      );
+    }
+  });
   it('requires both URLs', () => {
     expect(() => load(without('DATABASE_URL'))).toThrow(/DATABASE_URL is not set/);
   });

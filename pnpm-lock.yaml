@@ -381,6 +381,9 @@ importers:
       '@feedbouncer/mailer':
         specifier: workspace:*
         version: link:../../packages/mailer
+      '@feedbouncer/moderation-check':
+        specifier: workspace:*
+        version: link:../../packages/moderation-check
       '@feedbouncer/observability':
         specifier: workspace:*
         version: link:../../packages/observability
