@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { REQUEST_BODY_LIMIT_BYTES } from '@feedbouncer/public-api';
 import { AppModule } from './app.module.js';
 import { ApiError, ApiErrorFilter, errorBody } from './http/errors.js';
 import { registerStrictJsonParser } from './http/json-parser.js';
@@ -20,7 +21,7 @@ export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
     // No Fastify logger, so no built-in request logging: registerRequestLog
     // writes the only (redacted) request line.
     logger: false,
-    bodyLimit: 64 * 1024,
+    bodyLimit: REQUEST_BODY_LIMIT_BYTES,
     trustProxy: trustProxyHops(deps.env.trustProxyHops),
     routerOptions: { ignoreTrailingSlash: false },
   });

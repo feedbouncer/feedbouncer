@@ -1,5 +1,6 @@
 import type { Redis } from 'ioredis';
 import { RateLimiterRedis, RateLimiterRes } from 'rate-limiter-flexible';
+import { AUTH_FAILURES_PER_MINUTE } from '@feedbouncer/public-api';
 import { clientIpKey } from '../auth/client-ip.js';
 import { ApiError } from '../http/errors.js';
 
@@ -11,8 +12,6 @@ export interface PublicApiLimits {
   /** Counts one failed authentication from an address. Same errors as above. */
   consumeAuthFailure(ip: string): Promise<void>;
 }
-
-const AUTH_FAILURES_PER_MINUTE = 30;
 
 export function createPublicApiLimits(
   redis: Redis,

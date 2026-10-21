@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { PUBLIC_ERROR_CODES, PUBLIC_ROUTE_SPECS, type RouteSpec } from '@feedbouncer/public-api';
 import { buildOpenApiDocument } from './openapi.js';
 
+const toOpenApiPath = (path: string): string => path;
+
 const Thing = z.object({ id: z.uuid(), name: z.string() }).meta({ id: 'Thing' });
 const fixture: RouteSpec[] = [
   ...PUBLIC_ROUTE_SPECS,
@@ -156,12 +158,72 @@ describe('buildOpenApiDocument', () => {
       '401',
       '403',
       '404',
+      '413',
       '422',
       '429',
       '500',
       '503',
     ]);
     expect(doc.components.schemas).toHaveProperty('ModerationCheckResult');
+  });
+
+  const real = buildOpenApiDocument() as unknown as {
+    paths: Record<string, Record<string, Record<string, unknown>>>;
+  };
+
+  it('gives every operation one curl sample that runs against $FEEDBOUNCER_URL', () => {
+    for (const spec of PUBLIC_ROUTE_SPECS) {
+      const op = real.paths[toOpenApiPath(spec.path)]![spec.method.toLowerCase()]!;
+      const samples = op['x-codeSamples'] as Array<{ source: string }>;
+      expect(samples).toHaveLength(1);
+      expect(samples[0]).toMatchObject({ lang: 'curl', label: 'curl' });
+      const src = samples[0]!.source;
+      expect(src.startsWith('curl -sS')).toBe(true);
+      expect(src).toContain(
+        `"$FEEDBOUNCER_URL${spec.path.replace(/\{(\w+)\}/g, (_, p: string) => spec.example!.pathParams![p]!)}`,
+      );
+      expect(src.includes('Authorization: Bearer $FEEDBOUNCER_API_KEY')).toBe(spec.scope !== null);
+      expect(src.includes('Idempotency-Key: <UNIQUE_KEY>')).toBe(spec.idempotent);
+      expect(src).not.toMatch(
+        /fbk_[a-z2-7]{16}_|localhost|127\.0\.0\.1|https?:\/\/(?!feedbouncer\.example\.com)/,
+      );
+    }
+  });
+
+  it('has a body example that the route schema accepts, with no single quotes', () => {
+    for (const spec of PUBLIC_ROUTE_SPECS.filter((s) => s.body)) {
+      expect(spec.body!.safeParse(spec.example?.body).success, spec.id).toBe(true);
+      expect(JSON.stringify(spec.example!.body)).not.toContain("'");
+    }
+  });
+
+  it('has query and path examples that parse, with placeholder path params', () => {
+    for (const spec of PUBLIC_ROUTE_SPECS) {
+      if (spec.query)
+        expect(spec.query.safeParse(spec.example?.query ?? {}).success, spec.id).toBe(true);
+      for (const [, name] of spec.path.matchAll(/\{(\w+)\}/g)) {
+        expect(spec.example?.pathParams?.[name!], `${spec.id} ${name}`).toMatch(
+          /^<[A-Z][A-Z0-9_]*>$/,
+        );
+      }
+    }
+  });
+
+  it('documents 413 invalid_request on every route with a body', () => {
+    for (const spec of PUBLIC_ROUTE_SPECS) {
+      const res = real.paths[spec.path]![spec.method.toLowerCase()]!.responses as Record<
+        string,
+        unknown
+      >;
+      if (spec.body) {
+        expect(res['413']).toEqual({
+          description: 'Request body larger than 64 KiB.',
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+        });
+      } else {
+        expect(res['413']).toBeUndefined();
+      }
+    }
   });
 
   it('is deterministic', () => {

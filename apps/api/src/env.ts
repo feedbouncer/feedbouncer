@@ -18,6 +18,7 @@ import {
   type LogLevel,
   type SecretFileSystem,
 } from '@feedbouncer/service-runtime';
+import { DEFAULT_RATE_LIMIT_PER_MINUTE } from '@feedbouncer/public-api';
 import { readExportDir } from '@feedbouncer/privacy';
 import { normalizeAddress } from '@feedbouncer/mailer';
 import { parseAlertChannels, readAlertLimits } from '@feedbouncer/alerts';
@@ -181,7 +182,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     publicApiRateLimitPerMinute: readInt(env, 'PUBLIC_API_RATE_LIMIT_PER_MINUTE', {
       min: 1,
       max: 10_000,
-      fallback: 60,
+      fallback: DEFAULT_RATE_LIMIT_PER_MINUTE,
     }),
     ruleProposalTtlHours: readInt(env, 'RULE_PROPOSAL_TTL_HOURS', {
       min: 1,
