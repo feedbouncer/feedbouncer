@@ -103,9 +103,10 @@ Before this instance is reachable from the internet, replace the example values 
 FB_ENV=production
 AUTH_SECRET=$(openssl rand -hex 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
+REDIS_PASSWORD=$(openssl rand -hex 24)
 ```
 
-Write the generated values into `.env` itself (the `$(...)` is not expanded there). With `FB_ENV=production`, the services refuse to start while any example value is left in place. Postgres sets its password only when its volume is first created, so on an existing stack either change the password inside Postgres too or start from a fresh volume.
+Write the generated values into `.env` itself (the `$(...)` is not expanded there). Replace every other `dev-only-*` value in `.env` the same way. With `FB_ENV=production`, the services refuse to start while any example value is left in place. Postgres sets its password only when its volume is first created, so on an existing stack either change the password inside Postgres too or start from a fresh volume. Redis takes its password as a command argument, so restarting the stack is enough.
 
 FeedBouncer encrypts the Page tokens it obtains with `FB_ENCRYPTION_KEYS`, so replace the `dev-example` key in your `.env` with a production key first, and set `FB_ENCRYPTION_ACTIVE_KEY_ID` to that key's id; [secrets.md](../operations/secrets.md) shows how to generate one. Compose does not read `PUBLIC_WEB_URL` from `.env`; you set it in the next step. Leave `FACEBOOK_GRAPH_API_VERSION` at its default. Docker Compose passes only these plain variables to the containers. To use the `_FILE` variants instead, mount the files from `compose.override.yaml` as shown in [secrets.md](../operations/secrets.md).
 
