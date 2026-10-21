@@ -62,10 +62,11 @@ Placeholders: `<APP_ID>`, `<APP_SECRET>`, `<VERIFY_TOKEN>` and `https://feedboun
 
 You need:
 
-- A Facebook account and a Facebook Page that you administer.
-- Optionally, an Instagram **professional** (Business or Creator) account linked to that Page. See the prerequisites at the top of [Part 7](#part-7-connect-instagram-optional).
+- A Meta developer account. You create it in [Step 1](#step-1-register-as-a-meta-developer).
+- A Facebook **Page** on which you have full control or admin rights. A personal profile is not enough, because FeedBouncer moderates comments on Pages, not on profiles.
+- Optionally, an Instagram **professional account** (Business or Creator) linked to that Page. See the prerequisites at the top of [Part 7](#part-7-connect-instagram-optional).
 - A running FeedBouncer instance. Installing it is covered in [Local stack with Docker Compose](../../README.md#local-stack-with-docker-compose).
-- A **public HTTPS URL** for that instance, with a publicly trusted certificate. Meta's documentation says webhooks need a publicly reachable HTTPS endpoint, so expect Meta not to deliver to `localhost` or to a self-signed certificate (see Meta's [webhooks documentation](https://developers.facebook.com/docs/graph-api/webhooks)).
+- A **public HTTPS URL** for that instance, with a publicly trusted certificate: no `localhost` and no self-signed certificate. Meta's documentation says webhooks need a publicly reachable HTTPS endpoint, so expect Meta not to deliver to `localhost` or to a self-signed certificate (see Meta's [webhooks documentation](https://developers.facebook.com/docs/graph-api/webhooks)).
 
 For testing you can put any HTTPS tunnel in front of your instance, for example Cloudflare Tunnel or ngrok (neither is endorsed). If the tunnel URL changes, update `PUBLIC_WEB_URL` and both URLs you give Meta.
 
@@ -131,7 +132,9 @@ Open **App settings**, then **Basic**. The **App ID** is shown at the top. It is
 
 **Goal:** Store the secret Meta uses to sign webhooks and that FeedBouncer uses to check them. It is under your app's basic settings.
 
-On the same **Basic** page, next to **App secret**, choose **Show** and enter your password if asked. Copy the value into a password manager or a secret file straight away. The app secret is a secret: never paste it in an issue, chat or screenshot, and hide it again when you are done. See [Keep your app secret and tokens safe](#keep-your-app-secret-and-tokens-safe).
+On the same **Basic** page, next to **App secret**, choose **Show** and enter your password if asked. Copy the value into a password manager or a secret file straight away. The app secret is a secret: never paste it in an issue, chat or screenshot, and hide it again when you are done.
+
+Meta's documentation says it signs every webhook payload with this secret and sends the result in the `X-Hub-Signature-256` header. FeedBouncer rejects any event whose signature does not match, with a `403`, so a wrong secret looks like "comments never arrive". FeedBouncer also signs its own Graph API calls with it (`appsecret_proof`). See [Keep your app secret and tokens safe](#keep-your-app-secret-and-tokens-safe).
 
 > [SCREENSHOT: app settings, basic, app secret] Must show: The Basic settings page with the App secret field still masked, before you choose Show. Redact: the app secret field (it must stay masked), the App ID and app name in the dashboard header, your name and avatar, and any email address.
 
@@ -399,6 +402,8 @@ Meta calls your URL when you choose **Verify and save**. Check in this order:
 1. The verify token differs from `FACEBOOK_WEBHOOK_VERIFY_TOKEN`. FeedBouncer answers a bad handshake with `403`, so repeat the `curl` in Step 11 and compare.
 2. The URL is unreachable or has the wrong path, or `PUBLIC_WEB_URL` or your tunnel changed. The path is `/api/v1/webhooks/facebook`.
 3. The TLS certificate is not publicly trusted or has expired.
+4. The URL is not HTTPS or is not publicly reachable. Test it from outside your own network, for example from a phone on mobile data.
+5. A reverse proxy or tunnel is changing the request. The handshake query string (`hub.mode`, `hub.challenge`, `hub.verify_token`) must reach FeedBouncer intact and the path must not be rewritten. For events, the body must pass through byte-for-byte and the `X-Hub-Signature-256` header must not be stripped, or every event gets a `403`.
 
 ### Comments don't show up in FeedBouncer at all
 
@@ -410,7 +415,16 @@ Meta's documentation says that in Development mode, or with only Standard Access
 
 ### The connection says "Needs reconnect"
 
-Meta rejected the stored token, for example after a password change, a lost Page role, or, according to Meta's documentation, a long period without use. Choose **Reconnect**.
+Meta rejected the stored token. Common causes:
+
+- A short-lived token was never exchanged for a long-lived one. This cannot happen through **Connect**, but it can if someone pasted Graph API Explorer tokens elsewhere.
+- The user changed their Facebook password.
+- The user lost their role on the Page.
+- The admin who connected the Page left the Page.
+- The app was removed from the Page's Business Integrations.
+- According to Meta's documentation, a long period without use made the token expire.
+
+FeedBouncer emails the owners and pauses moderation actions until you choose **Reconnect**.
 
 ### Instagram account not found when connecting Instagram
 
@@ -419,6 +433,14 @@ The account is not a professional account, is not linked to the Page, or the Pag
 ### Connecting fails with "missing permissions"
 
 A permission was unticked in the Facebook dialog. Connect again and grant every permission.
+
+### Actions fail with a permission error
+
+FeedBouncer shows "FeedBouncer lacks the permission for this action". Likely causes, not yet verified: a permission was unticked when you connected, the user lost their role on the Page, or the action needs a permission that has only Standard Access (see [Access Levels](https://developers.facebook.com/docs/graph-api/overview/access-levels)). Choose **Reconnect** and grant all permissions.
+
+### Processing is delayed and Meta asked FeedBouncer to slow down
+
+FeedBouncer shows "Processing delayed: Meta asked FeedBouncer to slow down. New comments are queued and will be checked; none are dropped." Meta is rate limiting the app; see Meta's [rate limiting documentation](https://developers.facebook.com/docs/graph-api/overview/rate-limiting). Comments are queued, not dropped, and there is nothing for you to change unless the message persists for hours.
 
 ### Comments arrive but nothing gets hidden
 
@@ -434,31 +456,55 @@ This is Meta's own check. Follow Meta's help for [identity verification](https:/
 
 ## Keep your app secret and tokens safe
 
-> Not yet verified against Meta's dashboard as of 2026-10-21. Check: where the app secret reset and the Business Integrations removal live today.
+> Not yet verified against Meta's dashboard as of 2026-10-21. Check: where the app secret reveal and the Access Token Debugger live today.
 
 - The app secret, the verify token and `FB_ENCRYPTION_KEYS` are secrets. Keep `.env` readable only by you (`chmod 600 .env`), or use the `_FILE` variants or your host's secret store; see [secrets.md](../operations/secrets.md).
-- Never commit them, paste them into issues or chat, or screenshot them. Keep `.env` and `compose.override.yaml` out of git.
-- If a secret or token may be exposed, follow [Rotate secrets and tokens](#rotate-secrets-and-tokens).
+- Never commit them. Keep `.env` and `compose.override.yaml` out of git.
+- Never paste tokens or the app secret into issues, logs, chat or screenshots. FeedBouncer never logs them, so if a log you are about to share contains one, stop and rotate it; see [Rotate secrets and tokens](#rotate-secrets-and-tokens).
 - Back up `FB_ENCRYPTION_KEYS`. Without it stored tokens cannot be decrypted and every connection needs a reconnect.
+
+### What to redact in screenshots
+
+Cover sensitive areas with an opaque fill. Never use blur or pixelation, which can be reversed or guessed. Redact:
+
+- The App ID, the app name and the Page name.
+- User and Instagram names and avatars.
+- The app secret. Never choose **Show** while capturing a screenshot.
+- The verify token.
+- Any `access_token`, `code` or other URL query string.
+- Email addresses.
+- The Access Token Debugger output. Never capture it.
 
 ## Rotate secrets and tokens
 
 > Not yet verified against Meta's dashboard as of 2026-10-21. Check: where the app secret reset lives under App settings and where the Business Integrations list is today.
 
-If the app secret is exposed, reset it under **App settings**, **Basic**, update `FACEBOOK_APP_SECRET` in your `.env` and restart the stack. To rotate the verify token, generate a new one as in Step 7, update `FACEBOOK_WEBHOOK_VERIFY_TOKEN`, restart, and enter the new value in Meta's Webhooks settings.
+### App secret
 
-If a Page token may be exposed, remove the app from the Page's Business Integrations and choose **Reconnect** in FeedBouncer. To change `FB_ENCRYPTION_KEYS`, follow [secrets.md](../operations/secrets.md) and keep the old key until every connection is re-encrypted; losing it means every connection needs a Reconnect.
+If the app secret is exposed, reset it under **App settings**, **Basic**, then update `FACEBOOK_APP_SECRET` (or its file) in your `.env` and restart the stack. Webhooks fail with `403` until both sides match, so do both in one sitting.
+
+### Verify token
+
+Generate a new one as in Step 7, update `FACEBOOK_WEBHOOK_VERIFY_TOKEN`, restart, then re-enter the new value in Meta's Webhooks settings and choose **Verify and save**.
+
+### Page tokens
+
+Choosing **Reconnect** in FeedBouncer re-issues them. To revoke a Page token, remove the app from the Page's Business Integrations.
+
+### Encryption keys
+
+Follow [secrets.md](../operations/secrets.md) to rotate `FB_ENCRYPTION_KEYS`. Back up your keys and keep the old key until every connection is re-encrypted; otherwise every connection needs a **Reconnect**.
 
 ## When you need App Review or Business Verification
 
 > Not yet verified against Meta's documentation as of 2026-10-21. Check: the App Review and Business Verification requirements and links against Meta's current pages.
 
-You need neither if only people with a role on your app moderate their own Pages. Meta's documentation says you need **App Review** (to get Advanced Access) to serve Pages of people without a role on the app, and for live Instagram comments. According to Meta's documentation, **Business Verification** is required for Advanced Access on many permissions and for Instagram webhooks in Business apps. FeedBouncer does not walk you through either; follow Meta's own guides: [App Review](https://developers.facebook.com/docs/resp-plat-initiatives/app-review) and [Business Verification](https://developers.facebook.com/docs/development/release/business-verification).
+Meta's documentation says you need **App Review** (to get Advanced Access) to serve Pages of people without a role on the app, and for live Instagram comments. According to Meta's documentation, **Business Verification** is required for Advanced Access on many permissions and for Instagram webhooks in Business apps. Meta's review and verification take time, so plan for a wait.
+
+Self-hosters who only moderate their own assets, with commenters who have a role on the app, *may* be able to stay in Development mode and need neither. This is unverified; it is an open question (see [meta-app-verification.md](meta-app-verification.md)). FeedBouncer does not walk you through either process; follow Meta's own guides: [App Review](https://developers.facebook.com/docs/resp-plat-initiatives/app-review) and [Business Verification](https://developers.facebook.com/docs/development/release/business-verification).
 
 ## More Pages and accounts
 
 > Not yet verified against Meta's dashboard as of 2026-10-21. Check: that one app can serve several Pages and how the Page picker lists them.
 
-One Meta app serves many Pages. To add another Page, choose **Connect Facebook** again and select it in the Page picker (in Facebook's dialog, edit the grant if the Page is not listed). Each Page becomes its own connection under a brand. See [shared Pages](../connectors/facebook.md#shared-pages).
-
-If you want to serve more than one brand, add each brand's Page in the same app; nothing in Meta needs to change for a second Page beyond approving it in the Facebook dialog. Use the same app for Instagram accounts linked to those Pages.
+Use the **same app** for every Page and Instagram account; never create a second app. To add another Page, choose **Connect Facebook** again and pick the new Page in the Page picker. If the Page is not offered, edit the grant in Facebook's dialog (the Business Integrations entry for the app) to include it. The webhook and redirect URIs are per app, so nothing changes in Meta. Each Page becomes its own connection under a brand, and different brands can hold different Pages. See [shared Pages](../connectors/facebook.md#shared-pages).

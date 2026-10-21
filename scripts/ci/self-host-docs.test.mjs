@@ -274,7 +274,7 @@ test('external links are https and on allowed Meta hosts', () => {
     }
 });
 
-test('troubleshooting covers the required symptoms', { todo: 'Task 3' }, () => {
+test('troubleshooting covers the required symptoms', () => {
   const blocks = h3Blocks(section('Troubleshooting'));
   const heading = (b) => b.split('\n')[0].toLowerCase();
   for (const symptom of [
@@ -297,7 +297,7 @@ test('troubleshooting covers the required symptoms', { todo: 'Task 3' }, () => {
     assert.ok(webhook?.includes(term), `webhook entry lacks "${term}"`);
 });
 
-test('quoted FeedBouncer UI strings exist in apps/web/src', { todo: 'Task 3' }, () => {
+test('quoted FeedBouncer UI strings exist in apps/web/src', () => {
   const web = webSrcText();
   for (const s of UI_STRINGS) {
     assert.ok(guide.includes(s), `guide lacks "${s}"`);
@@ -305,7 +305,7 @@ test('quoted FeedBouncer UI strings exist in apps/web/src', { todo: 'Task 3' }, 
   }
 });
 
-test('required callouts are present', { todo: 'Task 3' }, () => {
+test('required callouts are present', () => {
   const expectations = {
     'Before you start': ['personal profile', 'professional account', 'HTTPS', 'admin'],
     'Development mode and Live mode': ['role on the app'],
