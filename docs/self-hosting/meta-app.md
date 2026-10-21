@@ -243,7 +243,7 @@ In the list of Page fields, find `feed` and choose **Subscribe**. This only regi
 
 > [SCREENSHOT: webhooks, page feed field subscribed] Must show: The Page webhook field list with feed subscribed. Redact: the App ID and app name in the dashboard header, your name and avatar, and any email address.
 
-**Checkpoint:** Meta shows the callback verified, the Page feed field is subscribed and both redirect URIs are saved under Facebook Login for Business.
+**Checkpoint:** Meta shows the callback verified, the Page feed field is subscribed and the Facebook redirect URI is saved under Facebook Login for Business. You add the Instagram one in Part 7 if you use Instagram.
 
 ## Part 6: Connect your Facebook Page
 
@@ -253,9 +253,9 @@ In the list of Page fields, find `feed` and choose **Subscribe**. This only regi
 
 **Goal:** Let FeedBouncer obtain its own long-lived Page access, so you never paste a token.
 
-In FeedBouncer open your brand, then **Connections**, and choose **Connect Facebook**. Facebook asks you to approve the permissions listed under [Permissions and why](#permissions-and-why). Leave every permission ticked, because FeedBouncer needs all of them and aborts the connection if one is declined. Do not paste any token from the Graph API Explorer; FeedBouncer obtains its own.
+In FeedBouncer open your brand, then **Connections**, and choose **Connect Facebook Page**. Facebook asks you to approve the permissions listed under [Permissions and why](#permissions-and-why). Leave every permission ticked, because FeedBouncer needs all of them and aborts the connection if one is declined. Do not paste any token from the Graph API Explorer; FeedBouncer obtains its own.
 
-> [SCREENSHOT: feedbouncer connections, connect facebook] Must show: The brand's Connections page with the Connect Facebook button. Redact: Page, user and brand names, avatars and email addresses, and any URL query string such as an OAuth code.
+> [SCREENSHOT: feedbouncer connections, connect facebook] Must show: The brand's Connections page with the Connect Facebook Page button. Redact: Page, user and brand names, avatars and email addresses, and any URL query string such as an OAuth code.
 
 ### Step 16: Choose the Page
 
@@ -275,7 +275,7 @@ Read this before you change anything. Instagram needs more than Facebook:
 
 - The account must be an Instagram **professional account** (Business or Creator). Personal accounts cannot work. In the Instagram app, switch it under **Settings** > **Account type and tools** > **Switch to professional account**, then link it to your Page; search the Instagram Help Center if the menu differs.
 - It must be **linked** to the Facebook Page you connected in Part 6.
-- Meta's documentation says live Instagram comment webhooks are sent only to apps with **Advanced Access** to the permissions, which requires App Review, and for Business apps the business linked to the Page must be verified. If you only have Standard Access, Instagram comments may not reach FeedBouncer even for your own account. See [When you need App Review or Business Verification](#when-you-need-app-review-or-business-verification). Facebook Pages are not affected.
+- Meta's documentation appears to say that live Instagram comment webhooks may require **Advanced Access** to the permissions (which needs App Review) and, for Business apps, a verified business; this is an open question and not yet verified (see [Meta's webhooks documentation](https://developers.facebook.com/docs/graph-api/webhooks)). If so, with only Standard Access, Instagram comments may not reach FeedBouncer even for your own account. See [When you need App Review or Business Verification](#when-you-need-app-review-or-business-verification). Facebook Pages are not affected.
 
 ### Step 17: Add the Instagram product
 
@@ -315,7 +315,7 @@ Under **Webhooks** choose the **Instagram** object, not Page. Use the callback U
 
 **Goal:** Let FeedBouncer connect your Instagram account through its linked Page.
 
-In FeedBouncer open your brand, then **Connections**, and choose **Connect Instagram**. Approve every permission and choose the Page that is linked to your Instagram account. The Instagram account then appears as its own connection.
+In FeedBouncer open your brand, then **Connections**, and choose **Connect Instagram account**. Approve every permission and choose the Page that is linked to your Instagram account. The Instagram account then appears as its own connection.
 
 > [SCREENSHOT: feedbouncer connections, connect instagram] Must show: The Connections page with the Instagram account listed as its own connection. Redact: Page, user and Instagram names, avatars and email addresses, and any URL query string such as an OAuth code.
 
@@ -339,7 +339,7 @@ In FeedBouncer open your brand, then **Connections**, and choose **Connect Insta
 
 > Not yet verified against Meta's documentation as of 2026-10-21. Check: each permission name and whether Standard Access covers app-role users.
 
-Across Connect Facebook and Connect Instagram, FeedBouncer asks for exactly these permissions.
+Across **Connect Facebook Page** and **Connect Instagram account**, FeedBouncer asks for exactly these permissions.
 
 | Permission                  | Used for                   | Why FeedBouncer needs it                                          | App Review (per Meta's docs)                                                                 |
 | --------------------------- | -------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -363,7 +363,7 @@ A new app starts in **Development mode**. Meta's documentation says that in Deve
 
 Meta's documentation says **Live mode** is required to receive events from people without a role on the app, that switching to Live needs details such as a privacy policy URL, and that permissions beyond Standard Access need App Review. See [App Review](https://developers.facebook.com/docs/resp-plat-initiatives/app-review) and ask Meta for the current requirements.
 
-If you only moderate your own Page and the people commenting have a role on the app (add them as testers in **App roles**), you can stay in Development mode.
+If you only moderate your own Page and the people commenting have a role on the app (add them as testers in **App roles**), you may be able to stay in Development mode. This is unverified; Meta's documentation says apps in development mode only receive webhook notifications for people with a role on the app (see [Meta's webhooks documentation](https://developers.facebook.com/docs/graph-api/webhooks)).
 
 ## Tokens: how long they last
 
@@ -371,7 +371,7 @@ If you only moderate your own Page and the people commenting have a role on the 
 
 FeedBouncer never asks you for a token. When you click Connect it receives a user token, exchanges it for a long-lived one and derives a Page access token, which it stores encrypted.
 
-Meta can invalidate a token at any time: the user changes their password, loses their role on the Page, removes the app, or, according to Meta's documentation, has not used the app for about 90 days (see [Access Levels](https://developers.facebook.com/docs/graph-api/overview/access-levels)). You can inspect a token's `expires_at` and `data_access_expires_at` in Meta's Access Token Debugger, but never screenshot or share the output.
+Meta can invalidate a token at any time: the user changes their password, loses their role on the Page, removes the app, or has not used the app for a long time. Exact token lifetimes are not yet verified; check Meta's documentation. You can inspect a token's `expires_at` and `data_access_expires_at` in Meta's Access Token Debugger, but never screenshot or share the output.
 
 When Meta rejects a token, the connection shows **Needs reconnect** with a reason, FeedBouncer emails the owners once, and moderation actions are paused. Choose **Reconnect**, approve the permissions again, and the paused actions are replayed.
 
@@ -421,7 +421,7 @@ Meta rejected the stored token. Common causes:
 - The user changed their Facebook password.
 - The user lost their role on the Page.
 - The admin who connected the Page left the Page.
-- The app was removed from the Page's Business Integrations.
+- The app was removed from your Facebook account's Business Integrations.
 - According to Meta's documentation, a long period without use made the token expire.
 
 FeedBouncer emails the owners and pauses moderation actions until you choose **Reconnect**.
@@ -489,7 +489,7 @@ Generate a new one as in Step 7, update `FACEBOOK_WEBHOOK_VERIFY_TOKEN`, restart
 
 ### Page tokens
 
-Choosing **Reconnect** in FeedBouncer re-issues them. To revoke a Page token, remove the app from the Page's Business Integrations.
+Choosing **Reconnect** in FeedBouncer re-issues them. To revoke a Page token, remove the app from your Facebook account's Business Integrations.
 
 ### Encryption keys
 
@@ -499,12 +499,12 @@ Follow [secrets.md](../operations/secrets.md) to rotate `FB_ENCRYPTION_KEYS`. Ba
 
 > Not yet verified against Meta's documentation as of 2026-10-21. Check: the App Review and Business Verification requirements and links against Meta's current pages.
 
-Meta's documentation says you need **App Review** (to get Advanced Access) to serve Pages of people without a role on the app, and for live Instagram comments. According to Meta's documentation, **Business Verification** is required for Advanced Access on many permissions and for Instagram webhooks in Business apps. Meta's review and verification take time, so plan for a wait.
+Meta's documentation says you need **App Review** (to get Advanced Access) to serve Pages of people without a role on the app. Whether live Instagram comments also need Advanced Access and, for Business apps, **Business Verification** is an open question that is not yet verified; Meta's documentation appears to say so for many permissions. Meta's review and verification take time, so plan for a wait.
 
-Self-hosters who only moderate their own assets, with commenters who have a role on the app, *may* be able to stay in Development mode and need neither. This is unverified; it is an open question (see [meta-app-verification.md](meta-app-verification.md)). FeedBouncer does not walk you through either process; follow Meta's own guides: [App Review](https://developers.facebook.com/docs/resp-plat-initiatives/app-review) and [Business Verification](https://developers.facebook.com/docs/development/release/business-verification).
+Self-hosters who only moderate their own assets, with commenters who have a role on the app, _may_ be able to stay in Development mode and need neither. This is unverified; it is an open question (see [meta-app-verification.md](meta-app-verification.md)). FeedBouncer does not walk you through either process; follow Meta's own guides: [App Review](https://developers.facebook.com/docs/resp-plat-initiatives/app-review) and [Business Verification](https://developers.facebook.com/docs/development/release/business-verification).
 
 ## More Pages and accounts
 
 > Not yet verified against Meta's dashboard as of 2026-10-21. Check: that one app can serve several Pages and how the Page picker lists them.
 
-Use the **same app** for every Page and Instagram account; never create a second app. To add another Page, choose **Connect Facebook** again and pick the new Page in the Page picker. If the Page is not offered, edit the grant in Facebook's dialog (the Business Integrations entry for the app) to include it. The webhook and redirect URIs are per app, so nothing changes in Meta. Each Page becomes its own connection under a brand, and different brands can hold different Pages. See [shared Pages](../connectors/facebook.md#shared-pages).
+Use the **same app** for every Page and Instagram account; never create a second app. To add another Page, choose **Connect Facebook Page** again and pick the new Page in the Page picker. If the Page is not offered, edit the grant in Facebook's dialog (your Facebook account's Business Integrations entry for the app) to include it. The webhook and redirect URIs are per app, so nothing changes in Meta. Each Page becomes its own connection under a brand, and different brands can hold different Pages. See [shared Pages](../connectors/facebook.md#shared-pages).

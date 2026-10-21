@@ -354,10 +354,10 @@ test('verification doc lists every slot and every noted section', () => {
       .filter((l) => l.startsWith('- [ ] '))
       .map((l) => l.slice(6).replaceAll('`', '').trim());
   };
-  assert.deepEqual(new Set(checklist('Screenshots')), new Set(markers(guide)));
+  assert.deepEqual([...checklist('Screenshots')].sort(), [...markers(guide)].sort());
   assert.deepEqual(
-    new Set(checklist('Removing a "not yet verified" note')),
-    new Set(notedSections()),
+    [...checklist('Removing a "not yet verified" note')].sort(),
+    [...notedSections()].sort(),
   );
   assert.ok(read(join(DOCS, 'README.md')).includes('](meta-app-verification.md'));
 });

@@ -46,7 +46,7 @@ Slots, one per marker in the guide:
 
 For each row in the guide's permissions table, confirm the permission name, the reason and the access level against Meta's [Permissions Reference](https://developers.facebook.com/docs/permissions) and [Access Levels](https://developers.facebook.com/docs/graph-api/overview/access-levels) pages.
 
-Also resolve the two open questions in the factory ROADMAP (lines 155 and 156): whether Standard Access is enough for assets you own, and what Instagram webhooks require. Then update Part 7 and the App Review section of the guide to match.
+Also resolve the two open questions: whether Standard Access is enough when you moderate only assets you own, and whether live Instagram comment webhooks require Advanced Access plus Business Verification. Then update Part 7 and the App Review section of the guide to match.
 
 ## Two-reader dry run
 
@@ -90,4 +90,4 @@ Noted sections:
 Keep readers anonymous (Reader A, Reader B). Do not record names, IDs or screenshots.
 
 | Reader | Date | Finished? | Where they got stuck | Fix (commit) |
-| --- | --- | --- | --- | --- |
+| ------ | ---- | --------- | -------------------- | ------------ |
