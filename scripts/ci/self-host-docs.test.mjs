@@ -207,7 +207,8 @@ test('status block lists every noted section and says nothing is verified', () =
   const s = section('Status of this guide');
   const rows = tableRows(s);
   const noted = notedSections();
-  assert.deepEqual(rows.map((r) => r[0]).sort(), [...noted].sort());
+  const tracked = EXPECTED_H2S.filter((h) => !NOTE_EXEMPT.includes(h));
+  assert.deepEqual(rows.map((r) => r[0]).sort(), [...tracked].sort());
   for (const [name, status] of rows)
     assert.match(
       status,
@@ -351,13 +352,13 @@ test('verification doc lists every slot and every noted section', () => {
     return v
       .slice(start, end === -1 ? undefined : end)
       .split('\n')
-      .filter((l) => l.startsWith('- [ ] '))
+      .filter((l) => /^- \[[ x]\] /.test(l))
       .map((l) => l.slice(6).replaceAll('`', '').trim());
   };
   assert.deepEqual([...checklist('Screenshots')].sort(), [...markers(guide)].sort());
   assert.deepEqual(
     [...checklist('Removing a "not yet verified" note')].sort(),
-    [...notedSections()].sort(),
+    EXPECTED_H2S.filter((h) => !NOTE_EXEMPT.includes(h)).sort(),
   );
   assert.ok(read(join(DOCS, 'README.md')).includes('](meta-app-verification.md'));
 });

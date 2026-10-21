@@ -4,7 +4,7 @@ This page records what is still unchecked in [meta-app.md](meta-app.md). Each se
 
 ## Scope
 
-Nothing in the guide has been verified against a live Meta dashboard yet. Three pieces of follow-up work remain: real screenshots, a live check of permission names and dashboard wording against Meta's documentation, and a two-reader dry run. All three are manual and need a Meta developer account. The factory agent cannot do them.
+Nothing in the guide has been verified against a live Meta dashboard yet. Three pieces of follow-up work remain: real screenshots, a live check of permission names and dashboard wording against Meta's documentation, and a two-reader dry run. All three are manual and need a maintainer with a Meta developer account.
 
 ## Screenshots
 
@@ -60,7 +60,7 @@ A note is removed only when all of the following hold:
 2. Every label, menu path and permission name matches or has been corrected.
 3. The section's screenshots are merged and redaction-reviewed.
 4. Both dry-run readers got through that section, or their sticking point was fixed and re-checked.
-5. In the same commit, the section's Status row becomes `Verified YYYY-MM-DD`.
+5. In the same commit, the section's Status row becomes `Verified YYYY-MM-DD` and its box below is ticked.
 
 If a section turns out to be wrong, correct the text and re-date the note instead of removing it.
 
