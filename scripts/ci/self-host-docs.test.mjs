@@ -150,7 +150,12 @@ test('steps are numbered continuously and each has a verification line', () => {
   });
 });
 
-test('callback and redirect paths in the guide match the code', () => {
+test('webhook and OAuth callback paths in the guide match the code', () => {
+  const metaDeps = read('apps/api/src/meta-deps.ts');
+  assert.ok(
+    metaDeps.includes('/api/v1/oauth/${p}/callback'),
+    'code changed the OAuth callback path',
+  );
   const plugin = read('apps/api/src/webhooks/meta-webhooks.plugin.ts');
   for (const platform of ['facebook', 'instagram']) {
     assert.ok(
