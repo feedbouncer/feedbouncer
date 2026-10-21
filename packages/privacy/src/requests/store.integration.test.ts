@@ -259,6 +259,18 @@ describe('PgPrivacyRequestStore', () => {
     expect(await store.staleRunning(15 * 60_000)).toEqual([]);
   });
 
+  it('keeps a running request from being taken over while it reports progress', async () => {
+    const r = await store.create(request(A));
+    await store.claim(r.id);
+    await ctx.c.query(
+      "UPDATE privacy_request SET started_at = now() - interval '20 minutes' WHERE id = $1",
+      [r.id],
+    );
+    await store.heartbeat(r.id);
+    expect(await store.staleRunning(15 * 60_000)).toEqual([]);
+    expect(await store.claim(r.id)).toBeNull();
+  });
+
   it('rejects an unknown organization without leaving a request behind', async () => {
     await expect(store.create(request(A, { organizationId: randomUUID() }))).rejects.toThrow();
     expect((await ctx.c.query('SELECT 1 FROM privacy_request')).rowCount).toBe(0);

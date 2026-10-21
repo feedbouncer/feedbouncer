@@ -6,7 +6,7 @@ import { open, seal, type KeyProvider } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
 import { SubjectList, type SubjectIdentifierT } from '../subject/identifier.js';
 
-/** A request left running this long is taken over: its worker is presumed dead. */
+/** A running request silent this long is taken over: its processor is presumed dead. */
 export const STALE_RUNNING_MS = 15 * 60_000;
 
 export interface NewPrivacyRequest {
@@ -247,6 +247,14 @@ export class PgPrivacyRequestStore {
       action: 'privacy.request_failed',
       details: {},
     }));
+  }
+
+  /** Marks a running request as alive, so it is not taken over as abandoned. */
+  async heartbeat(id: string): Promise<void> {
+    await this.pool.query(
+      "UPDATE privacy_request SET started_at = now() WHERE id = $1 AND status = 'running'",
+      [id],
+    );
   }
 
   /** Puts a running request back in the queue after a failed attempt that will be retried. */

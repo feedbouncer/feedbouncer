@@ -4,7 +4,7 @@ import type pg from 'pg';
 import type { Logger } from '@feedbouncer/service-runtime';
 import { eraseSubject } from '../erase/erase.js';
 import { writeSubjectExport } from '../export/export.js';
-import type { PgPrivacyRequestStore } from './store.js';
+import { STALE_RUNNING_MS, type PgPrivacyRequestStore } from './store.js';
 
 const HOUR_MS = 3_600_000;
 
@@ -17,6 +17,8 @@ export interface PrivacyProcessorDeps {
   exportTtlHours: number;
   batchSize: number;
   log: Logger;
+  /** How often a running request reports it is alive; must be well under STALE_RUNNING_MS. */
+  heartbeatMs?: number;
 }
 
 /**
@@ -30,9 +32,18 @@ export async function processPrivacyRequest(
   requestId: string,
   o: { finalAttempt: boolean } = { finalAttempt: true },
 ): Promise<void> {
+  let heartbeat: NodeJS.Timeout | undefined;
   try {
     const req = await d.store.claim(requestId);
     if (!req) return;
+    heartbeat = setInterval(
+      () => {
+        d.store
+          .heartbeat(req.id)
+          .catch(() => d.log.warn('privacy.heartbeat_failed', { requestId }));
+      },
+      d.heartbeatMs ?? STALE_RUNNING_MS / 5,
+    );
     if (req.kind === 'export') {
       await mkdir(d.exportDir, { recursive: true, mode: 0o700 });
       // A crashed earlier attempt may have left its file behind; the write refuses to overwrite.
@@ -71,5 +82,7 @@ export async function processPrivacyRequest(
     if (o.finalAttempt) await d.store.fail(requestId, 'internal_error');
     else await d.store.release(requestId);
     throw new Error('privacy_request_failed');
+  } finally {
+    clearInterval(heartbeat);
   }
 }
