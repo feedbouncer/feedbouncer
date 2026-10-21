@@ -193,8 +193,13 @@ test('every step starts with a Goal line and has a marker or a code block', () =
   });
 });
 
-test('every Meta-dependent section carries a dated not-yet-verified note first', () => {
-  for (const t of EXPECTED_H2S.filter((h) => !NOTE_EXEMPT.includes(h))) {
+const unverifiedSections = () =>
+  tableRows(section('Status of this guide'))
+    .filter(([, status]) => status === 'Not yet verified')
+    .map(([name]) => name);
+
+test('every section still marked not yet verified carries a dated note first', () => {
+  for (const t of unverifiedSections()) {
     const firstPara = section(t)
       .trim()
       .split(/\n\s*\n/)[1];
