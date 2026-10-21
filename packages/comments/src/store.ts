@@ -171,6 +171,31 @@ async function isErased(
   return r.rows.length > 0;
 }
 
+const ERASED_WHILE_WRITING = Symbol('erased while writing');
+
+/**
+ * Runs a write that stores a comment. The erased check is repeated after the
+ * write, because an erasure committing while the write waited on the deleted
+ * row would otherwise be followed by a fresh insert; the transaction is then rolled back.
+ */
+async function writeUnlessErased<T>(
+  pool: pg.Pool,
+  scope: ConnectionScope,
+  externalId: string,
+  write: (tx: pg.PoolClient) => Promise<T>,
+): Promise<T | typeof ERASED_WHILE_WRITING> {
+  try {
+    return await withTransaction(pool, async (tx) => {
+      const result = await write(tx);
+      if (await isErased(tx, scope, externalId)) throw ERASED_WHILE_WRITING;
+      return result;
+    });
+  } catch (e) {
+    if (e === ERASED_WHILE_WRITING) return ERASED_WHILE_WRITING;
+    throw e;
+  }
+}
+
 /** An existing source keeps its kind: an ad post is never demoted. */
 async function upsertSource(
   tx: pg.ClientBase,
@@ -303,8 +328,8 @@ export class PgCommentStore {
         hookBody: string | null;
       }
   > {
-    return withTransaction(this.pool, async (tx) => {
-      if (await isErased(tx, scope, c.externalId)) return { suppressed: true };
+    const stored = await writeUnlessErased(this.pool, scope, c.externalId, async (tx) => {
+      if (await isErased(tx, scope, c.externalId)) return { suppressed: true as const };
       const sourceId = await upsertSource(tx, scope, c.sourceExternalId);
       let authorId: string | null = null;
       if (c.author) {
@@ -410,8 +435,9 @@ export class PgCommentStore {
             : prev.rows[0]?.pending === true && !(applied && bodyChanged)
               ? prev.rows[0].body
               : null;
-      return { suppressed: false, commentId, created, applied, hookBody };
+      return { suppressed: false as const, commentId, created, applied, hookBody };
     });
+    return stored === ERASED_WHILE_WRITING ? { suppressed: true } : stored;
   }
 
   /** Upserts an ad's post as a source of kind 'ad_post' (promoting an organic one); `tx` joins a caller's transaction. */
@@ -472,7 +498,7 @@ export class PgCommentStore {
     ref: CommentRef,
     o: { syncedAt: Date; occurredAt: Date },
   ): Promise<string | null> {
-    return withTransaction(this.pool, async (tx) => {
+    const id = await writeUnlessErased(this.pool, scope, ref.externalId, async (tx) => {
       if (await isErased(tx, scope, ref.externalId)) return null;
       const sourceId = await upsertSource(tx, scope, ref.sourceExternalId);
       const r = await tx.query<{ id: string }>(
@@ -492,6 +518,7 @@ export class PgCommentStore {
       await linkChildren(tx, scope, r.rows[0].id, ref.externalId);
       return r.rows[0].id;
     });
+    return id === ERASED_WHILE_WRITING ? null : id;
   }
 
   async load(scope: BrandScope, commentId: string): Promise<CommentRow | null> {

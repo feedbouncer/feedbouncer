@@ -21,6 +21,8 @@ COPY . .
 RUN pnpm install --frozen-lockfile --offline
 
 FROM base AS dev
+RUN mkdir -p /var/lib/feedbouncer/privacy-exports \
+  && chown node:node /var/lib/feedbouncer/privacy-exports
 ENV NODE_ENV=development \
     NODE_OPTIONS=--conditions=@feedbouncer/source
 WORKDIR /repo/apps/api
@@ -32,6 +34,8 @@ FROM base AS build
 RUN pnpm turbo run build --filter=@feedbouncer/api...
 
 FROM node:${NODE_VERSION}-slim AS runtime
+RUN mkdir -p /var/lib/feedbouncer/privacy-exports \
+  && chown node:node /var/lib/feedbouncer/privacy-exports
 ENV NODE_ENV=production
 # Dev-stack scope: ships the built workspace unpruned. Production hardening
 # (pnpm deploy, distroless, etc.) is a separate ticket.

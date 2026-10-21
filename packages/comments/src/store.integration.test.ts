@@ -663,6 +663,53 @@ describe('per-connection comment identity', () => {
       expect((await counts(sx)).comments).toBe(0);
     });
 
+    describe('an erasure committing while the comment is being stored', () => {
+      const raceWithErasure = async (
+        ext: string,
+        run: (s: ConnectionScope) => Promise<unknown>,
+      ): Promise<{ result: unknown; comments: number }> => {
+        const x = await seedTenant(ctx.c, `cs-erased-race-${ext}`);
+        const sx = scopeOf(x);
+        await upsertStored(store, sx, comment({ externalId: ext }), own(1));
+        const eraser = await pool.connect();
+        try {
+          await eraser.query('BEGIN');
+          await eraser.query('DELETE FROM comment WHERE connection_id = $1', [sx.connectionId]);
+          await eraser.query(
+            'INSERT INTO erased_comment (connection_id, fingerprint) VALUES ($1, $2)',
+            [sx.connectionId, commentFingerprint(sx.connectionId, ext)],
+          );
+          const pending = run(sx);
+          await new Promise((r) => setTimeout(r, 200));
+          await eraser.query('COMMIT');
+          const result = await pending;
+          return { result, comments: (await counts(sx)).comments };
+        } finally {
+          eraser.release();
+        }
+      };
+
+      it('upsertFromPlatform does not store the comment again', async () => {
+        const { result, comments } = await raceWithErasure('race-1', (sx) =>
+          store.upsertFromPlatform(sx, comment({ externalId: 'race-1' }), own(2)),
+        );
+        expect(result).toEqual({ suppressed: true });
+        expect(comments).toBe(0);
+      });
+
+      it('recordDeleted does not store a tombstone', async () => {
+        const { result, comments } = await raceWithErasure('race-2', (sx) =>
+          store.recordDeleted(
+            sx,
+            { sourceExternalId: 'post-1', externalId: 'race-2' },
+            { syncedAt: at(2), occurredAt: at(2) },
+          ),
+        );
+        expect(result).toBeNull();
+        expect(comments).toBe(0);
+      });
+    });
+
     it('only the erased comment on that connection is suppressed', async () => {
       const x = await seedTenant(ctx.c, 'cs-erased-scope');
       const sx = scopeOf(x);
