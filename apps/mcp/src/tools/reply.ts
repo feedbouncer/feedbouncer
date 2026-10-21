@@ -89,7 +89,7 @@ export function registerReply(server: McpServer, deps: ToolDeps): void {
               content: text(`Reply posted (action ${action.id}).`),
               structuredContent: {
                 status: 'posted',
-                replyId: action.platformRef,
+                ...(action.platformRef !== null && { replyId: action.platformRef }),
                 actionId: action.id,
               },
             },
