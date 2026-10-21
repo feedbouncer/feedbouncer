@@ -97,7 +97,7 @@ FACEBOOK_APP_SECRET=<APP_SECRET>
 FACEBOOK_WEBHOOK_VERIFY_TOKEN=<VERIFY_TOKEN>
 ```
 
-These variables store real Page tokens, so replace the `dev-example` value of `FB_ENCRYPTION_KEYS` from `.env.example` with a production key first; [secrets.md](../operations/secrets.md) shows how to generate one. Compose does not read `PUBLIC_WEB_URL` from `.env`; you set it in the next step. Leave `FACEBOOK_GRAPH_API_VERSION` at its default. Docker Compose passes only these plain variables to the containers. To use the `_FILE` variants instead, mount the files from `compose.override.yaml` as shown in [secrets.md](../operations/secrets.md).
+FeedBouncer encrypts the Page tokens it obtains with `FB_ENCRYPTION_KEYS`, so replace the `dev-example` key in `.env.example` with a production key first, and set `FB_ENCRYPTION_ACTIVE_KEY_ID` to that key's id; [secrets.md](../operations/secrets.md) shows how to generate one. Compose does not read `PUBLIC_WEB_URL` from `.env`; you set it in the next step. Leave `FACEBOOK_GRAPH_API_VERSION` at its default. Docker Compose passes only these plain variables to the containers. To use the `_FILE` variants instead, mount the files from `compose.override.yaml` as shown in [secrets.md](../operations/secrets.md).
 
 Last verified: not yet checked on a live dashboard
 
