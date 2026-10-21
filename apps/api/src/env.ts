@@ -18,6 +18,7 @@ import {
   type LogLevel,
   type SecretFileSystem,
 } from '@feedbouncer/service-runtime';
+import { readExportDir } from '@feedbouncer/privacy';
 import { normalizeAddress } from '@feedbouncer/mailer';
 import { parseAlertChannels, readAlertLimits } from '@feedbouncer/alerts';
 import {
@@ -92,6 +93,8 @@ export interface ApiEnv {
   readonly ruleProposalTtlHours: number;
   /** How long POST /v1/moderation/check waits for the worker's verdict before answering 503. */
   readonly moderationCheckTimeoutMs: number;
+  /** Where the worker writes subject exports; the API only reads them to serve downloads. */
+  readonly privacyExportDir: string;
   /** Private networks, besides public addresses, that webhook endpoints may point at. Empty by default. */
   readonly webhookAllowedPrivateCidrs: readonly string[];
   readonly telemetry: TelemetryConfig;
@@ -190,6 +193,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
       max: 60_000,
       fallback: 20_000,
     }),
+    privacyExportDir: readExportDir(env),
     webhookAllowedPrivateCidrs: readAllowedPrivateCidrs(env),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),

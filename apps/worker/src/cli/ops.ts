@@ -25,12 +25,16 @@ import { ERASE_ORG_USAGE, EraseError, eraseOrgCommand } from './erase-org.js';
 import { EVAL_EXPORT_USAGE, evalExportCommand } from './eval-export.js';
 import { EVAL_REPORT_USAGE, evalReportCommand } from './eval-report.js';
 import type { OpsCommand, OpsContext } from './ops-context.js';
+import { PRIVACY_USAGE, privacyCommand } from './privacy.js';
+import { RETENTION_USAGE, retentionCommand } from './retention.js';
 
 const COMMANDS: Readonly<Record<string, { run: OpsCommand; usage: string }>> = {
   'beta-status': { run: betaStatusCommand, usage: BETA_STATUS_USAGE },
   'erase-org': { run: eraseOrgCommand, usage: ERASE_ORG_USAGE },
   'eval-export': { run: evalExportCommand, usage: EVAL_EXPORT_USAGE },
   'eval-report': { run: evalReportCommand, usage: EVAL_REPORT_USAGE },
+  privacy: { run: privacyCommand, usage: PRIVACY_USAGE },
+  retention: { run: retentionCommand, usage: RETENTION_USAGE },
 };
 
 const silent = { debug() {}, info() {}, warn() {}, error() {} };

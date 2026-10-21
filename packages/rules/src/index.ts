@@ -20,9 +20,12 @@ export { emojiGraphemes, emojiKey, isSingleEmoji } from './emoji.js';
 export {
   CONDITION_LIMITS,
   checkActionForConditions,
+  mapAuthorConditions,
+  normalizeAuthorHandle,
   ruleConditionsSchema,
   ruleInputSchema,
   rulePatchSchema,
+  type AuthorConditionNode,
   type RuleConditions,
   type RuleInput,
   type RulePatch,

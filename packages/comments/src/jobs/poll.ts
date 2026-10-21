@@ -111,6 +111,10 @@ export async function pollSource(
         syncedAt: new Date(d.clock.now()),
         adSourceId: s.sourceId,
       });
+      if (r.suppressed) {
+        log.info('comment.ingest_suppressed', { connectionId: scope.connectionId });
+        continue;
+      }
       if (r.outcome === 'created') {
         created++;
         try {

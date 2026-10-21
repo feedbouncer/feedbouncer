@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import { ActionResource, KeyResource, PgApiKeys } from '@feedbouncer/public-api';
 import { Secret } from '@feedbouncer/service-runtime';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import { runExecuteJob } from '../testing/execute.js';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
 
@@ -52,7 +53,8 @@ describe('GET /v1/actions/{id}', () => {
     const scope = { organizationId: A.orgId, brandId: A.brandId, connectionId: rows[0]!.id };
     await api.deps.connectors!.stack.store.put(scope, 'access_token', new Secret(pageToken), null);
     const c = graph.addComment(pageId, { message: 'hello', createdAtMs: Date.now() });
-    const stored = await api.deps.comments!.store.upsertFromPlatform(
+    const stored = await upsertStored(
+      api.deps.comments!.store,
       scope,
       {
         externalId: c.commentId,

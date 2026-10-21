@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
-import { createPool } from '@feedbouncer/db';
+import { commentFingerprint, createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import type { NormalizedComment } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { PgCommentStore, setCommentPlatformState } from './store.js';
 import { applyPlatformComment } from './apply.js';
+import { applyStored, upsertStored } from './testing/index.js';
 
 let ctx: Awaited<ReturnType<typeof migratedDb>>;
 let pool: pg.Pool;
@@ -80,38 +81,39 @@ const foreignScope = (): ConnectionScope => ({
 describe('PgCommentStore', () => {
   it('applies only snapshots newer than the stored one', async () => {
     const c = comment({ body: 'first' });
-    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    const a = await upsertStored(store, scope(), c, own(1));
     expect(a).toMatchObject({ created: true, applied: true });
-    const same = await store.upsertFromPlatform(scope(), c, own(2));
+    const same = await upsertStored(store, scope(), c, own(2));
     expect(same).toMatchObject({ created: false, applied: true });
-    const edited = await store.upsertFromPlatform(scope(), { ...c, body: 'second' }, own(3));
+    const edited = await upsertStored(store, scope(), { ...c, body: 'second' }, own(3));
     expect(edited).toMatchObject({ applied: true, hookBody: 'second' });
-    const stale = await store.upsertFromPlatform(scope(), { ...c, body: 'third' }, own(2));
+    const stale = await upsertStored(store, scope(), { ...c, body: 'third' }, own(2));
     expect(stale).toMatchObject({ applied: false });
     expect((await store.load(t, a.commentId))?.body).toBe('second');
   });
 
   it('keeps a live body pending for the hook until it is marked delivered', async () => {
     const c = comment({ body: 'pending one' });
-    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    const a = await upsertStored(store, scope(), c, own(1));
     expect(a).toMatchObject({ hookBody: 'pending one' });
-    const again = await store.upsertFromPlatform(scope(), c, own(2));
+    const again = await upsertStored(store, scope(), c, own(2));
     expect(again).toMatchObject({ hookBody: 'pending one' });
     // Delivering an older version leaves a newer pending body alone.
-    await store.upsertFromPlatform(scope(), { ...c, body: 'pending two' }, own(3));
+    await upsertStored(store, scope(), { ...c, body: 'pending two' }, own(3));
     await store.markHookDelivered(scope(), a.commentId, 'pending one');
-    const still = await store.upsertFromPlatform(scope(), { ...c, body: 'pending two' }, own(4));
+    const still = await upsertStored(store, scope(), { ...c, body: 'pending two' }, own(4));
     expect(still).toMatchObject({ hookBody: 'pending two' });
     await store.markHookDelivered(scope(), a.commentId, 'pending two');
-    const done = await store.upsertFromPlatform(scope(), { ...c, body: 'pending two' }, own(5));
+    const done = await upsertStored(store, scope(), { ...c, body: 'pending two' }, own(5));
     expect(done).toMatchObject({ hookBody: null });
   });
 
   it('a backfill snapshot with a new body is never evaluated: it replaces and clears the pending marker', async () => {
     const c = comment({ body: 'live text' });
-    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    const a = await upsertStored(store, scope(), c, own(1));
     expect(a.hookBody).toBe('live text');
-    const r = await store.upsertFromPlatform(
+    const r = await upsertStored(
+      store,
       scope(),
       { ...c, body: 'backfilled text' },
       {
@@ -127,7 +129,7 @@ describe('PgCommentStore', () => {
 
   it('pendingHooks lists only this connection, live, non-deleted rows', async () => {
     const c = comment({ body: 'listed' });
-    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    const a = await upsertStored(store, scope(), c, own(1));
     expect(await store.pendingHooks(scope(), 1000)).toContainEqual({
       commentId: a.commentId,
       body: 'listed',
@@ -138,7 +140,7 @@ describe('PgCommentStore', () => {
 
   it('a new snapshot that arrives already deleted gets no pending marker', async () => {
     const c = comment({ body: 'gone on arrival', platformState: 'deleted' });
-    const r = await store.upsertFromPlatform(scope(), c, own(1));
+    const r = await upsertStored(store, scope(), c, own(1));
     expect(r).toMatchObject({ created: true, hookBody: null });
     const { rows } = await pool.query<{ hook_pending_sha256: Buffer | null }>(
       'SELECT hook_pending_sha256 FROM comment WHERE id = $1',
@@ -154,7 +156,7 @@ describe('PgCommentStore', () => {
       { sourceExternalId: c.sourceExternalId, externalId: c.externalId },
       { syncedAt: at(1), occurredAt: at(1) },
     );
-    const r = await store.upsertFromPlatform(scope(), c, own(2));
+    const r = await upsertStored(store, scope(), c, own(2));
     expect(r).toMatchObject({ hookBody: null });
     expect(await store.pendingHooks(scope(), 1000)).not.toContainEqual(
       expect.objectContaining({ commentId: r.commentId }),
@@ -163,7 +165,7 @@ describe('PgCommentStore', () => {
 
   it('a delete clears the pending marker', async () => {
     const c = comment({ body: 'to delete' });
-    const a = await store.upsertFromPlatform(scope(), c, own(1));
+    const a = await upsertStored(store, scope(), c, own(1));
     await store.markDeleted(
       scope(),
       { sourceExternalId: c.sourceExternalId, externalId: c.externalId },
@@ -176,7 +178,7 @@ describe('PgCommentStore', () => {
   });
 
   it('never marks backfilled comments pending', async () => {
-    const r = await store.upsertFromPlatform(scope(), comment({ body: 'old' }), {
+    const r = await upsertStored(store, scope(), comment({ body: 'old' }), {
       ...own(1),
       origin: 'backfill',
     });
@@ -185,10 +187,11 @@ describe('PgCommentStore', () => {
 
   it('creates once and is idempotent for the same snapshot', async () => {
     const c = comment();
-    const a = await store.upsertFromPlatform(scope(), c, own(1));
-    const b = await store.upsertFromPlatform(scope(), c, own(1));
+    const a = await upsertStored(store, scope(), c, own(1));
+    const b = await upsertStored(store, scope(), c, own(1));
     expect(a).toMatchObject({ created: true, applied: true });
     expect(b).toEqual({
+      suppressed: false,
       commentId: a.commentId,
       created: false,
       applied: false,
@@ -205,7 +208,7 @@ describe('PgCommentStore', () => {
 
   it('stores the full row: author, permalink, state, source', async () => {
     const c = comment({ platformState: 'hidden' });
-    const { commentId } = await store.upsertFromPlatform(scope(), c, own(1));
+    const { commentId } = await upsertStored(store, scope(), c, own(1));
     expect(await store.load(t, commentId)).toEqual({
       id: commentId,
       connectionId: t.connectionId,
@@ -214,6 +217,7 @@ describe('PgCommentStore', () => {
       externalId: c.externalId,
       parentExternalId: null,
       parentCommentId: null,
+      parentRemoved: false,
       authorExternalId: 'u1',
       authorName: 'Ann',
       body: 'hello',
@@ -232,16 +236,18 @@ describe('PgCommentStore', () => {
 
   it('a newer snapshot wins, an older one never overwrites (out of order)', async () => {
     const c = comment();
-    await store.upsertFromPlatform(scope(), { ...c, body: 'v2' }, own(5));
-    const stale = await store.upsertFromPlatform(scope(), { ...c, body: 'v1' }, own(3));
+    await upsertStored(store, scope(), { ...c, body: 'v2' }, own(5));
+    const stale = await upsertStored(store, scope(), { ...c, body: 'v1' }, own(3));
     expect(stale.applied).toBe(false);
     expect((await store.load(t, stale.commentId))?.body).toBe('v2');
-    const newer = await store.upsertFromPlatform(
+    const newer = await upsertStored(
+      store,
       scope(),
       { ...c, body: 'v3', platformState: 'hidden' },
       own(7),
     );
     expect(newer).toEqual({
+      suppressed: false,
       commentId: stale.commentId,
       created: false,
       applied: true,
@@ -255,7 +261,7 @@ describe('PgCommentStore', () => {
 
   it('deleted is sticky even against a newer fetch', async () => {
     const c = comment();
-    const { commentId } = await store.upsertFromPlatform(scope(), c, own(1));
+    const { commentId } = await upsertStored(store, scope(), c, own(1));
     expect(
       await store.markDeleted(
         scope(),
@@ -263,7 +269,8 @@ describe('PgCommentStore', () => {
         at(2),
       ),
     ).toBe(commentId);
-    await store.upsertFromPlatform(
+    await upsertStored(
+      store,
       scope(),
       { ...c, platformState: 'visible', body: 'resurrected?' },
       own(9),
@@ -273,7 +280,7 @@ describe('PgCommentStore', () => {
 
   it('a delete that lands after a newer fetch still deletes, and keeps the newer sync time', async () => {
     const c = comment();
-    const { commentId } = await store.upsertFromPlatform(scope(), c, own(9));
+    const { commentId } = await upsertStored(store, scope(), c, own(9));
     await store.markDeleted(
       scope(),
       { sourceExternalId: 'post-1', externalId: c.externalId },
@@ -283,7 +290,7 @@ describe('PgCommentStore', () => {
     const r = await pool.query('SELECT platform_synced_at FROM comment WHERE id = $1', [commentId]);
     expect(r.rows[0].platform_synced_at).toEqual(at(9));
     // an older fetch is still refused after the delete
-    expect((await store.upsertFromPlatform(scope(), c, own(5))).applied).toBe(false);
+    expect((await upsertStored(store, scope(), c, own(5))).applied).toBe(false);
   });
 
   it('markDeleted of an unknown comment stores nothing and returns null', async () => {
@@ -301,12 +308,15 @@ describe('PgCommentStore', () => {
   it('recordDeleted leaves a tombstone so a later stale fetch cannot resurrect the comment', async () => {
     const c = comment();
     const ref = { sourceExternalId: c.sourceExternalId, externalId: c.externalId };
-    const id = await store.recordDeleted(scope(), ref, { syncedAt: at(2), occurredAt: at(1) });
+    const id = (await store.recordDeleted(scope(), ref, {
+      syncedAt: at(2),
+      occurredAt: at(1),
+    }))!;
     expect(await store.load(t, id)).toMatchObject({ platformState: 'deleted', body: '' });
     expect(await store.recordDeleted(scope(), ref, { syncedAt: at(3), occurredAt: at(1) })).toBe(
       id,
     );
-    const late = await store.upsertFromPlatform(scope(), { ...c, body: 'late' }, own(4));
+    const late = await upsertStored(store, scope(), { ...c, body: 'late' }, own(4));
     expect(late).toMatchObject({ commentId: id, created: false });
     expect(await store.load(t, id)).toMatchObject({
       platformState: 'deleted',
@@ -317,7 +327,7 @@ describe('PgCommentStore', () => {
 
   it('setCommentPlatformState follows our own actions but never revives a deleted comment', async () => {
     const c = comment();
-    const { commentId } = await store.upsertFromPlatform(scope(), c, own(1));
+    const { commentId } = await upsertStored(store, scope(), c, own(1));
     await setCommentPlatformState(pool, scope(), commentId, 'hidden');
     expect((await store.load(t, commentId))?.platformState).toBe('hidden');
     await setCommentPlatformState(pool, scope(), commentId, 'deleted');
@@ -328,16 +338,17 @@ describe('PgCommentStore', () => {
   it('links a reply that arrives before its parent', async () => {
     const parent = comment();
     const child = comment({ parentExternalId: parent.externalId });
-    const { commentId: childId } = await store.upsertFromPlatform(scope(), child, own(1));
+    const { commentId: childId } = await upsertStored(store, scope(), child, own(1));
     expect((await store.load(t, childId))?.parentCommentId).toBeNull();
-    const { commentId: parentId } = await store.upsertFromPlatform(scope(), parent, own(2));
+    const { commentId: parentId } = await upsertStored(store, scope(), parent, own(2));
     expect((await store.load(t, childId))?.parentCommentId).toBe(parentId);
   });
 
   it('links a reply that arrives after its parent', async () => {
     const parent = comment();
-    const { commentId: parentId } = await store.upsertFromPlatform(scope(), parent, own(1));
-    const { commentId: childId } = await store.upsertFromPlatform(
+    const { commentId: parentId } = await upsertStored(store, scope(), parent, own(1));
+    const { commentId: childId } = await upsertStored(
+      store,
       scope(),
       comment({ parentExternalId: parent.externalId }),
       own(2),
@@ -349,7 +360,8 @@ describe('PgCommentStore', () => {
   });
 
   it('flags comments authored by the page itself', async () => {
-    const { commentId } = await store.upsertFromPlatform(
+    const { commentId } = await upsertStored(
+      store,
       scope(),
       comment({ author: { externalId: 'page', displayName: 'Shop', profileUrl: null } }),
       own(1),
@@ -358,7 +370,8 @@ describe('PgCommentStore', () => {
   });
 
   it('stores empty bodies (stickers) and missing authors', async () => {
-    const { commentId } = await store.upsertFromPlatform(
+    const { commentId } = await upsertStored(
+      store,
       scope(),
       comment({ body: '', author: null }),
       own(1),
@@ -367,7 +380,8 @@ describe('PgCommentStore', () => {
   });
 
   it('stores text as plain text with NUL replaced', async () => {
-    const { commentId } = await store.upsertFromPlatform(
+    const { commentId } = await upsertStored(
+      store,
       scope(),
       comment({
         body: 'a\u0000<b>x</b>',
@@ -387,7 +401,7 @@ describe('PgCommentStore', () => {
     const ids: string[] = [];
     for (let i = 0; i < 3; i++) {
       const c = comment({ postedAt: new Date(Date.UTC(2026, 9, 1, 0, 0, i)) });
-      ids.push((await store.upsertFromPlatform(sx, c, own(1))).commentId);
+      ids.push((await upsertStored(store, sx, c, own(1))).commentId);
     }
     expect((await store.list(x, { before: null, limit: 50 })).map((r) => r.id)).toEqual(
       [...ids].reverse(),
@@ -415,9 +429,7 @@ describe('PgCommentStore', () => {
     const same = new Date(Date.UTC(2026, 9, 2, 0, 0, 0));
     const expected: string[] = [];
     for (let i = 0; i < 3; i++)
-      expected.push(
-        (await store.upsertFromPlatform(sx, comment({ postedAt: same }), own(1))).commentId,
-      );
+      expected.push((await upsertStored(store, sx, comment({ postedAt: same }), own(1))).commentId);
     expected.sort().reverse();
     const page1 = await store.list(x, { before: null, limit: 2 });
     expect(page1.map((r) => r.id)).toEqual(expected.slice(0, 2));
@@ -432,13 +444,14 @@ describe('PgCommentStore', () => {
   it('leaves deleted comments out before the limit when asked', async () => {
     const x = await seedTenant(ctx.c, 'cs-del');
     const sx = scopeOf(x);
-    const kept = await store.upsertFromPlatform(
+    const kept = await upsertStored(
+      store,
       sx,
       comment({ postedAt: new Date(Date.UTC(2026, 9, 3, 0, 0, 0)) }),
       own(1),
     );
     const gone = comment({ postedAt: new Date(Date.UTC(2026, 9, 3, 0, 0, 1)) });
-    const { commentId: goneId } = await store.upsertFromPlatform(sx, gone, own(1));
+    const { commentId: goneId } = await upsertStored(store, sx, gone, own(1));
     await store.recordDeleted(
       sx,
       { sourceExternalId: gone.sourceExternalId, externalId: gone.externalId },
@@ -452,7 +465,7 @@ describe('PgCommentStore', () => {
 
   it('load/list never cross brands', async () => {
     const other = await seedTenant(ctx.c, 'cs2');
-    const { commentId } = await store.upsertFromPlatform(scope(), comment(), own(1));
+    const { commentId } = await upsertStored(store, scope(), comment(), own(1));
     expect(await store.load(other, commentId)).toBeNull();
     expect((await store.list(other, { before: null, limit: 50 })).map((r) => r.id)).not.toContain(
       commentId,
@@ -463,7 +476,7 @@ describe('PgCommentStore', () => {
   it('writes never cross tenants', async () => {
     const other = await seedTenant(ctx.c, 'cs3');
     const c = comment();
-    const { commentId } = await store.upsertFromPlatform(scope(), c, own(1));
+    const { commentId } = await upsertStored(store, scope(), c, own(1));
     const ref = { sourceExternalId: c.sourceExternalId, externalId: c.externalId };
     // Another tenant's scope sees its own (empty) world.
     expect(await store.markDeleted(scopeOf(other), ref, at(2))).toBeNull();
@@ -471,11 +484,11 @@ describe('PgCommentStore', () => {
     expect((await store.load(t, commentId))?.platformState).toBe('visible');
     // A forged scope (our connection, their organization) is refused.
     const forged = { ...scope(), organizationId: other.organizationId, brandId: other.brandId };
-    await expect(store.upsertFromPlatform(forged, comment(), own(3))).rejects.toThrow();
+    await expect(upsertStored(store, forged, comment(), own(3))).rejects.toThrow();
     expect(await store.markDeleted(forged, ref, at(3))).toBeNull();
     expect((await store.load(t, commentId))?.platformState).toBe('visible');
     // Same platform ids in another tenant are a different comment.
-    const theirs = await store.upsertFromPlatform(scopeOf(other), c, own(1));
+    const theirs = await upsertStored(store, scopeOf(other), c, own(1));
     expect(theirs.created).toBe(true);
     expect(theirs.commentId).not.toBe(commentId);
   });
@@ -484,19 +497,21 @@ describe('PgCommentStore', () => {
 describe('per-connection comment identity', () => {
   it('the same comment through two sources is one row', async () => {
     const c = normalized({ sourceExternalId: '900_1', externalId: '900_1_77' });
-    const a = await store.upsertFromPlatform(scope(), c, opts());
-    const b = await store.upsertFromPlatform(scope(), { ...c, sourceExternalId: '900_2' }, opts());
+    const a = await upsertStored(store, scope(), c, opts());
+    const b = await upsertStored(store, scope(), { ...c, sourceExternalId: '900_2' }, opts());
     expect(b.commentId).toBe(a.commentId);
     expect(b.created).toBe(false);
     expect(await countComments(scope(), '900_1_77')).toBe(1);
   });
   it('a reply stored under another source still links to its parent', async () => {
-    const parent = await store.upsertFromPlatform(
+    const parent = await upsertStored(
+      store,
       scope(),
       normalized({ sourceExternalId: 'm1', externalId: 'x-p1' }),
       opts(),
     );
-    const child = await store.upsertFromPlatform(
+    const child = await upsertStored(
+      store,
       scope(),
       normalized({ sourceExternalId: 'm2', externalId: 'x-c1', parentExternalId: 'x-p1' }),
       opts(),
@@ -504,14 +519,16 @@ describe('per-connection comment identity', () => {
     expect((await store.load(t, child.commentId))!.parentCommentId).toBe(parent.commentId);
   });
   it('ensureAdSource promotes an organic source and a later webhook never demotes it', async () => {
-    await store.upsertFromPlatform(
+    await upsertStored(
+      store,
       scope(),
       normalized({ sourceExternalId: '900_5', externalId: '900_5_1' }),
       opts(),
     );
     expect(await sourceKind(scope(), '900_5')).toBe('organic_post');
     await store.ensureAdSource(scope(), '900_5');
-    await store.upsertFromPlatform(
+    await upsertStored(
+      store,
       scope(),
       normalized({ sourceExternalId: '900_5', externalId: '900_5_2' }),
       opts(),
@@ -525,7 +542,7 @@ describe('per-connection comment identity', () => {
     ).toBe(undefined);
   });
   it('applyPlatformComment with adSourceId labels a comment filed under another source', async () => {
-    const r = await applyPlatformComment(
+    const r = await applyStored(
       store,
       scope(),
       normalized({ sourceExternalId: 'orig', externalId: 'k1' }),
@@ -545,14 +562,14 @@ describe('per-connection comment identity', () => {
   it('a stale read through an ad source still records the ad path', async () => {
     const first = opts();
     const later = opts();
-    const r = await applyPlatformComment(
+    const r = await applyStored(
       store,
       scope(),
       normalized({ sourceExternalId: 'orig2', externalId: 'k2' }),
       later,
     );
     const adSrc = await store.ensureAdSource(scope(), 'admedia2');
-    const stale = await applyPlatformComment(
+    const stale = await applyStored(
       store,
       scope(),
       normalized({ sourceExternalId: 'admedia2', externalId: 'k2' }),
@@ -580,7 +597,7 @@ describe('per-connection comment identity', () => {
     expect(r.rows[0].ingest_origin).toBe('live');
   });
   it('latestActionActor is the actor of the newest pending or applied action', async () => {
-    const { commentId } = await store.upsertFromPlatform(scope(), comment(), own(1));
+    const { commentId } = await upsertStored(store, scope(), comment(), own(1));
     expect(await store.latestActionActor(t, commentId)).toBeNull();
     const act = (actor: string, status: string, createdAt: string) =>
       pool.query(
@@ -604,5 +621,114 @@ describe('per-connection comment identity', () => {
     await act('rule', 'failed', '2026-10-03T00:00:00Z');
     expect(await store.latestActionActor(t, commentId)).toBe('policy');
     expect(await store.latestActionActor(foreign, commentId)).toBeNull();
+  });
+  describe('erased comments', () => {
+    const erase = (s: ConnectionScope, ext: string) =>
+      pool.query('INSERT INTO erased_comment (connection_id, fingerprint) VALUES ($1, $2)', [
+        s.connectionId,
+        commentFingerprint(s.connectionId, ext),
+      ]);
+    const counts = async (s: ConnectionScope) =>
+      (
+        await pool.query(
+          `SELECT (SELECT count(*)::int FROM comment WHERE connection_id = $1) AS comments,
+                  (SELECT count(*)::int FROM author WHERE connection_id = $1) AS authors`,
+          [s.connectionId],
+        )
+      ).rows[0] as { comments: number; authors: number };
+
+    it('upsertFromPlatform stores nothing for an erased comment', async () => {
+      const x = await seedTenant(ctx.c, 'cs-erased');
+      const sx = scopeOf(x);
+      await erase(sx, 'ext-1');
+      const before = await counts(sx);
+      const r = await store.upsertFromPlatform(
+        sx,
+        comment({
+          externalId: 'ext-1',
+          author: { externalId: 'gone', displayName: 'G', profileUrl: null },
+        }),
+        own(1),
+      );
+      expect(r).toEqual({ suppressed: true });
+      expect(await counts(sx)).toEqual(before);
+    });
+
+    it('recordDeleted stores no tombstone for an erased comment', async () => {
+      const x = await seedTenant(ctx.c, 'cs-erased-del');
+      const sx = scopeOf(x);
+      await erase(sx, 'ext-1');
+      const ref = { sourceExternalId: 'post-1', externalId: 'ext-1' };
+      expect(await store.recordDeleted(sx, ref, { syncedAt: at(1), occurredAt: at(1) })).toBeNull();
+      expect((await counts(sx)).comments).toBe(0);
+    });
+
+    describe('an erasure committing while the comment is being stored', () => {
+      const raceWithErasure = async (
+        ext: string,
+        run: (s: ConnectionScope) => Promise<unknown>,
+      ): Promise<{ result: unknown; comments: number }> => {
+        const x = await seedTenant(ctx.c, `cs-erased-race-${ext}`);
+        const sx = scopeOf(x);
+        await upsertStored(store, sx, comment({ externalId: ext }), own(1));
+        const eraser = await pool.connect();
+        try {
+          await eraser.query('BEGIN');
+          await eraser.query('DELETE FROM comment WHERE connection_id = $1', [sx.connectionId]);
+          await eraser.query(
+            'INSERT INTO erased_comment (connection_id, fingerprint) VALUES ($1, $2)',
+            [sx.connectionId, commentFingerprint(sx.connectionId, ext)],
+          );
+          const pending = run(sx);
+          await new Promise((r) => setTimeout(r, 200));
+          await eraser.query('COMMIT');
+          const result = await pending;
+          return { result, comments: (await counts(sx)).comments };
+        } finally {
+          eraser.release();
+        }
+      };
+
+      it('upsertFromPlatform does not store the comment again', async () => {
+        const { result, comments } = await raceWithErasure('race-1', (sx) =>
+          store.upsertFromPlatform(sx, comment({ externalId: 'race-1' }), own(2)),
+        );
+        expect(result).toEqual({ suppressed: true });
+        expect(comments).toBe(0);
+      });
+
+      it('recordDeleted does not store a tombstone', async () => {
+        const { result, comments } = await raceWithErasure('race-2', (sx) =>
+          store.recordDeleted(
+            sx,
+            { sourceExternalId: 'post-1', externalId: 'race-2' },
+            { syncedAt: at(2), occurredAt: at(2) },
+          ),
+        );
+        expect(result).toBeNull();
+        expect(comments).toBe(0);
+      });
+    });
+
+    it('only the erased comment on that connection is suppressed', async () => {
+      const x = await seedTenant(ctx.c, 'cs-erased-scope');
+      const sx = scopeOf(x);
+      await erase(sx, 'ext-1');
+      const sameAuthor = { externalId: 'u-same', displayName: 'S', profileUrl: null };
+      const other = await upsertStored(
+        store,
+        scope(),
+        comment({ externalId: 'ext-1', author: sameAuthor }),
+        own(1),
+      );
+      expect(other.created).toBe(true);
+      const next = await upsertStored(
+        store,
+        sx,
+        comment({ externalId: 'ext-2', author: sameAuthor }),
+        own(1),
+      );
+      expect(next.created).toBe(true);
+    });
   });
 });

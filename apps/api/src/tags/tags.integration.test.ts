@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Secret } from '@feedbouncer/service-runtime';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
 
 const FACEBOOK = {
@@ -92,7 +93,8 @@ describe('tags', () => {
     const tagId = made.body.tag.id as string;
     // A comment carrying the tag.
     const { scope } = await api.seedFacebookConnection(org);
-    const stored = await api.deps.comments!.store.upsertFromPlatform(
+    const stored = await upsertStored(
+      api.deps.comments!.store,
       scope,
       {
         externalId: '1_2_3',

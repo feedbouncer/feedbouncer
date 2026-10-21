@@ -1,6 +1,7 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { PgBackfillStore } from '@feedbouncer/comments';
 import { PgApiKeys } from '@feedbouncer/public-api';
+import { PgPrivacyRequestStore } from '@feedbouncer/privacy';
 import { Reflector } from '@nestjs/core';
 import { createAccountDeletionHooks } from './auth/account-deletion.js';
 import { createAuth, type AuthHooks } from './auth/auth.js';
@@ -71,6 +72,8 @@ import { ClassifierController } from './classifier/classifier.controller.js';
 import { ClassifierService } from './classifier/classifier.service.js';
 import { PoliciesController } from './policies/policies.controller.js';
 import { PoliciesService } from './policies/policies.service.js';
+import { PrivacyController } from './privacy/privacy.controller.js';
+import { PrivacyService } from './privacy/privacy.service.js';
 import { ActivityController } from './rules/activity.controller.js';
 import { DomainsController } from './rules/domains.controller.js';
 import { RuleChangesController } from './rule-changes/rule-changes.controller.js';
@@ -99,10 +102,13 @@ import {
   DEPS,
   JOB_PRODUCER,
   MODERATION_CHECK_CLIENT,
+  PRIVACY_QUEUE_CLIENT,
+  PRIVACY_REQUESTS,
   PUBLIC_API_LIMITS,
   RATE_LIMITS,
 } from './tokens.js';
 import type { AppDeps } from './deps.js';
+import { PrivacyQueueClient } from './privacy/privacy-queue.client.js';
 
 // Providers are wired explicitly (inject: [DEPS, ...]) rather than through
 // constructor type metadata, which the test transformer does not emit.
@@ -149,6 +155,7 @@ export class AppModule {
         ReportsController,
         MeReportsController,
         ApiKeysController,
+        PrivacyController,
         OpenApiController,
         PublicCommentsController,
         PublicFlaggedItemsController,
@@ -188,6 +195,7 @@ export class AppModule {
         AlertsService,
         ReportsService,
         ApiKeysService,
+        PrivacyService,
         ApiKeyGuard,
         PublicModerationService,
         PublicRuleProposalsService,
@@ -198,6 +206,22 @@ export class AppModule {
         { provide: JOB_PRODUCER, useValue: deps.producer },
         { provide: COMMENTS, useValue: deps.comments },
         { provide: API_KEYS, useValue: new PgApiKeys(deps.pool) },
+        {
+          provide: PRIVACY_REQUESTS,
+          inject: [DEPS],
+          useFactory: (d: AppDeps) => new PgPrivacyRequestStore(d.pool, d.env.encryption),
+        },
+        {
+          // Stopped by Nest (onModuleDestroy).
+          provide: PRIVACY_QUEUE_CLIENT,
+          inject: [DEPS],
+          useFactory: (d: AppDeps) =>
+            new PrivacyQueueClient({
+              redisUrl: d.env.redisUrl.href,
+              prefix: d.env.jobs.prefix,
+              log: d.log,
+            }),
+        },
         { provide: BACKFILL_STORE, useValue: new PgBackfillStore(deps.pool) },
         {
           provide: AUTH_EMAILS,

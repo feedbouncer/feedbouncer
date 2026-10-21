@@ -1,8 +1,7 @@
-import type { AuthorConditions } from '../conditions.js';
-import { normalizeText } from '../normalize.js';
+import { normalizeAuthorHandle, type AuthorConditions } from '../conditions.js';
 import type { Matcher } from './types.js';
 
-const normHandle = (h: string) => normalizeText(h.replace(/^@/, '')).trim();
+const normHandle = normalizeAuthorHandle;
 
 export function compileAuthorRule(c: AuthorConditions): Matcher {
   const ids = new Set<string>();

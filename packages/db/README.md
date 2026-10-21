@@ -420,9 +420,39 @@ In practice:
 - **User:** delete the `app_user` row. Memberships go; decisions and audit events
   stay with `actor_user_id = NULL`.
 - **Comment:** delete the row. Its decisions go with it; replies keep
-  `parent_external_id`.
+  `parent_external_id`. Write `commentFingerprint(connectionId, externalId)` to
+  `erased_comment` in the same transaction so a re-delivery is not re-ingested.
+  The retention purge fingerprints the comments it deletes the same way, so a
+  later poll cannot bring them back. Replies by other people keep their text and
+  get `parent_removed_at`.
 - Normalizers must strip NUL bytes (`\u0000`) from text before writing. Postgres
   rejects them with SQLSTATE `22021` rather than truncating.
+
+### Escape hatches for the append-only tables
+
+`decision`, `rule_evaluation`, `comment_classification`, `policy_evaluation`,
+`policy_evaluation_match`, `custom_policy_revision` and `audit_event` refuse direct
+`UPDATE`, `DELETE` and `TRUNCATE` (`fb_forbid_direct_mutation()`). Two
+settings open a narrow exception: the trigger only checks that the setting is
+`on`, so this is not a security boundary. Any role that can run SQL can open a
+hatch, including with a session-level `SET`. What the helpers in
+`src/privacy-guards.ts` guarantee is transaction scope for application code: they
+require an open transaction (they throw `privacy guard requires a transaction`
+otherwise), set the value transaction-locally, and it ends at `COMMIT` or
+`ROLLBACK`, so it cannot leak to a pooled connection.
+
+- `withRetentionDelete(tx, fn)` sets `fb.retention_delete`: a direct `DELETE` is
+  allowed. `UPDATE` and `TRUNCATE` are still refused. Used by the retention purge.
+- `withPrivacyRedaction(tx, fn)` sets `fb.privacy_redaction`: an `UPDATE` of
+  `audit_event` that changes only `details` (and `updated_at`) is allowed.
+  Anything else, on any table, is still refused.
+
+Rolling back this feature takes two steps: first
+`20261021000200_privacy_request_heartbeat` (drops `privacy_request.heartbeat_at`),
+then `20261021000100_privacy_retention`, which drops the privacy and retention
+records it added (`privacy_request`, `retention_*`, `erased_comment`,
+`comment.parent_removed_at`) and restores the original guard. Existing content,
+decisions and audit events are untouched.
 
 ## Security notes
 

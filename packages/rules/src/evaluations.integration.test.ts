@@ -5,6 +5,7 @@ import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import { PgCommentStore } from '@feedbouncer/comments';
 import type { ConnectionScope } from '@feedbouncer/secrets';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import { PgEvaluationStore } from './evaluations.js';
 import type { RuleAction, RuleHit, Verdict } from './types.js';
 
@@ -38,7 +39,8 @@ const scopeOf = (t: Tenant): ConnectionScope => ({
 async function fresh(): Promise<{ t: Tenant; scope: ConnectionScope; commentId: string }> {
   const t = await seedTenant(ctx.c, `ev${++n}`);
   const scope = scopeOf(t);
-  const r = await comments.upsertFromPlatform(
+  const r = await upsertStored(
+    comments,
     scope,
     {
       externalId: `c_${n}`,

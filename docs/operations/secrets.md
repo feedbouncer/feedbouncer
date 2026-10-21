@@ -188,6 +188,9 @@ plaintext credential column (expected: 0).
 - Database backups contain only ciphertext. A restored database is usable only
   with the keys that were configured when the data was written (see `status`).
 - Back keys up separately: different system, different access list.
+- Data removed by erasure or retention stays in backups until they rotate out; see
+  [data-retention.md](data-retention.md#backups-and-replicas). Restoring one
+  brings it back, so run the purge after a restore.
 - After restoring an old backup, run `pnpm secrets status`. Any `NOT CONFIGURED`
   key must be restored from your key backup.
 
@@ -217,6 +220,18 @@ plaintext credential column (expected: 0).
   reconnect. It is never guessed.
 
 The command exits `1` while any of these remain.
+
+## Pending privacy requests
+
+A subject export or erasure request ([subject-requests.md](subject-requests.md))
+keeps the identifiers it was asked about sealed in `privacy_request.subjects_sealed`,
+with the same key ring, as a `privacy_subject` envelope. The request id is bound
+into the envelope (in the slot used for the connection id elsewhere), so a blob
+copied to another request cannot be opened. The column is cleared when the
+request finishes or fails, so only pending requests hold one.
+
+Unlike OAuth flows, these are counted: `pnpm secrets status` includes them in
+the per-key counts, and `reencrypt` and `verify` cover them.
 
 ## Pending OAuth flows
 

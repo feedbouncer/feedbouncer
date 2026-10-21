@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { createPool } from '@feedbouncer/db';
@@ -9,6 +9,7 @@ import {
   markReconnectRequired,
   type ConnectionScope,
 } from './credential-store.js';
+import { seal } from './envelope.js';
 import { CredentialUnreadableError } from './errors.js';
 import { Keyring } from './keyring.js';
 import { recheckConnections, reencryptAll, secretsStatus, verifyAll } from './maintenance.js';
@@ -182,6 +183,61 @@ describe('reencryptAll', () => {
       expect.objectContaining({ connectionId: tenants[1]!.connectionId, reason: 'tampered' }),
     ]);
     expect(r.remainingOnOldKeys).toBe(1);
+  });
+});
+
+describe('sealed privacy request subjects', () => {
+  async function sealedRequest(t: Tenant, keys: Keyring, boundTo?: string) {
+    const id = randomUUID();
+    const { blob } = await seal(keys, new Secret('[{"platform":"facebook","externalId":"1"}]'), {
+      organizationId: t.organizationId,
+      connectionId: boundTo ?? id,
+      kind: 'privacy_subject',
+    });
+    await h.c.query(
+      `INSERT INTO privacy_request (id, organization_id, kind, mode, requested_via, subject_count, subjects_sealed)
+       VALUES ($1, $2, 'erasure', 'execute', 'cli', 1, $3)`,
+      [id, t.organizationId, blob],
+    );
+    return id;
+  }
+  const keyIdOf = async (id: string) =>
+    (
+      await h.c.query<{ k: string }>(
+        `SELECT convert_from(substring(subjects_sealed FROM 3 FOR get_byte(subjects_sealed, 1)), 'LATIN1') AS k
+           FROM privacy_request WHERE id = $1`,
+        [id],
+      )
+    ).rows[0]!.k;
+
+  it('are rewrapped onto the active key, counted by status and verified', async () => {
+    await freshDataset(1);
+    const t = tenants[0]!;
+    const id = await sealedRequest(t, ringV1);
+    expect((await secretsStatus(pool, ringBoth)).rowsNotOnActiveKey).toBe(2);
+    expect(await reencryptAll(pool, ringBoth, { dryRun: true, batchSize: 5 })).toMatchObject({
+      scanned: 2,
+      rewrapped: 2,
+    });
+    expect(await keyIdOf(id)).toBe('k1');
+    const r = await reencryptAll(pool, ringBoth, { dryRun: false, batchSize: 5 });
+    expect(r).toMatchObject({ scanned: 2, rewrapped: 2, remainingOnOldKeys: 0, unreadable: [] });
+    expect(await keyIdOf(id)).toBe('k2');
+    expect(await verifyAll(pool, ringV2)).toEqual({ scanned: 2, unreadable: [] });
+    expect((await secretsStatus(pool, ringV2)).keys).toEqual([
+      { keyId: 'k2', configured: true, active: true, rows: 2 },
+    ]);
+    await h.c.query('DELETE FROM privacy_request WHERE id = $1', [id]);
+  });
+
+  it('are reported unreadable when bound to another request', async () => {
+    await freshDataset(1);
+    const id = await sealedRequest(tenants[0]!, ringV1, randomUUID());
+    const v = await verifyAll(pool, ringV1);
+    expect(v.unreadable).toEqual([
+      expect.objectContaining({ id, kind: 'privacy_subject', reason: 'tampered' }),
+    ]);
+    await h.c.query('DELETE FROM privacy_request WHERE id = $1', [id]);
   });
 });
 

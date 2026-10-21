@@ -37,7 +37,11 @@ export function CommentRow({
       <p>
         <strong>{item.authorName ?? 'Unknown author'}</strong> ·{' '}
         <LocalTime iso={item.postedAt} exactTitle />
-        {item.isReply ? <> · Reply</> : null}
+        {item.parentRemoved ? (
+          <> · Reply to a removed comment</>
+        ) : item.isReply ? (
+          <> · Reply</>
+        ) : null}
         {item.stale ? <> · May be out of date</> : null}
         {item.done ? (
           <>

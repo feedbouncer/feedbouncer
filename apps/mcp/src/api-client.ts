@@ -32,6 +32,7 @@ const CommentSchema = z.object({
   platform,
   externalId: z.string(),
   parentId: z.uuid().nullable(),
+  parentRemoved: z.boolean(),
   authorName: z.string().nullable(),
   text: z.string(),
   textTruncated: z.boolean(),

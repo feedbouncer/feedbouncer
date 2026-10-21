@@ -27,6 +27,7 @@ import {
   PgPolicyUsage,
   createPolicyEvaluator,
 } from '@feedbouncer/policies';
+import { PgPrivacyRequestStore, publishRetentionStatus } from '@feedbouncer/privacy';
 import { PgRuleStore, RuleSetCache } from '@feedbouncer/rules';
 import { BrandSlots, createPool, runJobOnce } from '@feedbouncer/db';
 import {
@@ -63,6 +64,8 @@ import { startIdempotencyPurge } from './idempotency.js';
 import { startWebhookLoops } from './webhooks.js';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { startReportLoops } from './reports.js';
+import { startPrivacyRequestWorker } from './privacy-requests.js';
+import { startRetentionLoop } from './retention.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
 import { buildConnectorRegistry, buildJobRegistry } from './registries.js';
 import { reportStartupFailure } from './startup.js';
@@ -109,7 +112,12 @@ try {
   );
   const pool = createPool(env.databaseUrl, {
     applicationName: 'feedbouncer-worker',
-    max: env.concurrency + 2 + jobConsumerConnections + Math.min(32, laneConsumerConnections),
+    max:
+      env.concurrency +
+      2 +
+      jobConsumerConnections +
+      Math.min(32, laneConsumerConnections) +
+      env.privacy.requestConcurrency,
     onIdleError: (err) => log.warn('postgres idle client error', errorFields(err)),
   });
   // PgRefreshLock holds a session per refresh, so it gets a small pool of its own.
@@ -150,6 +158,7 @@ try {
   let alertLoops: ReturnType<typeof startAlertLoops> = null;
   let reportLoops: ReturnType<typeof startReportLoops> = null;
   let idempotencyPurge: ReturnType<typeof startIdempotencyPurge> | null = null;
+  let retentionLoop: ReturnType<typeof startRetentionLoop> | null = null;
   let webhookLoops: ReturnType<typeof startWebhookLoops> | null = null;
   if (facebook && mail && mailer) {
     const stack = buildPgConnectorStack({
@@ -268,6 +277,20 @@ try {
       },
     },
   });
+  const privacyRequests = startPrivacyRequestWorker({
+    connection: redis,
+    prefix: env.jobs.prefix,
+    concurrency: env.privacy.requestConcurrency,
+    log,
+    deps: {
+      store: new PgPrivacyRequestStore(pool, env.encryption),
+      pool,
+      exportDir: env.privacy.exportDir,
+      exportTtlHours: env.privacy.exportTtlHours,
+      batchSize: env.retention.batchSize,
+      log,
+    },
+  });
   const health = await startHealthServer({
     host: '127.0.0.1',
     port: env.healthPort,
@@ -297,9 +320,15 @@ try {
     alertLoops?.stop();
     reportLoops?.stop();
     idempotencyPurge?.stop();
+    retentionLoop?.stop();
     await webhookLoops?.stop();
     await scheduler?.stop();
-    await Promise.all([worker.close(), jobWorkers.close(), moderationCheck.close()]);
+    await Promise.all([
+      worker.close(),
+      jobWorkers.close(),
+      moderationCheck.close(),
+      privacyRequests.close(),
+    ]);
     await queues.close();
     await health.close();
     mailer?.close();
@@ -323,6 +352,7 @@ try {
   });
 
   await reportKeyCoverage(pool, env.encryption, log);
+  await publishRetentionStatus(pool, env.retention);
 
   await jobWorkers.start();
   log.info('job consumers ready', { platforms: jobWorkers.platforms().join(',') || 'none' });
@@ -353,6 +383,12 @@ try {
     { pool, log, keys: env.encryption, mailer, web: env.publicWebUrl },
   );
   idempotencyPurge = startIdempotencyPurge({ pool, log });
+  retentionLoop = startRetentionLoop({
+    pool,
+    settings: env.retention,
+    log,
+    exportDir: env.privacy.exportDir,
+  });
   webhookLoops = startWebhookLoops(
     {
       concurrency: env.webhookConcurrency,

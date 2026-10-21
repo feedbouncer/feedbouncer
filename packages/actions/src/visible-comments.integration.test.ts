@@ -269,6 +269,21 @@ describe('PgVisibleComments', () => {
     expect(r.items[2]).toMatchObject({ body: 'first', connectionName: null });
   });
 
+  it('marks a reply whose parent was erased or purged as parentRemoved', async () => {
+    const w = await world();
+    const a = await post(w.fb1, { at: at('09:00') });
+    const kept = await post(w.fb1, { at: at('08:00'), parentId: a.id });
+    const orphan = await post(w.fb1, { at: at('07:00'), parentId: a.id });
+    await q(
+      `UPDATE comment SET parent_removed_at = now(), parent_comment_id = NULL WHERE id = $1`,
+      [orphan.id],
+    );
+    const byId = new Map((await store.list(w.orgId, NONE, FIRST)).items.map((i) => [i.id, i]));
+    expect(byId.get(orphan.id)).toMatchObject({ isReply: true, parentRemoved: true });
+    expect(byId.get(kept.id)!.parentRemoved).toBe(false);
+    expect(byId.get(a.id)!.parentRemoved).toBe(false);
+  });
+
   it('excludes hidden, deleted, own-account comments, revoked connections and archived brands', async () => {
     const w = await world();
     const keep = await post(w.fb1);

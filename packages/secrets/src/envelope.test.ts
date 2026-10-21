@@ -74,6 +74,18 @@ describe('envelope v1', () => {
     await expect(open(ringK1, blob, { ...wctx, connectionId: 'endpoint-2' })).rejects.toThrow();
   });
 
+  it('seals privacy_subject bound to its request: another request id or org fails to open', async () => {
+    const pctx = {
+      organizationId: 'org',
+      connectionId: 'request-1',
+      kind: 'privacy_subject',
+    } as const;
+    const { blob } = await seal(ringK1, new Secret('[{"platform":"facebook"}]'), pctx);
+    expect((await open(ringK1, blob, pctx)).reveal()).toBe('[{"platform":"facebook"}]');
+    await expect(open(ringK1, blob, { ...pctx, connectionId: 'request-2' })).rejects.toThrow();
+    await expect(open(ringK1, blob, { ...pctx, organizationId: 'org-2' })).rejects.toThrow();
+  });
+
   it('round-trips and records the key id', async () => {
     const { keyId, blob } = await seal(ringK1, new Secret(TOKEN), ctx);
     expect(keyId).toBe('k1');

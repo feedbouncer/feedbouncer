@@ -6,6 +6,7 @@ import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import { ModerationResult, PgApiKeys } from '@feedbouncer/public-api';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import { runExecuteJob } from '../testing/execute.js';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
 
@@ -46,7 +47,8 @@ async function comment(
 ) {
   const c = graph.addComment(p.pageId, { message: 'hello', createdAtMs: Date.now() });
   const authorId = String(3_000_000_000 + Math.floor(Math.random() * 1_000_000));
-  const r = await api.deps.comments!.store.upsertFromPlatform(
+  const r = await upsertStored(
+    api.deps.comments!.store,
     p.scope,
     {
       externalId: c.commentId,

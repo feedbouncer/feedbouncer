@@ -450,3 +450,47 @@ describe('ad polling settings', () => {
     expect(() => load({ ...base, META_ADS_CONNECTOR_ENABLED: 'true' })).toThrow(EnvError);
   });
 });
+
+describe('retention and privacy settings', () => {
+  it('keeps everything forever by default', () => {
+    const env = load(base);
+    expect(Object.values(env.retention.days)).toEqual(Array(5).fill('forever'));
+    expect(env.privacy).toEqual({
+      exportDir: '/var/lib/feedbouncer/privacy-exports',
+      exportTtlHours: 72,
+      requestConcurrency: 1,
+    });
+  });
+  it('reads configured values', () => {
+    const env = load({
+      ...base,
+      RETENTION_AUDIT_DAYS: '730',
+      PRIVACY_EXPORT_DIR: '/data/exports',
+      PRIVACY_EXPORT_TTL_HOURS: '24',
+      PRIVACY_REQUEST_CONCURRENCY: '2',
+    });
+    expect(env.retention.days.audit).toBe(730);
+    expect(env.privacy).toEqual({
+      exportDir: '/data/exports',
+      exportTtlHours: 24,
+      requestConcurrency: 2,
+    });
+  });
+  it('rejects an invalid retention period with the exact message', () => {
+    expect(messageOf(() => load({ ...base, RETENTION_AUDIT_DAYS: '0' }))).toBe(
+      'RETENTION_AUDIT_DAYS must be a whole number of days from 1 to 36500, or "forever" (got "0").',
+    );
+  });
+  it('rejects a relative export directory', () => {
+    expect(messageOf(() => load({ ...base, PRIVACY_EXPORT_DIR: 'exports' }))).toBe(
+      'PRIVACY_EXPORT_DIR must be an absolute path',
+    );
+  });
+  it.each([
+    ['PRIVACY_EXPORT_TTL_HOURS', '0'],
+    ['PRIVACY_EXPORT_TTL_HOURS', '721'],
+    ['PRIVACY_REQUEST_CONCURRENCY', '9'],
+  ])('rejects %s=%s', (name, value) => {
+    expect(() => load({ ...base, [name]: value })).toThrow(EnvError);
+  });
+});

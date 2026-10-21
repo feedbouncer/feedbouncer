@@ -69,6 +69,16 @@ When an unhide cannot be sent, the row stays hidden and can be tried again:
 - the platform failed or asked to slow down: a specific reason, or "Couldn't
   unhide, try again."
 
+## Purged actions
+
+The page lists hides from today only, so the retention purge
+([data-retention.md](../operations/data-retention.md)) rarely touches it. But a
+hide whose comment or action record has been deleted, by the `comments` or
+`decisions` retention category or by a subject erasure
+([subject-requests.md](../operations/subject-requests.md)), is no longer listed
+and can no longer be undone from here. Deleting the record does not unhide the
+comment on the platform.
+
 ## Moderator override
 
 An unhide on this page is a person's action, recorded with the hide it reverses.

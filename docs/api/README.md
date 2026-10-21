@@ -24,6 +24,7 @@ Authorization: Bearer fbk_<id>_<secret>
 ## Comments, replies and moderation
 
 - `GET /v1/comments` lists comments newest first and pages with `cursor`. Filters: `brandId`, `platform` (`facebook`, `instagram`), `status` (`visible`, `hidden`, `flagged`, `replied`, `unanswered`), `postedFrom` (inclusive) and `postedTo` (exclusive), and `q`, a case-insensitive substring (2 to 200 characters) of the comment text or the author name. Filters combine, and a search with no match is an empty page. A cursor keeps the result set it started with, so later pages neither repeat nor skip comments when new ones arrive.
+- A comment resource has `parentRemoved: true` when it is a reply whose parent comment was deleted, by an erasure request or by the retention purge. The reply itself is unchanged. The field is additive; older clients can ignore it. Erased and purged comments are never re-ingested or re-sent in webhooks.
 - `POST /v1/comments/{id}/hide` and `/unhide` ask the platform to change a comment's visibility. A comment already in that state answers `200` with action status `noop` and code `already_hidden` or `already_visible`; otherwise the answer is `202` with a `pending` action.
 - `POST /v1/comments/{id}/replies` with `{"text": "..."}` posts a public reply as the brand. It answers `202` with a `pending` action that the worker then posts, or `200` when the outcome is known at once. Errors: `422 text_too_long` (with `max`), `422 reply_not_allowed` (with `reason`), `422 unsupported_action`, `409 connection_inactive`. Send an `Idempotency-Key` so a retry cannot post twice.
 - `GET /v1/actions/{id}` returns the status of a hide, unhide or reply: `pending`, `applied` (for a reply, `platformRef` is the reply's platform ID), `noop`, `not_eligible` or `failed`, with a `code` for the last three.
@@ -112,7 +113,7 @@ Every delivery is a `POST` with a JSON body:
 }
 ```
 
-The schema of each type is under `webhooks` in the reference. The body is built when the delivery is sent, so a comment that has since been deleted or erased is never sent, including on redelivery. Delivery history is kept for 30 days.
+The schema of each type is under `webhooks` in the reference. The body is built when the delivery is sent, so a comment that has since been deleted or erased is never sent, including on redelivery. Comments erased on request or removed by the retention purge are not re-ingested from the platform either. Delivery history is kept for 30 days.
 
 Headers: `webhook-id` (the event id, the same on every retry), `webhook-timestamp`, `webhook-signature`, `feedbouncer-event-type` and `feedbouncer-delivery-id`.
 

@@ -19,6 +19,7 @@ import type { ConnectorCapabilities, Platform } from '@feedbouncer/connectors';
 import type { JobContext } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { createLogger, type Logger } from '@feedbouncer/service-runtime';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import type { RuleEvaluatedHook } from '../hooks.js';
 import { PgRuleStore } from '../store.js';
 import { RuleSetCache } from '../cache.js';
@@ -168,7 +169,8 @@ async function comment(
   const s = o.ig ? e.igScope : e.scope;
   const owner = o.ig ? `${IG_ACCOUNT}${n}` : `${PAGE}${n}`;
   const externalId = o.externalId ?? `c_${++seq}`;
-  const r = await comments.upsertFromPlatform(
+  const r = await upsertStored(
+    comments,
     s,
     {
       externalId,

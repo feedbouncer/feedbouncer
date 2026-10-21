@@ -26,6 +26,7 @@ const OPEN_REVIEW_ITEM = `EXISTS (SELECT 1 FROM review_item r WHERE r.comment_id
 const SELECT = `
   SELECT c.id, c.brand_id AS "brandId", c.connection_id AS "connectionId", cn.platform,
          c.external_id AS "externalId", c.parent_comment_id AS "parentId",
+         (c.parent_removed_at IS NOT NULL) AS "parentRemoved",
          a.display_name AS "authorDisplayName", a.anonymized_at AS "authorAnonymizedAt",
          c.body, c.posted_at AS "postedAt", c.ingested_at AS "ingestedAt",
          c.platform_state AS "platformState", ${OPEN_REVIEW_ITEM} AS "hasOpenReviewItem",

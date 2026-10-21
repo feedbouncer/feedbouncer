@@ -6,6 +6,7 @@ import type { NormalizedComment } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { PgCommentStore } from '../store.js';
 import { PgAdTracking, type BrandMetaConnections, type DiscoveredAdRow } from './tracking.js';
+import { upsertStored } from '../testing/index.js';
 
 let ctx: Awaited<ReturnType<typeof migratedDb>>;
 let pool: pg.Pool;
@@ -575,11 +576,11 @@ describe('PgAdTracking', () => {
       adRow('5001', { fb: '900_1' }, await tracking.brandMetaConnections(adsA)),
       at,
     );
-    const ad = await store.upsertFromPlatform(fbA, comment('900_1', '900_1_1'), {
+    const ad = await upsertStored(store, fbA, comment('900_1', '900_1_1'), {
       ownAccountExternalId: '900',
       syncedAt: at,
     });
-    const organic = await store.upsertFromPlatform(fbA, comment('900_9', '900_9_1'), {
+    const organic = await upsertStored(store, fbA, comment('900_9', '900_9_1'), {
       ownAccountExternalId: '900',
       syncedAt: at,
     });
@@ -608,14 +609,10 @@ describe('PgAdTracking', () => {
       at,
     );
     const [s] = await tracking.dueSources(igA, at, { graceDays: 7, limit: 10 });
-    const r = await store.upsertFromPlatform(
-      igA,
-      comment('17900000000000099', '18000000000000001'),
-      {
-        ownAccountExternalId: '17841400000000001',
-        syncedAt: at,
-      },
-    );
+    const r = await upsertStored(store, igA, comment('17900000000000099', '18000000000000001'), {
+      ownAccountExternalId: '17841400000000001',
+      syncedAt: at,
+    });
     expect((await store.load(a, r.commentId))?.origin).toBe('organic');
     await store.markSeenViaAdSource(igA, r.commentId, s!.sourceId);
     expect(await store.load(a, r.commentId)).toMatchObject({

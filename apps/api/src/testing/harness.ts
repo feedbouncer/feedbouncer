@@ -3,6 +3,8 @@
 // Requests go through fastify.inject, so no port is opened.
 // Needs DATABASE_URL (admin connection for scratch databases) and REDIS_URL.
 import { randomInt, randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type pg from 'pg';
 import { Redis } from 'ioredis';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
@@ -125,6 +127,7 @@ export async function startTestApi(
     publicApiRateLimitPerMinute: 60,
     ruleProposalTtlHours: 24,
     moderationCheckTimeoutMs: 20_000,
+    privacyExportDir: path.join(tmpdir(), 'fb-privacy-exports-unused'),
     webhookAllowedPrivateCidrs: [],
     alerts: { slack: false, email: false, capPerHour: 30, emailPerMinute: 60 },
     // A random queue prefix per app keeps tests from sharing BullMQ keys.

@@ -28,7 +28,7 @@ export function formatComment(c: Comment): string {
     `platform: ${c.platform}`,
     `status: ${c.status}`,
     `posted: ${c.postedAt}`,
-    ...(c.parentId ? [`reply to: ${c.parentId}`] : []),
+    ...(c.parentRemoved ? ['reply to: (removed)'] : c.parentId ? [`reply to: ${c.parentId}`] : []),
     ...(c.isOwnAccount ? ['own account'] : []),
     ...(c.textTruncated ? ['text truncated'] : []),
   ].join(' | ');

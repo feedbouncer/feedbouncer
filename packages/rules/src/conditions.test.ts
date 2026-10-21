@@ -1,9 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   checkActionForConditions,
+  mapAuthorConditions,
+  normalizeAuthorHandle,
   ruleConditionsSchema,
   ruleInputSchema,
   rulePatchSchema,
+  type AuthorConditionNode,
   type RuleConditions,
 } from './conditions.js';
 
@@ -148,5 +151,43 @@ describe('checkActionForConditions / ruleInputSchema', () => {
   it('rule patch accepts actions and rejects action', () => {
     expect(rulePatchSchema.safeParse({ actions: [{ type: 'hide' }] }).success).toBe(true);
     expect(rulePatchSchema.safeParse({ action: 'hide' }).success).toBe(false);
+  });
+});
+
+describe('mapAuthorConditions', () => {
+  const author = (entries: object[]) => ({
+    type: 'author',
+    list: 'block',
+    platform: 'facebook',
+    entries,
+  });
+  it('visits every author node at any depth and leaves the input untouched', () => {
+    const input = {
+      all: [author([{ externalId: '1' }]), { any: [author([{ handle: 'h' }])] }],
+      n: 3,
+    };
+    const before = JSON.stringify(input);
+    const seen: unknown[] = [];
+    const out = mapAuthorConditions(input, (node) => {
+      seen.push(node.entries);
+      return { ...node, entries: [] };
+    });
+    expect(seen).toEqual([[{ externalId: '1' }], [{ handle: 'h' }]]);
+    expect(out).toEqual({ all: [author([]), { any: [author([])] }], n: 3 });
+    expect(JSON.stringify(input)).toBe(before);
+  });
+  it('ignores objects that only look like author nodes', () => {
+    const fn = vi.fn((n: AuthorConditionNode) => n);
+    const v = { type: 'author', entries: 'x' };
+    expect(mapAuthorConditions(v, fn)).toEqual(v);
+    expect(mapAuthorConditions('author', fn)).toBe('author');
+    expect(fn).not.toHaveBeenCalled();
+  });
+});
+
+describe('normalizeAuthorHandle', () => {
+  it('compares handles the way the author matcher does', () => {
+    expect(normalizeAuthorHandle('@Foo')).toBe('foo');
+    expect(normalizeAuthorHandle('Zoë ')).toBe('zoe');
   });
 });

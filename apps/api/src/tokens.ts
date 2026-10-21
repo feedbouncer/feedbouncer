@@ -20,3 +20,7 @@ export const API_KEYS = Symbol('API_KEYS');
 export const PUBLIC_API_LIMITS = Symbol('PUBLIC_API_LIMITS');
 /** The moderation-check queue client: enqueues text checks and waits for the worker. */
 export const MODERATION_CHECK_CLIENT = Symbol('MODERATION_CHECK_CLIENT');
+/** Subject export and erasure requests (identifiers sealed in Postgres). */
+export const PRIVACY_REQUESTS = Symbol('PRIVACY_REQUESTS');
+/** Enqueues privacy requests for the worker. */
+export const PRIVACY_QUEUE_CLIENT = Symbol('PRIVACY_QUEUE_CLIENT');

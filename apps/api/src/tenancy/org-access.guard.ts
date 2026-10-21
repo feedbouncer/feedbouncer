@@ -25,7 +25,7 @@ export interface OrgRequest extends AuthedRequest {
 @Injectable()
 export class OrgAccessGuard implements CanActivate {
   constructor(
-    @Inject(DEPS) private readonly deps: AppDeps,
+    @Inject(DEPS) protected readonly deps: AppDeps,
     @Inject(Reflector) private readonly reflector: Reflector,
   ) {}
 
@@ -41,7 +41,14 @@ export class OrgAccessGuard implements CanActivate {
     const m = await findMembership(this.deps.pool, organizationId, req.user.id);
     if (!m) throw notFound();
     req.org = { organizationId, actorUserId: req.user.id, role: m.role, grants: m.grants };
-    if (!can(m.role, cap, m.grants)) throw new ApiError(403, 'forbidden');
+    if (!can(m.role, cap, m.grants)) {
+      await this.onDenied(req.org, cap, `${req.method} ${req.routeOptions.url ?? ''}`);
+      throw new ApiError(403, 'forbidden');
+    }
     return true;
   }
+
+  /** Called when a member lacks the route's capability, before the 403; features override it to audit. */
+  protected onDenied: (org: OrgContext, capability: Capability, route: string) => Promise<void> =
+    async () => {};
 }

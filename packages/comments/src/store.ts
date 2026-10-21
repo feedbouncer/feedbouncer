@@ -6,7 +6,7 @@
 // Every statement is filtered by organization_id + brand_id (+ connection_id).
 import { createHash } from 'node:crypto';
 import type pg from 'pg';
-import { withTransaction } from '@feedbouncer/db';
+import { commentFingerprint, withTransaction } from '@feedbouncer/db';
 import type {
   CommentRef,
   ConnectionStatus,
@@ -34,6 +34,8 @@ export interface CommentRow {
   readonly externalId: string;
   readonly parentExternalId: string | null;
   readonly parentCommentId: string | null;
+  /** The parent comment was erased or purged; the reply stays. */
+  readonly parentRemoved: boolean;
   readonly authorExternalId: string | null;
   readonly authorName: string | null;
   readonly body: string;
@@ -78,7 +80,8 @@ export const COMMENT_IS_AD_SQL = IS_AD_SQL;
 
 const ROW_SQL = `
   SELECT c.id, c.connection_id, cn.platform, s.external_id AS source_external_id, c.external_id,
-         c.parent_external_id, c.parent_comment_id, a.external_id AS author_external_id,
+         c.parent_external_id, c.parent_comment_id, (c.parent_removed_at IS NOT NULL) AS parent_removed,
+         a.external_id AS author_external_id,
          a.display_name AS author_name, c.body, c.platform_state,
          p.platform_state AS parent_platform_state, c.posted_at, c.permalink,
          c.is_own_account, cn.status AS connection_status,
@@ -114,6 +117,7 @@ const toRow = (r: Record<string, unknown>): CommentRow => ({
   externalId: r.external_id as string,
   parentExternalId: (r.parent_external_id as string | null) ?? null,
   parentCommentId: (r.parent_comment_id as string | null) ?? null,
+  parentRemoved: r.parent_removed as boolean,
   authorExternalId: (r.author_external_id as string | null) ?? null,
   authorName: (r.author_name as string | null) ?? null,
   body: r.body as string,
@@ -152,6 +156,44 @@ export async function setCommentPlatformState(
       WHERE id = $4 AND organization_id = $1 AND brand_id = $2 AND connection_id = $3`,
     [...ids(scope), commentId, state],
   );
+}
+
+/** True for a comment erased by a subject request; it must not be stored again. */
+async function isErased(
+  tx: pg.ClientBase,
+  scope: ConnectionScope,
+  externalId: string,
+): Promise<boolean> {
+  const r = await tx.query(
+    'SELECT 1 FROM erased_comment WHERE connection_id = $1 AND fingerprint = $2',
+    [scope.connectionId, commentFingerprint(scope.connectionId, externalId)],
+  );
+  return r.rows.length > 0;
+}
+
+const ERASED_WHILE_WRITING = Symbol('erased while writing');
+
+/**
+ * Runs a write that stores a comment. The erased check is repeated after the
+ * write, because an erasure committing while the write waited on the deleted
+ * row would otherwise be followed by a fresh insert; the transaction is then rolled back.
+ */
+async function writeUnlessErased<T>(
+  pool: pg.Pool,
+  scope: ConnectionScope,
+  externalId: string,
+  write: (tx: pg.PoolClient) => Promise<T>,
+): Promise<T | typeof ERASED_WHILE_WRITING> {
+  try {
+    return await withTransaction(pool, async (tx) => {
+      const result = await write(tx);
+      if (await isErased(tx, scope, externalId)) throw ERASED_WHILE_WRITING;
+      return result;
+    });
+  } catch (e) {
+    if (e === ERASED_WHILE_WRITING) return ERASED_WHILE_WRITING;
+    throw e;
+  }
 }
 
 /** An existing source keeps its kind: an ad post is never demoted. */
@@ -275,14 +317,19 @@ export class PgCommentStore {
     scope: ConnectionScope,
     c: NormalizedComment,
     o: { ownAccountExternalId: string; syncedAt: Date; origin?: IngestOrigin },
-  ): Promise<{
-    commentId: string;
-    created: boolean;
-    applied: boolean;
-    /** A live body the rule hook has not yet been told about (new, edited, or a failed delivery). */
-    hookBody: string | null;
-  }> {
-    return withTransaction(this.pool, async (tx) => {
+  ): Promise<
+    | { suppressed: true }
+    | {
+        suppressed: false;
+        commentId: string;
+        created: boolean;
+        applied: boolean;
+        /** A live body the rule hook has not yet been told about (new, edited, or a failed delivery). */
+        hookBody: string | null;
+      }
+  > {
+    const stored = await writeUnlessErased(this.pool, scope, c.externalId, async (tx) => {
+      if (await isErased(tx, scope, c.externalId)) return { suppressed: true as const };
       const sourceId = await upsertSource(tx, scope, c.sourceExternalId);
       let authorId: string | null = null;
       if (c.author) {
@@ -388,8 +435,9 @@ export class PgCommentStore {
             : prev.rows[0]?.pending === true && !(applied && bodyChanged)
               ? prev.rows[0].body
               : null;
-      return { commentId, created, applied, hookBody };
+      return { suppressed: false as const, commentId, created, applied, hookBody };
     });
+    return stored === ERASED_WHILE_WRITING ? { suppressed: true } : stored;
   }
 
   /** Upserts an ad's post as a source of kind 'ad_post' (promoting an organic one); `tx` joins a caller's transaction. */
@@ -443,13 +491,15 @@ export class PgCommentStore {
    * tombstone when it was never seen, so a stale fetch that lands later (the
    * create event's job running after the delete's) cannot store it as visible.
    * `occurredAt` (the event time) stands in for posted_at until a fetch fills it in.
+   * Returns null, storing nothing, for a comment erased by a subject request.
    */
   async recordDeleted(
     scope: ConnectionScope,
     ref: CommentRef,
     o: { syncedAt: Date; occurredAt: Date },
-  ): Promise<string> {
-    return withTransaction(this.pool, async (tx) => {
+  ): Promise<string | null> {
+    const id = await writeUnlessErased(this.pool, scope, ref.externalId, async (tx) => {
+      if (await isErased(tx, scope, ref.externalId)) return null;
       const sourceId = await upsertSource(tx, scope, ref.sourceExternalId);
       const r = await tx.query<{ id: string }>(
         `INSERT INTO comment (organization_id, brand_id, connection_id, source_id, external_id, body,
@@ -468,6 +518,7 @@ export class PgCommentStore {
       await linkChildren(tx, scope, r.rows[0].id, ref.externalId);
       return r.rows[0].id;
     });
+    return id === ERASED_WHILE_WRITING ? null : id;
   }
 
   async load(scope: BrandScope, commentId: string): Promise<CommentRow | null> {

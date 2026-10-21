@@ -11,6 +11,7 @@ const row: CommentRow = {
   platform: 'instagram',
   externalId: 'ig_1',
   parentId: null,
+  parentRemoved: false,
   authorDisplayName: 'Ann',
   authorAnonymizedAt: null,
   body: 'hello',
@@ -33,6 +34,13 @@ describe('toCommentResource', () => {
       flagged: false,
     });
     expect(out.postedAt).toBe('2026-10-18T10:00:00.000Z');
+  });
+
+  it('includes parentRemoved', () => {
+    expect(CommentResource.parse(toCommentResource(row)).parentRemoved).toBe(false);
+    expect(
+      CommentResource.parse(toCommentResource({ ...row, parentRemoved: true })).parentRemoved,
+    ).toBe(true);
   });
 
   it('hides the author when anonymized', () => {

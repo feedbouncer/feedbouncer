@@ -235,6 +235,41 @@ export class PgRuleStore {
     return rows[0] ? toRule(rows[0]) : null;
   }
 
+  /**
+   * Rewrites a rule's conditions for a subject erasure. `erase` gets the stored conditions
+   * and enabled flag, read under the brand and rule locks, and returns the filtered ones (with `disable` when
+   * the rule must be turned off) or null to leave the rule alone. Skips validation on
+   * purpose: an author list the erasure emptied is not a valid rule, which is why it is
+   * disabled. Archived rules are written too, since their conditions still hold the
+   * subject's identifiers. Bumps the brand's revision like every rule write. Returns the
+   * rule as written, or null when nothing was written.
+   */
+  async writeErasedConditions(
+    tx: pg.PoolClient,
+    scope: BrandScope,
+    ruleId: string,
+    erase: (current: {
+      conditions: unknown;
+      enabled: boolean;
+    }) => { conditions: unknown; disable: boolean } | null,
+  ): Promise<StoredRule | null> {
+    if (!(await this.#lockBrand(tx, scope))) return null;
+    const { rows: cur } = await tx.query<{ conditions: unknown; enabled: boolean }>(
+      `SELECT conditions, enabled FROM rule
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3 FOR UPDATE`,
+      [scope.organizationId, scope.brandId, ruleId],
+    );
+    const next = cur[0] ? erase(cur[0]) : null;
+    if (!next) return null;
+    const { rows } = await tx.query<RuleRow>(
+      `UPDATE rule SET conditions = $4::jsonb, enabled = enabled AND NOT $5::boolean
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3
+        RETURNING ${COLS}`,
+      [scope.organizationId, scope.brandId, ruleId, JSON.stringify(next.conditions), next.disable],
+    );
+    return rows[0] ? toRule(rows[0]) : null;
+  }
+
   /** Delete is archive: decisions keep citing the rule. */
   async archive(tx: pg.PoolClient, scope: BrandScope, ruleId: string): Promise<boolean> {
     if (!(await this.#lockBrand(tx, scope))) return false;

@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type pg from 'pg';
-import { createPool } from '@feedbouncer/db';
+import { commentFingerprint, createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import {
   ConnectorError,
@@ -541,6 +541,7 @@ describe('comment ingest job on instagram', () => {
       externalId: reply.commentId,
       parentExternalId: top.commentId,
       parentCommentId: null,
+      parentRemoved: false,
       authorExternalId: '17841400000009999',
       authorName: 'fan.account',
       body: 'agreed',
@@ -645,5 +646,49 @@ describe('comment ingest job on instagram', () => {
     tick();
     expect(await runIg(igPayload(c, 'updated'))).toMatchObject({ outcome: 'gone', commentId });
     expect((await store.load(t, commentId as string))?.platformState).toBe('deleted');
+  });
+});
+
+describe('comment ingest job: erased comments', () => {
+  const calls: string[] = [];
+  const lines: string[] = [];
+  const hooked = () =>
+    ingestCommentJob({
+      ...deps,
+      applied: {
+        onApplied: async (e) => {
+          calls.push(e.commentId);
+        },
+      },
+    });
+  const capture = createLogger('comments-ingest-test', 'info', (l) => lines.push(l));
+  const runErased = (p: IngestPayload) =>
+    hooked().handle({ ...jobCtx(), log: capture }, INGEST_JOB.payload.parse(p));
+  const count = async (sql: string) =>
+    (await pool.query(sql, [t.organizationId])).rows[0].n as number;
+
+  it('acks a webhook, a poll re-read and a retry without storing, hooking or delivering', async () => {
+    const c = graph.addComment(pageId, { message: 'erase me' });
+    await pool.query('INSERT INTO erased_comment (connection_id, fingerprint) VALUES ($1, $2)', [
+      t.connectionId,
+      commentFingerprint(t.connectionId, c.commentId),
+    ]);
+    for (const event of ['created', 'updated', 'created', 'deleted'] as const) {
+      tick();
+      const r = await runErased(payload(c, event));
+      expect(r).toMatchObject({ outcome: 'suppressed', commentId: null });
+    }
+    expect(await rowsFor(c.commentId)).toHaveLength(0);
+    expect(
+      await count('SELECT count(*)::int AS n FROM webhook_event WHERE organization_id = $1'),
+    ).toBe(0);
+    expect(calls).toEqual([]);
+    expect(events).toEqual([]);
+    const suppressed = lines
+      .map((l) => JSON.parse(l))
+      .filter((l) => l.msg === 'comment.ingest_suppressed');
+    expect(suppressed).toHaveLength(4);
+    expect(lines.join('\n')).not.toContain(c.commentId);
+    expect(suppressed[0]).toMatchObject({ connectionId: t.connectionId });
   });
 });

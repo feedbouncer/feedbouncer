@@ -76,6 +76,8 @@ export interface VisibleComment {
   postedAt: Date;
   permalink: string | null;
   isReply: boolean;
+  /** The parent comment was erased or purged; the reply stays. */
+  parentRemoved: boolean;
   ads: VisibleCommentAd[];
   adCount: number;
   category: string | null;
@@ -252,7 +254,9 @@ function whereSql(f: VisibleCommentFilter): { sql: string; values: unknown[] } {
 
 const LIST_COLUMNS = `c.id, c.brand_id, b.name AS brand_name, c.connection_id, cn.display_name AS connection_name,
        cn.platform, au.display_name AS author_name, c.body, c.posted_at, c.permalink,
-       (c.parent_comment_id IS NOT NULL OR c.parent_external_id IS NOT NULL) AS is_reply,
+       (c.parent_comment_id IS NOT NULL OR c.parent_external_id IS NOT NULL
+         OR c.parent_removed_at IS NOT NULL) AS is_reply,
+       (c.parent_removed_at IS NOT NULL) AS parent_removed,
        ad.ads, ad.ad_count, ${CATEGORY_SQL} AS category, ${STATUS_SQL} AS status,
        ${ACCOUNT_PROBLEM_SQL} IS NOT NULL AS stale,
        dn.done_at, du.display_name AS done_by_name, tg.tags, rp.replies, rp.reply_count,
@@ -318,6 +322,7 @@ interface Row {
   posted_at: Date;
   permalink: string | null;
   is_reply: boolean;
+  parent_removed: boolean;
   ads: VisibleCommentAd[];
   ad_count: number | null;
   category: string | null;
@@ -349,6 +354,7 @@ const toComment = (r: Row): VisibleComment => ({
   postedAt: r.posted_at,
   permalink: r.permalink,
   isReply: r.is_reply,
+  parentRemoved: r.parent_removed,
   ads: r.ads,
   adCount: r.ad_count ?? 0,
   category: r.category,

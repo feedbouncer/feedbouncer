@@ -7,6 +7,7 @@ import { createFacebookConnector } from '@feedbouncer/connector-facebook';
 import { createInstagramConnector } from '@feedbouncer/connector-instagram';
 import { ModerationActions, PgCommentStore } from '@feedbouncer/comments';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
+import { upsertStored } from '@feedbouncer/comments/testing';
 import { PgReviewQueue } from './review.js';
 import { PgActionRunStore } from './runs.js';
 import { resolveReviewItem, undoStep, type Audit } from './services.js';
@@ -474,7 +475,8 @@ describe('resolveReviewItem', () => {
       [f.t.organizationId, f.t.brandId, IG_ACCOUNT + n],
     );
     const igScope = { ...f.scope, connectionId: ig.rows[0]!.id };
-    const { commentId } = await comments.upsertFromPlatform(
+    const { commentId } = await upsertStored(
+      comments,
       igScope,
       {
         externalId: `ig-${randomUUID()}`,

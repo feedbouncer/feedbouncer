@@ -24,16 +24,30 @@ const NATURAL_KEY_TABLES: Record<string, string> = {
   alert_brand_state: 'PRIMARY KEY (brand_id)',
   alert_negative_hourly: 'PRIMARY KEY (brand_id, hour)',
   alert_flag_item: 'PRIMARY KEY (review_item_id)',
+  erased_comment: 'PRIMARY KEY (connection_id, fingerprint)',
+  retention_confirmation: 'PRIMARY KEY (category, days)',
+  retention_status: 'PRIMARY KEY (id)',
 };
 // Link and grant rows are inserted or deleted, never edited: they keep one event timestamp
 // (added_at, done_at, created_at) instead of created_at/updated_at and have no updated_at trigger.
-const IMMUTABLE_ROW_TABLES = ['comment_tag', 'comment_done', 'role_grant'];
+const IMMUTABLE_ROW_TABLES = [
+  'comment_tag',
+  'comment_done',
+  'role_grant',
+  'erased_comment',
+  'retention_confirmation',
+];
 const GLOBAL_TABLES = [
   'organization',
   'app_user',
   'auth_session',
   'auth_account',
   'auth_verification',
+  // Instance-wide retention records, and a fingerprint row keyed by connection.
+  'erased_comment',
+  'retention_run',
+  'retention_confirmation',
+  'retention_status',
 ];
 
 // Credential-like columns that are allowed on purpose. Each one holds a hash,

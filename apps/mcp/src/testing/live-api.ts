@@ -104,6 +104,7 @@ export async function startLiveApi(): Promise<LiveApi> {
         },
         { ownAccountExternalId: page.pageId, syncedAt: new Date() },
       );
+      if (r.suppressed) throw new Error('comment_suppressed');
       return { id: r.commentId, externalId: c.commentId };
     },
     close: () => api.close(),

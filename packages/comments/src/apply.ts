@@ -10,16 +10,22 @@ export async function applyPlatformComment(
   scope: ConnectionScope,
   c: NormalizedComment,
   o: { ownAccountExternalId: string; syncedAt: Date; adSourceId?: string; origin?: IngestOrigin },
-): Promise<{
-  commentId: string;
-  outcome: ApplyOutcome;
-  /** The body the rule hook is owed (new text, or an earlier delivery that never completed). */
-  hookBody: string | null;
-}> {
+): Promise<
+  | { suppressed: true }
+  | {
+      suppressed: false;
+      commentId: string;
+      outcome: ApplyOutcome;
+      /** The body the rule hook is owed (new text, or an earlier delivery that never completed). */
+      hookBody: string | null;
+    }
+> {
   const r = await store.upsertFromPlatform(scope, c, o);
+  if (r.suppressed) return r;
   // Recorded even for a stale read: the ad path is a fact, not a snapshot.
   if (o.adSourceId !== undefined) await store.markSeenViaAdSource(scope, r.commentId, o.adSourceId);
   return {
+    suppressed: false,
     commentId: r.commentId,
     outcome: r.created ? 'created' : r.applied ? 'updated' : 'stale',
     hookBody: r.hookBody,

@@ -164,6 +164,10 @@ export function connectionBackfillJob(d: {
             syncedAt,
             origin: 'backfill',
           });
+          if (r.suppressed) {
+            ctx.log.info('comment.ingest_suppressed', { connectionId: scope.connectionId });
+            continue;
+          }
           applied++;
           try {
             d.observer?.onIngested({
