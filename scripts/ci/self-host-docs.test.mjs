@@ -332,7 +332,7 @@ test('required callouts are present', () => {
   }
 });
 
-test('verification doc lists every slot and every noted section', { todo: 'Task 4' }, () => {
+test('verification doc lists every slot and every noted section', () => {
   const v = read(join(DOCS, 'meta-app-verification.md'));
   const vh2s = h2s(v);
   for (const h of [
