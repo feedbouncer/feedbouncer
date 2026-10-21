@@ -144,14 +144,13 @@ const PLACEHOLDERS = [
   /<your[- ][a-z -]+>/i,
 ];
 const PERSONAL_PATHS = [/\/Users\/[A-Za-z]/, /\/home\/[a-z][\w-]*\//, /[A-Z]:\\Users\\/];
-const SECRET_SHAPES = SECRET_PATTERNS;
 
 test('community files contain no placeholders, personal paths or secret-shaped strings', () => {
   for (const rel of present()) {
     const text = read(rel);
     // LICENSE is canonical text; its "How to Apply" appendix legitimately has <year> etc.
     const patterns =
-      rel === 'LICENSE' ? SECRET_SHAPES : [...PLACEHOLDERS, ...PERSONAL_PATHS, ...SECRET_SHAPES];
+      rel === 'LICENSE' ? SECRET_PATTERNS : [...PLACEHOLDERS, ...PERSONAL_PATHS, ...SECRET_PATTERNS];
     for (const re of patterns) assert.ok(!re.test(text), `${rel} matches ${re}`);
   }
 });
@@ -411,11 +410,7 @@ test('n8n package has no runtime dependencies and the community keyword', () => 
 
 test('n8n build does not emit a tsbuildinfo into the published dist', () => {
   const { compilerOptions } = JSON.parse(read(`${N8N_PACKAGE}/tsconfig.json`));
-  assert.notEqual(
-    compilerOptions.incremental,
-    true,
-    'incremental builds write dist/tsconfig.tsbuildinfo',
-  );
+  assert.notEqual(compilerOptions.incremental, true, 'incremental builds write dist/tsconfig.tsbuildinfo');
 });
 
 test('README states the n8n version CI tests against', () => {
@@ -423,10 +418,7 @@ test('README states the n8n version CI tests against', () => {
   const version = read(versionFile).trim();
   assert.match(version, /^\d+\.\d+\.\d+$/, versionFile);
   for (const workflow of ['ci.yml', 'release-n8n-node.yml']) {
-    assert.ok(
-      read(`.github/workflows/${workflow}`).includes(versionFile),
-      `${workflow} must read ${versionFile}`,
-    );
+    assert.ok(read(`.github/workflows/${workflow}`).includes(versionFile), `${workflow} must read ${versionFile}`);
   }
   assert.ok(read(`${N8N_PACKAGE}/README.md`).includes(version), 'README must state the version');
 });

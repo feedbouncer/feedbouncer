@@ -2,7 +2,7 @@
 // screenshots are checked here; scopes, paths and settings against the code.
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { findSecretLike } from './lib/secret-patterns.mjs';
@@ -10,7 +10,7 @@ import { findSecretLike } from './lib/secret-patterns.mjs';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const DOCS = join(ROOT, 'docs/self-hosting');
 const IMAGES = join(DOCS, 'images/meta-app');
-const read = (p) => readFileSync(p.startsWith('/') ? p : join(ROOT, p), 'utf8');
+const read = (p) => readFileSync(isAbsolute(p) ? p : join(ROOT, p), 'utf8');
 const guide = read(join(DOCS, 'meta-app.md'));
 
 const EXPECTED_H2S = [
@@ -62,9 +62,6 @@ const selfHostingDocs = () =>
     .filter((f) => f.endsWith('.md'))
     .map((f) => join(DOCS, f));
 
-/** Placeholders such as <APP_ID> are fine; long digit runs look like real Meta IDs. */
-const stripCodeOfPlaceholders = (md) => md.replace(/<[A-Z_]+>/g, '');
-
 /** Chunk list of a PNG: [{ type, length }]. */
 function pngChunks(buf) {
   assert.equal(buf.subarray(1, 4).toString('latin1'), 'PNG', 'not a PNG file');
@@ -111,7 +108,7 @@ test('all relative links and #anchors in docs/self-hosting/*.md resolve', () => 
 
 test('guide and images contain no secret-shaped strings or metadata', () => {
   assert.deepEqual(findSecretLike(guide), []);
-  assert.equal(/\b\d{10,}\b/.test(stripCodeOfPlaceholders(guide)), false);
+  assert.equal(/\b\d{10,}\b/.test(guide), false);
   const pngs = readdirSync(IMAGES).filter((f) => f.endsWith('.png'));
   for (const name of pngs) {
     const buf = readFileSync(join(IMAGES, name));
@@ -142,14 +139,118 @@ test('PNG helpers report chunk types and size', () => {
   assert.deepEqual(pngSize(header), { width: 800, height: 600 });
 });
 
-// Written when the sections they check are filled in (Tasks 2-5 of the plan).
-const later = (task) => ({ todo: task });
-test('Written against version equals default FACEBOOK_GRAPH_API_VERSION', later('Task 3'));
-test('every step has an image or config block, alt text and a Last verified date', later('Task 3'));
-test('every image in images/meta-app is referenced exactly once', later('Task 3'));
-test('callback and redirect URLs in the guide match code', later('Task 3'));
-test('configuration map names only settings documented in .env.example', later('Task 3'));
-test('permissions table lists exactly the Facebook and Instagram scopes', later('Task 2'));
-test('troubleshooting covers the required symptoms', later('Task 5'));
-test('Instagram prerequisites precede the first Instagram step', later('Task 4'));
-test('required callouts are present', later('Task 5'));
+const section = (title) => {
+  const start = guide.indexOf(`\n## ${title}\n`);
+  assert.notEqual(start, -1, `no section ${title}`);
+  const end = guide.indexOf('\n## ', start + 1);
+  return guide.slice(start, end === -1 ? undefined : end);
+};
+
+const tableRows = (md) =>
+  md
+    .split('\n')
+    .filter((l) => l.startsWith('|'))
+    .slice(2)
+    .map((l) => l.split('|').slice(1, -1).map((c) => c.trim()));
+
+const constBody = (file, name) => read(file).match(new RegExp(`${name} = \\[([^\\]]*)\\]`))[1];
+
+const readScopes = (file, name) => {
+  const body = constBody(file, name);
+  const spread = [...body.matchAll(/\.\.\.(\w+)/g)].flatMap((m) => readScopes(file, m[1]));
+  return [...[...body.matchAll(/'(\w+)'/g)].map((m) => m[1]), ...spread];
+};
+
+const FB_CONFIG = 'packages/connector-facebook/src/config.ts';
+const IG_CONFIG = 'packages/connector-instagram/src/config.ts';
+
+test('Written against version equals default FACEBOOK_GRAPH_API_VERSION', () => {
+  const written = section('About this guide').match(/Written against: .*Graph API (v\d+\.0)/)?.[1];
+  const current = read(FB_CONFIG).match(/'(v\d+\.0)'/)?.[1];
+  assert.ok(written, 'About this guide has no "Written against" line');
+  assert.equal(written, current);
+});
+
+const steps = guide
+  .split(/^(?=### Step )/m)
+  .slice(1)
+  .map((block) => ({ block, ...block.match(/^### Step (?<n>\d+): (?<title>.+)/).groups }));
+
+test('steps are numbered continuously and each has an image, config block or text marker and a verification line', () => {
+  assert.ok(steps.length > 0, 'no steps');
+  steps.forEach(({ block, n, title }, i) => {
+    assert.equal(Number(n), i + 1, `step numbering breaks at "${title}"`);
+    const image = block.match(/!\[([^\]]*)\]\(images\/meta-app\/([^)]+)\)/);
+    if (image) {
+      assert.ok(image[1].length >= 30, `step ${n} alt text is too short`);
+      assert.ok(image[2].startsWith(`${String(n).padStart(2, '0')}-`), `step ${n} image name`);
+      assert.ok(existsSync(join(IMAGES, image[2])), `step ${n} image is missing`);
+    } else if (block.includes('<!-- step-kind: config -->')) {
+      assert.ok(block.includes('```'), `config step ${n} has no code block`);
+    } else {
+      assert.ok(block.includes('<!-- step-kind: text -->'), `step ${n} has no image, config block or text marker`);
+    }
+    const prose = block.replace(/^### .*$/m, '').replace(/```[\s\S]*?```/g, '').replace(/!\[.*\)|<!--.*-->|^Last verified:.*$/gm, '');
+    assert.ok(prose.trim().length >= 120, `step ${n} is too short to follow from the text alone`);
+    assert.match(block, /^Last verified: (\d{4}-\d{2}-\d{2}|not yet checked on a live dashboard)$/m, `step ${n} verification line`);
+  });
+});
+
+test('every image in images/meta-app is referenced exactly once', () => {
+  const referenced = [...guide.matchAll(/\]\(images\/meta-app\/([^)]+)\)/g)].map((m) => m[1]);
+  const onDisk = readdirSync(IMAGES).filter((f) => f.endsWith('.png'));
+  assert.deepEqual([...referenced].sort(), onDisk.sort());
+});
+
+test('callback and redirect paths in the guide match the code', () => {
+  const plugin = read('apps/api/src/webhooks/meta-webhooks.plugin.ts');
+  for (const platform of ['facebook', 'instagram']) {
+    assert.ok(plugin.includes(`/api/v1/webhooks/${platform}`), `code lost the ${platform} webhook path`);
+    assert.ok(guide.includes(`/api/v1/webhooks/${platform}`), `guide lacks the ${platform} webhook path`);
+    assert.ok(guide.includes(`/api/v1/oauth/${platform}/callback`), `guide lacks the ${platform} callback path`);
+  }
+});
+
+test('configuration map names only settings documented in .env.example', () => {
+  const rows = tableRows(section('Configuration map'));
+  const settings = rows.map((r) => r[2]).join(' ');
+  const envExample = read('.env.example');
+  for (const name of ['FACEBOOK_APP_ID', 'FACEBOOK_APP_SECRET', 'FACEBOOK_WEBHOOK_VERIFY_TOKEN', 'PUBLIC_WEB_URL', 'FACEBOOK_GRAPH_API_VERSION', 'INSTAGRAM_CONNECTOR_ENABLED'])
+    assert.ok(settings.includes(name), `${name} is missing from the map`);
+  for (const [name] of settings.matchAll(/\b[A-Z][A-Z_]{3,}\b/g))
+    assert.ok(envExample.includes(name), `${name} is not in .env.example`);
+  const token = rows.find((r) => r[0].startsWith('Access token'));
+  assert.ok(token?.[2].startsWith('None'), 'access token row must say None');
+});
+
+test('permissions table lists exactly the Facebook and Instagram scopes', () => {
+  const body = section('Permissions and why');
+  const rows = tableRows(body);
+  const expected = new Set([...readScopes(FB_CONFIG, 'FACEBOOK_SCOPES'), ...readScopes(IG_CONFIG, 'INSTAGRAM_SCOPES')]);
+  assert.deepEqual(new Set(rows.map((r) => r[0].replaceAll('`', ''))), expected);
+  assert.equal(rows.length, expected.size);
+  for (const row of rows) assert.ok(row.length === 4 && row.every(Boolean), `empty cell in ${row[0]}`);
+  assert.match(body, /Checked against Meta's documentation on \d{4}-\d{2}-\d{2}/);
+});
+
+test('troubleshooting covers the required symptoms', () => {
+  const headings = [...section('Troubleshooting').matchAll(/^### (.+)$/gm)].map((m) => m[1].toLowerCase());
+  for (const symptom of ["won't save the webhook", "don't show up", 'only your own comments', 'needs reconnect', 'instagram account', 'missing permissions', 'nothing gets hidden'])
+    assert.ok(headings.some((h) => h.includes(symptom)), `no troubleshooting entry for "${symptom}"`);
+});
+
+test('Instagram prerequisites precede the first Instagram step', () => {
+  const intro = section('Part 7: Connect Instagram (optional)').split('### Step')[0];
+  for (const word of ['professional account', 'linked', 'Facebook Page', 'Advanced Access'])
+    assert.ok(intro.includes(word), `Part 7 intro lacks "${word}"`);
+});
+
+test('required callouts are present', () => {
+  const has = (title, ...words) => words.forEach((w) => assert.ok(section(title).includes(w), `"${title}" lacks "${w}"`));
+  has('Development mode and Live mode', 'role on the app');
+  has('Test it end to end', 'role on the app', 'Suggestions');
+  has('Before you start', 'tunnel', 'HTTPS');
+  has('Keep your app secret and tokens safe', '_FILE', 'rotate');
+  has('About this guide', 'another language');
+  has('When you need App Review or Business Verification', 'https://developers.facebook.com/');
+});
