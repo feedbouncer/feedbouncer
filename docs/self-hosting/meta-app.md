@@ -230,7 +230,7 @@ Last verified: not yet checked on a live dashboard
 
 ## Permissions and why
 
-FeedBouncer asks for exactly these permissions when you click Connect.
+Across Connect Facebook and Connect Instagram, FeedBouncer asks for exactly these permissions.
 
 | Permission                  | Used for                   | Why FeedBouncer needs it                                          | App Review needed?                                                              |
 | --------------------------- | -------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------- |
