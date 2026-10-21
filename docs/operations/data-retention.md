@@ -74,10 +74,12 @@ pnpm ops retention status
 ```
 
 prints the period in force per category, the warnings, the built-in limits
-that are shorter than your setting, and the last run. The same data is served
-to owners and admins at `GET /api/v1/orgs/:orgId/privacy/retention`. Both show
-what the worker last published, so start the worker once after changing
-settings. Warnings are not errors:
+that are shorter than your setting, and the last run across the instance. The
+endpoint `GET /api/v1/orgs/:orgId/privacy/retention` serves owners and admins
+the same settings, warnings and effective periods, plus only their own
+organization's latest purge counts and hold events, never instance-wide
+totals. Both show what the worker last published, so start the worker once
+after changing settings. Warnings are not errors:
 
 | Code                           | Meaning                                                                                             |
 | ------------------------------ | --------------------------------------------------------------------------------------------------- |

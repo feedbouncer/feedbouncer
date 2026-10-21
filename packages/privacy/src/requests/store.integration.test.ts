@@ -245,6 +245,20 @@ describe('PgPrivacyRequestStore', () => {
     expect(await store.staleQueued(5 * 60_000)).toEqual([]);
   });
 
+  it('lists running requests abandoned past the cutoff, and only those', async () => {
+    const abandoned = await store.create(request(A));
+    const active = await store.create(request(A));
+    await store.claim(abandoned.id);
+    await store.claim(active.id);
+    await ctx.c.query(
+      "UPDATE privacy_request SET started_at = now() - interval '20 minutes' WHERE id = $1",
+      [abandoned.id],
+    );
+    expect(await store.staleRunning(15 * 60_000)).toEqual([abandoned.id]);
+    expect(await store.claim(abandoned.id)).not.toBeNull();
+    expect(await store.staleRunning(15 * 60_000)).toEqual([]);
+  });
+
   it('rejects an unknown organization without leaving a request behind', async () => {
     await expect(store.create(request(A, { organizationId: randomUUID() }))).rejects.toThrow();
     expect((await ctx.c.query('SELECT 1 FROM privacy_request')).rowCount).toBe(0);

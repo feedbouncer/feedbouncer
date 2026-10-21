@@ -17,19 +17,20 @@ import { SessionGuard } from '../auth/session.guard.js';
 import { ApiError } from '../http/errors.js';
 import { parseBody, parseUuidOr404 } from '../http/validation.js';
 import { RequireCapability } from '../tenancy/capability.decorator.js';
-import { OrgAccessGuard, type OrgRequest } from '../tenancy/org-access.guard.js';
+import { type OrgRequest } from '../tenancy/org-access.guard.js';
+import { PrivacyAccessGuard } from './access.guard.js';
 import { CreatePrivacyRequestBody, ListPrivacyRequestsQuery } from './dto.js';
 import { PrivacyService } from './privacy.service.js';
 
 @Controller('api/v1/orgs/:orgId/privacy')
-@UseGuards(SessionGuard, OrgAccessGuard)
+@UseGuards(SessionGuard, PrivacyAccessGuard)
 export class PrivacyController {
   constructor(@Inject(PrivacyService) private readonly privacy: PrivacyService) {}
 
   @Get('retention')
   @RequireCapability('privacy.read')
-  retention() {
-    return this.privacy.retention();
+  retention(@Req() req: OrgRequest) {
+    return this.privacy.retention(req.org);
   }
 
   @Post('requests')

@@ -196,9 +196,9 @@ function memberRows(
         rows<CommentRow>(
           `SELECT c.id, k.platform, c.connection_id, c.external_id, c.permalink, c.body, c.posted_at,
                   c.ingested_at, c.platform_state, c.parent_comment_id,
-                  (c.parent_comment_id IS NOT NULL OR c.parent_external_id IS NOT NULL) AS is_reply,
-                  (c.parent_removed_at IS NOT NULL
-                    OR c.parent_comment_id IS NULL AND c.parent_external_id IS NOT NULL) AS parent_removed
+                  (c.parent_comment_id IS NOT NULL OR c.parent_external_id IS NOT NULL
+                    OR c.parent_removed_at IS NOT NULL) AS is_reply,
+                  (c.parent_removed_at IS NOT NULL) AS parent_removed
              FROM comment c JOIN connection k ON k.id = c.connection_id
             WHERE c.organization_id = $1 AND c.author_id = ANY($2::uuid[])`,
         ),

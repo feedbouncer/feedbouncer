@@ -5,9 +5,9 @@ import { Inject, Injectable } from '@nestjs/common';
 import { orgCan, type OrgContext } from '../tenancy/org-access.guard.js';
 import { withTransaction } from '@feedbouncer/db';
 import {
-  readRetentionStatus,
+  readOrgRetentionStatus,
   type PgPrivacyRequestStore,
-  type RetentionStatus,
+  type OrgRetentionStatus,
 } from '@feedbouncer/privacy';
 import { errorFields } from '@feedbouncer/service-runtime';
 import { recordAudit } from '../audit/audit.js';
@@ -37,8 +37,8 @@ export class PrivacyService {
     @Inject(PRIVACY_QUEUE_CLIENT) private readonly queue: PrivacyQueueClient,
   ) {}
 
-  retention(): Promise<RetentionStatus> {
-    return readRetentionStatus(this.deps.pool);
+  retention(org: OrgContext): Promise<OrgRetentionStatus> {
+    return readOrgRetentionStatus(this.deps.pool, org.organizationId);
   }
 
   async create(org: OrgContext, body: CreatePrivacyRequestBody): Promise<{ id: string }> {

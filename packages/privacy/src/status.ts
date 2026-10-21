@@ -81,6 +81,55 @@ interface RunRow {
   skipped_pending_review: number;
 }
 
+export interface OrgRetentionStatus {
+  settings: RetentionSettings;
+  effective: Record<RetentionCategory, RetentionDays>;
+  warnings: RetentionWarning[];
+  updatedAt: Date;
+  /** The organization's latest purge; its counts cover only its own rows. */
+  lastPurge: { at: Date; counts: Record<string, number> } | null;
+  /** Categories held for this organization's rows, newest first. */
+  held: { at: Date; category: string; days: number }[];
+}
+
+const HELD_LIMIT = 20;
+
+/** The settings plus the organization's own purge and hold audit events; nothing from other organizations. */
+export async function readOrgRetentionStatus(
+  pool: pg.Pool,
+  organizationId: string,
+): Promise<OrgRetentionStatus> {
+  const [status, purged, held] = await Promise.all([
+    pool.query<StatusRow>(
+      'SELECT settings, effective, warnings, updated_at FROM retention_status WHERE id = 1',
+    ),
+    pool.query<{ created_at: Date; counts: Record<string, number> }>(
+      `SELECT created_at, details->'counts' AS counts FROM audit_event
+        WHERE organization_id = $1 AND action = 'retention.purged'
+        ORDER BY sequence DESC LIMIT 1`,
+      [organizationId],
+    ),
+    pool.query<{ created_at: Date; category: string; days: number }>(
+      `SELECT created_at, details->>'category' AS category, (details->>'days')::int AS days
+         FROM audit_event
+        WHERE organization_id = $1 AND action = 'retention.held'
+        ORDER BY sequence DESC LIMIT $2`,
+      [organizationId, HELD_LIMIT],
+    ),
+  ]);
+  const row = status.rows[0];
+  if (!row) throw new Error('retention_status row is missing');
+  const last = purged.rows[0];
+  return {
+    settings: row.settings,
+    effective: row.effective,
+    warnings: row.warnings,
+    updatedAt: row.updated_at,
+    lastPurge: last ? { at: last.created_at, counts: last.counts } : null,
+    held: held.rows.map((h) => ({ at: h.created_at, category: h.category, days: h.days })),
+  };
+}
+
 export async function readRetentionStatus(pool: pg.Pool): Promise<RetentionStatus> {
   const [status, run] = await Promise.all([
     pool.query<StatusRow>(

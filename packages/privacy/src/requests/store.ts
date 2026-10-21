@@ -7,7 +7,7 @@ import { Secret } from '@feedbouncer/service-runtime';
 import { SubjectList, type SubjectIdentifierT } from '../subject/identifier.js';
 
 /** A request left running this long is taken over: its worker is presumed dead. */
-const STALE_RUNNING_MS = 15 * 60_000;
+export const STALE_RUNNING_MS = 15 * 60_000;
 
 export interface NewPrivacyRequest {
   organizationId: string;
@@ -287,6 +287,17 @@ export class PgPrivacyRequestStore {
       `SELECT id FROM privacy_request
         WHERE status = 'queued' AND created_at < now() - make_interval(secs => $1)
         ORDER BY created_at LIMIT 100`,
+      [olderThanMs / 1000],
+    );
+    return rows.map((r) => r.id);
+  }
+
+  /** Requests left running past `olderThanMs`: their worker died and its retry found them still claimed. */
+  async staleRunning(olderThanMs: number): Promise<string[]> {
+    const { rows } = await this.pool.query<{ id: string }>(
+      `SELECT id FROM privacy_request
+        WHERE status = 'running' AND started_at < now() - make_interval(secs => $1)
+        ORDER BY started_at LIMIT 100`,
       [olderThanMs / 1000],
     );
     return rows.map((r) => r.id);

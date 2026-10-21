@@ -261,6 +261,28 @@ async function exportFor(t: Tenant, subjects: SubjectIdentifierT[], requestId = 
 }
 
 describe('writeSubjectExport', () => {
+  it('marks a reply whose parent was removed, but not one whose parent is not ingested yet', async () => {
+    const s = await seed();
+    await ctx.c.query(
+      `UPDATE comment SET parent_comment_id = NULL, parent_external_id = NULL, parent_removed_at = now()
+        WHERE id = $1`,
+      [s.c2.id],
+    );
+    await ctx.c.query(`UPDATE comment SET parent_external_id = 'not-ingested-yet' WHERE id = $1`, [
+      s.c3.id,
+    ]);
+    const { json } = await exportFor(A, [fb(X)]);
+    const comments = json('comments.json');
+    expect(comments.find((c) => c.id === s.c2.id)!.inReplyTo).toEqual({
+      commentId: null,
+      removed: true,
+    });
+    expect(comments.find((c) => c.id === s.c3.id)!.inReplyTo).toEqual({
+      commentId: null,
+      removed: false,
+    });
+  });
+
   it('writes every member as JSON, with the subject’s data and matching manifest counts', async () => {
     const s = await seed();
     const { result, requestId, members, json } = await exportFor(A, [fb(X)]);

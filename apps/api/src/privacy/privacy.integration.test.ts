@@ -342,8 +342,24 @@ describe('privacy admin API', () => {
     expect(r.body.effective.comments).toBe(30);
     expect(r.body.warnings).toContain('decisions_capped_by_comments');
     expect(Object.keys(r.body).sort()).toEqual(
-      ['effective', 'lastRun', 'settings', 'updatedAt', 'warnings'].sort(),
+      ['effective', 'held', 'lastPurge', 'settings', 'updatedAt', 'warnings'].sort(),
     );
+  });
+
+  it('reports only the requesting organization’s own purge and hold events', async () => {
+    const event = (orgId: string, action: string, details: object) =>
+      api.pool.query(
+        `INSERT INTO audit_event (organization_id, actor_type, action, subject_type, subject_id, details)
+         VALUES ($1, 'system', $2, 'retention_run', gen_random_uuid(), $3::jsonb)`,
+        [orgId, action, JSON.stringify(details)],
+      );
+    await event(A.orgId, 'retention.purged', { counts: { comments: 3 } });
+    await event(B.orgId, 'retention.purged', { counts: { comments: 900 } });
+    await event(B.orgId, 'retention.held', { category: 'decisions', days: 30 });
+    const r = await api.req('GET', `${base(A.orgId)}/retention`, { cookie: A.admin.cookie });
+    expect(r.body.lastPurge).toMatchObject({ counts: { comments: 3 } });
+    expect(r.body.held).toEqual([]);
+    expect(JSON.stringify(r.body)).not.toContain('900');
   });
 
   it('never logs an identifier', () => {

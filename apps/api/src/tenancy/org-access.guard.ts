@@ -5,7 +5,6 @@ import type { AuthedRequest } from '../auth/session.guard.js';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
 import { parseUuidOr404 } from '../http/validation.js';
-import { recordPrivacyDenial } from '../privacy/denial.js';
 import { DEPS } from '../tokens.js';
 import { CAPABILITY } from './capability.decorator.js';
 import { findMembership } from './memberships.repo.js';
@@ -26,7 +25,7 @@ export interface OrgRequest extends AuthedRequest {
 @Injectable()
 export class OrgAccessGuard implements CanActivate {
   constructor(
-    @Inject(DEPS) private readonly deps: AppDeps,
+    @Inject(DEPS) protected readonly deps: AppDeps,
     @Inject(Reflector) private readonly reflector: Reflector,
   ) {}
 
@@ -43,16 +42,13 @@ export class OrgAccessGuard implements CanActivate {
     if (!m) throw notFound();
     req.org = { organizationId, actorUserId: req.user.id, role: m.role, grants: m.grants };
     if (!can(m.role, cap, m.grants)) {
-      if (cap.startsWith('privacy.')) {
-        await recordPrivacyDenial(
-          this.deps,
-          req.org,
-          cap,
-          `${req.method} ${req.routeOptions.url ?? ''}`,
-        );
-      }
+      await this.onDenied(req.org, cap, `${req.method} ${req.routeOptions.url ?? ''}`);
       throw new ApiError(403, 'forbidden');
     }
     return true;
   }
+
+  /** Called when a member lacks the route's capability, before the 403; features override it to audit. */
+  protected onDenied: (org: OrgContext, capability: Capability, route: string) => Promise<void> =
+    async () => {};
 }

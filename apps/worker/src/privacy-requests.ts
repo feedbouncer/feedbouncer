@@ -4,6 +4,7 @@ import {
   enqueuePrivacyRequest,
   PRIVACY_QUEUE,
   PrivacyJobData,
+  STALE_RUNNING_MS,
   processPrivacyRequest,
   type PrivacyProcessorDeps,
 } from '@feedbouncer/privacy';
@@ -25,7 +26,8 @@ export interface PrivacyRequestWorkerDeps {
 
 /**
  * Consumes the privacy queue, which carries request ids only. A sweeper re-enqueues requests
- * still queued after five minutes, so a lost Redis job cannot strand one.
+ * still queued after five minutes, or left running past the takeover window by a crashed
+ * worker, so neither a lost Redis job nor a crash can strand one.
  */
 export function startPrivacyRequestWorker(d: PrivacyRequestWorkerDeps): {
   close(): Promise<void>;
@@ -53,7 +55,12 @@ export function startPrivacyRequestWorker(d: PrivacyRequestWorkerDeps): {
     'privacy_requeue',
     d.sweepIntervalMs ?? SWEEP_INTERVAL_MS,
     async () => {
-      for (const id of await d.deps.store.staleQueued(STALE_QUEUED_MS)) await enqueue(id);
+      const { store } = d.deps;
+      const ids = [
+        ...(await store.staleQueued(STALE_QUEUED_MS)),
+        ...(await store.staleRunning(STALE_RUNNING_MS)),
+      ];
+      for (const id of ids) await enqueue(id);
     },
     log,
     'privacy.requeue_failed',
