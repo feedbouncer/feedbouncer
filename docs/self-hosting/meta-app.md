@@ -31,15 +31,11 @@ The order of this guide differs from what you might expect: Meta checks your web
 
 ### Step 1: Register as a Meta developer
 
-<!-- step-kind: text -->
-
 Open [developers.facebook.com](https://developers.facebook.com/) and log in with the Facebook account that administers your Page. Choose **Get Started** and complete the registration prompts. If Meta asks you to verify your account, follow its prompts; this is Meta's own check and not specific to FeedBouncer.
 
 Last verified: not yet checked on a live dashboard
 
 ### Step 2: Create a Business app
-
-<!-- step-kind: text -->
 
 In the App Dashboard choose **Create app**. Give it any name that you recognise, such as `FeedBouncer`, and enter a contact email. When asked for the app type or use case, pick the one that lets you add **Facebook Login for Business** and **Webhooks**, which is the **Business** app type. You should land on the new app's dashboard.
 
@@ -49,15 +45,11 @@ Last verified: not yet checked on a live dashboard
 
 ### Step 3: Add Facebook Login for Business
 
-<!-- step-kind: text -->
-
 On the app dashboard, find **Add products** (or **Products** in the left menu) and add **Facebook Login for Business**. FeedBouncer uses it so you can click **Connect** and approve the permissions listed under [Permissions and why](#permissions-and-why). The product's Settings page is where you add the redirect URI in Step 12.
 
 Last verified: not yet checked on a live dashboard
 
 ### Step 4: Add Webhooks
-
-<!-- step-kind: text -->
 
 Add the **Webhooks** product the same way. Meta uses it to tell your instance about new comments. Do not subscribe to anything yet, because Meta verifies your callback URL while you save it and FeedBouncer is not configured until Part 4.
 
@@ -67,15 +59,11 @@ Last verified: not yet checked on a live dashboard
 
 ### Step 5: Copy the App ID
 
-<!-- step-kind: text -->
-
 Open **App settings**, then **Basic**. The **App ID** is shown at the top. It is a number, and it is not secret, but do not post it in public. You will enter it as `FACEBOOK_APP_ID` in Part 4. Keep this page open for the next step.
 
 Last verified: not yet checked on a live dashboard
 
 ### Step 6: Copy the App Secret
-
-<!-- step-kind: text -->
 
 On the same **Basic** page, next to **App secret**, choose **Show** and enter your password if asked. Copy the value into a password manager or a secret file straight away. The app secret is a secret: never paste it in an issue, chat or screenshot, and hide it again when you are done. See [Keep your app secret and tokens safe](#keep-your-app-secret-and-tokens-safe).
 
@@ -83,19 +71,15 @@ Last verified: not yet checked on a live dashboard
 
 ### Step 7: Generate a verify token
 
-<!-- step-kind: config -->
-
-The verify token is a random string that you invent. Meta sends it back during the handshake so that FeedBouncer knows the request is genuine. It must be at least 20 characters. Generate one on a machine you trust and store it as a secret:
+The verify token is a random string that you invent. Meta sends it back during the handshake so that FeedBouncer knows the request is genuine. It must be at least 20 characters. Generate one on a machine you trust and keep it for Steps 9 and 13:
 
 ```bash
-openssl rand -hex 32 > facebook_webhook_verify_token
+openssl rand -hex 32
 ```
 
 Last verified: not yet checked on a live dashboard
 
 ### Step 8: Turn on Require App Secret
-
-<!-- step-kind: text -->
 
 In **App settings**, then **Advanced**, make sure **Require App Secret** is on. FeedBouncer signs every Graph API call with `appsecret_proof`, so this setting is safe to enable and it stops anyone with only a stolen token from calling the API.
 
@@ -105,26 +89,22 @@ Last verified: not yet checked on a live dashboard
 
 ### Step 9: Set the Meta settings
 
-<!-- step-kind: config -->
-
-Add these settings to the `.env` of your instance. Prefer the `_FILE` variants so the secrets stay out of the environment; see [secrets.md](../operations/secrets.md). Paths are examples:
+Add these settings to the `.env` of your instance and restrict the file with `chmod 600 .env`, because it now holds secrets:
 
 ```bash
 FACEBOOK_APP_ID=<APP_ID>
-FACEBOOK_APP_SECRET_FILE=/run/secrets/facebook_app_secret
-FACEBOOK_WEBHOOK_VERIFY_TOKEN_FILE=/run/secrets/facebook_webhook_verify_token
+FACEBOOK_APP_SECRET=<APP_SECRET>
+FACEBOOK_WEBHOOK_VERIFY_TOKEN=<VERIFY_TOKEN>
 PUBLIC_WEB_URL=https://feedbouncer.example.com
 ```
 
-`PUBLIC_WEB_URL` is an origin only: no path and no trailing slash. Leave `FACEBOOK_GRAPH_API_VERSION` at its default.
+`PUBLIC_WEB_URL` is an origin only: no path and no trailing slash. Leave `FACEBOOK_GRAPH_API_VERSION` at its default. Docker Compose passes only these plain variables to the containers. To use the `_FILE` variants instead, mount the files from `compose.override.yaml` as shown in [secrets.md](../operations/secrets.md).
 
 Last verified: not yet checked on a live dashboard
 
 ### Step 10: Override PUBLIC_WEB_URL for Docker Compose
 
-<!-- step-kind: config -->
-
-`compose.yaml` sets `PUBLIC_WEB_URL` to `http://localhost`, which overrides `.env`. Copy `compose.override.example.yaml` to `compose.override.yaml` (git-ignored, so keep secrets out of it anyway) and set the public origin for both the API and the worker:
+`compose.yaml` sets `PUBLIC_WEB_URL` to `http://localhost`, which overrides `.env`. Copy `compose.override.example.yaml` to `compose.override.yaml` (git-ignored) and set the public origin for both the API and the worker:
 
 ```yaml
 services:
@@ -142,8 +122,6 @@ Last verified: not yet checked on a live dashboard
 
 ### Step 11: Restart and prove the webhook route is live
 
-<!-- step-kind: config -->
-
 Restart the stack with `docker compose up -d`. The webhook route exists only when the Facebook settings are present. Send a handshake with a deliberately wrong token, so nothing secret is typed. A working route answers `403`; `404` means the route does not exist, so recheck Step 9:
 
 ```bash
@@ -156,23 +134,17 @@ Last verified: not yet checked on a live dashboard
 
 ### Step 12: Add the OAuth redirect URI
 
-<!-- step-kind: text -->
-
 Open **Facebook Login for Business**, then **Settings**, and add this under **Valid OAuth Redirect URIs**: `https://feedbouncer.example.com/api/v1/oauth/facebook/callback`. It must match your `PUBLIC_WEB_URL` exactly. Save the changes. Without it, clicking Connect later fails with a redirect error.
 
 Last verified: not yet checked on a live dashboard
 
 ### Step 13: Register the callback URL
 
-<!-- step-kind: text -->
-
 Open **Webhooks**, choose the **Page** object, then **Subscribe to this object**. Enter the callback URL `https://feedbouncer.example.com/api/v1/webhooks/facebook` and your verify token from Step 7, then choose **Verify and save**. Meta calls your instance immediately, which is why Part 4 comes first. If it fails, see the troubleshooting entry.
 
 Last verified: not yet checked on a live dashboard
 
 ### Step 14: Subscribe to the feed field
-
-<!-- step-kind: text -->
 
 In the list of Page fields, find `feed` and choose **Subscribe**. This only registers the app for the field. FeedBouncer subscribes each Page to your app by itself when you connect it, so you do not subscribe Pages by hand.
 
@@ -182,15 +154,11 @@ Last verified: not yet checked on a live dashboard
 
 ### Step 15: Connect Facebook in FeedBouncer
 
-<!-- step-kind: text -->
-
 In FeedBouncer open your brand, then **Connections**, and choose **Connect Facebook**. Facebook asks you to approve the permissions listed under [Permissions and why](#permissions-and-why). Leave every permission ticked, because FeedBouncer needs all of them and aborts the connection if one is declined. Do not paste any token from the Graph API Explorer; FeedBouncer obtains its own.
 
 Last verified: not yet checked on a live dashboard
 
 ### Step 16: Choose the Page
-
-<!-- step-kind: text -->
 
 Back in FeedBouncer, pick your Page in the Page picker. The connection should then show as connected. FeedBouncer stores its access token encrypted with `FB_ENCRYPTION_KEYS` and subscribes the Page to the `feed` field. Continue with [Test it end to end](#test-it-end-to-end), or with Part 7 for Instagram.
 
@@ -206,23 +174,17 @@ Read this before you change anything. Instagram needs more than Facebook:
 
 ### Step 17: Add the Instagram product
 
-<!-- step-kind: text -->
-
 In the App Dashboard add the **Instagram** product and choose **API setup with Facebook Login**, not the option that uses Instagram Login. FeedBouncer only works with the Facebook Login flavour, because it reaches the account through its linked Page.
 
 Last verified: not yet checked on a live dashboard
 
 ### Step 18: Add the Instagram redirect URI
 
-<!-- step-kind: text -->
-
 Under **Facebook Login for Business**, **Settings**, add a second **Valid OAuth Redirect URI**: `https://feedbouncer.example.com/api/v1/oauth/instagram/callback`. Keep the Facebook one from Step 12 as well.
 
 Last verified: not yet checked on a live dashboard
 
 ### Step 19: Enable Instagram in FeedBouncer
-
-<!-- step-kind: config -->
 
 Turn the Instagram connector on in the `.env` that both the API and the worker read, then restart the stack with `docker compose up -d`. It runs on the same Meta app, so it requires the Facebook settings from Step 9 and fails at startup without them:
 
@@ -234,15 +196,11 @@ Last verified: not yet checked on a live dashboard
 
 ### Step 20: Register the Instagram webhook
 
-<!-- step-kind: text -->
-
 Under **Webhooks** choose the **Instagram** object, not Page. Use the callback URL `https://feedbouncer.example.com/api/v1/webhooks/instagram` and the same verify token as in Step 13, then choose **Verify and save** and subscribe to the `comments` field.
 
 Last verified: not yet checked on a live dashboard
 
 ### Step 21: Connect Instagram in FeedBouncer
-
-<!-- step-kind: text -->
 
 In FeedBouncer open your brand, then **Connections**, and choose **Connect Instagram**. Approve every permission and choose the Page that is linked to your Instagram account. The Instagram account then appears as its own connection.
 
@@ -250,31 +208,31 @@ Last verified: not yet checked on a live dashboard
 
 ## Configuration map
 
-| Meta value | Where to find it in Meta | FeedBouncer setting |
-| --- | --- | --- |
-| App ID | App settings, Basic | `FACEBOOK_APP_ID` |
-| App Secret | App settings, Basic, Show | `FACEBOOK_APP_SECRET` (or `FACEBOOK_APP_SECRET_FILE`) |
-| Verify token | You create it, then type it into Webhooks | `FACEBOOK_WEBHOOK_VERIFY_TOKEN` (or `FACEBOOK_WEBHOOK_VERIFY_TOKEN_FILE`) |
-| Callback URL and redirect URI | Webhooks, and Facebook Login for Business, Settings | `PUBLIC_WEB_URL` plus the path |
-| Graph API version | Shown in the dashboard header | `FACEBOOK_GRAPH_API_VERSION` (leave the default) |
-| Instagram product | Add products, Instagram | `INSTAGRAM_CONNECTOR_ENABLED` set to `true` |
-| Access token | Not needed | None: FeedBouncer gets it when you click Connect and stores it encrypted. Never paste one into config. |
+| Meta value                    | Where to find it in Meta                            | FeedBouncer setting                                                                                    |
+| ----------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| App ID                        | App settings, Basic                                 | `FACEBOOK_APP_ID`                                                                                      |
+| App Secret                    | App settings, Basic, Show                           | `FACEBOOK_APP_SECRET` (or `FACEBOOK_APP_SECRET_FILE`)                                                  |
+| Verify token                  | You create it, then type it into Webhooks           | `FACEBOOK_WEBHOOK_VERIFY_TOKEN` (or `FACEBOOK_WEBHOOK_VERIFY_TOKEN_FILE`)                              |
+| Callback URL and redirect URI | Webhooks, and Facebook Login for Business, Settings | `PUBLIC_WEB_URL` plus the path                                                                         |
+| Graph API version             | Shown in the dashboard header                       | `FACEBOOK_GRAPH_API_VERSION` (leave the default)                                                       |
+| Instagram product             | Add products, Instagram                             | `INSTAGRAM_CONNECTOR_ENABLED` set to `true`                                                            |
+| Access token                  | Not needed                                          | None: FeedBouncer gets it when you click Connect and stores it encrypted. Never paste one into config. |
 
 ## Permissions and why
 
 FeedBouncer asks for exactly these permissions when you click Connect.
 
-| Permission | Used for | Why FeedBouncer needs it | App Review needed? |
-| --- | --- | --- | --- |
-| `pages_show_list` | Listing your Pages | Shows the Page picker and gives a Page access token for each | Only for people without a role on the app |
-| `pages_read_engagement` | Reading posts and comments | Reads comments, replies and author ids | Only for people without a role on the app |
-| `pages_read_user_content` | Reading user comments | Reads comments written by users on Page posts | Only for people without a role on the app |
-| `pages_manage_engagement` | Moderating comments | Hides, unhides, deletes and replies to comments, and bans authors | Only for people without a role on the app |
-| `pages_manage_metadata` | Webhook subscription | Subscribes the Page to the `feed` and `comments` fields | Only for people without a role on the app |
-| `pages_messaging` | Private replies | Sends a private reply to a commenter | Only for people without a role on the app |
-| `instagram_basic` | Instagram account details | Reads the account id and username | Only for people without a role on the app |
-| `instagram_manage_comments` | Instagram moderation | Reads, hides, deletes and replies to Instagram comments | Only for people without a role on the app, and needed for live Instagram events |
-| `instagram_manage_messages` | Private replies (optional) | Sends private replies on Instagram; not needed to moderate | Only for people without a role on the app |
+| Permission                  | Used for                   | Why FeedBouncer needs it                                          | App Review needed?                                                              |
+| --------------------------- | -------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `pages_show_list`           | Listing your Pages         | Shows the Page picker and gives a Page access token for each      | Only for people without a role on the app                                       |
+| `pages_read_engagement`     | Reading posts and comments | Reads comments, replies and author ids                            | Only for people without a role on the app                                       |
+| `pages_read_user_content`   | Reading user comments      | Reads comments written by users on Page posts                     | Only for people without a role on the app                                       |
+| `pages_manage_engagement`   | Moderating comments        | Hides, unhides, deletes and replies to comments, and bans authors | Only for people without a role on the app                                       |
+| `pages_manage_metadata`     | Webhook subscription       | Subscribes the Page to the `feed` and `comments` fields           | Only for people without a role on the app                                       |
+| `pages_messaging`           | Private replies            | Sends a private reply to a commenter                              | Only for people without a role on the app                                       |
+| `instagram_basic`           | Instagram account details  | Reads the account id and username                                 | Only for people without a role on the app                                       |
+| `instagram_manage_comments` | Instagram moderation       | Reads, hides, deletes and replies to Instagram comments           | Only for people without a role on the app, and needed for live Instagram events |
+| `instagram_manage_messages` | Private replies (optional) | Sends private replies on Instagram; not needed to moderate        | Only for people without a role on the app                                       |
 
 Checked against Meta's documentation on 2026-10-21. See Meta's [Permissions Reference](https://developers.facebook.com/docs/permissions) and [Access Levels](https://developers.facebook.com/docs/graph-api/overview/access-levels).
 
@@ -347,7 +305,7 @@ This is Meta's own check. Follow Meta's help for [identity verification](https:/
 
 ## Keep your app secret and tokens safe
 
-- The app secret, the verify token and `FB_ENCRYPTION_KEYS` are secrets. Store them with the `_FILE` variants or your host's secret store; see [secrets.md](../operations/secrets.md).
+- The app secret, the verify token and `FB_ENCRYPTION_KEYS` are secrets. Keep `.env` readable only by you (`chmod 600 .env`), or use the `_FILE` variants or your host's secret store; see [secrets.md](../operations/secrets.md).
 - Never commit them, paste them into issues or chat, or screenshot them. Keep `.env` and `compose.override.yaml` out of git.
 - If the app secret is exposed, reset it under **App settings**, **Basic**, update `FACEBOOK_APP_SECRET` and restart. To rotate the verify token, generate a new one and update both FeedBouncer and Meta.
 - If a Page token may be exposed, remove the app from the Page's Business Integrations and connect again.
