@@ -80,7 +80,7 @@ const selfHostingDocs = () =>
     .filter((f) => f.endsWith('.md'))
     .map((f) => join(DOCS, f));
 
-test('guide exists and H2 headings appear in the planned order', { todo: 'Task 2' }, () => {
+test('guide exists and H2 headings appear in the planned order', () => {
   assert.deepEqual(h2s(guide), EXPECTED_H2S);
 });
 
@@ -178,79 +178,63 @@ const steps = guide
 
 const stepBody = (block) => block.split('\n').slice(1).join('\n');
 
-test(
-  'every step starts with a Goal line and has a marker or a code block',
-  { todo: 'Task 2' },
-  () => {
-    assert.ok(steps.length > 0, 'no steps');
-    steps.forEach(({ block, n, title }, i) => {
-      assert.equal(Number(n), i + 1, `step numbering breaks at "${title}"`);
-      const firstLine = stepBody(block)
-        .split('\n')
-        .find((l) => l.trim() !== '');
-      assert.ok(firstLine?.startsWith('**Goal:** '), `step ${n} lacks a Goal line`);
-      assert.ok(
-        [...block.matchAll(MARKER_RE)].length > 0 || block.includes('```'),
-        `step ${n} has neither a screenshot marker nor a code block`,
-      );
-    });
-  },
-);
+test('every step starts with a Goal line and has a marker or a code block', () => {
+  assert.ok(steps.length > 0, 'no steps');
+  steps.forEach(({ block, n, title }, i) => {
+    assert.equal(Number(n), i + 1, `step numbering breaks at "${title}"`);
+    const firstLine = stepBody(block)
+      .split('\n')
+      .find((l) => l.trim() !== '');
+    assert.ok(firstLine?.startsWith('**Goal:** '), `step ${n} lacks a Goal line`);
+    assert.ok(
+      [...block.matchAll(MARKER_RE)].length > 0 || block.includes('```'),
+      `step ${n} has neither a screenshot marker nor a code block`,
+    );
+  });
+});
 
-test(
-  'every Meta-dependent section carries a dated not-yet-verified note first',
-  { todo: 'Task 2' },
-  () => {
-    for (const t of EXPECTED_H2S.filter((h) => !NOTE_EXEMPT.includes(h))) {
-      const firstPara = section(t)
-        .trim()
-        .split(/\n\s*\n/)[1];
-      assert.match(firstPara, NOTE_RE, `${t} lacks a leading note`);
-      assert.ok(new Date(firstPara.match(NOTE_RE)[2]) <= new Date(), `${t} note dated in future`);
-    }
-  },
-);
+test('every Meta-dependent section carries a dated not-yet-verified note first', () => {
+  for (const t of EXPECTED_H2S.filter((h) => !NOTE_EXEMPT.includes(h))) {
+    const firstPara = section(t)
+      .trim()
+      .split(/\n\s*\n/)[1];
+    assert.match(firstPara, NOTE_RE, `${t} lacks a leading note`);
+    assert.ok(new Date(firstPara.match(NOTE_RE)[2]) <= new Date(), `${t} note dated in future`);
+  }
+});
 
-test(
-  'status block lists every noted section and says nothing is verified',
-  { todo: 'Task 2' },
-  () => {
-    const s = section('Status of this guide');
-    const rows = tableRows(s);
-    const noted = notedSections();
-    assert.deepEqual(rows.map((r) => r[0]).sort(), [...noted].sort());
-    for (const [name, status] of rows)
-      assert.match(
-        status,
-        noted.includes(name) ? /^Not yet verified$/ : /^Verified \d{4}-\d{2}-\d{2}$/,
-      );
-    if (rows.every((r) => r[1] === 'Not yet verified'))
-      assert.ok(
-        s.includes('Nothing in this guide has been verified against a live Meta dashboard yet.'),
-      );
-    assert.ok(s.includes('](meta-app-verification.md'));
-  },
-);
+test('status block lists every noted section and says nothing is verified', () => {
+  const s = section('Status of this guide');
+  const rows = tableRows(s);
+  const noted = notedSections();
+  assert.deepEqual(rows.map((r) => r[0]).sort(), [...noted].sort());
+  for (const [name, status] of rows)
+    assert.match(
+      status,
+      noted.includes(name) ? /^Not yet verified$/ : /^Verified \d{4}-\d{2}-\d{2}$/,
+    );
+  if (rows.every((r) => r[1] === 'Not yet verified'))
+    assert.ok(
+      s.includes('Nothing in this guide has been verified against a live Meta dashboard yet.'),
+    );
+  assert.ok(s.includes('](meta-app-verification.md'));
+});
 
-test('guide never claims verification', { todo: 'Task 2' }, () => {
+test('guide never claims verification', () => {
   for (const banned of [/Checked against/i, /^Last verified: 20/m, /\bverified on\b/i])
     assert.doesNotMatch(guide, banned);
 });
 
-test(
-  'screenshot markers are well-formed and unique, and no real images are embedded',
-  { todo: 'Task 2' },
-  () => {
-    const names = markers(guide);
-    assert.ok(names.length >= 15);
-    assert.equal(new Set(names).size, names.length);
-    assert.equal(guide.split('\n').filter((l) => l.includes('[SCREENSHOT')).length, names.length);
-    assert.doesNotMatch(guide, /!\[/);
-    assert.equal(existsSync(join(DOCS, 'images')), false);
-  },
-);
+test('screenshot markers are well-formed and unique, and no real images are embedded', () => {
+  const names = markers(guide);
+  assert.ok(names.length >= 15);
+  assert.equal(new Set(names).size, names.length);
+  assert.equal(guide.split('\n').filter((l) => l.includes('[SCREENSHOT')).length, names.length);
+  assert.doesNotMatch(guide, /!\[/);
+  assert.equal(existsSync(join(DOCS, 'images')), false);
+});
 
-test('each Part 1-7 ends with a Checkpoint', { todo: 'Task 2' }, () => {
+test('each Part 1-7 ends with a Checkpoint', () => {
   const parts = EXPECTED_H2S.filter((h) => /^Part [1-7]:/.test(h));
   assert.equal(parts.length, 7);
   for (const t of parts) {
