@@ -32,7 +32,7 @@ Out of scope:
 
 ## Create the Meta app
 
-For a screenshot-by-screenshot version, see the [step-by-step guide](../self-hosting/meta-app.md).
+For a step-by-step version, see the [self-hosting guide](../self-hosting/meta-app.md).
 
 1. In the [Meta for Developers](https://developers.facebook.com/) dashboard,
    create an app of the **Business** type.
