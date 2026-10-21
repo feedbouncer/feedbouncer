@@ -51,6 +51,12 @@ export function startPrivacyRequestWorker(d: PrivacyRequestWorkerDeps): {
   const enqueue = async (requestId: string) => {
     await enqueuePrivacyRequest(queue, requestId, d.backoffMs);
   };
+  /** BullMQ ignores an add() under the id of a retained failed job, so clear it first. */
+  const requeue = async (requestId: string) => {
+    const previous = await queue.getJob(requestId);
+    if (previous && (await previous.isFailed())) await previous.remove();
+    await enqueue(requestId);
+  };
   const sweeper = every(
     'privacy_requeue',
     d.sweepIntervalMs ?? SWEEP_INTERVAL_MS,
@@ -60,7 +66,7 @@ export function startPrivacyRequestWorker(d: PrivacyRequestWorkerDeps): {
         ...(await store.staleQueued(STALE_QUEUED_MS)),
         ...(await store.staleRunning(STALE_RUNNING_MS)),
       ];
-      for (const id of ids) await enqueue(id);
+      for (const id of ids) await requeue(id);
     },
     log,
     'privacy.requeue_failed',

@@ -199,6 +199,38 @@ describe('privacy request worker', () => {
     }
   });
 
+  it('the sweeper rescues a running request whose job ended in the failed set', async () => {
+    class Unrecordable extends PgPrivacyRequestStore {
+      override finish(): Promise<void> {
+        return Promise.reject(new Error('cannot finish'));
+      }
+      override fail(): Promise<void> {
+        return Promise.reject(new Error('cannot fail'));
+      }
+    }
+    const { id } = await store.create(request());
+    const crashing = start({ store: new Unrecordable(pool, keys) });
+    try {
+      await crashing.enqueue(id);
+      await until(async () => (await queue.getJob(id))?.finishedOn !== undefined);
+    } finally {
+      await crashing.close();
+    }
+    expect(await queue.getJob(id).then((j) => j?.getState())).toBe('failed');
+    expect((await status(id)).status).toBe('running');
+    await h.c.query(
+      "UPDATE privacy_request SET started_at = now() - interval '1 hour' WHERE id = $1",
+      [id],
+    );
+    const w = start({ sweepIntervalMs: 50 });
+    try {
+      await until(finished(id));
+      expect((await status(id)).status).toBe('done');
+    } finally {
+      await w.close();
+    }
+  });
+
   it('retries a failed attempt, then fails with a data-free reason and wipes the identifiers', async () => {
     class Failing extends PgPrivacyRequestStore {
       override finish(): Promise<void> {
