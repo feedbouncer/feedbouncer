@@ -95,16 +95,15 @@ Add these settings to the `.env` of your instance and restrict the file with `ch
 FACEBOOK_APP_ID=<APP_ID>
 FACEBOOK_APP_SECRET=<APP_SECRET>
 FACEBOOK_WEBHOOK_VERIFY_TOKEN=<VERIFY_TOKEN>
-PUBLIC_WEB_URL=https://feedbouncer.example.com
 ```
 
-`PUBLIC_WEB_URL` is an origin only: no path and no trailing slash. Leave `FACEBOOK_GRAPH_API_VERSION` at its default. Docker Compose passes only these plain variables to the containers. To use the `_FILE` variants instead, mount the files from `compose.override.yaml` as shown in [secrets.md](../operations/secrets.md).
+These variables store real Page tokens, so replace the `dev-example` value of `FB_ENCRYPTION_KEYS` from `.env.example` with a production key first; [secrets.md](../operations/secrets.md) shows how to generate one. Compose does not read `PUBLIC_WEB_URL` from `.env`; you set it in the next step. Leave `FACEBOOK_GRAPH_API_VERSION` at its default. Docker Compose passes only these plain variables to the containers. To use the `_FILE` variants instead, mount the files from `compose.override.yaml` as shown in [secrets.md](../operations/secrets.md).
 
 Last verified: not yet checked on a live dashboard
 
 ### Step 10: Override PUBLIC_WEB_URL for Docker Compose
 
-`compose.yaml` sets `PUBLIC_WEB_URL` to `http://localhost`, which overrides `.env`. Copy `compose.override.example.yaml` to `compose.override.yaml` (git-ignored) and set the public origin for both the API and the worker:
+`compose.yaml` sets `PUBLIC_WEB_URL` to `http://localhost:${WEB_HOST_PORT:-3000}`. Copy `compose.override.example.yaml` to `compose.override.yaml` (git-ignored) and set the public origin for both the API and the worker:
 
 ```yaml
 services:
@@ -297,7 +296,7 @@ Review mode is probably on: look under **Suggestions**. Otherwise check that the
 
 ### URL blocked or a redirect URI error when connecting
 
-The redirect URI is missing from Facebook Login for Business, or `PUBLIC_WEB_URL` is still `localhost` because of `compose.yaml` (see Step 10). Compare the URI in the error with Step 12.
+The redirect URI is missing from Facebook Login for Business, or `PUBLIC_WEB_URL` is still `http://localhost:3000` because of `compose.yaml` (see Step 10). Compare the URI in the error with Step 12.
 
 ### Meta asks you to verify your identity or says the app is restricted
 

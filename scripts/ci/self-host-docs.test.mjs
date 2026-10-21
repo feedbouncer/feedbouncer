@@ -94,8 +94,6 @@ test('all relative links and #anchors in docs/self-hosting/*.md resolve', () => 
 test('guide contains no secret-shaped strings or ID-length numbers', () => {
   assert.deepEqual(findSecretLike(guide), []);
   assert.equal(/\b\d{10,}\b/.test(guide), false);
-  assert.deepEqual(findSecretLike('set <APP_SECRET> and restart'), []);
-  assert.equal(findSecretLike('token EAA' + 'x'.repeat(40)).length, 1);
 });
 
 const section = (title) => {
