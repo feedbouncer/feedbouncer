@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod';
-import type { RuleChangeBody } from '../api-client.js';
+import { ProposalSchema, type RuleChangeBody } from '../api-client.js';
 import { idempotencyKey, runTool, text, type ToolDeps } from './common.js';
 
 const MAX_JSON_CHARS = 16_384;
@@ -60,6 +60,15 @@ function toBody({ brandId, operation, rationale, ...v }: z.output<typeof input>)
   }
 }
 
+const output = z.object({
+  proposalId: ProposalSchema.shape.id,
+  status: ProposalSchema.shape.status,
+  diff: ProposalSchema.shape.diff,
+  warnings: ProposalSchema.shape.warnings,
+  expiresAt: ProposalSchema.shape.expiresAt,
+  reviewUrl: ProposalSchema.shape.reviewUrl,
+});
+
 export function registerProposeRuleChange(server: McpServer, deps: ToolDeps): void {
   server.registerTool(
     'propose_rule_change',
@@ -68,6 +77,7 @@ export function registerProposeRuleChange(server: McpServer, deps: ToolDeps): vo
       description:
         'Creates a pending proposal to create, update or archive a moderation rule; no rule changes until a person approves it in the FeedBouncer web app.',
       inputSchema: input,
+      outputSchema: output,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

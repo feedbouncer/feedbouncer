@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod';
-import type { ListQuery } from '../api-client.js';
+import { CommentSchema, type ListQuery } from '../api-client.js';
 import { UNTRUSTED_NOTICE, formatComment, framedComment } from '../present.js';
 import { runTool, text, timestamp, type Outcome, type ToolDeps } from './common.js';
 
@@ -36,6 +36,11 @@ export async function inboxPage(deps: ToolDeps, args: InboxArgs): Promise<Outcom
   return { result: { content, structuredContent }, outcome: 'ok' };
 }
 
+export const inboxOutput = z.object({
+  comments: z.array(CommentSchema),
+  nextCursor: z.string().nullable(),
+});
+
 export function registerListInbox(server: McpServer, deps: ToolDeps): void {
   server.registerTool(
     'list_inbox',
@@ -44,6 +49,7 @@ export function registerListInbox(server: McpServer, deps: ToolDeps): void {
       description:
         'Read-only. Lists comments from the FeedBouncer inbox, filtered by brand, status, platform and posting time; page with nextCursor.',
       inputSchema: inboxFilters,
+      outputSchema: inboxOutput,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     (args) => runTool(deps, 'list_inbox', args.brandId, () => inboxPage(deps, args)),

@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod';
-import type { RulesResponse } from '../api-client.js';
+import { RulesSchema, type RulesResponse } from '../api-client.js';
 import { runTool, text, type ToolDeps } from './common.js';
 
 const input = z.object({ brandId: z.uuid().optional().describe('Only rules for this brand.') });
@@ -32,6 +32,7 @@ export function registerReadRules(server: McpServer, deps: ToolDeps): void {
       description:
         'Read-only. Lists the moderation rules of each brand and the status of recent rule-change proposals.',
       inputSchema: input,
+      outputSchema: RulesSchema,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     (args) =>
