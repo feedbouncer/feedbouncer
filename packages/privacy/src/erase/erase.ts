@@ -17,8 +17,8 @@ import {
   AUTHOR_NODE,
   authorRules,
   entryMatches,
-  ERASED,
   redactAuthorEntries,
+  redactIdentifierFields,
   removeAuthorEntries,
   type AuthorRule,
   type EntryMatch,
@@ -261,50 +261,73 @@ async function redactProposals(
   return redacted;
 }
 
-/** Audit events of $1 holding one of the strings $2 as a JSON string value, at any depth. */
-const AUDIT_MATCH = `x.organization_id = $1 AND EXISTS (
-  SELECT 1 FROM unnest($2::text[]) AS t(v)
-   WHERE jsonb_path_exists(x.details, '$.** ? (@ == $v)', jsonb_build_object('v', t.v)))`;
+/** Audit events of $1 with an object carrying an identifier field, at any depth. */
+const AUDIT_CANDIDATES = `x.organization_id = $1 AND jsonb_path_exists(x.details,
+  '$.** ? (exists(@.externalId) || exists(@.handle))')`;
 
-/** Every string value equal to one of `terms` becomes "[erased]"; keys and other values stay. */
-function redactStrings(v: unknown, terms: ReadonlySet<string>): unknown {
-  if (typeof v === 'string') return terms.has(v) ? ERASED : v;
-  if (Array.isArray(v)) return v.map((x) => redactStrings(x, terms));
-  if (typeof v === 'object' && v !== null)
-    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, redactStrings(x, terms)]));
-  return v;
+interface AuditRow {
+  id: string;
+  sequence: string;
+  details: unknown;
 }
 
-/** Rewrites the details of matching audit events, in batches, through the redaction hatch. */
+/**
+ * Rewrites the identifier fields naming the subject in audit details, in batches, through
+ * the redaction hatch. Only `externalId` and `handle` fields are touched, so roles, ids and
+ * other values that happen to equal an identifier stay as recorded.
+ */
 async function redactAuditEvents(
   pool: pg.Pool,
   organizationId: string,
-  terms: readonly string[],
+  matches: readonly EntryMatch[],
   batchSize: number,
 ): Promise<number> {
-  const set = new Set(terms);
   let after = '0';
   let redacted = 0;
   for (;;) {
-    const rows = await withTransaction(pool, (tx) =>
+    const batch = await withTransaction(pool, (tx) =>
       withPrivacyRedaction(tx, async () => {
-        const batch = await tx.query<{ id: string; sequence: string; details: unknown }>(
+        const { rows } = await tx.query<AuditRow>(
           `SELECT x.id, x.sequence, x.details FROM audit_event x
-            WHERE ${AUDIT_MATCH} AND x.sequence > $3
-            ORDER BY x.sequence LIMIT $4 FOR UPDATE`,
-          [organizationId, terms, after, batchSize],
+            WHERE ${AUDIT_CANDIDATES} AND x.sequence > $2
+            ORDER BY x.sequence LIMIT $3 FOR UPDATE`,
+          [organizationId, after, batchSize],
         );
-        for (const r of batch.rows) {
+        let changed = 0;
+        for (const r of rows) {
+          const details = redactIdentifierFields(r.details, matches);
+          if (details === null) continue;
           await tx.query(
             'UPDATE audit_event SET details = $3::jsonb WHERE organization_id = $1 AND id = $2',
-            [organizationId, r.id, JSON.stringify(redactStrings(r.details, set))],
+            [organizationId, r.id, JSON.stringify(details)],
           );
+          changed += 1;
         }
-        return batch.rows;
+        return { rows, changed };
       }),
     );
-    redacted += rows.length;
-    if (rows.length < batchSize) return redacted;
+    redacted += batch.changed;
+    if (batch.rows.length < batchSize) return redacted;
+    after = batch.rows.at(-1)!.sequence;
+  }
+}
+
+/** The audit events `redactAuditEvents` would rewrite, counted in the caller's snapshot. */
+async function countAuditRedactions(
+  c: pg.ClientBase,
+  organizationId: string,
+  matches: readonly EntryMatch[],
+): Promise<number> {
+  let after = '0';
+  let count = 0;
+  for (;;) {
+    const { rows } = await c.query<AuditRow>(
+      `SELECT x.id, x.sequence, x.details FROM audit_event x
+        WHERE ${AUDIT_CANDIDATES} AND x.sequence > $2 ORDER BY x.sequence LIMIT 1000`,
+      [organizationId, after],
+    );
+    count += rows.filter((r) => redactIdentifierFields(r.details, matches) !== null).length;
+    if (rows.length < 1000) return count;
     after = rows.at(-1)!.sequence;
   }
 }
@@ -471,12 +494,14 @@ async function execute(
       : await removeRuleEntries(pool, organizationId, matches),
   );
   counts.proposalsRedacted = await redactProposals(pool, organizationId, matches);
-  counts.auditEventsRedacted = await redactAuditEvents(
-    pool,
-    organizationId,
-    redactionTerms(subjects),
-    o.batchSize,
-  );
+  if (isFound(authorIds, counts)) {
+    counts.auditEventsRedacted = await redactAuditEvents(
+      pool,
+      organizationId,
+      matches,
+      o.batchSize,
+    );
+  }
   return { counts, authorIds, completedAt };
 }
 
@@ -514,10 +539,9 @@ async function dryRun(
       counts.proposalsRedacted = proposals.rows.filter(
         (p) => redactProposal(p, matches) !== null,
       ).length;
-      counts.auditEventsRedacted = await countWhere(tx, 'audit_event', AUDIT_MATCH, [
-        organizationId,
-        redactionTerms(subjects),
-      ]);
+      if (isFound(authorIds, counts)) {
+        counts.auditEventsRedacted = await countAuditRedactions(tx, organizationId, matches);
+      }
       const p = operationalParams(organizationId, rows);
       counts.idempotencyRecords = await countWhere(
         tx,
@@ -532,15 +556,9 @@ async function dryRun(
   );
 }
 
-/** The strings redacted from audit details: the requested external ids and handles. */
-function redactionTerms(subjects: readonly SubjectIdentifierT[]): string[] {
-  const terms = new Set<string>();
-  for (const s of subjects) {
-    if (s.externalId !== undefined) terms.add(s.externalId);
-    if (s.handle !== undefined) terms.add(s.handle);
-  }
-  return [...terms];
-}
+/** The subject exists in the organization: an author row, or a rule entry naming them. */
+const isFound = (authorIds: readonly string[], counts: ErasureCounts) =>
+  authorIds.length > 0 || counts.ruleEntriesRemoved + counts.ruleEntriesKept > 0;
 
 /**
  * Erases one subject from one organization: their comments (with everything that cascades
@@ -561,7 +579,7 @@ export async function eraseSubject(
   const { counts, authorIds, completedAt } = o.dryRun
     ? await dryRun(pool, organizationId, subjects, o)
     : await execute(pool, organizationId, subjects, o);
-  const found = authorIds.length > 0 || counts.ruleEntriesRemoved + counts.ruleEntriesKept > 0;
+  const found = isFound(authorIds, counts);
   o.log.info('privacy.erasure_done', {
     organizationId,
     dryRun: o.dryRun,

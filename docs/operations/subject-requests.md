@@ -100,7 +100,7 @@ Erasure deletes, in the organization:
   review items, action suggestions, previews and moderation records;
 - the person's entries in rule author lists (see below);
 - the person's identifiers from rule-change proposals (replaced with
-  `[erased]`; pending proposals become stale) and from audit event details;
+  `[erased]`; pending proposals become stale) and from the `externalId` and `handle` fields of audit event details (no other value is changed);
 - cached API responses and finished job records that refer to their comments.
 
 It does not contact the platform. Aggregate counters hold no identifier and

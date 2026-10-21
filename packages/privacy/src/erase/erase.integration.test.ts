@@ -547,11 +547,15 @@ describe('eraseSubject', () => {
   });
 
   it('redacts proposals and audit details, and makes a pending proposal stale', async () => {
+    await authorRule(A, [{ externalId: X }]);
     const pending = await proposal(A, [{ externalId: X }, { externalId: 'someone-else' }]);
     const unrelated = await proposal(A, [{ externalId: 'someone-else' }]);
-    const event = await auditEvent(A, { note: X, nested: { list: [X, 'keep'], n: 1 } });
+    const event = await auditEvent(A, {
+      note: X,
+      nested: { list: [{ externalId: X, handle: HANDLE }, { externalId: 'keep' }], n: 1 },
+    });
     const other = await auditEvent(A, { note: 'keep' });
-    const otherOrg = await auditEvent(B, { note: X });
+    const otherOrg = await auditEvent(B, { author: { externalId: X } });
     const before = (
       await ctx.c.query<{ action: string; created_at: Date; sequence: string }>(
         'SELECT action, created_at, sequence FROM audit_event WHERE id = $1',
@@ -586,13 +590,46 @@ describe('eraseSubject', () => {
       )
     ).rows[0]!;
     expect({ action: a.action, created_at: a.created_at, sequence: a.sequence }).toEqual(before);
-    expect(a.details).toEqual({ note: '[erased]', nested: { list: ['[erased]', 'keep'], n: 1 } });
+    expect(a.details).toEqual({
+      note: X,
+      nested: {
+        list: [{ externalId: '[erased]', handle: '[erased]' }, { externalId: 'keep' }],
+        n: 1,
+      },
+    });
     expect(
       (await ctx.c.query('SELECT details FROM audit_event WHERE id = $1', [other])).rows[0],
     ).toEqual({ details: { note: 'keep' } });
     expect(
       (await ctx.c.query('SELECT details FROM audit_event WHERE id = $1', [otherOrg])).rows[0],
-    ).toEqual({ details: { note: X } });
+    ).toEqual({ details: { author: { externalId: X } } });
+  });
+
+  it('leaves audit values that only equal an identifier, and redacts nothing for an unknown subject', async () => {
+    const role = await auditEvent(A, { role: 'admin', capability: X, ruleId: X });
+    const named = await auditEvent(A, { author: { externalId: 'ghost-id', handle: 'ghost' } });
+    await erase(A.organizationId, [{ platform: 'facebook', handle: 'admin' }]);
+    const r = await erase(A.organizationId, [fb(X), fb('ghost-id')]);
+
+    expect(r.found).toBe(false);
+    expect(r.counts.auditEventsRedacted).toBe(0);
+    const details = async (id: string) =>
+      (await ctx.c.query('SELECT details FROM audit_event WHERE id = $1', [id])).rows[0]!.details;
+    expect(await details(role)).toEqual({ role: 'admin', capability: X, ruleId: X });
+    expect(await details(named)).toEqual({ author: { externalId: 'ghost-id', handle: 'ghost' } });
+  });
+
+  it('matches audit handles after normalization', async () => {
+    await authorRule(A, [{ handle: HANDLE }]);
+    const event = await auditEvent(A, { author: { handle: HANDLE.toUpperCase() } });
+
+    const r = await erase(A.organizationId, [{ platform: 'facebook', handle: `@${HANDLE}` }]);
+
+    expect(r.counts.auditEventsRedacted).toBe(1);
+    expect(
+      (await ctx.c.query('SELECT details FROM audit_event WHERE id = $1', [event])).rows[0]!
+        .details,
+    ).toEqual({ author: { handle: '[erased]' } });
   });
 
   it('deletes idempotency records and finished ledger rows that refer to erased comments', async () => {
@@ -638,7 +675,7 @@ describe('eraseSubject', () => {
     await authorRule(A, [{ externalId: X }, { externalId: 'someone-else' }]);
     await authorRule(A, [{ externalId: X }]);
     await proposal(A, [{ externalId: X }]);
-    await auditEvent(A, { note: X });
+    await auditEvent(A, { author: { externalId: X } });
     await idempotencyRecord(A, { id: s.c3.id });
     await ledger(connA(), 'completed', { commentExternalId: s.c1.externalId });
     const before = await everyTableCount();

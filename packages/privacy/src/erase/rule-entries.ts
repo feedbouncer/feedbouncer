@@ -143,3 +143,34 @@ export function redactAuthorEntries(
   }));
   return redacted === 0 ? { value, redacted: 0 } : { value: out, redacted };
 }
+
+/**
+ * Replaces the `externalId` and `handle` of every object naming the subject, at any depth of
+ * a stored JSON value, with "[erased]". Other values are left alone, whatever they hold.
+ * Returns null when nothing names the subject. The platform is not recorded in such values,
+ * so the identifiers of every platform in the request apply.
+ */
+export function redactIdentifierFields(
+  value: unknown,
+  matches: readonly EntryMatch[],
+): unknown | null {
+  const hits = matches.map(matcher);
+  let changed = false;
+  const walk = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(walk);
+    if (typeof v !== 'object' || v === null) return v;
+    const obj = v as Record<string, unknown>;
+    const names = hits.some((hit) => hit(obj) !== null);
+    return Object.fromEntries(
+      Object.entries(obj).map(([k, x]) => {
+        if (names && (k === 'externalId' || k === 'handle') && typeof x === 'string') {
+          changed = true;
+          return [k, ERASED];
+        }
+        return [k, walk(x)];
+      }),
+    );
+  };
+  const out = walk(value);
+  return changed ? out : null;
+}
