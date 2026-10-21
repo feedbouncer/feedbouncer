@@ -98,7 +98,7 @@ describe('PgPrivacyRequestStore', () => {
     const { id } = await store.create(request(A));
     await store.claim(id);
     await ctx.c.query(
-      "UPDATE privacy_request SET started_at = now() - interval '16 minutes' WHERE id = $1",
+      "UPDATE privacy_request SET heartbeat_at = now() - interval '16 minutes' WHERE id = $1",
       [id],
     );
     expect(await store.claim(id)).toMatchObject({ id, subjects });
@@ -251,7 +251,7 @@ describe('PgPrivacyRequestStore', () => {
     await store.claim(abandoned.id);
     await store.claim(active.id);
     await ctx.c.query(
-      "UPDATE privacy_request SET started_at = now() - interval '20 minutes' WHERE id = $1",
+      "UPDATE privacy_request SET heartbeat_at = now() - interval '20 minutes' WHERE id = $1",
       [abandoned.id],
     );
     expect(await store.staleRunning(15 * 60_000)).toEqual([abandoned.id]);
@@ -263,12 +263,25 @@ describe('PgPrivacyRequestStore', () => {
     const r = await store.create(request(A));
     await store.claim(r.id);
     await ctx.c.query(
-      "UPDATE privacy_request SET started_at = now() - interval '20 minutes' WHERE id = $1",
+      "UPDATE privacy_request SET heartbeat_at = now() - interval '20 minutes' WHERE id = $1",
       [r.id],
     );
     await store.heartbeat(r.id);
     expect(await store.staleRunning(15 * 60_000)).toEqual([]);
     expect(await store.claim(r.id)).toBeNull();
+  });
+
+  it('keeps the original start time when the heartbeat refreshes', async () => {
+    const r = await store.create(request(A));
+    await store.claim(r.id);
+    await ctx.c.query(
+      "UPDATE privacy_request SET started_at = now() - interval '40 minutes' WHERE id = $1",
+      [r.id],
+    );
+    await store.heartbeat(r.id);
+    await store.fail(r.id, 'boom');
+    const [failed] = await audits('privacy.request_failed');
+    expect(failed.details.durationMs).toBeGreaterThanOrEqual(40 * 60_000);
   });
 
   it('rejects an unknown organization without leaving a request behind', async () => {

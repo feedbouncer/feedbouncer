@@ -219,7 +219,7 @@ describe('privacy request worker', () => {
     expect(await queue.getJob(id).then((j) => j?.getState())).toBe('failed');
     expect((await status(id)).status).toBe('running');
     await h.c.query(
-      "UPDATE privacy_request SET started_at = now() - interval '1 hour' WHERE id = $1",
+      "UPDATE privacy_request SET heartbeat_at = now() - interval '1 hour' WHERE id = $1",
       [id],
     );
     const w = start({ sweepIntervalMs: 50 });

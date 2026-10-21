@@ -203,9 +203,9 @@ export class PgPrivacyRequestStore {
       subjects_sealed: Buffer;
       keep_rule_entries_reason: string | null;
     }>(
-      `UPDATE privacy_request SET status = 'running', started_at = now()
+      `UPDATE privacy_request SET status = 'running', started_at = now(), heartbeat_at = now()
         WHERE id = $1 AND (status = 'queued'
-              OR (status = 'running' AND started_at < now() - make_interval(secs => $2)))
+              OR (status = 'running' AND heartbeat_at < now() - make_interval(secs => $2)))
        RETURNING organization_id, kind, mode, subjects_sealed, keep_rule_entries_reason`,
       [id, STALE_RUNNING_MS / 1000],
     );
@@ -252,7 +252,7 @@ export class PgPrivacyRequestStore {
   /** Marks a running request as alive, so it is not taken over as abandoned. */
   async heartbeat(id: string): Promise<void> {
     await this.pool.query(
-      "UPDATE privacy_request SET started_at = now() WHERE id = $1 AND status = 'running'",
+      "UPDATE privacy_request SET heartbeat_at = now() WHERE id = $1 AND status = 'running'",
       [id],
     );
   }
@@ -304,8 +304,8 @@ export class PgPrivacyRequestStore {
   async staleRunning(olderThanMs: number): Promise<string[]> {
     const { rows } = await this.pool.query<{ id: string }>(
       `SELECT id FROM privacy_request
-        WHERE status = 'running' AND started_at < now() - make_interval(secs => $1)
-        ORDER BY started_at LIMIT 100`,
+        WHERE status = 'running' AND heartbeat_at < now() - make_interval(secs => $1)
+        ORDER BY heartbeat_at LIMIT 100`,
       [olderThanMs / 1000],
     );
     return rows.map((r) => r.id);
