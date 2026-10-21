@@ -88,11 +88,9 @@ export interface OrgRetentionStatus {
   updatedAt: Date;
   /** The organization's latest purge; its counts cover only its own rows. */
   lastPurge: { at: Date; counts: Record<string, number> } | null;
-  /** Categories held for this organization's rows, newest first. */
+  /** Categories held for this organization's rows: the period still applies and no one has confirmed it. */
   held: { at: Date; category: string; days: number }[];
 }
-
-const HELD_LIMIT = 20;
 
 /** The settings plus the organization's own purge and hold audit events; nothing from other organizations. */
 export async function readOrgRetentionStatus(
@@ -110,11 +108,15 @@ export async function readOrgRetentionStatus(
       [organizationId],
     ),
     pool.query<{ created_at: Date; category: string; days: number }>(
-      `SELECT created_at, details->>'category' AS category, (details->>'days')::int AS days
-         FROM audit_event
-        WHERE organization_id = $1 AND action = 'retention.held'
-        ORDER BY sequence DESC LIMIT $2`,
-      [organizationId, HELD_LIMIT],
+      `SELECT DISTINCT ON (a.details->>'category')
+              a.created_at, a.details->>'category' AS category, (a.details->>'days')::int AS days
+         FROM audit_event a
+        WHERE a.organization_id = $1 AND a.action = 'retention.held'
+          AND NOT EXISTS (
+            SELECT 1 FROM retention_confirmation r
+             WHERE r.category = a.details->>'category' AND r.days = (a.details->>'days')::int)
+        ORDER BY a.details->>'category', a.sequence DESC`,
+      [organizationId],
     ),
   ]);
   const row = status.rows[0];
@@ -126,7 +128,10 @@ export async function readOrgRetentionStatus(
     warnings: row.warnings,
     updatedAt: row.updated_at,
     lastPurge: last ? { at: last.created_at, counts: last.counts } : null,
-    held: held.rows.map((h) => ({ at: h.created_at, category: h.category, days: h.days })),
+    held: held.rows
+      .filter((h) => purgeDays(row.settings)[h.category as RetentionCategory] === h.days)
+      .map((h) => ({ at: h.created_at, category: h.category, days: h.days }))
+      .sort((a, b) => b.at.getTime() - a.at.getTime()),
   };
 }
 

@@ -378,9 +378,10 @@ async function deleteWhere(
 }
 
 /**
- * One batch of the subject's comments, erased in one transaction together with the cached
- * responses and finished job records that mention them, so a retry never finds comments
- * gone and their operational copies left behind.
+ * One batch of the subject's comments. Cached responses and finished job records that
+ * mention them go first, in their own transaction, because finding them scans tables no
+ * index serves and must not run while the comments are locked. The comments are still there
+ * if that step is interrupted, so a retry finds the same batch and repeats it.
  */
 async function eraseCommentBatch(
   pool: pg.Pool,
@@ -388,13 +389,30 @@ async function eraseCommentBatch(
   authorIds: readonly string[],
   batchSize: number,
 ): Promise<{ comments: SubjectComment[]; counts: Partial<ErasureCounts> }> {
+  const { rows: batch } = await pool.query<SubjectComment>(
+    `${SUBJECT_COMMENTS} ORDER BY id LIMIT $3`,
+    [organizationId, authorIds, batchSize],
+  );
+  if (batch.length === 0) return { comments: [], counts: {} };
+  const p = operationalParams(organizationId, batch);
+  const operational = await withTransaction(pool, (tx) =>
+    withRetentionDelete(tx, async () => ({
+      idempotencyRecords: await deleteWhere(
+        tx,
+        'api_idempotency_record',
+        IDEMPOTENCY_MATCH,
+        p.idempotency,
+      ),
+      jobLedgerRows: await deleteWhere(tx, 'job_ledger', LEDGER_MATCH, p.ledger),
+    })),
+  );
   return withTransaction(pool, (tx) =>
     withRetentionDelete(tx, async () => {
       const { rows } = await tx.query<SubjectComment>(
-        `${SUBJECT_COMMENTS} ORDER BY id LIMIT $3 FOR UPDATE`,
-        [organizationId, authorIds, batchSize],
+        `${SUBJECT_COMMENTS} AND id = ANY($3::uuid[]) ORDER BY id FOR UPDATE`,
+        [organizationId, authorIds, batch.map((r) => r.id)],
       );
-      if (rows.length === 0) return { comments: [], counts: {} };
+      if (rows.length === 0) return { comments: [], counts: operational };
       const ids = rows.map((r) => r.id);
       const children = await countChildren(tx, organizationId, ids);
       const replies = await markRepliesParentRemoved(tx, ids, authorIds);
@@ -410,20 +428,13 @@ async function eraseCommentBatch(
         'DELETE FROM comment WHERE organization_id = $1 AND id = ANY($2::uuid[])',
         [organizationId, ids],
       );
-      const p = operationalParams(organizationId, rows);
       return {
         comments: rows,
         counts: {
           ...children,
           repliesMarkedParentRemoved: replies,
           comments: deleted.rowCount ?? 0,
-          idempotencyRecords: await deleteWhere(
-            tx,
-            'api_idempotency_record',
-            IDEMPOTENCY_MATCH,
-            p.idempotency,
-          ),
-          jobLedgerRows: await deleteWhere(tx, 'job_ledger', LEDGER_MATCH, p.ledger),
+          ...operational,
         },
       };
     }),

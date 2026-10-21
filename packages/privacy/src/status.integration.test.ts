@@ -3,7 +3,7 @@ import type pg from 'pg';
 import { createPool } from '@feedbouncer/db';
 import { migratedDb } from '@feedbouncer/db/testing';
 import { effectiveDays, loadRetentionSettings, retentionWarnings } from './settings.js';
-import { publishRetentionStatus, readRetentionStatus } from './status.js';
+import { publishRetentionStatus, readOrgRetentionStatus, readRetentionStatus } from './status.js';
 
 let ctx: Awaited<ReturnType<typeof migratedDb>>;
 let pool: pg.Pool;
@@ -61,5 +61,31 @@ describe('retention status', () => {
       skippedPendingReview: 0,
     });
     expect(lastRun?.finishedAt).toBeInstanceOf(Date);
+  });
+
+  it("lists only the organization's holds that still apply", async () => {
+    const { rows } = await ctx.c.query<{ id: string }>(
+      "INSERT INTO organization (name) VALUES ('held-org') RETURNING id",
+    );
+    const org = rows[0]!.id;
+    const hold = (category: string, days: number) =>
+      ctx.c.query(
+        `INSERT INTO audit_event (organization_id, actor_type, action, subject_type, details)
+         VALUES ($1, 'system', 'retention.held', 'retention_run', $2::jsonb)`,
+        [org, JSON.stringify({ category, days })],
+      );
+    await publishRetentionStatus(
+      pool,
+      loadRetentionSettings({ RETENTION_COMMENTS_DAYS: '30', RETENTION_AUDIT_DAYS: '400' }),
+    );
+    await hold('comments', 30);
+    await hold('audit', 400);
+    await hold('previews', 3);
+    await ctx.c.query(
+      "INSERT INTO retention_confirmation (category, days, eligible_count, confirmed_by) VALUES ('audit', 400, 5, 'ops')",
+    );
+
+    const status = await readOrgRetentionStatus(pool, org);
+    expect(status.held.map((h) => [h.category, h.days])).toEqual([['comments', 30]]);
   });
 });
