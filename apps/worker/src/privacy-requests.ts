@@ -1,6 +1,7 @@
 import { Queue, Worker, type Job } from 'bullmq';
 import type { Redis } from 'ioredis';
 import {
+  enqueuePrivacyRequest,
   PRIVACY_QUEUE,
   PrivacyJobData,
   processPrivacyRequest,
@@ -9,7 +10,6 @@ import {
 import { errorFields } from '@feedbouncer/service-runtime';
 import { every } from './interval.js';
 
-const ATTEMPTS = 3;
 const SWEEP_INTERVAL_MS = 60_000;
 const STALE_QUEUED_MS = 5 * 60_000;
 
@@ -47,17 +47,7 @@ export function startPrivacyRequestWorker(d: PrivacyRequestWorkerDeps): {
   worker.on('error', (err) => log.error('privacy.worker_error', errorFields(err)));
 
   const enqueue = async (requestId: string) => {
-    await queue.add(
-      'process',
-      { v: 1, requestId },
-      {
-        jobId: requestId,
-        attempts: ATTEMPTS,
-        backoff: { type: 'exponential', delay: d.backoffMs ?? 5_000 },
-        removeOnComplete: true,
-        removeOnFail: 1000,
-      },
-    );
+    await enqueuePrivacyRequest(queue, requestId, d.backoffMs);
   };
   const sweeper = every(
     'privacy_requeue',

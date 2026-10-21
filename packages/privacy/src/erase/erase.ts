@@ -344,26 +344,21 @@ async function countWhere(
   return Number(rows[0]?.n ?? 0);
 }
 
-async function deleteInBatches(
-  pool: pg.Pool,
+async function deleteWhere(
+  c: pg.ClientBase,
   table: string,
   where: string,
   params: unknown[],
-  batchSize: number,
 ): Promise<number> {
-  let deleted = 0;
-  for (;;) {
-    const r = await pool.query(
-      `DELETE FROM ${table} WHERE id IN
-         (SELECT x.id FROM ${table} x WHERE ${where} LIMIT $${params.length + 1})`,
-      [...params, batchSize],
-    );
-    deleted += r.rowCount ?? 0;
-    if ((r.rowCount ?? 0) < batchSize) return deleted;
-  }
+  const r = await c.query(`DELETE FROM ${table} x WHERE ${where}`, params);
+  return r.rowCount ?? 0;
 }
 
-/** One batch of the subject's comments, erased in one transaction. */
+/**
+ * One batch of the subject's comments, erased in one transaction together with the cached
+ * responses and finished job records that mention them, so a retry never finds comments
+ * gone and their operational copies left behind.
+ */
 async function eraseCommentBatch(
   pool: pg.Pool,
   organizationId: string,
@@ -392,12 +387,20 @@ async function eraseCommentBatch(
         'DELETE FROM comment WHERE organization_id = $1 AND id = ANY($2::uuid[])',
         [organizationId, ids],
       );
+      const p = operationalParams(organizationId, rows);
       return {
         comments: rows,
         counts: {
           ...children,
           repliesMarkedParentRemoved: replies,
           comments: deleted.rowCount ?? 0,
+          idempotencyRecords: await deleteWhere(
+            tx,
+            'api_idempotency_record',
+            IDEMPOTENCY_MATCH,
+            p.idempotency,
+          ),
+          jobLedgerRows: await deleteWhere(tx, 'job_ledger', LEDGER_MATCH, p.ledger),
         },
       };
     }),
@@ -440,14 +443,12 @@ async function execute(
 ): Promise<{ counts: ErasureCounts; authorIds: string[]; completedAt: Date }> {
   const counts = zeroCounts();
   const matches = entryMatches(subjects);
-  const erased: SubjectComment[] = [];
   let authorIds = await locateAuthorIds(pool, organizationId, subjects);
 
   for (;;) {
     for (;;) {
       const batch = await eraseCommentBatch(pool, organizationId, authorIds, o.batchSize);
       if (batch.comments.length === 0) break;
-      erased.push(...batch.comments);
       add(counts, batch.counts);
       o.log.debug('privacy.erasure_batch', { organizationId, comments: batch.comments.length });
       await o.onStep?.('comment_batch');
@@ -474,21 +475,6 @@ async function execute(
     pool,
     organizationId,
     redactionTerms(subjects),
-    o.batchSize,
-  );
-  const p = operationalParams(organizationId, erased);
-  counts.idempotencyRecords = await deleteInBatches(
-    pool,
-    'api_idempotency_record',
-    IDEMPOTENCY_MATCH,
-    p.idempotency,
-    o.batchSize,
-  );
-  counts.jobLedgerRows = await deleteInBatches(
-    pool,
-    'job_ledger',
-    LEDGER_MATCH,
-    p.ledger,
     o.batchSize,
   );
   return { counts, authorIds, completedAt };

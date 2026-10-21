@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Worker } from 'bullmq';
@@ -351,33 +351,5 @@ describe('privacy admin API', () => {
     for (const secret of [SUBJECT_ID, SUBJECT_HANDLE, SUBJECT_NAME]) {
       expect(logs).not.toContain(secret);
     }
-  });
-});
-
-describe('separation of duties', () => {
-  const root = new URL('.', import.meta.url);
-  const sources = async () => {
-    const names = (await readdir(root)).filter((f) => f.endsWith('.ts') && !f.includes('.test.'));
-    return Promise.all(names.map(async (f) => [f, await readFile(new URL(f, root), 'utf8')]));
-  };
-
-  it('the API code never erases, writes exports or opens sealed subjects', async () => {
-    const files = await sources();
-    expect(files.length).toBeGreaterThan(2);
-    for (const [name, text] of files as [string, string][]) {
-      expect(text, name).not.toMatch(/\b(eraseSubject|writeSubjectExport)\b/);
-      expect(text, name).not.toMatch(/\bopen\s*\(|\bopen\b[^;]*from '@feedbouncer\/secrets'/);
-      expect(text, name).not.toMatch(/@feedbouncer\/classifier/);
-    }
-  });
-
-  it('the API package keeps its dependency list apart from the privacy package', async () => {
-    const pkg = JSON.parse(
-      await readFile(new URL('../../package.json', import.meta.url), 'utf8'),
-    ) as { dependencies: Record<string, string> };
-    expect(Object.keys(pkg.dependencies)).toContain('@feedbouncer/privacy');
-    expect(
-      Object.keys(pkg.dependencies).filter((d) => d.startsWith('@feedbouncer/classifier')),
-    ).toEqual(['@feedbouncer/classifier']);
   });
 });

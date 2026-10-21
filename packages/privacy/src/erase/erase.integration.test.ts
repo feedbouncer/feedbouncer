@@ -614,6 +614,25 @@ describe('eraseSubject', () => {
     expect(await exists('job_ledger', unrelated)).toBe(true);
   });
 
+  it('removes cached responses and job records even when the first attempt fails after its batches', async () => {
+    const s = await seedSubject();
+    const record = await idempotencyRecord(A, { data: { id: s.c1.id, body: `${MARKER}` } });
+    const done = await ledger(connA(), 'completed', { commentExternalId: s.c1.externalId });
+
+    await expect(
+      erase(A.organizationId, [fb(X)], {
+        onStep: async (step) => {
+          if (step === 'authors_deleted') throw new Error('crash');
+        },
+      }),
+    ).rejects.toThrow('crash');
+    const retry = await erase(A.organizationId, [fb(X)]);
+
+    expect(await exists('api_idempotency_record', record)).toBe(false);
+    expect(await exists('job_ledger', done)).toBe(false);
+    expect(retry.counts.comments).toBe(0);
+  });
+
   it('dry run writes nothing and counts exactly what the erasure then does', async () => {
     const s = await seedSubject();
     await authorRule(A, [{ externalId: X }, { externalId: 'someone-else' }]);

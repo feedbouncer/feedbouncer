@@ -9,3 +9,4 @@ export * from './export/json-array-stream.js';
 export * from './requests/store.js';
 export * from './requests/transport.js';
 export * from './requests/process.js';
+export * from './export-dir.js';

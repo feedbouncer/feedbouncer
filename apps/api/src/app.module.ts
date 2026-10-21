@@ -102,11 +102,13 @@ import {
   DEPS,
   JOB_PRODUCER,
   MODERATION_CHECK_CLIENT,
+  PRIVACY_QUEUE_CLIENT,
   PRIVACY_REQUESTS,
   PUBLIC_API_LIMITS,
   RATE_LIMITS,
 } from './tokens.js';
 import type { AppDeps } from './deps.js';
+import { PrivacyQueueClient } from './privacy/privacy-queue.client.js';
 
 // Providers are wired explicitly (inject: [DEPS, ...]) rather than through
 // constructor type metadata, which the test transformer does not emit.
@@ -208,6 +210,17 @@ export class AppModule {
           provide: PRIVACY_REQUESTS,
           inject: [DEPS],
           useFactory: (d: AppDeps) => new PgPrivacyRequestStore(d.pool, d.env.encryption),
+        },
+        {
+          // Stopped by Nest (onModuleDestroy).
+          provide: PRIVACY_QUEUE_CLIENT,
+          inject: [DEPS],
+          useFactory: (d: AppDeps) =>
+            new PrivacyQueueClient({
+              redisUrl: d.env.redisUrl.href,
+              prefix: d.env.jobs.prefix,
+              log: d.log,
+            }),
         },
         { provide: BACKFILL_STORE, useValue: new PgBackfillStore(deps.pool) },
         {

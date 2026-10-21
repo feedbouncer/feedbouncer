@@ -44,7 +44,12 @@ export class OrgAccessGuard implements CanActivate {
     req.org = { organizationId, actorUserId: req.user.id, role: m.role, grants: m.grants };
     if (!can(m.role, cap, m.grants)) {
       if (cap.startsWith('privacy.')) {
-        await recordPrivacyDenial(this.deps, req.org, cap, req.routeOptions.url ?? '');
+        await recordPrivacyDenial(
+          this.deps,
+          req.org,
+          cap,
+          `${req.method} ${req.routeOptions.url ?? ''}`,
+        );
       }
       throw new ApiError(403, 'forbidden');
     }

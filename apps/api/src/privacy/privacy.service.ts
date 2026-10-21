@@ -1,13 +1,10 @@
 import { createReadStream, type ReadStream } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { Inject, Injectable, type OnModuleDestroy } from '@nestjs/common';
-import { Queue } from 'bullmq';
+import { Inject, Injectable } from '@nestjs/common';
 import { orgCan, type OrgContext } from '../tenancy/org-access.guard.js';
 import { withTransaction } from '@feedbouncer/db';
-import { createProducerConnection } from '@feedbouncer/jobs';
 import {
-  PRIVACY_QUEUE,
   readRetentionStatus,
   type PgPrivacyRequestStore,
   type RetentionStatus,
@@ -16,8 +13,9 @@ import { errorFields } from '@feedbouncer/service-runtime';
 import { recordAudit } from '../audit/audit.js';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
-import { DEPS, PRIVACY_REQUESTS } from '../tokens.js';
+import { DEPS, PRIVACY_QUEUE_CLIENT, PRIVACY_REQUESTS } from '../tokens.js';
 import { recordPrivacyDenial } from './denial.js';
+import type { PrivacyQueueClient } from './privacy-queue.client.js';
 import {
   isDownloadable,
   toPrivacyRequestDto,
@@ -32,30 +30,12 @@ export const CREATE_ROUTE = 'POST /api/v1/orgs/:orgId/privacy/requests';
  * straight into the sealed column) and serves finished exports; the worker does the work.
  */
 @Injectable()
-export class PrivacyService implements OnModuleDestroy {
-  readonly #redis;
-  readonly #queue: Queue;
-
+export class PrivacyService {
   constructor(
     @Inject(DEPS) private readonly deps: AppDeps,
     @Inject(PRIVACY_REQUESTS) private readonly store: PgPrivacyRequestStore,
-  ) {
-    this.#redis = createProducerConnection(deps.env.redisUrl.href);
-    this.#redis.on('error', (err) => deps.log.warn('privacy.redis_error', errorFields(err)));
-    this.#queue = new Queue(PRIVACY_QUEUE, {
-      connection: this.#redis,
-      prefix: deps.env.jobs.prefix,
-    });
-    this.#queue.on('error', () => {});
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    await Promise.race([
-      this.#queue.close().catch(() => {}),
-      new Promise((resolve) => setTimeout(resolve, 1_000)),
-    ]);
-    this.#redis.disconnect();
-  }
+    @Inject(PRIVACY_QUEUE_CLIENT) private readonly queue: PrivacyQueueClient,
+  ) {}
 
   retention(): Promise<RetentionStatus> {
     return readRetentionStatus(this.deps.pool);
@@ -85,17 +65,7 @@ export class PrivacyService implements OnModuleDestroy {
       kind: body.kind,
     });
     try {
-      await this.#queue.add(
-        'process',
-        { v: 1, requestId: id },
-        {
-          jobId: id,
-          attempts: 3,
-          backoff: { type: 'exponential', delay: 5_000 },
-          removeOnComplete: true,
-          removeOnFail: 1000,
-        },
-      );
+      await this.queue.enqueue(id);
     } catch (err) {
       // The request is stored; the worker's sweeper queues it again within minutes.
       this.deps.log.warn('privacy.enqueue_failed', { requestId: id, ...errorFields(err) });

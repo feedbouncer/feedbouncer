@@ -1,4 +1,3 @@
-import { isAbsolute } from 'node:path';
 import {
   EnvError,
   LOG_LEVELS,
@@ -19,6 +18,7 @@ import {
   type LogLevel,
   type SecretFileSystem,
 } from '@feedbouncer/service-runtime';
+import { readExportDir } from '@feedbouncer/privacy';
 import { normalizeAddress } from '@feedbouncer/mailer';
 import { parseAlertChannels, readAlertLimits } from '@feedbouncer/alerts';
 import {
@@ -152,14 +152,6 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'AUTH_SECRET', authSecret, opts.warn);
   const facebook = parseFacebookEnv(env, opts.warn);
-  const privacyExportDir = readString(env, 'PRIVACY_EXPORT_DIR', {
-    fallback: '/var/lib/feedbouncer/privacy-exports',
-    maxLength: 4096,
-    pattern: /^[^\0]+$/,
-  });
-  if (!isAbsolute(privacyExportDir)) {
-    throw new EnvError('PRIVACY_EXPORT_DIR must be an absolute path');
-  }
   const config: ApiEnv = {
     appEnv,
     databaseUrl,
@@ -201,7 +193,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
       max: 60_000,
       fallback: 20_000,
     }),
-    privacyExportDir,
+    privacyExportDir: readExportDir(env),
     webhookAllowedPrivateCidrs: readAllowedPrivateCidrs(env),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),

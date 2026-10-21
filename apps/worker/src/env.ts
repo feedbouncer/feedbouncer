@@ -1,4 +1,3 @@
-import { isAbsolute } from 'node:path';
 import {
   EnvError,
   LOG_LEVELS,
@@ -48,7 +47,7 @@ import {
   type HealthPolicy,
   type TelemetryConfig,
 } from '@feedbouncer/observability';
-import { loadRetentionSettings, type RetentionSettings } from '@feedbouncer/privacy';
+import { loadRetentionSettings, readExportDir, type RetentionSettings } from '@feedbouncer/privacy';
 import { ENCRYPTION_FILE_VARS, loadEncryptionKeyring, type Keyring } from '@feedbouncer/secrets';
 
 const SMTP_PROTOCOLS = ['smtp:', 'smtps:'] as const;
@@ -150,14 +149,8 @@ function readPublicWebUrl(env: Env): URL {
 }
 
 export function readPrivacyConfig(env: Env): PrivacyConfig {
-  const exportDir = readString(env, 'PRIVACY_EXPORT_DIR', {
-    fallback: '/var/lib/feedbouncer/privacy-exports',
-    maxLength: 4096,
-    pattern: /^[^\0]+$/,
-  });
-  if (!isAbsolute(exportDir)) throw new EnvError('PRIVACY_EXPORT_DIR must be an absolute path');
   return {
-    exportDir,
+    exportDir: readExportDir(env),
     exportTtlHours: readInt(env, 'PRIVACY_EXPORT_TTL_HOURS', { min: 1, max: 720, fallback: 72 }),
     requestConcurrency: readInt(env, 'PRIVACY_REQUEST_CONCURRENCY', {
       min: 1,
