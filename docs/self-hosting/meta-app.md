@@ -10,7 +10,7 @@ This guide covers Facebook Pages, and Instagram professional accounts as an opti
 
 Labels and menu paths come from FeedBouncer's connector docs and Meta's documentation. Meta changes its dashboard often, so some labels may differ from what you see. Each step ends with a verification line that says when it was last checked on a live dashboard. If the dashboard uses another language, labels will differ from the English ones used here.
 
-The guide is refreshed every 90 days and whenever the default Graph API version in FeedBouncer changes. Issues and corrections are welcome.
+A CI test fails when the version above no longer matches FeedBouncer's default Graph API version, so the guide cannot silently fall behind that. Issues and corrections are welcome.
 
 Placeholders: `<APP_ID>`, `<APP_SECRET>`, `<VERIFY_TOKEN>` and `https://feedbouncer.example.com` stand for your own values.
 
@@ -59,7 +59,7 @@ Last verified: not yet checked on a live dashboard
 
 ### Step 5: Copy the App ID
 
-Open **App settings**, then **Basic**. The **App ID** is shown at the top. It is a number, and it is not secret, but do not post it in public. You will enter it as `FACEBOOK_APP_ID` in Part 4. Keep this page open for the next step.
+Open **App settings**, then **Basic**. The **App ID** is shown at the top. It is a number, and it is public: Meta shows it in the login dialog and in URLs. It is not a credential, but there is also no need to publish it. You will enter it as `FACEBOOK_APP_ID` in Part 4. Keep this page open for the next step.
 
 Last verified: not yet checked on a live dashboard
 
@@ -96,6 +96,16 @@ FACEBOOK_APP_ID=<APP_ID>
 FACEBOOK_APP_SECRET=<APP_SECRET>
 FACEBOOK_WEBHOOK_VERIFY_TOKEN=<VERIFY_TOKEN>
 ```
+
+Before this instance is reachable from the internet, replace the example values that `.env.example` ships, because they are published in this repository and would let anyone forge a login or reach your database:
+
+```bash
+FB_ENV=production
+AUTH_SECRET=$(openssl rand -hex 32)
+POSTGRES_PASSWORD=$(openssl rand -hex 24)
+```
+
+Write the generated values into `.env` itself (the `$(...)` is not expanded there). With `FB_ENV=production`, the services refuse to start while any example value is left in place. Postgres sets its password only when its volume is first created, so on an existing stack either change the password inside Postgres too or start from a fresh volume.
 
 FeedBouncer encrypts the Page tokens it obtains with `FB_ENCRYPTION_KEYS`, so replace the `dev-example` key in your `.env` with a production key first, and set `FB_ENCRYPTION_ACTIVE_KEY_ID` to that key's id; [secrets.md](../operations/secrets.md) shows how to generate one. Compose does not read `PUBLIC_WEB_URL` from `.env`; you set it in the next step. Leave `FACEBOOK_GRAPH_API_VERSION` at its default. Docker Compose passes only these plain variables to the containers. To use the `_FILE` variants instead, mount the files from `compose.override.yaml` as shown in [secrets.md](../operations/secrets.md).
 
@@ -167,7 +177,7 @@ Last verified: not yet checked on a live dashboard
 
 Read this before you change anything. Instagram needs more than Facebook:
 
-- The account must be an Instagram **professional account** (Business or Creator). Personal accounts cannot work. See Meta's help on [switching to a professional account](https://help.instagram.com/) and on linking it to a Page.
+- The account must be an Instagram **professional account** (Business or Creator). Personal accounts cannot work. In the Instagram app, switch it under **Settings** > **Account type and tools** > **Switch to professional account**, then link it to your Page; search the Instagram Help Center if the menu differs.
 - It must be **linked** to the Facebook Page you connected in Part 6.
 - Meta's documentation says live Instagram comment webhooks are sent only to apps with **Advanced Access** to the permissions, which requires App Review, and for Business apps the business linked to the Page must be verified. If you only have Standard Access, Instagram comments may not reach FeedBouncer even for your own account. See [When you need App Review or Business Verification](#when-you-need-app-review-or-business-verification). Facebook Pages are not affected.
 
