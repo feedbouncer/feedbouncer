@@ -115,7 +115,11 @@ const tableRows = (md) =>
         .map((c) => c.trim()),
     );
 
-const constBody = (file, name) => read(file).match(new RegExp(`${name} = \\[([^\\]]*)\\]`))[1];
+const constBody = (file, name) => {
+  const match = read(file).match(new RegExp(`${name} = \\[([^\\]]*)\\]`));
+  assert.ok(match, `${name} not found in ${file}`);
+  return match[1];
+};
 
 const readScopes = (file, name) => {
   const body = constBody(file, name);
