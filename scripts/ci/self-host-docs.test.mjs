@@ -203,7 +203,6 @@ test(
   () => {
     for (const t of EXPECTED_H2S.filter((h) => !NOTE_EXEMPT.includes(h))) {
       const firstPara = section(t)
-        .split('\n## ')[0]
         .trim()
         .split(/\n\s*\n/)[1];
       assert.match(firstPara, NOTE_RE, `${t} lacks a leading note`);
@@ -219,7 +218,7 @@ test(
     const s = section('Status of this guide');
     const rows = tableRows(s);
     const noted = notedSections();
-    assert.deepEqual(rows.map((r) => r[0]).sort(), noted.sort());
+    assert.deepEqual(rows.map((r) => r[0]).sort(), [...noted].sort());
     for (const [name, status] of rows)
       assert.match(
         status,
@@ -259,7 +258,10 @@ test('each Part 1-7 ends with a Checkpoint', { todo: 'Task 2' }, () => {
     const lastStep = body.lastIndexOf('\n### Step ');
     const checkpoint = body.lastIndexOf('\n**Checkpoint:** ');
     assert.ok(checkpoint > lastStep, `${t}: Checkpoint must follow the last step`);
-    const line = body.slice(checkpoint + 1).split('\n')[0];
+    const line = body
+      .slice(checkpoint + 1)
+      .split('\n')[0]
+      .slice('**Checkpoint:** '.length);
     assert.ok(line.length >= 40, `${t}: Checkpoint is too short`);
   }
 });
