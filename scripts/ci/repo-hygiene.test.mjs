@@ -9,6 +9,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
+import { SECRET_PATTERNS } from './lib/secret-patterns.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const REPO_URL = 'https://github.com/feedbouncer/feedbouncer';
@@ -143,15 +144,7 @@ const PLACEHOLDERS = [
   /<your[- ][a-z -]+>/i,
 ];
 const PERSONAL_PATHS = [/\/Users\/[A-Za-z]/, /\/home\/[a-z][\w-]*\//, /[A-Z]:\\Users\\/];
-const SECRET_SHAPES = [
-  /\bgh[pousr]_[A-Za-z0-9]{20,}/,
-  /\bgithub_pat_[A-Za-z0-9_]{20,}/,
-  /\bsk-[A-Za-z0-9_-]{20,}/,
-  /\bxox[abpr]-[A-Za-z0-9-]{10,}/,
-  /\bAKIA[0-9A-Z]{16}\b/,
-  /\bEAA[A-Za-z0-9]{30,}/,
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-];
+const SECRET_SHAPES = SECRET_PATTERNS;
 
 test('community files contain no placeholders, personal paths or secret-shaped strings', () => {
   for (const rel of present()) {
@@ -418,7 +411,11 @@ test('n8n package has no runtime dependencies and the community keyword', () => 
 
 test('n8n build does not emit a tsbuildinfo into the published dist', () => {
   const { compilerOptions } = JSON.parse(read(`${N8N_PACKAGE}/tsconfig.json`));
-  assert.notEqual(compilerOptions.incremental, true, 'incremental builds write dist/tsconfig.tsbuildinfo');
+  assert.notEqual(
+    compilerOptions.incremental,
+    true,
+    'incremental builds write dist/tsconfig.tsbuildinfo',
+  );
 });
 
 test('README states the n8n version CI tests against', () => {
@@ -426,7 +423,10 @@ test('README states the n8n version CI tests against', () => {
   const version = read(versionFile).trim();
   assert.match(version, /^\d+\.\d+\.\d+$/, versionFile);
   for (const workflow of ['ci.yml', 'release-n8n-node.yml']) {
-    assert.ok(read(`.github/workflows/${workflow}`).includes(versionFile), `${workflow} must read ${versionFile}`);
+    assert.ok(
+      read(`.github/workflows/${workflow}`).includes(versionFile),
+      `${workflow} must read ${versionFile}`,
+    );
   }
   assert.ok(read(`${N8N_PACKAGE}/README.md`).includes(version), 'README must state the version');
 });
