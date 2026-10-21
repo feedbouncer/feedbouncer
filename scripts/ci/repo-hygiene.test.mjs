@@ -9,6 +9,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
+import { SECRET_PATTERNS } from './lib/secret-patterns.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const REPO_URL = 'https://github.com/feedbouncer/feedbouncer';
@@ -143,22 +144,15 @@ const PLACEHOLDERS = [
   /<your[- ][a-z -]+>/i,
 ];
 const PERSONAL_PATHS = [/\/Users\/[A-Za-z]/, /\/home\/[a-z][\w-]*\//, /[A-Z]:\\Users\\/];
-const SECRET_SHAPES = [
-  /\bgh[pousr]_[A-Za-z0-9]{20,}/,
-  /\bgithub_pat_[A-Za-z0-9_]{20,}/,
-  /\bsk-[A-Za-z0-9_-]{20,}/,
-  /\bxox[abpr]-[A-Za-z0-9-]{10,}/,
-  /\bAKIA[0-9A-Z]{16}\b/,
-  /\bEAA[A-Za-z0-9]{30,}/,
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-];
 
 test('community files contain no placeholders, personal paths or secret-shaped strings', () => {
   for (const rel of present()) {
     const text = read(rel);
     // LICENSE is canonical text; its "How to Apply" appendix legitimately has <year> etc.
     const patterns =
-      rel === 'LICENSE' ? SECRET_SHAPES : [...PLACEHOLDERS, ...PERSONAL_PATHS, ...SECRET_SHAPES];
+      rel === 'LICENSE'
+        ? SECRET_PATTERNS
+        : [...PLACEHOLDERS, ...PERSONAL_PATHS, ...SECRET_PATTERNS];
     for (const re of patterns) assert.ok(!re.test(text), `${rel} matches ${re}`);
   }
 });

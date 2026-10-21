@@ -111,7 +111,7 @@ Sign-up, email confirmation, password reset and invitations send real emails. In
 
 ### Facebook Pages (optional)
 
-The connector is off until `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` and `FACEBOOK_WEBHOOK_VERIFY_TOKEN` are set in `.env` (commented examples are in `.env.example`). Meta needs a public HTTPS URL for the webhook and the OAuth redirect, so a purely local stack cannot complete a real connection without a tunnel. The worker also needs `SMTP_URL` and `PUBLIC_WEB_URL` (compose sets both). Meta app setup, permissions, App Review and known limitations: [docs/connectors/facebook.md](docs/connectors/facebook.md).
+The connector is off until `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` and `FACEBOOK_WEBHOOK_VERIFY_TOKEN` are set in `.env` (commented examples are in `.env.example`). Meta needs a public HTTPS URL for the webhook and the OAuth redirect, so a purely local stack cannot complete a real connection without a tunnel. The worker also needs `SMTP_URL` and `PUBLIC_WEB_URL` (compose sets both). Step-by-step Meta app setup: [docs/self-hosting/meta-app.md](docs/self-hosting/meta-app.md). Permissions, App Review and known limitations: [docs/connectors/facebook.md](docs/connectors/facebook.md).
 
 ### Stop, restart, reset
 
@@ -130,6 +130,7 @@ All settings live in `.env`, which is git-ignored and copied from `.env.example`
 - **Port already in use?** Change `WEB_HOST_PORT` or `API_HOST_PORT` in `.env`. You never need to edit `compose.yaml`.
 - **Need psql or a GUI client?** Postgres and Redis are not published by default. To publish them on `127.0.0.1` only, run `docker compose -f compose.yaml -f compose.expose-db.yaml up`, or uncomment `COMPOSE_FILE` in `.env`. Use `POSTGRES_HOST_PORT`/`REDIS_HOST_PORT` if 5432 or 6379 are taken.
 - **Personal tweaks:** copy `compose.override.example.yaml` to `compose.override.yaml`, which is git-ignored and loaded automatically (unless `COMPOSE_FILE` is set).
+- Self-hosting guides, including creating your own Meta app: [docs/self-hosting/README.md](docs/self-hosting/README.md).
 - Job queue (queues, retries, dead-letter commands): see [docs/operations/job-queue.md](docs/operations/job-queue.md). To define a job, see [docs/jobs/defining-a-job.md](docs/jobs/defining-a-job.md).
 - Slack and email alerts (spike and flagged-item alerts, `ALERT_CHANNELS`, Slack webhook setup): see [docs/operations/alerts.md](docs/operations/alerts.md).
 - Weekly email report (`WEEKLY_REPORTS`, when reports are sent, inspecting deliveries): see [docs/operations/weekly-report.md](docs/operations/weekly-report.md).

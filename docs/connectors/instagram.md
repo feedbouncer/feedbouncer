@@ -54,6 +54,8 @@ unavailable.
 
 ## Meta app setup
 
+For the step-by-step version, see [Part 7 of the self-hosting guide](../self-hosting/meta-app.md#part-7-connect-instagram-optional).
+
 Use the **same Meta app** as the Facebook connector. If you have not created it
 yet, follow [facebook.md](facebook.md#create-the-meta-app) first.
 

@@ -32,6 +32,8 @@ Out of scope:
 
 ## Create the Meta app
 
+For a step-by-step version, see the [self-hosting guide](../self-hosting/meta-app.md).
+
 1. In the [Meta for Developers](https://developers.facebook.com/) dashboard,
    create an app of the **Business** type.
 2. Add the **Facebook Login for Business** product (or **Facebook Login**) and
