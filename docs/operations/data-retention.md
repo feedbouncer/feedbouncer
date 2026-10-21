@@ -157,7 +157,8 @@ you; retention settings do not reach it.
 
 ## Rollback
 
-Rolling back the migration (`down.sql` of `privacy_retention`) drops the
+Rolling back takes two steps, newest first: `privacy_request_heartbeat`
+drops the `heartbeat_at` column, then `privacy_retention` (its `down.sql`) drops the
 `privacy_request`, `erased_comment`, `retention_run`, `retention_confirmation`
 and `retention_status` tables, the `comment.parent_removed_at` column and the
 indexes added for the purge, and puts the append-only guard back. Comments,

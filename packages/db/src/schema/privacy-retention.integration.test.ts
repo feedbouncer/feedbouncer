@@ -340,8 +340,11 @@ describe('migration round trip', () => {
       const before = await counts(c);
       expect(before.decision).toBe(1);
 
-      const res = await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR);
-      expect(res).toEqual({
+      expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({
+        status: 'rolled_back',
+        migration: '20261021000200_privacy_request_heartbeat',
+      });
+      expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({
         status: 'rolled_back',
         migration: '20261021000100_privacy_retention',
       });

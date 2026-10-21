@@ -447,7 +447,9 @@ otherwise), set the value transaction-locally, and it ends at `COMMIT` or
   `audit_event` that changes only `details` (and `updated_at`) is allowed.
   Anything else, on any table, is still refused.
 
-Rolling back `20261021000100_privacy_retention` drops the privacy and retention
+Rolling back this feature takes two steps: first
+`20261021000200_privacy_request_heartbeat` (drops `privacy_request.heartbeat_at`),
+then `20261021000100_privacy_retention`, which drops the privacy and retention
 records it added (`privacy_request`, `retention_*`, `erased_comment`,
 `comment.parent_removed_at`) and restores the original guard. Existing content,
 decisions and audit events are untouched.
