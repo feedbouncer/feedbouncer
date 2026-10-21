@@ -65,7 +65,7 @@ You need:
 - A Facebook account and a Facebook Page that you administer.
 - Optionally, an Instagram **professional** (Business or Creator) account linked to that Page. See the prerequisites at the top of [Part 7](#part-7-connect-instagram-optional).
 - A running FeedBouncer instance. Installing it is covered in [Local stack with Docker Compose](../../README.md#local-stack-with-docker-compose).
-- A **public HTTPS URL** for that instance, with a publicly trusted certificate. Meta will not deliver webhooks to `localhost` or to a self-signed certificate.
+- A **public HTTPS URL** for that instance, with a publicly trusted certificate. Meta's documentation says webhooks need a publicly reachable HTTPS endpoint, so expect Meta not to deliver to `localhost` or to a self-signed certificate (see Meta's [webhooks documentation](https://developers.facebook.com/docs/graph-api/webhooks)).
 
 For testing you can put any HTTPS tunnel in front of your instance, for example Cloudflare Tunnel or ngrok (neither is endorsed). If the tunnel URL changes, update `PUBLIC_WEB_URL` and both URLs you give Meta.
 
@@ -356,9 +356,9 @@ See Meta's [Permissions Reference](https://developers.facebook.com/docs/permissi
 
 > Not yet verified against Meta's documentation as of 2026-10-21. Check: what Development mode delivers, and what the Live-mode switch requires today.
 
-A new app starts in **Development mode**. In Development mode, only people with a role on the app (admins, developers, testers) generate events. A comment from anyone else is never delivered to FeedBouncer, even though it is on your Page. This is the most common reason a working setup looks broken.
+A new app starts in **Development mode**. Meta's documentation says that in Development mode only people with a role on the app (admins, developers, testers) generate events, so expect a comment from anyone else not to be delivered to FeedBouncer even though it is on your Page (see Meta's [webhooks documentation](https://developers.facebook.com/docs/graph-api/webhooks)). This is the most common reason a working setup looks broken.
 
-**Live mode** is required to receive events from people without a role on the app. Switching to Live needs details Meta asks for at the time, such as a privacy policy URL, and for permissions beyond Standard Access it needs App Review.
+Meta's documentation says **Live mode** is required to receive events from people without a role on the app, that switching to Live needs details such as a privacy policy URL, and that permissions beyond Standard Access need App Review. See [App Review](https://developers.facebook.com/docs/resp-plat-initiatives/app-review) and ask Meta for the current requirements.
 
 If you only moderate your own Page and the people commenting have a role on the app (add them as testers in **App roles**), you can stay in Development mode.
 
@@ -368,7 +368,7 @@ If you only moderate your own Page and the people commenting have a role on the 
 
 FeedBouncer never asks you for a token. When you click Connect it receives a user token, exchanges it for a long-lived one and derives a Page access token, which it stores encrypted.
 
-Meta can invalidate a token at any time: the user changes their password, loses their role on the Page, removes the app, or has not used the app for 90 days. You can inspect a token's `expires_at` and `data_access_expires_at` in Meta's Access Token Debugger, but never screenshot or share the output.
+Meta can invalidate a token at any time: the user changes their password, loses their role on the Page, removes the app, or, according to Meta's documentation, has not used the app for about 90 days (see [Access Levels](https://developers.facebook.com/docs/graph-api/overview/access-levels)). You can inspect a token's `expires_at` and `data_access_expires_at` in Meta's Access Token Debugger, but never screenshot or share the output.
 
 When Meta rejects a token, the connection shows **Needs reconnect** with a reason, FeedBouncer emails the owners once, and moderation actions are paused. Choose **Reconnect**, approve the permissions again, and the paused actions are replayed.
 
@@ -381,7 +381,10 @@ When Meta rejects a token, the connection shows **Needs reconnect** with a reaso
 3. Within about a minute the comment appears in the brand's Comments list. New connections start in review mode for 7 days, so FeedBouncer shows a **Suggestion** to hide it instead of hiding it. Open **Suggestions** and accept it. The comment is then hidden on Facebook and listed under **Hidden today**, with your rule as the reason. You can undo it.
 
 > [SCREENSHOT: feedbouncer suggestion for test comment] Must show: The Suggestions list with a suggestion to hide the test comment and its rule reason. Redact: commenter names and avatars, Page and brand names, and email addresses.
-> [SCREENSHOT: feedbouncer hidden today with rule reason] Must show: The Hidden today list with the test comment and your rule named as the reason. Redact: commenter names and avatars, Page and brand names, and email addresses. 4. Optional: turn review mode off for the connection and repeat. The hide then happens on its own.
+
+> [SCREENSHOT: feedbouncer hidden today with rule reason] Must show: The Hidden today list with the test comment and your rule named as the reason. Redact: commenter names and avatars, Page and brand names, and email addresses.
+
+4. Optional: turn review mode off for the connection and repeat. The hide then happens on its own.
 
 If nothing appears, see [Troubleshooting](#troubleshooting).
 
@@ -403,11 +406,11 @@ Check that the Page shows as connected, that `feed` is subscribed under Webhooks
 
 ### Only your own comments show up
 
-The app is in Development mode, or you only have Standard Access, so only people with a role on the app generate events. Add the commenter as a tester, or see [When you need App Review or Business Verification](#when-you-need-app-review-or-business-verification).
+Meta's documentation says that in Development mode, or with only Standard Access, only people with a role on the app generate events. Add the commenter as a tester, or see [When you need App Review or Business Verification](#when-you-need-app-review-or-business-verification).
 
 ### The connection says "Needs reconnect"
 
-Meta rejected the stored token, for example after a password change, a lost Page role or 90 days without use. Choose **Reconnect**.
+Meta rejected the stored token, for example after a password change, a lost Page role, or, according to Meta's documentation, a long period without use. Choose **Reconnect**.
 
 ### Instagram account not found when connecting Instagram
 
@@ -450,7 +453,7 @@ If a Page token may be exposed, remove the app from the Page's Business Integrat
 
 > Not yet verified against Meta's documentation as of 2026-10-21. Check: the App Review and Business Verification requirements and links against Meta's current pages.
 
-You need neither if only people with a role on your app moderate their own Pages. You need **App Review** (to get Advanced Access) to serve Pages of people without a role on the app, and, according to Meta's documentation, for live Instagram comments. **Business Verification** is required for Advanced Access on many permissions and for Instagram webhooks in Business apps. FeedBouncer does not walk you through either; follow Meta's own guides: [App Review](https://developers.facebook.com/docs/resp-plat-initiatives/app-review) and [Business Verification](https://developers.facebook.com/docs/development/release/business-verification).
+You need neither if only people with a role on your app moderate their own Pages. Meta's documentation says you need **App Review** (to get Advanced Access) to serve Pages of people without a role on the app, and for live Instagram comments. According to Meta's documentation, **Business Verification** is required for Advanced Access on many permissions and for Instagram webhooks in Business apps. FeedBouncer does not walk you through either; follow Meta's own guides: [App Review](https://developers.facebook.com/docs/resp-plat-initiatives/app-review) and [Business Verification](https://developers.facebook.com/docs/development/release/business-verification).
 
 ## More Pages and accounts
 
