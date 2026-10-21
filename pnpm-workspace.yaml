@@ -3,11 +3,14 @@ packages:
   - packages/*
   - integrations/*
 allowBuilds:
+  '@parcel/watcher': false
   '@prisma/engines': true
+  core-js: false
   cpu-features: false
   esbuild: false
   isolated-vm: false
   msgpackr-extract: false
+  postman-code-generators: false
   prisma: true
   re2: true
   ssh2: false

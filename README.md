@@ -34,6 +34,7 @@ pnpm test
 | `apps/web`                           | Web app (Next.js)                                                                                            |
 | `apps/worker`                        | Background worker that runs queued jobs                                                                      |
 | `apps/mcp`                           | MCP server over stdio, a client of the public API                                                            |
+| `apps/docs`                          | Public documentation site (Docusaurus); see apps/docs/README.md                                              |
 | `apps/placeholder-app`               | Minimal app used as the template for new apps and Docker images                                              |
 | `packages/authz`                     | Roles and authorization checks                                                                               |
 | `packages/comments`                  | Comments: storage, moderation, lifecycle, webhooks, reconnect emails                                         |

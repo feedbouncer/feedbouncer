@@ -1,0 +1,4 @@
+/* Site-wide overrides; keep to Docusaurus theme variables. */
+:root {
+  --ifm-color-primary: #1f5fbf;
+}
