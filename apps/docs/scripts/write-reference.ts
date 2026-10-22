@@ -1,9 +1,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { STEP_META, STEP_TYPES, CONFLICTS, type StepType } from '@feedbouncer/actions';
 import { REASON_CODES } from '@feedbouncer/moderation-contract';
 import {
+  API_KEY_SCOPES,
   AUTH_FAILURES_PER_MINUTE,
   DEFAULT_PAGE_SIZE,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
@@ -12,7 +14,6 @@ import {
   PUBLIC_ERROR_CODES,
   PUBLIC_ERROR_STATUS,
   REQUEST_BODY_LIMIT_BYTES,
-  type ApiKeyScope,
 } from '@feedbouncer/public-api';
 import {
   ACTION_SEVERITY,
@@ -25,8 +26,8 @@ import {
 export interface ProductReference {
   rules: {
     conditions: { type: string; schema: object }[];
-    limits: typeof CONDITION_LIMITS;
-    modes: readonly ['enforce', 'suggest'];
+    limits: typeof CONDITION_LIMITS & { termCharsBeforeTrim: number };
+    modes: typeof RULE_MODES;
     steps: { type: StepType; order: number; reversible: boolean; undo: string }[];
     conflicts: [StepType, StepType][];
     outcomes: string[];
@@ -34,7 +35,7 @@ export interface ProductReference {
   };
   api: {
     errors: { code: string; status: number }[];
-    scopes: ['moderate', 'read', 'write'];
+    scopes: typeof API_KEY_SCOPES;
     page: { default: number; max: number };
     rateLimit: {
       defaultPerMinute: number;
@@ -47,8 +48,6 @@ export interface ProductReference {
   moderationCheck: { reasons: string[] };
 }
 
-const SCOPES = ['moderate', 'read', 'write'] as const satisfies readonly ApiKeyScope[];
-
 export function buildProductReference(): ProductReference {
   return {
     rules: {
@@ -57,7 +56,9 @@ export function buildProductReference(): ProductReference {
         const type = (option.shape.type as z.ZodLiteral<string>).value;
         return { type, schema };
       }),
-      limits: CONDITION_LIMITS,
+      // Keyword terms and competitor names are trimmed before the termChars limit applies, so the
+      // request schema admits twice that much raw input.
+      limits: { ...CONDITION_LIMITS, termCharsBeforeTrim: CONDITION_LIMITS.termChars * 2 },
       modes: RULE_MODES,
       steps: STEP_TYPES.map((type, order) => ({
         type,
@@ -73,7 +74,7 @@ export function buildProductReference(): ProductReference {
     },
     api: {
       errors: PUBLIC_ERROR_CODES.map((code) => ({ code, status: PUBLIC_ERROR_STATUS[code] })),
-      scopes: [...SCOPES],
+      scopes: API_KEY_SCOPES,
       page: { default: DEFAULT_PAGE_SIZE, max: MAX_PAGE_SIZE },
       rateLimit: {
         defaultPerMinute: DEFAULT_RATE_LIMIT_PER_MINUTE,
@@ -87,7 +88,7 @@ export function buildProductReference(): ProductReference {
   };
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const file = new URL('../../../docs/reference/product-reference.json', import.meta.url);
   mkdirSync(new URL('.', file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(buildProductReference(), null, 2)}\n`);

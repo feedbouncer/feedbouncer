@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { MAX_CHECK_TEXT_UNITS, REASON_CODES } from '@feedbouncer/moderation-contract';
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './constants.js';
-import type { ApiKeyScope } from './keys/token.js';
+import { API_KEY_SCOPES, type ApiKeyScope } from './keys/token.js';
 import { ACTION_STATUSES, ActionResource } from './resources/action.js';
 import { CommentResource } from './resources/comment.js';
 import { FlaggedItemResource } from './resources/flagged-item.js';
@@ -246,7 +246,7 @@ export const KeyResource = z
   .object({
     organizationId: z.uuid(),
     name: z.string(),
-    scope: z.enum(['moderate', 'read', 'write']),
+    scope: z.enum(API_KEY_SCOPES),
   })
   .meta({ id: 'Key' });
 

@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Secret } from '@feedbouncer/service-runtime';
 
-export type ApiKeyScope = 'moderate' | 'read' | 'write';
+export const API_KEY_SCOPES = ['moderate', 'read', 'write'] as const;
+export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
 
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
 const KEY_RE = /^fbk_([a-z2-7]{16})_([A-Za-z0-9_-]{43})$/;

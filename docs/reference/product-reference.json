@@ -269,7 +269,8 @@
       "idChars": 255,
       "handleChars": 100,
       "competitorEach": 500,
-      "jsonChars": 600000
+      "jsonChars": 600000,
+      "termCharsBeforeTrim": 200
     },
     "modes": [
       "enforce",
@@ -433,11 +434,6 @@
         "code": "pending_limit_reached",
         "status": 409
       }
-    ],
-    "scopes": [
-      "moderate",
-      "read",
-      "write"
     ],
     "page": {
       "default": 50,
