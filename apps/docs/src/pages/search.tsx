@@ -1,4 +1,4 @@
-import { useCallback, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import Layout from '@theme/Layout';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import { useLocation } from '@docusaurus/router';
@@ -13,7 +13,10 @@ export default function Search(): ReactNode {
   const { search } = useLocation();
   const docs = useAllDocsData();
   const versions = docsVersions(docs.default?.versions ?? [], baseUrl);
-  const params = new URLSearchParams(search);
+  // The static page is built without a query; read it after mount so hydration matches.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const params = new URLSearchParams(mounted ? search : '');
   const requested = params.get('version') ?? '';
   const version = versions.some((v) => v.name === requested)
     ? requested

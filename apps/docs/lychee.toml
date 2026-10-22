@@ -1,0 +1,9 @@
+# Product-repo links are excluded because the content test "RepoLink paths exist" checks them
+# locally, and links to files added in the same pull request would 404 on main.
+exclude = [
+  '^https://feedbouncer\.example\.com',
+  '^https?://(localhost|127\.0\.0\.1)',
+  '^https://github\.com/feedbouncer/feedbouncer/',
+]
+max_retries = 3
+accept = ['200..=299', '429']

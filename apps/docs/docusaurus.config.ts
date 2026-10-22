@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import type * as OpenApiPlugin from 'docusaurus-plugin-openapi-docs';
+import { darkCodeTheme, lightCodeTheme } from './prism-theme';
 import { BASE_URL, REPO, SITE_URL } from './site.config';
 
 const versionsFile = new URL('./versions.json', import.meta.url);
@@ -89,6 +90,8 @@ const config: Config = {
   themes: ['docusaurus-theme-openapi-docs'],
   themeConfig: {
     api: { hideGeneratedSnippets: true },
+    // Token colors that keep 4.5:1 contrast on the code background (the default palette does not).
+    prism: { theme: lightCodeTheme, darkTheme: darkCodeTheme },
     languageTabs: [{ language: 'curl', highlight: 'bash' }],
     navbar: {
       title: 'FeedBouncer',
