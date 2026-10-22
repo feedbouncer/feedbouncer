@@ -27,5 +27,5 @@
     "suggestions": [],
     "alsoMatched": ["Flag refund mentions"]
   },
-  "note": "Both rules match. The one with the lower priority number runs first and decides, although it was created second. The other rule is listed as also matched in the decision record and does nothing."
+  "note": "Both rules match. The one with the lower priority number runs first and decides, although it was created second. The other rule does nothing. In review mode the decision record also lists it as also matched; outside review mode it is not recorded."
 }

@@ -24,11 +24,21 @@ describe('worked examples', () => {
   it.each(examples)('$id: the engine produces the documented decision', (ex) => {
     const set = compileRuleSet(toRecords(ex), { ownDomains: ex.brand.ownDomains }, 'docs');
     expect(set.invalid).toEqual([]);
+    // alsoMatched is only collected in review mode, which is how the worker calls the engine there.
     const v = evaluate(set, toFacts(ex.comment), { collectAlsoMatched: true });
     expect(v.decided?.ruleName ?? null).toBe(ex.expected.decidedRule);
     expect(v.decided ? deriveOutcome(v.decided.actions) : 'none').toBe(ex.expected.outcome);
     expect(v.decided?.actions.map((s) => s.type) ?? []).toEqual(ex.expected.steps);
     expect(v.suggestions.map((s) => s.ruleName)).toEqual(ex.expected.suggestions);
     expect(v.alsoMatched.map((s) => s.ruleName)).toEqual(ex.expected.alsoMatched);
+  });
+
+  it('also-matched rules are only collected in review mode', () => {
+    const ex = examples.find((e) => e.id === 'priority-tie-break')!;
+    const set = compileRuleSet(toRecords(ex), { ownDomains: ex.brand.ownDomains }, 'docs');
+    expect(evaluate(set, toFacts(ex.comment), { collectAlsoMatched: false }).alsoMatched).toEqual(
+      [],
+    );
+    expect(ex.note).toMatch(/review mode/);
   });
 });

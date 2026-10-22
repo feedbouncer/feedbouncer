@@ -14,7 +14,7 @@ When several rules could match a comment, the order below decides which one acts
 
 The first rule in `enforce` mode that matches **decides** the comment and stops the search for acting rules. An allow from a trusted author therefore skips every rule below it. [Trusted author wins](./examples.mdx#a-trusted-author-beats-a-keyword-rule) shows this.
 
-Every other enforce rule that also matches is recorded in the decision as also matched. It does nothing. [The lower priority number decides](./examples.mdx#the-lower-priority-number-decides) shows this.
+Every other enforce rule that also matches does nothing. During [review mode](#during-review-mode) only, the decision also lists them as also matched; otherwise the decision records just the rule that decided. [The lower priority number decides](./examples.mdx#the-lower-priority-number-decides) shows this.
 
 A rule that can never fire, because an earlier rule always matches first or because its list is empty, is flagged in the list.
 
@@ -28,7 +28,7 @@ An enforcing rule that decides a comment ends the evaluation, including a rule t
 
 ## The time budget
 
-Each rule has a budget of 50 ms for one comment. A rule that exceeds it, fails or has conditions that no longer validate is skipped for that comment, and evaluation goes on with the next rule. A skipped rule is recorded in the decision's trace.
+Each rule has a budget of 50 ms for one comment. A rule that exceeds it or fails is skipped for that comment, and evaluation goes on with the next rule. A skipped rule is recorded in the decision's trace. A rule whose conditions no longer validate is left out of the rule set altogether and never runs; FeedBouncer logs a warning, but it does not appear in the trace.
 
 ## When no rule matches
 
