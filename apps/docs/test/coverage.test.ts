@@ -1,9 +1,12 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { inflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { MAX_DOMAINS_PER_BRAND, MAX_RULES_PER_BRAND } from '@feedbouncer/rules';
 import reference from '../../../docs/reference/product-reference.json';
 import { exampleFiles } from './lib/examples';
-import { appRoot, body, headings } from './lib/content';
+import openapi from '../../../docs/api/openapi.json';
+import { appRoot, body, codeBlocks, headings } from './lib/content';
 
 const rules = reference.rules;
 const page = (name: string) => join(appRoot, 'docs/rules', name);
@@ -90,4 +93,132 @@ describe('rules section coverage', () => {
       /<FeatureStatus status="unsupported">[\s\S]*duplicate[\s\S]*<\/FeatureStatus>/i,
     );
   });
+});
+
+const apiPage = (name: string) => join(appRoot, 'docs/api', name);
+const GUIDES = [
+  'overview.md',
+  'quickstart.md',
+  'authentication.md',
+  'errors.mdx',
+  'pagination.md',
+  'rate-limits.mdx',
+  'idempotency.md',
+  'webhooks.md',
+  'moderation-check.md',
+];
+
+describe('api guides coverage', () => {
+  it('every /v1 path in api guides exists in openapi.json', () => {
+    const templates = Object.keys(openapi.paths).map(
+      (path) => new RegExp(`^${path.replace(/\{[^}]+\}/g, '[^/]+')}$`),
+    );
+    let seen = 0;
+    for (const guide of GUIDES) {
+      const text = body(apiPage(guide));
+      for (const m of text.matchAll(/\/v1\/[\w\-/<>{}.]*[\w>}]/g)) {
+        seen++;
+        const path = m[0].replace(/<[A-Z][A-Z0-9_]*>/g, '{id}');
+        expect(
+          templates.some((t) => t.test(path)),
+          `${guide}: ${m[0]}`,
+        ).toBe(true);
+      }
+    }
+    expect(seen).toBeGreaterThan(20);
+  });
+
+  it('errors.mdx renders the generated error table and explains the Error shape fields', () => {
+    const text = body(apiPage('errors.mdx'));
+    expect(text).toMatch(/<ReferenceTable\s+kind="errors"/);
+    expect(text).toContain('reference.api.errors');
+    for (const field of ['code', 'message']) expect(text).toContain(`\`${field}\``);
+  });
+
+  it('errors.mdx has a meaning for every error code in the reference data', () => {
+    const text = body(apiPage('errors.mdx'));
+    for (const { code } of reference.api.errors)
+      expect(text, code).toMatch(new RegExp(`\\b${code}:`));
+  });
+
+  it('errors.mdx states the 413 limit from the reference data', () => {
+    const text = body(apiPage('errors.mdx'));
+    expect(text).toContain('reference.api.requestBodyLimitBytes');
+    expect(text).toMatch(/`413`[^\n]*`invalid_request`/);
+    expect(reference.api.requestBodyLimitBytes).toBe(64 * 1024);
+  });
+
+  it('quickstart shows the exported host and a GET /v1/key call', () => {
+    const blocks = codeBlocks(body(apiPage('quickstart.md'))).map((b) => b.body);
+    expect(
+      blocks.some((b) => b.includes('export FEEDBOUNCER_URL=https://feedbouncer.example.com')),
+    ).toBe(true);
+    expect(blocks.some((b) => /curl[^\n]*"?\$FEEDBOUNCER_URL\/v1\/key"?/.test(b))).toBe(true);
+  });
+
+  it('authentication lists the scopes in order', () => {
+    const text = body(apiPage('authentication.md'));
+    const at = reference.api.scopes.map((s) => text.indexOf(`| \`${s}\``));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+  });
+
+  it('moderation-check.md covers every reason code', () => {
+    const text = body(apiPage('moderation-check.md'));
+    for (const r of reference.moderationCheck.reasons) expect(text, r).toContain(`\`${r}\``);
+  });
+
+  it('every guide is in the API reference sidebar', () => {
+    const sidebar = readFileSync(join(appRoot, 'sidebars.ts'), 'utf8');
+    for (const g of GUIDES) expect(sidebar, g).toContain(`'api/${g.replace(/\.mdx?$/, '')}'`);
+  });
+});
+
+const build = join(appRoot, 'build');
+const reference_ = join(appRoot, 'docs/api/reference');
+
+describe('built API reference', () => {
+  // The curl sample reaches the browser inside each page's compressed `api` data, not as static HTML,
+  // so the check decodes that data from the generated page and finds it in the built assets.
+  it.skipIf(!existsSync(join(build, 'docs/api/reference')))(
+    'every operation has a built reference page containing its curl sample',
+    () => {
+      const assets = join(build, 'assets/js');
+      const chunks = readdirSync(assets).map((f) => readFileSync(join(assets, f), 'utf8'));
+      const pages = new Map<string, { slug: string; blob: string; source: string }>();
+      for (const f of readdirSync(reference_).filter((n) => n.endsWith('.api.mdx'))) {
+        const blob = /^api: (.+)$/m.exec(readFileSync(join(reference_, f), 'utf8'))?.[1];
+        if (!blob) continue;
+        const data = JSON.parse(inflateSync(Buffer.from(blob, 'base64')).toString()) as {
+          operationId?: string;
+          codeSamples?: { source: string }[];
+          'x-codeSamples'?: { source: string }[];
+        };
+        if (data.operationId)
+          pages.set(data.operationId, {
+            slug: f.replace(/\.api\.mdx$/, ''),
+            blob,
+            source: (data.codeSamples ?? data['x-codeSamples'])?.[0]?.source ?? '',
+          });
+      }
+      const ids = Object.values(openapi.paths).flatMap((item) =>
+        Object.values(item as Record<string, { operationId?: string }>).flatMap((op) =>
+          op.operationId ? [op.operationId] : [],
+        ),
+      );
+      expect(ids.length).toBeGreaterThan(0);
+      for (const id of ids) {
+        const page = pages.get(id);
+        expect(page, `${id} has a generated page`).toBeDefined();
+        expect(existsSync(join(build, 'docs/api/reference', page!.slug, 'index.html')), id).toBe(
+          true,
+        );
+        expect(page!.source, id).toContain('$FEEDBOUNCER_URL/v1');
+        expect(
+          chunks.some((c) => c.includes(page!.blob)),
+          `${id} sample is in the build`,
+        ).toBe(true);
+      }
+    },
+  );
 });

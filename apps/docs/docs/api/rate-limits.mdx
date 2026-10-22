@@ -1,0 +1,41 @@
+---
+title: Rate limits
+description: The per-key request limit, the headers that report it, and the separate limit on failed authentication.
+status: stable
+---
+
+import reference from '@site/docs/_generated/product-reference.json';
+
+## Per key
+
+Each API key may make {reference.api.rateLimit.defaultPerMinute} requests per minute by default. The count is per key, not per address, and each key has its own budget. Requests that are refused for scope still count.
+
+Self-hosters change the limit with <code>{reference.api.rateLimit.env}</code> in the API's environment. A value of 120 doubles it for every key.
+
+## Headers
+
+Every authenticated response carries:
+
+| Header                  | Meaning                                         |
+| ----------------------- | ----------------------------------------------- |
+| `X-RateLimit-Limit`     | Requests allowed per minute for this key.       |
+| `X-RateLimit-Remaining` | Requests left in the current one-minute window. |
+
+Over the limit, the answer is `429 rate_limited` with `X-RateLimit-Remaining: 0` and `Retry-After`, the whole seconds to wait (at least 1):
+
+```http
+HTTP/1.1 429 Too Many Requests
+retry-after: 12
+x-ratelimit-limit: 60
+x-ratelimit-remaining: 0
+```
+
+Wait that long and retry. Slow down before you reach zero: when `X-RateLimit-Remaining` is low, spread the rest of your requests over the window.
+
+## Failed authentication
+
+A request with a missing or bad key counts against its source address, not a key. After {reference.api.rateLimit.authFailuresPerMinute} failures from one address in a minute, further requests from it get `429 rate_limited` with `Retry-After`, even if they carry a good key. This limit is fixed. It has no `X-RateLimit-*` headers, because no key is involved.
+
+## When the limiter is down
+
+The counters live in Redis. If the API cannot reach it, requests fail with `503 temporarily_unavailable` instead of going unmetered. Retry with backoff: see [Errors](./errors.mdx#what-to-retry).

@@ -14,8 +14,7 @@ const AUDIENCES = [
   {
     title: "I'm integrating with the API",
     text: 'Authenticate, make a first request and look up every endpoint.',
-    // The quickstart page is written with the API section; until then the section overview is the entry point.
-    to: '/docs/api/overview/',
+    to: '/docs/api/quickstart/',
   },
   {
     title: "I'm connecting an assistant (MCP)",

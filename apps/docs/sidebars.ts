@@ -34,7 +34,22 @@ const sidebars: SidebarsConfig = {
         'rules/limits',
       ],
     },
-    { type: 'category', label: 'API reference', items: ['api/overview', ...apiReference] },
+    {
+      type: 'category',
+      label: 'API reference',
+      items: [
+        'api/overview',
+        'api/quickstart',
+        'api/authentication',
+        'api/errors',
+        'api/pagination',
+        'api/rate-limits',
+        'api/idempotency',
+        'api/webhooks',
+        'api/moderation-check',
+        ...apiReference,
+      ],
+    },
     { type: 'category', label: 'MCP setup', items: ['mcp/overview'] },
   ],
 };

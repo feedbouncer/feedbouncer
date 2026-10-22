@@ -1,0 +1,74 @@
+---
+title: Errors
+description: The error response shape, every error code with its status, and which failures to retry.
+status: stable
+---
+
+import reference from '@site/docs/_generated/product-reference.json';
+
+export const meaning = {
+  invalid_request: 'The request is malformed or a field is invalid. The body is too large.',
+  invalid_cursor: 'The cursor is malformed, or was made for different filters.',
+  unauthenticated: 'The API key is missing, malformed, unknown or revoked.',
+  insufficient_scope: 'The key is valid but its scope is too low for this route.',
+  not_found: 'No such resource in your organization.',
+  rate_limited: 'Too many requests. Wait for Retry-After.',
+  temporarily_unavailable: 'A dependency is unavailable. Try again shortly.',
+  internal_error: 'Something went wrong on our side.',
+  idempotency_key_reused: 'The Idempotency-Key was already used with a different request.',
+  idempotency_request_in_progress: 'The first request with this Idempotency-Key is still running.',
+  invalid_idempotency_key: 'The Idempotency-Key is not 1 to 128 characters of A-Z a-z 0-9 . _ : -.',
+  connection_inactive: 'The connection of the brand is not active.',
+  unsupported_action: 'The action is not supported for this platform.',
+  invalid_webhook_url: 'The webhook URL is not allowed.',
+  webhook_endpoint_limit_reached: 'The organization has the most webhook endpoints it may have.',
+  webhook_endpoint_disabled: 'The webhook endpoint is disabled.',
+  webhook_event_unavailable: 'The comment of this event is no longer available.',
+  webhook_delivery_in_progress: 'The delivery is still being attempted.',
+  text_too_long: 'The text is over the limit. The limit is in max or maxLength.',
+  reply_not_allowed: 'A reply cannot be posted. The reason says why.',
+  rule_rejected: 'The proposed rule change could never be applied. The reason says why.',
+  rule_limit_reached: 'The brand already has the most rules it may have.',
+  pending_limit_reached: 'The brand already has the most proposals waiting that it may have.',
+};
+
+Every error response has the same shape:
+
+```json
+{
+  "error": {
+    "code": "invalid_request",
+    "message": "Request body too large."
+  }
+}
+```
+
+- `code` is a stable, machine-readable string. Match on it. New codes may be added, and none is ever renamed.
+- `message` is a plain sentence for a person. Do not match on it: its wording can change.
+
+Some errors add fields that say more: `reason`, `field` and `problem`, `max` and `maxLength`, and `ruleId`. Each route lists the codes it can return, and the [Error schema](./reference/schemas/error.schema.mdx) lists the fields.
+
+## Codes
+
+<ReferenceTable
+  kind="errors"
+  data={reference.api.errors.map((e) => ({ ...e, meaning: meaning[e.code] }))}
+/>
+
+Every authenticated route can also return `401`, `403`, `429`, `500` and `503`.
+
+## Request size
+
+A request body over {reference.api.requestBodyLimitBytes / 1024} KiB is refused with status `413` and code `invalid_request`. Send less per request.
+
+## What to retry
+
+| Status                                  | Retry?    | How                                                                                                      |
+| --------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------- |
+| `429 rate_limited`                      | Yes       | Wait the seconds in `Retry-After`.                                                                       |
+| `503 temporarily_unavailable`           | Yes       | Wait for `Retry-After` if present, else back off: 1 s, 2 s, 4 s, with jitter, up to a few attempts.      |
+| `500 internal_error`                    | Carefully | Back off as above. On a route that changes state, send an `Idempotency-Key` so a retry cannot repeat it. |
+| `409 idempotency_request_in_progress`   | Yes       | Wait a moment and send the same request with the same key.                                               |
+| Any other `4xx`, including other `409`s | No        | The request is wrong or the state forbids it. Change it first. Sending it again returns the same error.  |
+
+Idempotent retries are explained in [Idempotency](./idempotency.md).
