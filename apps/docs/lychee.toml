@@ -3,7 +3,11 @@
 exclude = [
   '^https://feedbouncer\.example\.com',
   '^https?://(localhost|127\.0\.0\.1)',
-  '^https://github\.com/feedbouncer/feedbouncer/',
+  '^https://github\.com/feedbouncer/feedbouncer(/|$)',
 ]
 max_retries = 3
 accept = ['200..=299', '429']
+
+# The site is served under /feedbouncer/ but the build directory has no such folder, so a root-relative
+# link such as /feedbouncer/docs/x resolves to <build>/feedbouncer/docs/x. Drop that segment.
+remap = ['^(file://.*/build)/feedbouncer(/.*)?$ $1$2']
