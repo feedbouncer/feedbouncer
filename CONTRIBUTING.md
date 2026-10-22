@@ -64,6 +64,8 @@ pnpm test
 
 Some docs are guarded by tests in `scripts/ci/`. If one fails after your change, update the doc in the same pull request.
 
+- Changes to rules or actions (`packages/rules`, `packages/actions`), the public API (`packages/public-api`, `apps/api/src/public-api`) or MCP tools (`apps/mcp`) must update the docs site (`apps/docs`) in the same pull request. CI fails when `docs/api/openapi.json`, `docs/mcp/tools.json` or `docs/reference/product-reference.json` is stale, or when a condition, step, tool or endpoint has no docs.
+
 ## Proposing larger changes
 
 Open an issue (choose **Feature request**) and agree on the approach **before** writing a large pull request. This applies to:

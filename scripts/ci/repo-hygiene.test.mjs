@@ -424,3 +424,11 @@ test('README states the n8n version CI tests against', () => {
   }
   assert.ok(read(`${N8N_PACKAGE}/README.md`).includes(version), 'README must state the version');
 });
+
+test('CONTRIBUTING states the same-PR docs rule for rules, API and MCP', () => {
+  const text = read('CONTRIBUTING.md');
+  for (const needle of ['apps/docs', 'rules', 'API', 'MCP tools']) {
+    assert.ok(text.includes(needle), `CONTRIBUTING.md should mention ${needle}`);
+  }
+  assert.match(text, /must update the docs site \(`apps\/docs`\) in the same pull request/);
+});
