@@ -3,8 +3,15 @@
   "extends": ["//"],
   "tasks": {
     "build": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docs/{api,mcp,reference}/*.json"],
       "outputs": ["build/**"],
       "cache": false
+    },
+    "typecheck": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docs/{api,mcp,reference}/*.json"]
+    },
+    "test": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docs/{api,mcp,reference}/*.json"]
     }
   }
 }

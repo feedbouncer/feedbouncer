@@ -12,7 +12,7 @@
     "format": "prettier --write . --ignore-path ../../.prettierignore --ignore-unknown",
     "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
     "typecheck": "node scripts/prepare-content.mjs && tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
-    "test": "vitest run",
+    "test": "node scripts/prepare-content.mjs && vitest run",
     "routes:update": "node scripts/check-routes.mjs --update",
     "test:site": "node scripts/check-routes.mjs && playwright test"
   },
