@@ -4,10 +4,10 @@ description: The error response shape, every error code with its status, and whi
 status: stable
 ---
 
-import reference from '@site/docs/_generated/product-reference.json';
+import reference from '../_generated/product-reference.json';
 
 export const meaning = {
-  invalid_request: 'The request is malformed or a field is invalid. The body is too large.',
+  invalid_request: 'The request is malformed, a field is invalid, or the body is too large (413).',
   invalid_cursor: 'The cursor is malformed, or was made for different filters.',
   unauthenticated: 'The API key is missing, malformed, unknown or revoked.',
   insufficient_scope: 'The key is valid but its scope is too low for this route.',

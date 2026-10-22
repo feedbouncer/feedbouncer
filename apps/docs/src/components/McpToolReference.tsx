@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import manifest from '../../docs/_generated/tools.json';
 
 interface Schema {
   type?: string | string[];
@@ -17,12 +16,11 @@ interface Schema {
   maxLength?: number;
 }
 
-// The manifest is JSON, so TypeScript infers each tool's schema from its own literal; this is the common shape.
-const tools = manifest.tools as unknown as readonly {
+interface Tool {
   name: string;
   inputSchema: Schema;
   outputSchema: Schema;
-}[];
+}
 
 function typeOf(s: Schema): string {
   if (s.enum) return s.enum.map((v) => String(v)).join(' | ');
@@ -81,8 +79,16 @@ function Table({ caption, schema, input }: { caption: string; schema: Schema; in
 }
 
 /** The input and output of one MCP tool, as tables built from the committed tool manifest. */
-export default function McpToolReference({ name }: { name: string }): ReactNode {
-  const tool = tools.find((t) => t.name === name);
+export default function McpToolReference({
+  name,
+  manifest,
+}: {
+  name: string;
+  /** The page's own copy of tools.json, so a versioned snapshot never reads the current tools. */
+  manifest: { tools: readonly object[] };
+}): ReactNode {
+  // The manifest is JSON, so TypeScript infers each tool's schema from its own literal; this is the common shape.
+  const tool = (manifest.tools as unknown as readonly Tool[]).find((t) => t.name === name);
   if (!tool) throw new Error(`Unknown MCP tool: ${name}`);
   return (
     <>

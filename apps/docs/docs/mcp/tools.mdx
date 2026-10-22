@@ -4,6 +4,8 @@ description: The seven FeedBouncer MCP tools, with the scope each needs, example
 status: stable
 ---
 
+import manifest from '../_generated/tools.json';
+
 The server offers seven <Term id="mcp-tool">tools</Term>. Each one calls one or two `/v1` routes of the [public API](../api/overview.md) with your key, so it sees only that key's workspace.
 
 Every tool returns a text result for the model and, on success, a `structuredContent` object with the same data as JSON. IDs are UUIDs. Times are ISO 8601 with an offset, such as `2026-10-18T09:00:00Z` or `2026-10-18T11:00:00+02:00`. The tables below are generated from the server's tool manifest.
@@ -46,7 +48,7 @@ Lists comments from the inbox, newest first. Needs a `read` key. Example prompt:
 
 An empty page is `No comments match.`, not an error. Pages are stable: following `nextCursor` neither repeats nor skips comments when new ones arrive in between. In the text result and in `structuredContent`, `text` and `authorName` are wrapped in [untrusted-content delimiters](authentication.mdx#tool-output-is-untrusted).
 
-<McpToolReference name="list_inbox" />
+<McpToolReference name="list_inbox" manifest={manifest} />
 
 ## `search_inbox`
 
@@ -54,7 +56,7 @@ Searches comment text and author names, case-insensitively. Needs a `read` key. 
 
 It takes every `list_inbox` input plus `query`, and returns the same output and paging. Nothing found is `No comments match.`, not an error.
 
-<McpToolReference name="search_inbox" />
+<McpToolReference name="search_inbox" manifest={manifest} />
 
 ## `reply_to_comment`
 
@@ -68,7 +70,7 @@ The tool queues the reply, then waits up to 15 seconds for it to post:
 
 Without `idempotencyKey`, the key is derived from the comment ID and the text, so calling again with the same text returns the first result instead of posting twice. The same applies to a refusal: retrying with the same key returns the stored refusal, even after the cause is fixed. To try again, pass a new `idempotencyKey`. To post the same text twice on purpose, pass a different key each time. Reusing a key with a different comment or text is refused with `idempotency_key_reused`.
 
-<McpToolReference name="reply_to_comment" />
+<McpToolReference name="reply_to_comment" manifest={manifest} />
 
 ## `set_comment_visibility`
 
@@ -80,7 +82,7 @@ Without `idempotencyKey`, every call is a new request. The result is one of:
 - Applied at once: `changed` is `true` and `status` is `applied`.
 - Already in that state, or deleted on the platform: `changed` is `false` with a `reason`. This is not an error.
 
-<McpToolReference name="set_comment_visibility" />
+<McpToolReference name="set_comment_visibility" manifest={manifest} />
 
 ## `summarize_period`
 
@@ -88,7 +90,7 @@ Summarises comment activity: totals, categories, the rules that matched most and
 
 `from` defaults to 7 days before `to`, and `to` defaults to now and must not be in the future. A period longer than 92 days is cut to the last 92 days, the result says so, and `bounded` is set. A `to` before `from` is `invalid_request`. In `notableThreads`, `textPreview` and `authorName` are wrapped in untrusted-content delimiters.
 
-<McpToolReference name="summarize_period" />
+<McpToolReference name="summarize_period" manifest={manifest} />
 
 ## `read_rules`
 
@@ -96,7 +98,7 @@ Lists the live rules of each brand and its recent rule-change proposals. Needs a
 
 Each brand has a `ruleRevision`, a counter that goes up on every rule change. See [approving rule changes](approvals.md#stale-proposals-must-be-proposed-again).
 
-<McpToolReference name="read_rules" />
+<McpToolReference name="read_rules" manifest={manifest} />
 
 ## `propose_rule_change`
 
@@ -119,4 +121,4 @@ The API refuses proposals it could never apply, with `rule_rejected` and one of 
 
 The `matches_everything`, duplicate and conflict checks are skipped when the resulting rule is disabled, so a bad rule can always be switched off.
 
-<McpToolReference name="propose_rule_change" />
+<McpToolReference name="propose_rule_change" manifest={manifest} />

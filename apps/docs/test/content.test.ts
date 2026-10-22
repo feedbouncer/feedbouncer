@@ -228,3 +228,23 @@ describe('concepts', () => {
       expect(text, word).toContain(word);
   });
 });
+
+describe('generated data imports', () => {
+  it('no versionable page imports docs/_generated through @site', () => {
+    for (const file of docFiles()) {
+      const text = readFileSync(file, 'utf8');
+      expect(text, relative(appRoot, file)).not.toMatch(/@site\/docs\/_generated/);
+      for (const m of text.matchAll(/^import .* from '(\.[^']*_generated[^']*)'/gm))
+        expect(m[1], relative(appRoot, file)).toMatch(/^(\.\.\/)+_generated\//);
+    }
+  });
+
+  it('no file under src/ imports docs/_generated', () => {
+    const files = readdirSync(join(appRoot, 'src'), { recursive: true, withFileTypes: true })
+      .filter((e) => e.isFile() && /\.(tsx?|mdx?)$/.test(e.name))
+      .map((e) => join(e.parentPath, e.name));
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files)
+      expect(readFileSync(file, 'utf8'), relative(appRoot, file)).not.toMatch(/_generated/);
+  });
+});

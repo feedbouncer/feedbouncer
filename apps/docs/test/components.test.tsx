@@ -3,6 +3,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ExampleComment from '../src/components/ExampleComment';
 import FeatureStatus from '../src/components/FeatureStatus';
+import manifest from '../../../docs/mcp/tools.json';
 import McpToolReference from '../src/components/McpToolReference';
 import ReferenceTable from '../src/components/ReferenceTable';
 import RepoLink from '../src/components/RepoLink';
@@ -128,7 +129,7 @@ describe('Term', () => {
 
 describe('McpToolReference', () => {
   it('renders the input and output tables of a tool from the manifest', () => {
-    const { container } = render(<McpToolReference name="list_inbox" />);
+    const { container } = render(<McpToolReference name="list_inbox" manifest={manifest} />);
     const captions = [...container.querySelectorAll('caption')].map((c) => c.textContent);
     expect(captions).toEqual(['list_inbox input', 'list_inbox structured output']);
     const [input] = container.querySelectorAll('table');
@@ -141,13 +142,15 @@ describe('McpToolReference', () => {
   });
 
   it('marks required inputs', () => {
-    const { container } = render(<McpToolReference name="reply_to_comment" />);
+    const { container } = render(<McpToolReference name="reply_to_comment" manifest={manifest} />);
     const row = (name: string) => within(container).getAllByText(name)[0]!.closest('tr')!;
     expect(row('commentId').cells[2]!.textContent).toBe('yes');
     expect(row('idempotencyKey').cells[2]!.textContent).toBe('no');
   });
 
   it('refuses a tool that is not in the manifest', () => {
-    expect(() => render(<McpToolReference name="no_such_tool" />)).toThrow('Unknown MCP tool');
+    expect(() => render(<McpToolReference name="no_such_tool" manifest={manifest} />)).toThrow(
+      'Unknown MCP tool',
+    );
   });
 });

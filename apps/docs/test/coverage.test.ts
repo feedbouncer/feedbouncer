@@ -182,7 +182,7 @@ const reference_ = join(appRoot, 'docs/api/reference');
 describe('built API reference', () => {
   // The curl sample reaches the browser inside each page's compressed `api` data, not as static HTML,
   // so the check decodes that data from the generated page and finds it in the built assets.
-  it.skipIf(!existsSync(join(build, 'docs/api/reference')))(
+  it.skipIf(!existsSync(join(build, 'docs/api/reference')) || !existsSync(reference_))(
     'every operation has a built reference page containing its curl sample',
     () => {
       const assets = join(build, 'assets/js');
@@ -248,7 +248,9 @@ describe('mcp setup coverage', () => {
       .map((h) => h.text.slice(1, -1));
     expect([...h2s].sort()).toEqual([...names].sort());
     for (const name of names)
-      expect(text, name).toMatch(new RegExp(`<McpToolReference\\s+name="${name}"\\s*/>`));
+      expect(text, name).toMatch(
+        new RegExp(`<McpToolReference\\s+name="${name}"\\s+manifest=\\{manifest\\}\\s*/>`),
+      );
   });
 
   it('tools.mdx states the limits where MCP and the API differ', () => {
