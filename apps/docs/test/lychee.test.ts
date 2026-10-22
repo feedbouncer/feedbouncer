@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { BASE_URL } from '../site.config';
+import { BASE_URL, SITE_URL } from '../site.config';
 import { appRoot } from './lib/content';
 
 const toml = readFileSync(join(appRoot, 'lychee.toml'), 'utf8');
@@ -34,5 +34,15 @@ describe('lychee.toml', () => {
         url,
       ).toBe(true);
     expect(patterns.some((p) => p.test('https://github.com/feedbouncer/other'))).toBe(false);
+  });
+
+  it("excludes the site's own published URLs, which do not exist before the first deploy", () => {
+    const patterns = quoted('exclude').map((p) => new RegExp(p));
+    const base = SITE_URL + BASE_URL;
+    for (const url of [base, `${base}docs/rules/precedence/`, `${base}search/`])
+      expect(
+        patterns.some((p) => p.test(url)),
+        url,
+      ).toBe(true);
   });
 });
