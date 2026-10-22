@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { prepareContent } from '../scripts/prepare-content.mjs';
+import { ensureApiSidebar, prepareContent } from '../scripts/prepare-content.mjs';
 import { stampLastUpdate } from '../scripts/stamp-generated.mjs';
 
 const appRoot = resolve(fileURLToPath(import.meta.url), '../..');
@@ -53,6 +53,17 @@ describe('prepare-content', () => {
     expect(readFileSync(join(docsDir, '../versioned_docs/version-1.0.0/frozen.md'), 'utf8')).toBe(
       'frozen',
     );
+  });
+});
+
+describe('ensureApiSidebar', () => {
+  it('stands in an empty sidebar once and never overwrites the generated one', () => {
+    const file = ensureApiSidebar(tmp)!;
+    expect(file).toBe(join(tmp, 'api/reference/sidebar.ts'));
+    expect(readFileSync(file, 'utf8')).toContain('apisidebar: []');
+    writeFileSync(file, 'generated');
+    expect(ensureApiSidebar(tmp)).toBeUndefined();
+    expect(readFileSync(file, 'utf8')).toBe('generated');
   });
 });
 
@@ -101,6 +112,36 @@ describe('stamp-generated', () => {
     });
     expect(run.status).toBe(1);
     expect(run.stderr).toContain('git history');
+  });
+
+  it('exits 1 in a shallow clone', () => {
+    const git = (cwd: string, ...args: string[]) =>
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], {
+        cwd,
+        stdio: 'ignore',
+      });
+    const origin = join(tmp, 'origin');
+    mkdirSync(join(origin, 'docs/api'), { recursive: true });
+    git(origin, 'init', '-q');
+    for (const n of [1, 2]) {
+      writeFileSync(join(origin, 'docs/api/openapi.json'), `{"n":${n}}`);
+      git(origin, 'add', '.');
+      git(origin, 'commit', '-q', '-m', `v${n}`);
+    }
+    const clone = join(tmp, 'clone');
+    git(tmp, 'clone', '-q', '--depth', '1', `file://${origin}`, clone);
+    mkdirSync(join(clone, 'apps/docs/scripts'), { recursive: true });
+    cpSync(
+      join(appRoot, 'scripts/stamp-generated.mjs'),
+      join(clone, 'apps/docs/scripts/stamp-generated.mjs'),
+    );
+    mkdirSync(join(clone, 'apps/docs/docs/api/reference'), { recursive: true });
+    const run = spawnSync('node', ['apps/docs/scripts/stamp-generated.mjs'], {
+      cwd: clone,
+      encoding: 'utf8',
+    });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('fetch-depth: 0');
   });
 });
 

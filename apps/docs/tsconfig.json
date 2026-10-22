@@ -2,6 +2,7 @@
   "extends": "@docusaurus/tsconfig",
   "compilerOptions": {
     "types": ["node", "@docusaurus/module-type-aliases"],
+    "ignoreDeprecations": "6.0",
     "noEmit": true,
     "composite": false,
     "incremental": true

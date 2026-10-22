@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,8 +23,28 @@ export function prepareContent(repoRoot, docsDir) {
   });
 }
 
+/**
+ * sidebars.ts imports the sidebar that `docusaurus gen-api-docs` writes. Until that has run (a
+ * fresh checkout, `typecheck`, `lint`) this empty one stands in; the generator overwrites it.
+ * Returns the path when it wrote one.
+ */
+export function ensureApiSidebar(docsDir) {
+  const file = join(docsDir, 'api/reference/sidebar.ts');
+  if (existsSync(file)) return undefined;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(
+    file,
+    'import type { SidebarsConfig } from "@docusaurus/plugin-content-docs";\n\nconst sidebar: SidebarsConfig = { apisidebar: [] };\n\nexport default sidebar;\n',
+  );
+  return file;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const here = dirname(fileURLToPath(import.meta.url));
-  for (const file of prepareContent(resolve(here, '../../..'), resolve(here, '../docs')))
-    console.log(`wrote ${file}`);
+  const docsDir = resolve(here, '../docs');
+  const written = [
+    ...prepareContent(resolve(here, '../../..'), docsDir),
+    ensureApiSidebar(docsDir),
+  ];
+  for (const file of written) if (file) console.log(`wrote ${file}`);
 }

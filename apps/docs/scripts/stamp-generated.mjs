@@ -41,16 +41,23 @@ function* mdxFiles(dir) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const here = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(here, '../../..');
-  let date = '';
-  try {
-    date = execFileSync('git', ['log', '-1', '--format=%cI', '--', 'docs/api/openapi.json'], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    // No repository or no commits yet: treated the same as an empty history.
+  const git = (...args) => {
+    try {
+      return execFileSync('git', args, {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      // No repository or no commits yet: treated the same as an empty history.
+      return '';
+    }
+  };
+  if (git('rev-parse', '--is-shallow-repository') === 'true') {
+    console.error('Shallow clone: the last-updated dates need the full history (fetch-depth: 0).');
+    process.exit(1);
   }
+  const date = git('log', '-1', '--format=%cI', '--', 'docs/api/openapi.json');
   if (!date) {
     console.error(
       'No git history for docs/api/openapi.json; fetch the full history (fetch-depth: 0).',
