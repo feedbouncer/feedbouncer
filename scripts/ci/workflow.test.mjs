@@ -10,6 +10,7 @@ import { parse } from 'yaml';
 const read = (rel) => readFile(new URL(`../../${rel}`, import.meta.url), 'utf8');
 const workflowText = await read('.github/workflows/ci.yml');
 const actionText = await read('.github/actions/setup/action.yml');
+const docsCheck = parse(await read('.github/actions/docs-check/action.yml'));
 const workflow = parse(workflowText);
 const action = parse(actionText);
 const jobs = Object.entries(workflow.jobs);
@@ -238,21 +239,27 @@ function assertUnitTestsAfterBuild(steps) {
   assert.ok(build >= 0 && tests > build, 'docs unit tests must run after the docs build');
 }
 
-test('docs-deploy.yml runs the docs unit tests after the build', () => {
-  assertUnitTestsAfterBuild(docsDeploy.jobs.build.steps);
+test('the docs-check action builds, tests, runs the site checks and checks links', () => {
+  const steps = docsCheck.runs.steps;
+  const runs = steps.map((s) => s.run ?? '').join('\n');
+  assert.match(runs, /turbo run build --filter=@feedbouncer\/docs/);
+  assert.match(runs, /@feedbouncer\/docs run test:site/);
+  assertUnitTestsAfterBuild(steps);
+  const lychee = steps.find((s) => s.uses?.startsWith('lycheeverse/lychee-action@'));
+  assert.equal(lychee.with.fail, true);
+  assert.match(lychee.with.args, /--config apps\/docs\/lychee\.toml/);
 });
 
-test('the docs job checks out full history and runs test:site and lychee', () => {
+test('the docs PR gate and the deploy build both run the docs-check action', () => {
+  for (const steps of [workflow.jobs.docs.steps, docsDeploy.jobs.build.steps]) {
+    assert.ok(steps.some((s) => s.uses === './.github/actions/docs-check'));
+  }
+});
+
+test('the docs job checks out full history', () => {
   const job = workflow.jobs.docs;
   assert.equal(job?.name, 'Docs');
   assert.equal(job['timeout-minutes'], 25);
   const checkout = job.steps.find((s) => s.uses?.startsWith('actions/checkout@'));
   assert.equal(checkout.with['fetch-depth'], 0);
-  const runs = job.steps.map((s) => s.run ?? '').join('\n');
-  assert.match(runs, /turbo run build --filter=@feedbouncer\/docs/);
-  assert.match(runs, /@feedbouncer\/docs run test:site/);
-  assertUnitTestsAfterBuild(job.steps);
-  const lychee = job.steps.find((s) => s.uses?.startsWith('lycheeverse/lychee-action@'));
-  assert.equal(lychee.with.fail, true);
-  assert.match(lychee.with.args, /--config apps\/docs\/lychee\.toml/);
 });

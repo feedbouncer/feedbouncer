@@ -358,19 +358,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/docs-check
         with:
           turbo-cache-scope: docs
-      - name: Build
-        run: pnpm turbo run build --filter=@feedbouncer/docs
-      - name: Unit tests (including the built reference)
-        run: pnpm --filter @feedbouncer/docs test
-      - name: Install browser
-        run: pnpm --filter @feedbouncer/docs exec playwright install --with-deps chromium
-      - name: Site checks
-        run: pnpm --filter @feedbouncer/docs run test:site
-      - name: Check links
-        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
-        with:
-          args: --config apps/docs/lychee.toml --root-dir ${{ github.workspace }}/apps/docs/build 'apps/docs/build/**/*.html'
-          fail: true

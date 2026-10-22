@@ -5,7 +5,7 @@ import { ruleInputSchema } from '@feedbouncer/rules';
 export const workedExampleSchema = z.strictObject({
   id: z.string().min(1),
   title: z.string().min(1),
-  case: z.union([z.enum(['spam_links', 'repeated_comments', 'abusive_language']), z.string()]),
+  case: z.string().min(1),
   rules: z.array(ruleInputSchema.extend({ priority: z.number().int() })),
   brand: z.strictObject({ ownDomains: z.array(z.string()) }),
   comment: z.strictObject({

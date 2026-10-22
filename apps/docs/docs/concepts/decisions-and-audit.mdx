@@ -4,6 +4,8 @@ description: What FeedBouncer stores about each decision, each action step and e
 status: stable
 ---
 
+import reference from '../_generated/product-reference.json';
+
 FeedBouncer records why every automated action happened.
 
 ## Decisions
@@ -23,17 +25,7 @@ Decisions are append-only. A later decision for the same comment does not change
 
 Each <Term id="action-step">action step</Term> of a decision records its own <Term id="outcome">outcome</Term>: succeeded, failed, skipped, not applicable, not supported, simulated or still pending. A failed hide or delete flags the comment for review.
 
-<ReferenceTable
-kind="steps"
-data={[
-{ type: 'flag_for_review', reversible: true, undo: 'dismiss_review' },
-{ type: 'private_reply', reversible: false, undo: 'none' },
-{ type: 'auto_reply', reversible: false, undo: 'none' },
-{ type: 'hide', reversible: true, undo: 'unhide' },
-{ type: 'ban', reversible: false, undo: 'unban_author' },
-{ type: 'delete', reversible: false, undo: 'none' },
-]}
-/>
+<ReferenceTable kind="steps" data={reference.rules.steps} />
 
 A ban can be undone, but it is hard to reverse. An auto-reply is only partly reversible and has no undo. Deleting a comment and sending a private reply cannot be undone.
 

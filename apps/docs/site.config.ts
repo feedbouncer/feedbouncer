@@ -7,8 +7,6 @@ export const ALLOWED_LINK_HOSTS = [
   'github.com',
   'developers.facebook.com',
   'modelcontextprotocol.io',
-  'code.claude.com',
-  'claude.ai',
   'cursor.com',
   'code.visualstudio.com',
   'nodejs.org',

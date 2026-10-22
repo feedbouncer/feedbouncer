@@ -1,0 +1,29 @@
+name: Check docs
+description: Builds the docs site, runs its unit tests, site checks and external link check.
+inputs:
+  turbo-cache-scope:
+    description: Cache namespace, usually the job id.
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup
+      with:
+        turbo-cache-scope: ${{ inputs.turbo-cache-scope }}
+    - name: Build
+      shell: bash
+      run: pnpm turbo run build --filter=@feedbouncer/docs
+    - name: Unit tests (including the built reference)
+      shell: bash
+      run: pnpm --filter @feedbouncer/docs test
+    - name: Install browser
+      shell: bash
+      run: pnpm --filter @feedbouncer/docs exec playwright install --with-deps chromium
+    - name: Site checks
+      shell: bash
+      run: pnpm --filter @feedbouncer/docs run test:site
+    - name: Check links
+      uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+      with:
+        args: --config apps/docs/lychee.toml --root-dir ${{ github.workspace }}/apps/docs/build 'apps/docs/build/**/*.html'
+        fail: true
