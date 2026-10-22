@@ -43,6 +43,8 @@ The <Term id="hidden-today">Hidden today</Term> page lists every comment hidden 
 
 A comment that was undone counts as a moderator override, so automation does not apply the same step again.
 
+For the routes, idempotency keys and row states, see the <RepoLink path="docs/moderation/undo-log.md">undo log operator reference</RepoLink>.
+
 ## Retention and deletion
 
 You choose how long each kind of data is kept. See <RepoLink path="docs/operations/data-retention.md">data retention</RepoLink> for the categories and <RepoLink path="docs/operations/data-deletion.md">data deletion</RepoLink> for deleting an organization. Deleting a record does not unhide a comment on the platform.

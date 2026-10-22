@@ -117,6 +117,19 @@ describe('content guards', () => {
     }
   });
 
+  test('RepoLink targets are not pointers back to the site', () => {
+    for (const { file, name } of pages) {
+      for (const m of readFileSync(file, 'utf8').matchAll(REPO_LINK_RE)) {
+        const target = join(repoRoot, m[1]!);
+        if (!target.endsWith('.md')) continue;
+        expect(
+          readFileSync(target, 'utf8'),
+          `${name}: ${m[1]} only points back to the site`,
+        ).not.toMatch(/^This page moved to the documentation site: /m);
+      }
+    }
+  });
+
   test('headings: no H1 in body, no skipped levels', () => {
     for (const { file, name } of pages) {
       let previous = 1;

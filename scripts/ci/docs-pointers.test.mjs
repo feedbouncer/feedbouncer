@@ -17,12 +17,6 @@ const POINTERS = {
   'docs/mcp/README.md': 'mcp/overview',
   'docs/mcp/tools.md': 'mcp/tools',
   'docs/mcp/approval.md': 'mcp/approvals',
-  'docs/moderation/rules.md': 'rules/overview',
-  'docs/moderation/actions.md': 'rules/actions',
-  'docs/moderation/review-mode.md': 'concepts/review-mode',
-  'docs/moderation/policies.md': 'concepts/ai-classifier-and-policies',
-  'docs/moderation/classifier.md': 'concepts/ai-classifier-and-policies',
-  'docs/moderation/undo-log.md': 'concepts/decisions-and-audit',
 };
 
 const slug = (heading) =>
@@ -80,7 +74,6 @@ for (const [file, page] of Object.entries(POINTERS)) {
 
 test('pointers keep every heading that another file links to by anchor', () => {
   const wanted = referencedAnchors();
-  assert.ok(Object.keys(wanted).length > 0, 'expected some anchored links to the pointers');
   for (const [file, anchors] of Object.entries(wanted)) {
     const have = headingSlugs(read(file));
     for (const anchor of anchors) {

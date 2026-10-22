@@ -53,3 +53,5 @@ Unticking **Start in review mode** at connect shows a warning, and the account c
 ## What happens at the end
 
 When the window ends, rules, the classifier and policies run at their configured level for new comments. Nothing still pending runs automatically. Waiting suggestions can be approved or dismissed for another 72 hours. After that they expire, and nothing is run.
+
+The audit log for review mode is described in the <RepoLink path="docs/moderation/review-mode.md">review mode operator reference</RepoLink>.
