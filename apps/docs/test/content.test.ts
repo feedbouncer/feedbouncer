@@ -17,10 +17,8 @@ import {
 
 const STATUSES = ['stable', 'partial', 'planned'];
 const PLACEHOLDER_HOST = 'feedbouncer.example.com';
-const PLACEHOLDER_UUIDS = new Set([
-  '00000000-0000-0000-0000-000000000000',
-  '11111111-1111-1111-1111-111111111111',
-]);
+/** Only `00000000-0000-4000-8000-0000000000NN` may appear in the docs. */
+const PLACEHOLDER_UUID_RE = /^00000000-0000-4000-8000-0000000000\d\d$/;
 
 const UUID_RE = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
 const JWT_RE = /eyJ[A-Za-z0-9_-]{10,}\./;
@@ -36,7 +34,7 @@ function leaks(text: string): string[] {
     ...(FEEDBOUNCER_KEY_RE.exec(text) ?? []),
     ...(JWT_RE.exec(text) ?? []),
     ...(LONG_NUMBER_RE.exec(text) ?? []),
-    ...(text.match(UUID_RE) ?? []).filter((u) => !PLACEHOLDER_UUIDS.has(u.toLowerCase())),
+    ...(text.match(UUID_RE) ?? []).filter((u) => !PLACEHOLDER_UUID_RE.test(u)),
     ...[...text.matchAll(EMAIL_RE)].filter((m) => m[1] !== 'example.com').map((m) => m[0]),
   ];
 }
