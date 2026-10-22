@@ -2,17 +2,10 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { URL, pathToFileURL } from 'node:url';
 import * as pagefind from 'pagefind';
+import { versionForPath } from '../src/search/core.ts';
+import { BASE_URL } from '../site.config.ts';
 
 const ROOT = join(import.meta.dirname, '..');
-// Keep in step with BASE_URL in site.config.ts.
-const BASE_URL = '/feedbouncer/';
-
-/** The version a docs route belongs to: the one whose path segment follows /docs/, else the default. */
-export function versionFromRoute(route, versions) {
-  const segment = /\/docs\/([^/]+)/.exec(route)?.[1];
-  const named = versions.find((v) => v.path !== '' && v.path === segment);
-  return (named ?? versions.find((v) => v.path === '') ?? versions[0]).name;
-}
 
 function loadVersions() {
   const file = join(ROOT, 'versions.json');
@@ -49,7 +42,7 @@ async function main() {
     const route = `${BASE_URL}${relative(build, file).split(sep).slice(0, -1).join('/')}/`;
     const content = readFileSync(file, 'utf8').replace(
       '<article',
-      `<article data-pagefind-body data-pagefind-filter="version:${versionFromRoute(route, versions)}"`,
+      `<article data-pagefind-body data-pagefind-filter="version:${versionForPath(route, versions)}"`,
     );
     const result = await index.addHTMLFile({ url: route, content });
     errors.push(...result.errors);

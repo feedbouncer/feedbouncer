@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { versionFromRoute } from '../scripts/build-search-index.mjs';
 import {
   SEARCH_SUGGESTIONS,
   fallbackQueries,
@@ -19,20 +18,13 @@ const versions = [
 
 afterEach(cleanup);
 
-describe('versionFromRoute', () => {
-  it('maps /docs/next/x, /docs/1.1.0/x and /docs/x', () => {
-    expect(versionFromRoute('/feedbouncer/docs/next/api/quickstart/', versions)).toBe('current');
-    expect(versionFromRoute('/feedbouncer/docs/1.1.0/api/quickstart/', versions)).toBe('1.1.0');
-    expect(versionFromRoute('/feedbouncer/docs/api/quickstart/', versions)).toBe('1.2.0');
-    expect(versionFromRoute('/feedbouncer/docs/', versions)).toBe('1.2.0');
-  });
-});
-
 describe('versionForPath', () => {
   it('uses the version in the path and falls back to the default', () => {
     expect(versionForPath('/feedbouncer/docs/next/x/', versions)).toBe('current');
     expect(versionForPath('/feedbouncer/docs/x/', versions)).toBe('1.2.0');
     expect(versionForPath('/feedbouncer/search/', versions)).toBe('1.2.0');
+    expect(versionForPath('/feedbouncer/docs/1.1.0/api/quickstart/', versions)).toBe('1.1.0');
+    expect(versionForPath('/feedbouncer/docs/', versions)).toBe('1.2.0');
   });
 });
 

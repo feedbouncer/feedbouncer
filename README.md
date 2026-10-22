@@ -106,8 +106,8 @@ Sign-up, email confirmation, password reset and invitations send real emails. In
 
 - **`AUTH_SECRET`** signs session cookies and is required (at least 32 characters). `.env.example` has a development-only value; for anything else generate one with `openssl rand -base64 48`.
 - **`PUBLIC_WEB_URL`** is set by compose to `http://localhost:<WEB_HOST_PORT>`. It must be the exact origin users type: cookies, the origin check on state-changing requests and the links in emails all depend on it. Browse the app as `localhost`, not `127.0.0.1`.
-- The public REST API and outgoing webhooks are documented in [docs/api/README.md](docs/api/README.md), and the full documentation is on the [Documentation site](https://feedbouncer.github.io/feedbouncer/docs/).
-- The MCP server, which lets desktop and IDE MCP clients work with a workspace through the API, is documented in [docs/mcp/README.md](docs/mcp/README.md).
+- The public REST API and outgoing webhooks are documented on the [Documentation site](https://feedbouncer.github.io/feedbouncer/docs/api/overview/).
+- The MCP server, which lets desktop and IDE MCP clients work with a workspace through the API, is documented on the [Documentation site](https://feedbouncer.github.io/feedbouncer/docs/mcp/overview/).
 - API settings such as `TRUST_PROXY_HOPS` (reverse proxies trusted for the client IP) and `MAIL_FROM`, plus the roles, routes and rate limits, are described in [apps/api/README.md](apps/api/README.md).
 
 ### Facebook Pages (optional)

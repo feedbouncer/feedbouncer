@@ -1,9 +1,8 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { extname, join, normalize } from 'node:path';
+import { extname, join, normalize, sep } from 'node:path';
+import { BASE_URL } from '../site.config.ts';
 
-// Keep in step with BASE_URL in site.config.ts.
-const BASE_URL = '/feedbouncer/';
 const ROOT = join(import.meta.dirname, '..', 'build');
 const [, , port = '3210', host = '127.0.0.1'] = process.argv;
 
@@ -27,7 +26,7 @@ const TYPES = {
  */
 function resolveFile(pathname) {
   const target = normalize(join(ROOT, pathname.slice(BASE_URL.length)));
-  if (!target.startsWith(ROOT)) return null;
+  if (target !== ROOT && !target.startsWith(ROOT + sep)) return null;
   if (existsSync(target) && statSync(target).isFile()) return target;
   const index = join(target, 'index.html');
   return existsSync(index) ? index : null;
