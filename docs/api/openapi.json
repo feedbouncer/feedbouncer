@@ -527,7 +527,7 @@
             }
           },
           "413": {
-            "description": "Request body larger than 64 KiB.",
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
             "content": {
               "application/json": {
                 "schema": {
@@ -756,7 +756,7 @@
             }
           },
           "413": {
-            "description": "Request body larger than 64 KiB.",
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
             "content": {
               "application/json": {
                 "schema": {
@@ -983,7 +983,7 @@
             }
           },
           "413": {
-            "description": "Request body larger than 64 KiB.",
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1617,7 +1617,7 @@
             }
           },
           "413": {
-            "description": "Request body larger than 64 KiB.",
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2178,7 +2178,7 @@
             }
           },
           "413": {
-            "description": "Request body larger than 64 KiB.",
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2453,7 +2453,7 @@
             }
           },
           "413": {
-            "description": "Request body larger than 64 KiB.",
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2770,7 +2770,7 @@
             }
           },
           "413": {
-            "description": "Request body larger than 64 KiB.",
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3082,7 +3082,7 @@
             }
           },
           "413": {
-            "description": "Request body larger than 64 KiB.",
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3278,7 +3278,7 @@
             }
           },
           "413": {
-            "description": "Request body larger than 64 KiB.",
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3655,7 +3655,7 @@
             }
           },
           "413": {
-            "description": "Request body larger than 64 KiB.",
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
             "content": {
               "application/json": {
                 "schema": {

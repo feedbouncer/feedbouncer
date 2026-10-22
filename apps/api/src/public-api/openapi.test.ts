@@ -2,10 +2,13 @@ import { readFileSync } from 'node:fs';
 import { Validator } from '@seriousme/openapi-schema-validator';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { PUBLIC_ERROR_CODES, PUBLIC_ROUTE_SPECS, type RouteSpec } from '@feedbouncer/public-api';
-import { buildOpenApiDocument } from './openapi.js';
-
-const toOpenApiPath = (path: string): string => path;
+import {
+  PUBLIC_ERROR_CODES,
+  PUBLIC_ROUTE_SPECS,
+  REQUEST_BODY_LIMIT_BYTES,
+  type RouteSpec,
+} from '@feedbouncer/public-api';
+import { BODY_TOO_LARGE, buildOpenApiDocument, curlExample } from './openapi.js';
 
 const Thing = z.object({ id: z.uuid(), name: z.string() }).meta({ id: 'Thing' });
 const fixture: RouteSpec[] = [
@@ -22,6 +25,7 @@ const fixture: RouteSpec[] = [
     idempotent: true,
     responses: { 201: Thing, 204: null },
     errors: ['not_found', 'idempotency_key_reused'],
+    example: { pathParams: { id: '<THING_ID>' }, body: { name: 'x' } },
   },
 ];
 
@@ -173,7 +177,7 @@ describe('buildOpenApiDocument', () => {
 
   it('gives every operation one curl sample that runs against $FEEDBOUNCER_URL', () => {
     for (const spec of PUBLIC_ROUTE_SPECS) {
-      const op = real.paths[toOpenApiPath(spec.path)]![spec.method.toLowerCase()]!;
+      const op = real.paths[spec.path]![spec.method.toLowerCase()]!;
       const samples = op['x-codeSamples'] as Array<{ source: string }>;
       expect(samples).toHaveLength(1);
       expect(samples[0]).toMatchObject({ lang: 'curl', label: 'curl' });
@@ -209,7 +213,7 @@ describe('buildOpenApiDocument', () => {
     }
   });
 
-  it('documents 413 invalid_request on every route with a body', () => {
+  it('documents 413 with the invalid_request code on every route with a body', () => {
     for (const spec of PUBLIC_ROUTE_SPECS) {
       const res = real.paths[spec.path]![spec.method.toLowerCase()]!.responses as Record<
         string,
@@ -217,13 +221,24 @@ describe('buildOpenApiDocument', () => {
       >;
       if (spec.body) {
         expect(res['413']).toEqual({
-          description: 'Request body larger than 64 KiB.',
+          description: BODY_TOO_LARGE,
           content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
         });
       } else {
         expect(res['413']).toBeUndefined();
       }
     }
+  });
+
+  it('words the 413 from the body limit and the real error code', () => {
+    expect(BODY_TOO_LARGE).toBe(
+      `Request body larger than ${REQUEST_BODY_LIMIT_BYTES / 1024} KiB: status 413 with the \`invalid_request\` code.`,
+    );
+  });
+
+  it('refuses a curl sample whose path parameter has no example', () => {
+    const { example: _example, ...bare } = fixture.at(-1)!;
+    expect(() => curlExample(bare)).toThrow(/createThing: example has no value for \{id\}/);
   });
 
   it('is deterministic', () => {

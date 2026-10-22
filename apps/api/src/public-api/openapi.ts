@@ -4,6 +4,7 @@ import {
   PUBLIC_ERROR_CODES,
   PUBLIC_ERROR_STATUS,
   PUBLIC_ROUTE_SPECS,
+  REQUEST_BODY_LIMIT_BYTES,
   type PublicErrorCode,
   type RouteSpec,
 } from '@feedbouncer/public-api';
@@ -65,6 +66,8 @@ const REPLAYED: JsonObject = {
 const RETRY_AFTER: JsonObject = {
   'Retry-After': integerHeader('Whole seconds to wait before retrying (at least 1).'),
 };
+/** The API answers an oversize body with status 413 and the `invalid_request` code. */
+export const BODY_TOO_LARGE = `Request body larger than ${REQUEST_BODY_LIMIT_BYTES / 1024} KiB: status 413 with the \`invalid_request\` code.`;
 const REF_ERROR: JsonObject = { $ref: '#/components/schemas/Error' };
 
 const ERROR_SCHEMA: JsonObject = {
@@ -198,7 +201,7 @@ function responses(spec: RouteSpec, schemas: SchemaCollector): JsonObject {
   }
   if (spec.body) {
     out[413] = {
-      description: 'Request body larger than 64 KiB.',
+      description: BODY_TOO_LARGE,
       content: { 'application/json': { schema: REF_ERROR } },
     };
   }
@@ -212,8 +215,10 @@ function responses(spec: RouteSpec, schemas: SchemaCollector): JsonObject {
  */
 export function curlExample(spec: RouteSpec): string {
   const example = spec.example ?? {};
-  const path = spec.path.replace(/\{(\w+)\}/g, (match, name: string) => {
-    return example.pathParams?.[name] ?? match;
+  const path = spec.path.replace(/\{(\w+)\}/g, (_, name: string) => {
+    const value = example.pathParams?.[name];
+    if (value === undefined) throw new Error(`${spec.id}: example has no value for {${name}}`);
+    return value;
   });
   const query = new URLSearchParams(example.query).toString();
   const lines = [
