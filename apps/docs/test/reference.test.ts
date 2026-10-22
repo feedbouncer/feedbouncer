@@ -28,6 +28,8 @@ describe('product reference', () => {
     ]);
     expect(ref.rules.steps.map((s) => s.type)).toEqual([...STEP_TYPES]);
     expect(ref.api.rateLimit.defaultPerMinute).toBe(60);
+    expect(ref.api.scopes).toEqual(['moderate', 'read', 'write']);
+    expect(ref.rules.modes).toEqual(['enforce', 'suggest']);
   });
 
   it('orders outcomes by severity', () => {

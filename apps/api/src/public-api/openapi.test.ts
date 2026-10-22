@@ -237,7 +237,8 @@ describe('buildOpenApiDocument', () => {
   });
 
   it('refuses a curl sample whose path parameter has no example', () => {
-    const { example: _example, ...bare } = fixture.at(-1)!;
+    const bare = { ...fixture.at(-1)! };
+    delete bare.example;
     expect(() => curlExample(bare)).toThrow(/createThing: example has no value for \{id\}/);
   });
 

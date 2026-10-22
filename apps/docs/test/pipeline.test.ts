@@ -60,7 +60,7 @@ describe('ensureApiSidebar', () => {
   it('stands in an empty sidebar once and never overwrites the generated one', () => {
     const file = ensureApiSidebar(tmp)!;
     expect(file).toBe(join(tmp, 'api/reference/sidebar.ts'));
-    expect(readFileSync(file, 'utf8')).toContain('apisidebar: []');
+    expect(readFileSync(file, 'utf8')).toContain('export default sidebar.apisidebar');
     writeFileSync(file, 'generated');
     expect(ensureApiSidebar(tmp)).toBeUndefined();
     expect(readFileSync(file, 'utf8')).toBe('generated');

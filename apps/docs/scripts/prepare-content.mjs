@@ -34,7 +34,7 @@ export function ensureApiSidebar(docsDir) {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(
     file,
-    'import type { SidebarsConfig } from "@docusaurus/plugin-content-docs";\n\nconst sidebar: SidebarsConfig = { apisidebar: [] };\n\nexport default sidebar;\n',
+    'import type { SidebarsConfig } from "@docusaurus/plugin-content-docs";\n\nconst sidebar: SidebarsConfig = { apisidebar: [] };\n\nexport default sidebar.apisidebar;\n',
   );
   return file;
 }

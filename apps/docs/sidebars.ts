@@ -1,8 +1,7 @@
 import type { SidebarsConfig } from '@docusaurus/plugin-content-docs';
-import apiSidebar from './docs/api/reference/sidebar';
+import apiReference from './docs/api/reference/sidebar';
 
 // `docusaurus gen-api-docs` writes this sidebar; scripts/prepare-content.mjs stands in an empty one before it runs.
-const apiReference = apiSidebar.apisidebar;
 if (!Array.isArray(apiReference))
   throw new Error('The generated API sidebar is not a list of items.');
 

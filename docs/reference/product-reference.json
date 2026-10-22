@@ -435,6 +435,11 @@
         "status": 409
       }
     ],
+    "scopes": [
+      "moderate",
+      "read",
+      "write"
+    ],
     "page": {
       "default": 50,
       "max": 100
