@@ -25,7 +25,7 @@ Give it these environment variables:
 
 The transport is stdio: the client writes protocol messages to the server's stdin and reads them from its stdout. The server logs only to stderr. If your client takes the key from an environment reference or a secret prompt, use that instead of typing it into a file. See [authentication](../authentication.mdx).
 
-Clients that read a JSON file usually expect the shape used by [Claude Desktop](claude-desktop.md): `command`, `args` and `env` under the server's name.
+Clients that read a JSON file usually expect the shape used by [desktop app page](desktop-app.md): `command`, `args` and `env` under the server's name.
 
 ## Check it works
 

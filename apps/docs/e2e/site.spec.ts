@@ -97,7 +97,7 @@ test('the "not found" page is served with the site chrome', async ({ page }) => 
 test.describe('code blocks', () => {
   const samples = [
     `${BASE_URL}docs/api/authentication/`,
-    `${BASE_URL}docs/mcp/clients/claude-desktop/`,
+    `${BASE_URL}docs/mcp/clients/desktop-app/`,
     ...docRoutes.filter((route) => route.includes('/api/reference/')).slice(0, 2),
   ];
   for (const route of samples) {

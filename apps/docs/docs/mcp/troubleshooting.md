@@ -47,7 +47,7 @@ Clients started from a launcher often do not have your shell's `PATH`. The sympt
 
 ## The Windows config file is not found
 
-On Windows, Claude Desktop reads `%APPDATA%\Claude\claude_desktop_config.json`. If you get `ENOENT` for it, the `Claude` folder or the file does not exist yet. Open `%APPDATA%` in Explorer, create the `Claude` folder if it is missing, and create the file with the entry from the [Claude Desktop page](clients/claude-desktop.md). Make sure the file's name does not end in `.txt`.
+On Windows, if the client's config file is reported missing (`ENOENT`), the folder or the file does not exist yet. Open the path the client's settings show, create the missing folder and the file with the entry from the [desktop app page](clients/desktop-app.md). Make sure the file's name does not end in `.txt`.
 
 ## Rate limited
 

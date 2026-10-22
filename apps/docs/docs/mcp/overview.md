@@ -24,7 +24,7 @@ No tool can approve a rule change. A person approves proposals in the web app. S
 1. Meet the [prerequisites](prerequisites.md): Node 24, a built checkout and an API key.
 2. Read how the server [authenticates](authentication.mdx) and how to keep the key out of shared files.
 3. Add the server to your client:
-   - [Claude Desktop](clients/claude-desktop.md)
+   - [Desktop app](clients/desktop-app.md)
    - [Cursor](clients/cursor.md)
    - [VS Code](clients/vscode.md)
    - [Any other stdio client](clients/generic.md)

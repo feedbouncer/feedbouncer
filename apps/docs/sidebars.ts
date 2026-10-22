@@ -61,7 +61,7 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Clients',
           items: [
-            'mcp/clients/claude-desktop',
+            'mcp/clients/desktop-app',
             'mcp/clients/cursor',
             'mcp/clients/vscode',
             'mcp/clients/generic',

@@ -1,6 +1,6 @@
 ---
-title: Claude Desktop
-description: Add the FeedBouncer MCP server to Claude Desktop with a claude_desktop_config.json entry.
+title: Desktop app
+description: Add the FeedBouncer MCP server to a desktop MCP client with a JSON config entry.
 status: stable
 ---
 
@@ -8,13 +8,7 @@ status: stable
 
 Complete the [prerequisites](../prerequisites.md). You need the absolute path to `apps/mcp/dist/main.js` and an API key.
 
-Claude Desktop reads its servers from `claude_desktop_config.json`:
-
-| System  | Location                                                          |
-| ------- | ----------------------------------------------------------------- |
-| macOS   | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Windows | `%APPDATA%\Claude\claude_desktop_config.json`                     |
-| Linux   | `~/.config/Claude/claude_desktop_config.json`                     |
+Desktop MCP clients read their servers from a JSON config file with an `mcpServers` object. Open your client's settings and look for the MCP or developer section; it shows or opens the file.
 
 ## Add FeedBouncer
 
@@ -39,11 +33,11 @@ Replace `<REPO_DIR>` with the absolute path of your checkout, and `<FEEDBOUNCER_
 
 <FeatureStatus status="partial">
   This file holds the key in plain text. Keep it readable by you only, never commit it and never
-  sync it between machines. Claude Desktop has no secret prompt for MCP servers, so use a `read`
+  sync it between machines. Desktop clients have no secret prompt for MCP servers, so use a `read`
   key unless you need to write, and rotate it if the file is ever shared.
 </FeatureStatus>
 
-Quit Claude Desktop completely and start it again. It reads the file only at start.
+Quit the client completely and start it again. It reads the file only at start.
 
 ## Check it works
 
@@ -51,7 +45,7 @@ Open the tools or connectors menu in a new chat. `feedbouncer` should be listed 
 
 ## If it does not work
 
-- Check the file is valid JSON. A trailing comma stops Claude Desktop from loading any server.
-- If Claude Desktop cannot start `node`, replace `"node"` with the absolute path from `which node`.
+- Check the file is valid JSON. A trailing comma stops the client from loading any server.
+- If the client cannot start `node`, replace `"node"` with the absolute path from `which node`.
 - On Windows, if the file is not found, see [troubleshooting](../troubleshooting.md#the-windows-config-file-is-not-found).
 - For the server's own errors, see [troubleshooting](../troubleshooting.md#the-server-exits-at-start).
