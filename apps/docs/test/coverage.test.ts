@@ -179,10 +179,16 @@ describe('api guides coverage', () => {
 const build = join(appRoot, 'build');
 const reference_ = join(appRoot, 'docs/api/reference');
 
+// Needs both a build and the generated pages it came from (the sidebar stub alone does not count).
+const hasBuiltReference =
+  existsSync(join(build, 'docs/api/reference')) &&
+  existsSync(reference_) &&
+  readdirSync(reference_).some((n) => n.endsWith('.api.mdx'));
+
 describe('built API reference', () => {
   // The curl sample reaches the browser inside each page's compressed `api` data, not as static HTML,
   // so the check decodes that data from the generated page and finds it in the built assets.
-  it.skipIf(!existsSync(join(build, 'docs/api/reference')) || !existsSync(reference_))(
+  it.skipIf(!hasBuiltReference)(
     'every operation has a built reference page containing its curl sample',
     () => {
       const assets = join(build, 'assets/js');
