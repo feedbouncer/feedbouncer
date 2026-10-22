@@ -106,8 +106,9 @@ test.describe('code blocks', () => {
     }) => {
       await open(page, route);
       const buttons = page.locator('.theme-code-block pre ~ div button');
+      // Copy buttons are added on the client, so wait for hydration to finish.
+      await expect(buttons.first()).toBeAttached();
       const count = await buttons.count();
-      expect(count).toBeGreaterThan(0);
       for (let i = 0; i < count; i += 1) {
         const button = buttons.nth(i);
         await expect(button).toHaveAttribute('aria-label', /\S/);
