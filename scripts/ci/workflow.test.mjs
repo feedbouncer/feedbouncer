@@ -230,6 +230,18 @@ test('docs-deploy.yml: no secrets and no ${{ }} in run', () => {
   }
 });
 
+// The built-reference test only runs against a build, so the tests must follow the build step.
+function assertUnitTestsAfterBuild(steps) {
+  const runs = steps.map((s) => s.run ?? '');
+  const build = runs.findIndex((r) => /turbo run build --filter=@feedbouncer\/docs/.test(r));
+  const tests = runs.findIndex((r) => /pnpm --filter @feedbouncer\/docs test$/.test(r.trim()));
+  assert.ok(build >= 0 && tests > build, 'docs unit tests must run after the docs build');
+}
+
+test('docs-deploy.yml runs the docs unit tests after the build', () => {
+  assertUnitTestsAfterBuild(docsDeploy.jobs.build.steps);
+});
+
 test('the docs job checks out full history and runs test:site and lychee', () => {
   const job = workflow.jobs.docs;
   assert.equal(job?.name, 'Docs');
@@ -239,6 +251,7 @@ test('the docs job checks out full history and runs test:site and lychee', () =>
   const runs = job.steps.map((s) => s.run ?? '').join('\n');
   assert.match(runs, /turbo run build --filter=@feedbouncer\/docs/);
   assert.match(runs, /@feedbouncer\/docs run test:site/);
+  assertUnitTestsAfterBuild(job.steps);
   const lychee = job.steps.find((s) => s.uses?.startsWith('lycheeverse/lychee-action@'));
   assert.equal(lychee.with.fail, true);
   assert.match(lychee.with.args, /--config apps\/docs\/lychee\.toml/);

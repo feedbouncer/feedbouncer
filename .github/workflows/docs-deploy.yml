@@ -32,6 +32,8 @@ jobs:
           turbo-cache-scope: docs-deploy
       - name: Build
         run: pnpm turbo run build --filter=@feedbouncer/docs
+      - name: Unit tests (including the built reference)
+        run: pnpm --filter @feedbouncer/docs test
       - name: Install browser
         run: pnpm --filter @feedbouncer/docs exec playwright install --with-deps chromium
       - name: Site checks
