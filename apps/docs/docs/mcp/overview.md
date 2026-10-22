@@ -25,7 +25,6 @@ No tool can approve a rule change. A person approves proposals in the web app. S
 2. Read how the server [authenticates](authentication.mdx) and how to keep the key out of shared files.
 3. Add the server to your client:
    - [Claude Desktop](clients/claude-desktop.md)
-   - [Claude Code](clients/claude-code.md)
    - [Cursor](clients/cursor.md)
    - [VS Code](clients/vscode.md)
    - [Any other stdio client](clients/generic.md)

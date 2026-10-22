@@ -16,4 +16,4 @@ export const ALLOWED_LINK_HOSTS = [
   'feedbouncer.example.com',
 ] as const;
 
-export const SUPPORTED_MCP_CLIENTS = ['claude-desktop', 'claude-code', 'cursor', 'vscode'] as const;
+export const SUPPORTED_MCP_CLIENTS = ['claude-desktop', 'cursor', 'vscode'] as const;

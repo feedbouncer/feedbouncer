@@ -62,7 +62,6 @@ const sidebars: SidebarsConfig = {
           label: 'Clients',
           items: [
             'mcp/clients/claude-desktop',
-            'mcp/clients/claude-code',
             'mcp/clients/cursor',
             'mcp/clients/vscode',
             'mcp/clients/generic',

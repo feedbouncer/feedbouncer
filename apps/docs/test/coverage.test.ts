@@ -320,17 +320,6 @@ describe('mcp setup coverage', () => {
     );
   });
 
-  it('claude-code.md adds the server with --scope user or local, never project', () => {
-    const text = body(mcpPage('clients/claude-code.md'));
-    const adds = text.split('\n').filter((l) => l.includes('claude mcp add'));
-    expect(adds.length).toBeGreaterThan(0);
-    for (const line of adds) {
-      expect(line).toMatch(/--scope (user|local)\b/);
-      expect(line).toMatch(/--env FEEDBOUNCER_API_KEY=<FEEDBOUNCER_API_KEY>/);
-    }
-    expect(codeBlocks(text).some((b) => /--scope project/.test(b.body))).toBe(false);
-  });
-
   it('overview labels remote MCP as planned', () => {
     expect(body(mcpPage('overview.md'))).toMatch(
       /<FeatureStatus status="planned">[\s\S]*remote[\s\S]*<\/FeatureStatus>/i,
