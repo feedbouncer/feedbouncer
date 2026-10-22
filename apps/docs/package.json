@@ -14,20 +14,6 @@
     "typecheck": "node scripts/prepare-content.mjs && tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@docusaurus/core": "3.10.2",
-    "@docusaurus/plugin-client-redirects": "3.10.2",
-    "@docusaurus/preset-classic": "3.10.2",
-    "@mdx-js/react": "3.1.1",
-    "clsx": "2.1.1",
-    "docusaurus-plugin-openapi-docs": "5.2.0",
-    "docusaurus-plugin-sass": "0.2.7",
-    "docusaurus-theme-openapi-docs": "5.2.0",
-    "prism-react-renderer": "2.4.1",
-    "react": "19.3.1",
-    "react-dom": "19.3.1",
-    "sass": "1.105.2"
-  },
   "browserslist": {
     "production": [
       ">0.5%",
@@ -41,15 +27,27 @@
     ]
   },
   "devDependencies": {
+    "@docusaurus/core": "3.10.2",
     "@docusaurus/module-type-aliases": "3.10.2",
+    "@docusaurus/plugin-client-redirects": "3.10.2",
+    "@docusaurus/preset-classic": "3.10.2",
     "@docusaurus/tsconfig": "3.10.2",
     "@docusaurus/types": "3.10.2",
     "@feedbouncer/actions": "workspace:*",
     "@feedbouncer/moderation-contract": "workspace:*",
     "@feedbouncer/public-api": "workspace:*",
     "@feedbouncer/rules": "workspace:*",
+    "@mdx-js/react": "3.1.1",
     "@types/node": "24.13.6",
     "@types/react": "19.3.0",
+    "clsx": "2.1.1",
+    "docusaurus-plugin-openapi-docs": "5.2.0",
+    "docusaurus-plugin-sass": "0.2.7",
+    "docusaurus-theme-openapi-docs": "5.2.0",
+    "prism-react-renderer": "2.4.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "sass": "1.105.2",
     "tsx": "4.23.15",
     "zod": "4.6.5"
   }
