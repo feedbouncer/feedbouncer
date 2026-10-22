@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -9,12 +10,12 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import config from '../docusaurus.config';
 import { ensureApiSidebar, prepareContent } from '../scripts/prepare-content.mjs';
-import { stampLastUpdate } from '../scripts/stamp-generated.mjs';
+import { stampDir } from '../scripts/stamp-generated.mjs';
 
 const appRoot = resolve(fileURLToPath(import.meta.url), '../..');
 const repoRoot = resolve(appRoot, '../..');
@@ -42,48 +43,60 @@ describe('versioning', () => {
     });
   });
 
-  it('versioned snapshot is byte-stable across builds', () => {
-    const docsDir = join(appRoot, 'docs');
-    const versionedRoot = join(appRoot, 'versioned_docs');
-    const fixtureDir = join(versionedRoot, 'version-0.0.0-test');
-    const sidebar = join(docsDir, 'api/reference/sidebar.ts');
-    const generated = join(docsDir, '_generated');
-    // Remember what already existed so only this test's own files are removed afterwards.
-    const hadVersionedRoot = existsSync(versionedRoot);
-    const hadSidebar = existsSync(sidebar);
-    const hadGenerated = existsSync(generated);
+  it('versioned snapshots are byte-stable when prepare-content and the stamp run', () => {
+    // Everything happens in a scratch copy of the app layout; the real tree is never touched.
     const scratch = mkdtempSync(join(tmpdir(), 'docs-stamp-'));
     try {
-      mkdirSync(join(fixtureDir, 'api/reference'), { recursive: true });
-      writeFileSync(join(fixtureDir, 'intro.md'), '---\ntitle: Frozen\n---\n\nSnapshot body.\n');
+      const repo = join(scratch, 'repo');
+      const app = join(repo, 'apps/docs');
+      const docsDir = join(app, 'docs');
+      for (const rel of [
+        'docs/api/openapi.json',
+        'docs/mcp/tools.json',
+        'docs/reference/product-reference.json',
+      ]) {
+        mkdirSync(dirname(join(repo, rel)), { recursive: true });
+        copyFileSync(join(repoRoot, rel), join(repo, rel));
+      }
+      const snapshot = join(app, 'versioned_docs/version-0.0.0-test');
+      mkdirSync(join(snapshot, 'api/reference'), { recursive: true });
+      mkdirSync(join(snapshot, '_generated'), { recursive: true });
+      writeFileSync(join(snapshot, 'intro.md'), '---\ntitle: Frozen\n---\n\nSnapshot body.\n');
+      writeFileSync(join(snapshot, '_generated/tools.json'), '{"tools":[]}\n');
       writeFileSync(
-        join(fixtureDir, 'api/reference/op.api.mdx'),
+        join(snapshot, 'api/reference/op.api.mdx'),
         '---\nlast_update:\n  date: 2000-01-01T00:00:00+00:00\n---\n\nFrozen operation.\n',
       );
+      mkdirSync(join(docsDir, 'api/reference'), { recursive: true });
+      const live = join(docsDir, 'api/reference/op.api.mdx');
+      writeFileSync(live, '---\ntitle: Live\n---\n\nLive operation.\n');
+
       const hashes = () =>
         Object.fromEntries(
-          readdirSync(fixtureDir, { recursive: true, withFileTypes: true })
+          readdirSync(snapshot, { recursive: true, withFileTypes: true })
             .filter((e) => e.isFile())
             .map((e) => join(e.parentPath, e.name))
             .sort()
             .map((p) => [p, createHash('sha256').update(readFileSync(p)).digest('hex')]),
         );
       const before = hashes();
-      expect(Object.keys(before)).toHaveLength(2);
+      expect(Object.keys(before)).toHaveLength(3);
 
-      prepareContent(repoRoot, docsDir);
+      prepareContent(repo, docsDir);
       ensureApiSidebar(docsDir);
-      const page = join(scratch, 'page.mdx');
-      writeFileSync(page, '---\ntitle: Generated\n---\n\nBody\n');
-      stampLastUpdate(page, '2026-01-01T00:00:00+00:00');
+      expect(stampDir(join(docsDir, 'api/reference'), '2026-01-01T00:00:00+00:00')).toBe(1);
 
+      // The run did its work on the live tree ...
+      expect(readFileSync(live, 'utf8')).toContain('date: 2026-01-01T00:00:00+00:00');
+      expect(existsSync(join(docsDir, '_generated/tools.json'))).toBe(true);
+      // ... and left every snapshot file byte for byte alone.
+      expect(hashes()).toEqual(before);
+      expect(() => stampDir(join(snapshot, 'api/reference'), '2026-01-01T00:00:00+00:00')).toThrow(
+        /frozen/,
+      );
       expect(hashes()).toEqual(before);
     } finally {
       rmSync(scratch, { recursive: true, force: true });
-      rmSync(fixtureDir, { recursive: true, force: true });
-      if (!hadVersionedRoot) rmSync(versionedRoot, { recursive: true, force: true });
-      if (!hadSidebar) rmSync(sidebar, { force: true });
-      if (!hadGenerated) rmSync(generated, { recursive: true, force: true });
     }
   });
 });

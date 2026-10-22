@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -38,6 +38,21 @@ function* mdxFiles(dir) {
   }
 }
 
+/**
+ * Stamps every `.mdx` page under `dir` (the generated `docs/api/reference`) and returns how many.
+ * Refuses a directory inside `versioned_docs`: those snapshots are frozen and never rewritten.
+ */
+export function stampDir(dir, isoDate) {
+  if (resolve(dir).split(sep).includes('versioned_docs'))
+    throw new Error(`Refusing to stamp frozen snapshot pages in ${dir}`);
+  let count = 0;
+  for (const file of mdxFiles(dir)) {
+    stampLastUpdate(file, isoDate);
+    count += 1;
+  }
+  return count;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const here = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(here, '../../..');
@@ -64,10 +79,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     );
     process.exit(1);
   }
-  let count = 0;
-  for (const file of mdxFiles(resolve(here, '../docs/api/reference'))) {
-    stampLastUpdate(file, date);
-    count += 1;
-  }
+  const count = stampDir(resolve(here, '../docs/api/reference'), date);
   console.log(`stamped ${count} pages with ${date}`);
 }
