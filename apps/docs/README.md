@@ -13,7 +13,7 @@ Run from the repository root with `pnpm --filter @feedbouncer/docs <script>`.
 | `serve`           | Serves the last build.                                                                 |
 | `reference:write` | Regenerates `docs/reference/product-reference.json` from the code.                     |
 | `test`            | Unit tests, including the check that the committed product reference matches the code. |
-| `routes:update`   | Rewrites `routes.lock.json` after a deliberate page rename or removal.                 |
+| `routes:update`   | Adds new routes to `routes.lock.json`. It never removes one; see below.                |
 | `test:site`       | Route lock, then the browser checks (links, accessibility, mobile, keyboard, search).  |
 
 ## Content pipeline
@@ -28,6 +28,10 @@ Three committed JSON files are the contract between the code and these docs:
 the API reference pages to `docs/api/reference/`. Both directories are generated and never committed.
 `scripts/stamp-generated.mjs` sets each generated page's last-updated date from the git history of
 `docs/api/openapi.json`, so the build needs the full history (`fetch-depth: 0` in CI).
+
+The route lock (`routes.lock.json`) lists every published route. A page that moves or goes away needs a
+redirect in `redirects.json`; `routes:update` only adds routes, so a removal that is deliberate (no
+redirect) is made by editing the lock by hand.
 
 Site constants (URL, base path, repository, allowed link hosts) live in `site.config.ts`.
 

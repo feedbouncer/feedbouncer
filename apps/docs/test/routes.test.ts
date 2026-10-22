@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkRoutes } from '../scripts/check-routes.mjs';
+import { checkRoutes, mergeLock } from '../scripts/check-routes.mjs';
 
 type Check = (
   built: string[],
@@ -25,5 +25,15 @@ describe('checkRoutes', () => {
       ],
     );
     expect(result.missing).toEqual([]);
+  });
+});
+
+describe('mergeLock', () => {
+  it('adds new routes and keeps every locked one, even when it is no longer built', () => {
+    expect(mergeLock(['/docs/b/', '/docs/gone/'], ['/docs/c/', '/docs/b/'])).toEqual([
+      '/docs/b/',
+      '/docs/c/',
+      '/docs/gone/',
+    ]);
   });
 });

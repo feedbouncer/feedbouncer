@@ -1,8 +1,8 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { BASE_URL } from '../site.config.ts';
 
 const HERE = new URL('.', import.meta.url);
-const BASE_URL = '/feedbouncer/';
 
 /**
  * Compare the built routes with the committed route lock.
@@ -17,6 +17,14 @@ export function checkRoutes(built, lock, redirects) {
     missing: lock.filter((route) => !builtSet.has(route) && !redirected.has(route)).sort(),
     unlocked: built.filter((route) => !lockSet.has(route)).sort(),
   };
+}
+
+/**
+ * The lock after `--update`: every locked route stays and new built routes are added. A route is
+ * never dropped here, so removing a page needs a redirect (or a deliberate edit of the lock).
+ */
+export function mergeLock(lock, built) {
+  return [...new Set([...lock, ...built])].sort();
 }
 
 /** Routes in build/sitemap.xml, with the base URL stripped and a leading slash kept. */
@@ -40,32 +48,33 @@ function main() {
     process.exit(1);
   }
   const built = readBuiltRoutes(sitemap);
+  const lock = JSON.parse(readFileSync(lockFile, 'utf8'));
   if (process.argv.includes('--update')) {
-    writeLock(lockFile, built);
+    const merged = mergeLock(lock, built);
+    writeLock(lockFile, merged, merged.length - lock.length);
     return;
   }
-  const lock = JSON.parse(readFileSync(lockFile, 'utf8'));
   const { missing, unlocked } = checkRoutes(built, lock, redirects);
   if (missing.length) {
     console.error(
       `Locked routes that no longer exist and have no redirect:\n  ${missing.join('\n  ')}\n` +
-        'Fix: add a redirect in apps/docs/redirects.json.',
+        'Fix: add a redirect in apps/docs/redirects.json. routes:update never removes a locked route;\n' +
+        'drop one from routes.lock.json by hand only when the removal is deliberate.',
     );
   }
   if (unlocked.length) {
     console.error(
       `Built routes missing from routes.lock.json:\n  ${unlocked.join('\n  ')}\n` +
-        'Fix: run pnpm --filter @feedbouncer/docs routes:update.',
+        'Fix: run pnpm --filter @feedbouncer/docs routes:update (it only adds routes).',
     );
   }
   if (missing.length || unlocked.length) process.exit(1);
   console.log(`routes ok (${built.length} built, ${lock.length} locked)`);
 }
 
-import { writeFileSync } from 'node:fs';
-function writeLock(file, routes) {
+function writeLock(file, routes, added) {
   writeFileSync(file, `${JSON.stringify(routes, null, 2)}\n`);
-  console.log(`wrote ${routes.length} routes to routes.lock.json`);
+  console.log(`routes.lock.json: ${added} added, ${routes.length} locked`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
