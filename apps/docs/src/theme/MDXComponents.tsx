@@ -1,6 +1,7 @@
 import MDXComponents from '@theme-original/MDXComponents';
 import ExampleComment from '../components/ExampleComment';
 import FeatureStatus from '../components/FeatureStatus';
+import McpToolReference from '../components/McpToolReference';
 import ReferenceTable from '../components/ReferenceTable';
 import RepoLink from '../components/RepoLink';
 import Term from '../components/Term';
@@ -10,6 +11,7 @@ export default {
   ...MDXComponents,
   ExampleComment,
   FeatureStatus,
+  McpToolReference,
   ReferenceTable,
   RepoLink,
   Term,

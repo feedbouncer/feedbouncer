@@ -23,7 +23,11 @@ const PLACEHOLDER_UUID_RE = /^00000000-0000-4000-8000-0000000000\d\d$/;
 
 const UUID_RE = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
 const JWT_RE = /eyJ[A-Za-z0-9_-]{10,}\./;
-const LONG_NUMBER_RE = /\b\d{10,}\b/;
+const LONG_NUMBER_RE = /\b\d{10,}\b/g;
+/** The allowed placeholder UUID, unanchored, so its zero run is not mistaken for a long number. */
+const PLACEHOLDER_UUID_IN_TEXT_RE = /\b00000000-0000-4000-8000-0000000000\d\d\b/g;
+const longNumbers = (text: string): string[] =>
+  text.replace(PLACEHOLDER_UUID_IN_TEXT_RE, '').match(LONG_NUMBER_RE) ?? [];
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
 const REPO_LINK_RE = /<RepoLink\b[^>]*\bpath=["']([^"']+)["']/g;
 const IMG_RE = /!\[([^\]]*)\]\([^)]*\)|<img\b[^>]*>/g;
@@ -34,7 +38,7 @@ function leaks(text: string): string[] {
     ...findSecretLike(text),
     ...(FEEDBOUNCER_KEY_RE.exec(text) ?? []),
     ...(JWT_RE.exec(text) ?? []),
-    ...(LONG_NUMBER_RE.exec(text) ?? []),
+    ...longNumbers(text),
     ...(text.match(UUID_RE) ?? []).filter((u) => !PLACEHOLDER_UUID_RE.test(u)),
     ...[...text.matchAll(EMAIL_RE)].filter((m) => m[1] !== 'example.com').map((m) => m[0]),
   ];
@@ -56,6 +60,12 @@ describe('detectors', () => {
   it('flag a leaked key and a local host in a fixture', () => {
     expect(leaks(bad)).toHaveLength(1);
     expect(badFenceHosts('```bash\n' + bad + '\n```')).toEqual(['localhost']);
+    expect(longNumbers('id 1234567890')).toEqual(['1234567890']);
+    expect(longNumbers('id 00000000-0000-4000-8000-000000000012')).toEqual([]);
+    expect(longNumbers('00000000-0000-4000-8000-000000000012 and 1234567890')).toEqual([
+      '1234567890',
+    ]);
+    expect(longNumbers('00000000-0000-4000-8000-000000000012345')).not.toEqual([]);
     expect(headings('# a\n### b')).toEqual([
       { depth: 1, text: 'a' },
       { depth: 3, text: 'b' },

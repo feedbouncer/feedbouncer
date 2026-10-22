@@ -1,11 +1,13 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { inflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { MAX_DOMAINS_PER_BRAND, MAX_RULES_PER_BRAND } from '@feedbouncer/rules';
 import reference from '../../../docs/reference/product-reference.json';
 import { exampleFiles } from './lib/examples';
 import openapi from '../../../docs/api/openapi.json';
+import tools from '../../../docs/mcp/tools.json';
+import { SUPPORTED_MCP_CLIENTS } from '../site.config';
 import { appRoot, body, codeBlocks, headings } from './lib/content';
 
 const rules = reference.rules;
@@ -221,4 +223,136 @@ describe('built API reference', () => {
       }
     },
   );
+});
+
+const rel = (file: string) => relative(appRoot, file);
+const mcpDir = join(appRoot, 'docs/mcp');
+const mcpPage = (name: string) => join(mcpDir, name);
+const mcpFiles = () =>
+  readdirSync(mcpDir, { recursive: true, withFileTypes: true })
+    .filter((e) => e.isFile() && /\.mdx?$/.test(e.name))
+    .map((e) => join(e.parentPath, e.name));
+const CLIENT_H2S = ['Before you start', 'Add FeedBouncer', 'Check it works', 'If it does not work'];
+const SAFE_KEY_VALUES = [
+  '${input:feedbouncer-api-key}',
+  '${env:FEEDBOUNCER_API_KEY}',
+  '<FEEDBOUNCER_API_KEY>',
+];
+
+describe('mcp setup coverage', () => {
+  it('tools.mdx has exactly one "## `<tool>`" per tool, each with <McpToolReference name>', () => {
+    const text = body(mcpPage('tools.mdx'));
+    const names = tools.tools.map((t) => t.name);
+    const h2s = headings(text)
+      .filter((h) => h.depth === 2 && /^`\w+`$/.test(h.text))
+      .map((h) => h.text.slice(1, -1));
+    expect([...h2s].sort()).toEqual([...names].sort());
+    for (const name of names)
+      expect(text, name).toMatch(new RegExp(`<McpToolReference\\s+name="${name}"\\s*/>`));
+  });
+
+  it('tools.mdx states the limits where MCP and the API differ', () => {
+    const text = body(mcpPage('tools.mdx'));
+    expect(text).toMatch(/idempotencyKey[^\n]*at most 64 characters/);
+    expect(text).toMatch(/`limit`[^\n]*at most 50/);
+  });
+
+  it('there is one page per supported client plus generic, each with the four H2s in order', () => {
+    for (const client of [...SUPPORTED_MCP_CLIENTS, 'generic']) {
+      const file = mcpPage(`clients/${client}.md`);
+      expect(existsSync(file), client).toBe(true);
+      const h2s = headings(body(file))
+        .filter((h) => h.depth === 2)
+        .map((h) => h.text);
+      expect(h2s, client).toEqual(CLIENT_H2S);
+    }
+  });
+
+  it('every client page is in the MCP sidebar', () => {
+    const sidebar = readFileSync(join(appRoot, 'sidebars.ts'), 'utf8');
+    for (const client of [...SUPPORTED_MCP_CLIENTS, 'generic'])
+      expect(sidebar, client).toContain(`'mcp/clients/${client}'`);
+    for (const page of [
+      'overview',
+      'prerequisites',
+      'authentication',
+      'tools',
+      'approvals',
+      'verify',
+      'troubleshooting',
+    ])
+      expect(sidebar, page).toContain(`'mcp/${page}'`);
+  });
+
+  it('MCP examples never place a literal key in config', () => {
+    let seen = 0;
+    for (const file of mcpFiles()) {
+      for (const block of codeBlocks(body(file))) {
+        for (const m of block.body.matchAll(
+          /FEEDBOUNCER_API_KEY"?\s*[:=]\s*"?(\$\{[^}]*\}|[^"\s,}]*)/g,
+        )) {
+          if (m[1] === '') continue;
+          seen++;
+          expect(SAFE_KEY_VALUES, `${rel(file)}: ${m[0]}`).toContain(m[1]);
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(3);
+  });
+
+  it('vscode.md prompts for the key with a password input', () => {
+    const json = codeBlocks(body(mcpPage('clients/vscode.md'))).find((b) =>
+      b.body.includes('"inputs"'),
+    );
+    const config = JSON.parse(json!.body.replace(/^\s*\/\/.*$/gm, '')) as {
+      inputs: { id: string; password?: boolean; type: string }[];
+    };
+    expect(config.inputs).toContainEqual(
+      expect.objectContaining({ id: 'feedbouncer-api-key', type: 'promptString', password: true }),
+    );
+  });
+
+  it('claude-code.md adds the server with --scope user or local, never project', () => {
+    const text = body(mcpPage('clients/claude-code.md'));
+    const adds = text.split('\n').filter((l) => l.includes('claude mcp add'));
+    expect(adds.length).toBeGreaterThan(0);
+    for (const line of adds) {
+      expect(line).toMatch(/--scope (user|local)\b/);
+      expect(line).toMatch(/--env FEEDBOUNCER_API_KEY=<FEEDBOUNCER_API_KEY>/);
+    }
+    expect(codeBlocks(text).some((b) => /--scope project/.test(b.body))).toBe(false);
+  });
+
+  it('overview labels remote MCP as planned', () => {
+    expect(body(mcpPage('overview.md'))).toMatch(
+      /<FeatureStatus status="planned">[\s\S]*remote[\s\S]*<\/FeatureStatus>/i,
+    );
+  });
+
+  it('authentication builds its table from the server environment', () => {
+    const text = body(mcpPage('authentication.mdx'));
+    expect(text).toMatch(/<ReferenceTable\s+kind="mcp-env"/);
+    expect(text).toContain('tools.env');
+  });
+
+  it('verify.md names the first request and the expected tool', () => {
+    const text = body(mcpPage('verify.md'));
+    expect(text).toContain('List my five most recent FeedBouncer comments.');
+    expect(text).toContain('list_inbox');
+  });
+
+  it('troubleshooting covers each documented failure', () => {
+    const h2s = headings(body(mcpPage('troubleshooting.md')))
+      .filter((h) => h.depth === 2)
+      .map((h) => h.text);
+    expect(h2s).toEqual([
+      'The server exits at start',
+      'The API rejects the key',
+      'A write tool says the key is read-only',
+      'Connection refused or unreachable',
+      'The client cannot find node',
+      'The Windows config file is not found',
+      'Rate limited',
+    ]);
+  });
 });

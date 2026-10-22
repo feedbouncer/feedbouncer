@@ -50,7 +50,30 @@ const sidebars: SidebarsConfig = {
         ...apiReference,
       ],
     },
-    { type: 'category', label: 'MCP setup', items: ['mcp/overview'] },
+    {
+      type: 'category',
+      label: 'MCP setup',
+      items: [
+        'mcp/overview',
+        'mcp/prerequisites',
+        'mcp/authentication',
+        {
+          type: 'category',
+          label: 'Clients',
+          items: [
+            'mcp/clients/claude-desktop',
+            'mcp/clients/claude-code',
+            'mcp/clients/cursor',
+            'mcp/clients/vscode',
+            'mcp/clients/generic',
+          ],
+        },
+        'mcp/verify',
+        'mcp/tools',
+        'mcp/approvals',
+        'mcp/troubleshooting',
+      ],
+    },
   ],
 };
 

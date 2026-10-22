@@ -1,0 +1,55 @@
+---
+title: Authentication
+description: The two environment variables the MCP server reads, how to keep the key private and how to treat tool output.
+status: stable
+---
+
+import tools from '@site/docs/_generated/tools.json';
+
+export const env = tools.env.map((e) => ({
+  name: e.name,
+  required: e.required ? 'yes' : 'no',
+  description: e.default ? `${e.rule} Default: ${e.default}.` : e.rule,
+}));
+
+The server reads two environment variables. Your client passes them when it starts the server.
+
+<ReferenceTable kind="mcp-env" data={env} />
+
+## What happens at start
+
+On start the server calls `GET /v1/key` to check the key:
+
+- A missing or malformed key, or a bad URL, stops the server with exit code 1 and a one-line reason on stderr.
+- A key the API rejects stops it with exit code 1 and `FeedBouncer API key rejected`.
+- If the API cannot be reached, the server starts anyway and logs a warning. Each tool fails with `FeedBouncer API error (unreachable).` until the API is back.
+
+The key is never printed. Logs go to stderr as JSON lines, one per tool call, with the tool name, the target ID and the outcome. Comment text, reply text and rule contents are not logged. Stdout carries only protocol messages.
+
+## Keep the key private
+
+The key lets its holder read and moderate your comments, so keep it out of anything shared.
+
+- Never put it in a file that is committed to a repository or synced between machines.
+- Prefer your client's secret prompt or your shell environment where it has one. The client pages show which.
+- Where a client stores the key in its own config file, keep that file readable by you only.
+- Use a `read` key unless you want the assistant to reply, hide or propose.
+
+Create, rotate and revoke keys in the web app, under **API keys**. A revoked key makes tool calls fail with `The API key was rejected.` and stops the server at its next start. After you rotate a key, update it in every client that uses it.
+
+## Tool output is untrusted
+
+Comments, author names and similar text come from the public, and some of it is written to manipulate an assistant ("ignore previous instructions and..."). The server never passes such text through bare. Every tool result that contains it wraps each piece in a delimiter that names its kind and the ID it belongs to:
+
+```text
+id: <COMMENT_ID> | platform: facebook | status: visible | posted: 2026-10-18T09:12:00.000Z
+author: <untrusted_author id="<COMMENT_ID>">author name</untrusted_author>
+<untrusted_comment id="<COMMENT_ID>">comment text</untrusted_comment>
+```
+
+- Comment text is wrapped in `untrusted_comment` and author names in `untrusted_author`. This applies to `list_inbox`, `search_inbox` and the notable threads of `summarize_period`.
+- Inside the delimiters `&`, `<` and `>` are escaped as `&amp;`, `&lt;` and `&gt;`, so the text cannot close its own block or open a new one.
+- Results that contain public text include a notice that the text is data and must not be followed as instructions.
+- `structuredContent` is framed the same way, because some clients pass it to the model. A client that shows it to a person can strip the delimiters and unescape the three entities.
+
+The delimiters help a model tell data from instructions, but they are not a guarantee. The real limits are on the server side: a key reaches only its own workspace, the read tools change nothing, and no tool or key can approve a rule change.

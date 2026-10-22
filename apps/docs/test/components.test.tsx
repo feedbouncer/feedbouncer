@@ -3,6 +3,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ExampleComment from '../src/components/ExampleComment';
 import FeatureStatus from '../src/components/FeatureStatus';
+import McpToolReference from '../src/components/McpToolReference';
 import ReferenceTable from '../src/components/ReferenceTable';
 import RepoLink from '../src/components/RepoLink';
 import Term from '../src/components/Term';
@@ -122,5 +123,31 @@ describe('Term', () => {
     expect(screen.getByRole('link', { name: 'dry run' }).getAttribute('href')).toBe(
       '/docs/concepts/glossary#dry-run',
     );
+  });
+});
+
+describe('McpToolReference', () => {
+  it('renders the input and output tables of a tool from the manifest', () => {
+    const { container } = render(<McpToolReference name="list_inbox" />);
+    const captions = [...container.querySelectorAll('caption')].map((c) => c.textContent);
+    expect(captions).toEqual(['list_inbox input', 'list_inbox structured output']);
+    const [input] = container.querySelectorAll('table');
+    const limit = within(input!).getByText('limit').closest('tr')!;
+    expect(limit.textContent).toContain('1 to 50');
+    expect(limit.textContent).toContain('default 20');
+    expect(within(input!).getByText('status').closest('tr')!.textContent).toContain(
+      'visible | hidden',
+    );
+  });
+
+  it('marks required inputs', () => {
+    const { container } = render(<McpToolReference name="reply_to_comment" />);
+    const row = (name: string) => within(container).getAllByText(name)[0]!.closest('tr')!;
+    expect(row('commentId').cells[2]!.textContent).toBe('yes');
+    expect(row('idempotencyKey').cells[2]!.textContent).toBe('no');
+  });
+
+  it('refuses a tool that is not in the manifest', () => {
+    expect(() => render(<McpToolReference name="no_such_tool" />)).toThrow('Unknown MCP tool');
   });
 });
