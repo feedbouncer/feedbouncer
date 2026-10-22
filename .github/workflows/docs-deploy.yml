@@ -1,0 +1,63 @@
+# Publishes the documentation site to GitHub Pages on every push to main.
+# Pages must be enabled with source "GitHub Actions" (repository settings).
+name: Docs deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+  FORCE_COLOR: '1'
+
+jobs:
+  build:
+    name: Build docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-scope: docs-deploy
+      - name: Build
+        run: pnpm turbo run build --filter=@feedbouncer/docs
+      - name: Install browser
+        run: pnpm --filter @feedbouncer/docs exec playwright install --with-deps chromium
+      - name: Site checks
+        run: pnpm --filter @feedbouncer/docs run test:site
+      - name: Check links
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: --config apps/docs/lychee.toml --root-dir ${{ github.workspace }}/apps/docs/build 'apps/docs/build/**/*.html'
+          fail: true
+      - name: Upload site
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: apps/docs/build
+
+  deploy:
+    name: Deploy docs
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

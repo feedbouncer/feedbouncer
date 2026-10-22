@@ -1,6 +1,7 @@
 # CI: required checks are "Typecheck", "Test", "Docker build", "Compose config" and "Database migrations".
 # "API integration" and "Compose smoke" are non-required until they have been stable for a while;
 # "Compose smoke" runs the full dev-stack lifecycle plus the end-to-end auth smoke.
+# "Docs" builds and checks the documentation site; make it required once it has run green.
 # Do not rename these jobs' `name:` without updating branch protection.
 # Local equivalents are documented in README.md -> "Continuous integration".
 name: CI
@@ -347,3 +348,27 @@ jobs:
         env:
           COMPOSE_ENV_FILES: .env.example
         run: docker compose down -v --remove-orphans
+
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-scope: docs
+      - name: Build
+        run: pnpm turbo run build --filter=@feedbouncer/docs
+      - name: Install browser
+        run: pnpm --filter @feedbouncer/docs exec playwright install --with-deps chromium
+      - name: Site checks
+        run: pnpm --filter @feedbouncer/docs run test:site
+      - name: Check links
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: --config apps/docs/lychee.toml --root-dir ${{ github.workspace }}/apps/docs/build 'apps/docs/build/**/*.html'
+          fail: true
