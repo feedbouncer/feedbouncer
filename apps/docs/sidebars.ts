@@ -7,7 +7,20 @@ if (!Array.isArray(apiReference))
 
 const sidebars: SidebarsConfig = {
   docs: [
-    { type: 'category', label: 'Concepts', items: ['concepts/overview'] },
+    {
+      type: 'category',
+      label: 'Concepts',
+      items: [
+        'concepts/overview',
+        'concepts/comment-lifecycle',
+        'concepts/organizations-brands-connections',
+        'concepts/decisions-and-audit',
+        'concepts/review-mode',
+        'concepts/ai-classifier-and-policies',
+        'concepts/self-hosting',
+        'concepts/glossary',
+      ],
+    },
     { type: 'category', label: 'Rules', items: ['rules/overview'] },
     { type: 'category', label: 'API reference', items: ['api/overview', ...apiReference] },
     { type: 'category', label: 'MCP setup', items: ['mcp/overview'] },

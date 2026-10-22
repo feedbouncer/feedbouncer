@@ -142,3 +142,73 @@ describe('content guards', () => {
     expect(labels).toEqual(['Concepts', 'Rules', 'API reference', 'MCP setup']);
   });
 });
+
+describe('concepts', () => {
+  const conceptsDir = join(appRoot, 'docs/concepts');
+  const REQUIRED_TERMS = [
+    'organization',
+    'brand',
+    'connection',
+    'platform',
+    'api-key',
+    'scope',
+    'idempotency-key',
+    'comment',
+    'author',
+    'decision',
+    'action-step',
+    'action-run',
+    'outcome',
+    'undo',
+    'hidden-today',
+    'rule',
+    'condition',
+    'enforce-mode',
+    'dry-run',
+    'review-mode',
+    'suggestion',
+    'classifier',
+    'category',
+    'threshold',
+    'policy',
+    'flagged-item',
+    'rule-change-proposal',
+    'webhook-endpoint',
+    'delivery',
+    'mcp',
+    'mcp-tool',
+  ];
+  /** Docusaurus (github-slugger) output for the plain-text headings used in the glossary. */
+  const slug = (text: string) =>
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9 -]/g, '')
+      .replace(/ /g, '-');
+  const glossarySlugs = () =>
+    headings(body(join(conceptsDir, 'glossary.md')))
+      .filter((h) => h.depth === 3)
+      .map((h) => slug(h.text));
+
+  it('glossary defines every REQUIRED_TERM', () => {
+    const slugs = glossarySlugs();
+    for (const term of REQUIRED_TERMS) expect(slugs, term).toContain(term);
+  });
+
+  it('every <Term id> used in any doc exists in the glossary', () => {
+    const slugs = glossarySlugs();
+    for (const { file, name } of pages) {
+      for (const m of readFileSync(file, 'utf8').matchAll(/<Term\b[^>]*\bid=["']([^"']+)["']/g))
+        expect(slugs, `${name}: ${m[1]}`).toContain(m[1]);
+    }
+  });
+
+  it('comment-lifecycle has an ordered step list of at least 6 items covering arrive, store, rules, AI, action, record', () => {
+    const items = [
+      ...body(join(conceptsDir, 'comment-lifecycle.md')).matchAll(/^\d+\.\s+(.+)$/gm),
+    ].map((m) => m[1]!.toLowerCase());
+    expect(items.length).toBeGreaterThanOrEqual(6);
+    const text = items.join('\n');
+    for (const word of ['webhook', 'poll', 'rule', 'classifier', 'polic', 'action', 'decision'])
+      expect(text, word).toContain(word);
+  });
+});
