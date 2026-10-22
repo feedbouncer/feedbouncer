@@ -1,5 +1,5 @@
-import { MCP_ENV_DOCS } from './config.js';
-import { connect } from './testing/harness.js';
+import { MCP_ENV_DOCS } from '../config.js';
+import { connect } from './harness.js';
 
 export interface ToolManifest {
   server: { name: 'feedbouncer'; transport: 'stdio' };
@@ -23,14 +23,17 @@ export async function buildToolManifest(): Promise<ToolManifest> {
       server: { name: 'feedbouncer', transport: 'stdio' },
       env: MCP_ENV_DOCS,
       tools: tools
-        .map((t) => ({
-          name: t.name,
-          ...(t.title !== undefined && { title: t.title }),
-          description: t.description ?? '',
-          inputSchema: t.inputSchema,
-          outputSchema: t.outputSchema ?? {},
-          ...(t.annotations !== undefined && { annotations: t.annotations }),
-        }))
+        .map((t) => {
+          if (t.outputSchema === undefined) throw new Error(`tool ${t.name} has no outputSchema`);
+          return {
+            name: t.name,
+            ...(t.title !== undefined && { title: t.title }),
+            description: t.description ?? '',
+            inputSchema: t.inputSchema,
+            outputSchema: t.outputSchema,
+            ...(t.annotations !== undefined && { annotations: t.annotations }),
+          };
+        })
         .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
     };
   } finally {

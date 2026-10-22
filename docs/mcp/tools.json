@@ -13,7 +13,7 @@
       "name": "FEEDBOUNCER_API_URL",
       "required": false,
       "default": "http://127.0.0.1:3001",
-      "rule": "Base URL of the FeedBouncer API. Must use https, except on localhost, 127.0.0.1 or [::1]; no credentials, query string or fragment."
+      "rule": "Base URL of the FeedBouncer API; blank uses the default. Must use https, except on localhost, 127.0.0.1 or [::1]; no credentials, query string or fragment."
     }
   ],
   "tools": [

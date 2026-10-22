@@ -33,7 +33,7 @@ export const MCP_ENV_DOCS: readonly {
     name: 'FEEDBOUNCER_API_URL',
     required: false,
     default: DEFAULT_API_URL,
-    rule: 'Base URL of the FeedBouncer API. Must use https, except on localhost, 127.0.0.1 or [::1]; no credentials, query string or fragment.',
+    rule: 'Base URL of the FeedBouncer API; blank uses the default. Must use https, except on localhost, 127.0.0.1 or [::1]; no credentials, query string or fragment.',
   },
 ];
 const API_KEY = /^fbk_[a-z2-7]{16}_[A-Za-z0-9_-]{43}$/;
