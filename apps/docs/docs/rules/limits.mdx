@@ -1,0 +1,58 @@
+---
+title: Limits
+description: The size limits of rules, their fields and a brand's rule set.
+status: stable
+---
+
+import reference from '@site/docs/_generated/product-reference.json';
+
+export const labels = {
+  terms: 'Terms in a keyword rule',
+  termChars: 'Characters in a term or name',
+  termCharsBeforeTrim: 'Characters in a term or name, before surrounding spaces are trimmed',
+  patterns: 'Patterns in a regex rule',
+  domains: 'Domains in a link rule',
+  emoji: 'Emoji in an emoji rule',
+  maxCount: 'Highest maximum emoji count in an emoji rule',
+  authorEntries: 'Entries in an author rule',
+  idChars: 'Characters in an author ID',
+  handleChars: 'Characters in a handle',
+  competitorEach: 'Names, handles or domains each, in a competitor rule',
+  jsonChars: 'Characters in the rule conditions as JSON',
+};
+
+A rule that goes over a limit is rejected when it is saved.
+
+## Per rule
+
+<table>
+  <caption>Limits of one rule</caption>
+  <thead>
+    <tr>
+      <th scope="col">Limit</th>
+      <th scope="col">Key</th>
+      <th scope="col">Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    {Object.entries(reference.rules.limits).map(([key, value]) => (
+      <tr key={key}>
+        <td>{labels[key] ?? key}</td>
+        <td>
+          <code>{key}</code>
+        </td>
+        <td>{value.toLocaleString('en-US')}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+
+A rule also has at most one of each [step](./actions.mdx), and a reply template is at most 2,000 characters.
+
+## Per brand
+
+- 200 rules per brand.
+- 50 own domains per brand.
+- 20 rule change proposals waiting for approval per brand.
+
+A rule evaluated against a comment also has a budget of {reference.rules.ruleBudgetMs} ms. See [Precedence](./precedence.md#the-time-budget).

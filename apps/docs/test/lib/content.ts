@@ -56,7 +56,8 @@ export function codeBlocks(md: string): { lang: string; body: string }[] {
 const withoutCode = (md: string) => md.replace(FENCE, '').replace(/`[^`\n]*`/g, '');
 
 export function headings(md: string): { depth: number; text: string }[] {
-  return [...withoutCode(md).matchAll(/^(#{1,6})\s+(.+?)\s*#*\s*$/gm)].map((m) => ({
+  // Only fences are stripped: a heading may itself hold inline code, such as "### `hide`".
+  return [...md.replace(FENCE, '').matchAll(/^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/gm)].map((m) => ({
     depth: m[1]!.length,
     text: m[2]!,
   }));

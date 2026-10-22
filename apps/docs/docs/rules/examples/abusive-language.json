@@ -1,0 +1,24 @@
+{
+  "id": "abusive-language",
+  "title": "Hide abusive language",
+  "case": "abusive_language",
+  "rules": [
+    {
+      "name": "Hide insults",
+      "conditions": { "type": "keyword", "terms": ["idiot", "jerk"], "match": "whole_word" },
+      "actions": [{ "type": "hide" }],
+      "mode": "enforce",
+      "priority": 10
+    }
+  ],
+  "brand": { "ownDomains": ["shop.example.com"] },
+  "comment": { "text": "What an idiot, nobody asked for your opinion.", "mild": true },
+  "expected": {
+    "decidedRule": "Hide insults",
+    "outcome": "hide",
+    "steps": ["hide"],
+    "suggestions": [],
+    "alsoMatched": []
+  },
+  "note": "Whole-word matching ignores case, so \"Idiot\" matches, while a longer word that merely contains a term does not."
+}

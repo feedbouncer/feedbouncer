@@ -1,0 +1,24 @@
+{
+  "id": "no-rule-matches",
+  "title": "No rule matches",
+  "case": "no_match",
+  "rules": [
+    {
+      "name": "Hide giveaway spam",
+      "conditions": { "type": "keyword", "terms": ["giveaway"], "match": "whole_word" },
+      "actions": [{ "type": "hide" }],
+      "mode": "enforce",
+      "priority": 10
+    }
+  ],
+  "brand": { "ownDomains": ["shop.example.com"] },
+  "comment": { "text": "Lovely photo, where was it taken?" },
+  "expected": {
+    "decidedRule": null,
+    "outcome": "none",
+    "steps": [],
+    "suggestions": [],
+    "alsoMatched": []
+  },
+  "note": "No rule decided the comment, so the rules stage does nothing. The classifier and the custom policies, if the brand has them, then look at it independently."
+}

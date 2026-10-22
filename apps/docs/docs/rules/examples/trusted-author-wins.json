@@ -1,0 +1,39 @@
+{
+  "id": "trusted-author-wins",
+  "title": "A trusted author beats a keyword rule",
+  "case": "trusted_author",
+  "rules": [
+    {
+      "name": "Hide sale words",
+      "conditions": { "type": "keyword", "terms": ["sale"], "match": "whole_word" },
+      "actions": [{ "type": "hide" }],
+      "mode": "enforce",
+      "priority": 1
+    },
+    {
+      "name": "Trust our team",
+      "conditions": {
+        "type": "author",
+        "list": "trusted",
+        "platform": "facebook",
+        "entries": [{ "externalId": "<TEAM_MEMBER_ID>" }]
+      },
+      "actions": [],
+      "mode": "enforce",
+      "priority": 50
+    }
+  ],
+  "brand": { "ownDomains": ["shop.example.com"] },
+  "comment": {
+    "text": "The summer sale starts on Friday.",
+    "authorExternalId": "<TEAM_MEMBER_ID>"
+  },
+  "expected": {
+    "decidedRule": "Trust our team",
+    "outcome": "approve",
+    "steps": [],
+    "suggestions": [],
+    "alsoMatched": ["Hide sale words"]
+  },
+  "note": "Trusted-author rules are checked before every other rule, whatever their priority. The comment is left alone. The keyword rule also matches, but it does not act because the trusted rule already decided."
+}

@@ -1,0 +1,93 @@
+---
+title: Actions
+description: The steps a rule can run, the order they run in, which can be combined, and how to undo them.
+status: stable
+---
+
+import reference from '@site/docs/_generated/product-reference.json';
+
+export const reasons = {
+  'auto_reply+hide': 'Instagram does not allow replies to hidden comments.',
+  'auto_reply+delete': 'You cannot reply to a comment that is being deleted.',
+  'private_reply+ban': 'You cannot message an author who is being banned.',
+  'hide+delete': 'Delete already removes the comment.',
+};
+
+A rule does not pick a single action. It carries a list of **steps**, with at most one of each type, and every step runs when the rule decides a comment. Author rules on the `allow` and `trusted` lists take no steps.
+
+## Execution order
+
+Steps run in this order, whatever order they were added in:
+
+<ReferenceTable kind="steps" data={reference.rules.steps} />
+
+Review comes first, messages go out while the comment still exists, and the destructive steps come last. A failure never stops the steps after it: each step records its own outcome and the rest still run. `delete` waits until every earlier step is final.
+
+The rule's decision is derived from its steps. Delete gives `remove`, Hide gives `hide`, Flag for review gives `flag`, and anything else gives `approve`. A rule whose steps are only replies therefore decides `approve`. That decision stops later rules and the custom policies for the comment. Add `flag_for_review` if later rules or policies should still look at it.
+
+## The steps
+
+### `flag_for_review`
+
+Puts the comment in the review queue. It changes nothing on the platform, and it is reversible: undoing it dismisses the review item. It is not held back in [review mode](../concepts/review-mode.md).
+
+### `private_reply`
+
+Sends one private message in answer to the comment, from a template. On Facebook it goes by Messenger and on Instagram by direct message. It goes out once per comment, within 7 days of the comment, and it cannot be taken back.
+
+```json
+{ "type": "private_reply", "template": "Hi {{author_first_name|friend}}, thanks for writing." }
+```
+
+### `auto_reply`
+
+Posts a public reply built from a template. The reply can be deleted on the platform afterwards, but FeedBouncer does not undo it for you. There is at most one automatic reply per thread.
+
+### `hide`
+
+Hides the comment on the platform. It is still stored and can be shown again with Unhide.
+
+### `ban`
+
+Bans the comment's author from the Page. The step needs `"confirmHardToReverse": true`, and the rule cannot be saved without it. Unbanning is possible from the log, but an author who was unbanned recently cannot be banned again straight away. Instagram has no ban.
+
+```json
+{ "type": "ban", "confirmHardToReverse": true }
+```
+
+### `delete`
+
+Removes the comment from the platform. The step needs `"confirmIrreversible": true`, and the rule cannot be saved without it. It cannot be undone.
+
+```json
+{ "type": "delete", "confirmIrreversible": true }
+```
+
+Templates for the two reply steps are plain text of up to 2,000 characters. They can use `{{author_name}}`, `{{author_first_name}}`, `{{brand_name}}` and `{{platform}}`, with an optional fallback written `{{name|fallback}}`. Unknown variables are rejected when the rule is saved.
+
+## Conflicts
+
+These combinations are rejected when the rule is saved. The same step twice is also rejected.
+
+<ReferenceTable
+  kind="conflicts"
+  data={reference.rules.conflicts.map(([first, second]) => ({
+    first,
+    second,
+    reason: reasons[`${first}+${second}`],
+  }))}
+/>
+
+## Undo
+
+Hide, Ban and Flag for review can be undone from the brand's action log, which can be filtered by rule, outcome and step. The Undo column above names the undo. A step that has none cannot be undone. Undoing a Hide or Ban asks the platform to unhide or unban, and the log shows the undo as in progress until the platform answers.
+
+An undone step is a moderator override: FeedBouncer will not apply that step to that comment again. If the platform refuses the undo, the log shows "Undo failed. Try again." and the step does not count as an override. See [Decisions and audit](../concepts/decisions-and-audit.md).
+
+## When Hide or Delete fails
+
+If a Hide or Delete step ends as failed or not supported, for example because the permission was revoked, the connection needs reconnecting or retries ran out, the comment is **flagged for review** instead, and the decision shows why. Other steps do not fall back, and their outcome is in the action log. A step that is only deferred, because it was rate limited or is waiting for a reconnect, stays pending and falls back only if it finally fails.
+
+## Platform support
+
+Steps the connected accounts do not support are not offered in the editor. Ban is not available on Instagram, and Instagram replies are not allowed on hidden comments. A private reply on Instagram works on top-level comments only. A step that no connected account supports cannot be saved.

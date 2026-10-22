@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it, test } from 'vitest';
 import { ALLOWED_LINK_HOSTS } from '../site.config';
+import { loadExamples } from './lib/examples';
 import {
   appRoot,
   body,
@@ -134,7 +135,12 @@ describe('content guards', () => {
       expect(readFileSync(f, 'utf8'), rel(f)).not.toContain('dangerouslySetInnerHTML');
   });
 
-  test.todo('comment text appears only inside ExampleComment (Task 8)');
+  test('comment text appears only inside ExampleComment', () => {
+    const texts = loadExamples().map((e) => e.comment.text);
+    expect(texts.length).toBeGreaterThan(0);
+    for (const { file, name } of pages)
+      for (const t of texts) expect(readFileSync(file, 'utf8'), name).not.toContain(t);
+  });
 
   test('four top-level sidebar sections in order', async () => {
     const { default: sidebars } = await import('../sidebars');

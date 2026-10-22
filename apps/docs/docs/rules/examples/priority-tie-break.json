@@ -1,0 +1,31 @@
+{
+  "id": "priority-tie-break",
+  "title": "The lower priority number decides",
+  "case": "priority",
+  "rules": [
+    {
+      "name": "Flag refund mentions",
+      "conditions": { "type": "keyword", "terms": ["refund"], "match": "whole_word" },
+      "actions": [{ "type": "flag_for_review" }],
+      "mode": "enforce",
+      "priority": 20
+    },
+    {
+      "name": "Hide refund scams",
+      "conditions": { "type": "keyword", "terms": ["refund"], "match": "whole_word" },
+      "actions": [{ "type": "hide" }],
+      "mode": "enforce",
+      "priority": 10
+    }
+  ],
+  "brand": { "ownDomains": ["shop.example.com"] },
+  "comment": { "text": "Message me for a quick refund." },
+  "expected": {
+    "decidedRule": "Hide refund scams",
+    "outcome": "hide",
+    "steps": ["hide"],
+    "suggestions": [],
+    "alsoMatched": ["Flag refund mentions"]
+  },
+  "note": "Both rules match. The one with the lower priority number runs first and decides, although it was created second. The other rule is listed as also matched in the decision record and does nothing."
+}
