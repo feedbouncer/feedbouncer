@@ -27,7 +27,7 @@ Facebook Pages and Instagram are supported.
 
 - [Comment lifecycle](./comment-lifecycle.md): what happens to a comment, step by step.
 - [Organizations, brands and connections](./organizations-brands-connections.md): who can see and change what.
-- [Decisions and audit](./decisions-and-audit.md): what FeedBouncer records about every action.
+- [Decisions and audit](./decisions-and-audit.mdx): what FeedBouncer records about every action.
 - [Review mode](./review-mode.md): the first 7 days, when FeedBouncer only suggests.
 - [AI classifier and policies](./ai-classifier-and-policies.md): the optional model-based checks.
 - [Self-hosting](./self-hosting.md): running your own instance.

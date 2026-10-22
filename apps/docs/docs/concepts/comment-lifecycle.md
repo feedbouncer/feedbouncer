@@ -38,4 +38,4 @@ A decision carries an ordered list of <Term id="action-step">action steps</Term>
 
 ## Undo
 
-Hide, ban and flag can be <Term id="undo">undone</Term>. Delete and private replies cannot. See [Decisions and audit](./decisions-and-audit.md#undo-log).
+Hide, ban and flag can be <Term id="undo">undone</Term>. Delete and private replies cannot. See [Decisions and audit](./decisions-and-audit.mdx#undo-log).
