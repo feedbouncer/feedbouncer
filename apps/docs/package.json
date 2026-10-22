@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "node scripts/prepare-content.mjs && docusaurus gen-api-docs all && node scripts/stamp-generated.mjs && docusaurus build",
+    "build": "node scripts/prepare-content.mjs && docusaurus gen-api-docs all && node scripts/stamp-generated.mjs && docusaurus build && node scripts/build-search-index.mjs",
     "start": "node scripts/prepare-content.mjs && docusaurus gen-api-docs all && node scripts/stamp-generated.mjs && docusaurus start",
     "serve": "docusaurus serve",
     "reference:write": "tsx scripts/write-reference.ts",
@@ -51,6 +51,7 @@
     "docusaurus-plugin-sass": "0.2.7",
     "docusaurus-theme-openapi-docs": "5.2.0",
     "jsdom": "30.1.3",
+    "pagefind": "1.5.2",
     "prism-react-renderer": "2.4.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",

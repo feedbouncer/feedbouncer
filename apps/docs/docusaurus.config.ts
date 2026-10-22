@@ -99,6 +99,7 @@ const config: Config = {
           position: 'right',
           dropdownItemsAfter: [{ to: '/versions', label: 'All versions' }],
         },
+        { type: 'search', position: 'right' },
         { href: `https://github.com/${REPO}`, label: 'GitHub', position: 'right' },
       ],
     },
