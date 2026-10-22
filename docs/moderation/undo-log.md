@@ -1,5 +1,7 @@
 # Undo log: Hidden today
 
+Operator reference. For the user-facing explanation, see the [documentation site](https://feedbouncer.github.io/feedbouncer/docs/concepts/decisions-and-audit/).
+
 **Hidden today** lists every comment FeedBouncer hid since local midnight, across
 all the Facebook and Instagram accounts you can moderate, newest first. Each row
 shows the comment, its author, the platform and account, when it was hidden,

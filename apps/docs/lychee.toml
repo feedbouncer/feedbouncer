@@ -1,0 +1,16 @@
+# Product-repo links are excluded because the content test "RepoLink paths exist" checks them
+# locally, and links to files added in the same pull request would 404 on main.
+# The site's own absolute URLs (canonical and alternate tags) are excluded because they do not
+# resolve until the pages are deployed; internal links are checked by the Docusaurus build.
+exclude = [
+  '^https://feedbouncer\.github\.io/feedbouncer(/|$)',
+  '^https://feedbouncer\.example\.com',
+  '^https?://(localhost|127\.0\.0\.1)',
+  '^https://github\.com/feedbouncer/feedbouncer(/|$)',
+]
+max_retries = 3
+accept = ['200..=299', '429']
+
+# The site is served under /feedbouncer/ but the build directory has no such folder, so a root-relative
+# link such as /feedbouncer/docs/x resolves to <build>/feedbouncer/docs/x. Drop that segment.
+remap = ['^(file://.*/build)/feedbouncer(/.*)?$ $1$2']

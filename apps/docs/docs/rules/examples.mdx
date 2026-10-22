@@ -1,0 +1,59 @@
+---
+title: Worked examples
+description: Rules, sample comments and the decisions the FeedBouncer engine makes for them.
+status: stable
+---
+
+import spamLinks from './examples/spam-links.json';
+import repeatedComments from './examples/repeated-comments.json';
+import abusiveLanguage from './examples/abusive-language.json';
+import emojiFlood from './examples/emoji-flood.json';
+import competitorDryRun from './examples/competitor-dry-run.json';
+import trustedAuthorWins from './examples/trusted-author-wins.json';
+import priorityTieBreak from './examples/priority-tie-break.json';
+import noRuleMatches from './examples/no-rule-matches.json';
+
+Each example shows the rules, one sample comment and the decision. The decision is not written by hand: the documentation tests run every example through the same rule engine that evaluates real comments, and fail if the engine decides differently. All comments are invented, and IDs are placeholders.
+
+## Spam and abuse
+
+### Hide spam links
+
+<WorkedExample data={spamLinks} />
+
+### Hide a repeat poster
+
+<FeatureStatus status="unsupported">
+  FeedBouncer has no condition for repeated or duplicate comments. It cannot compare the text of a
+  comment with earlier ones. Block the author instead, as below.
+</FeatureStatus>
+
+<WorkedExample data={repeatedComments} />
+
+### Hide abusive language
+
+<WorkedExample data={abusiveLanguage} />
+
+### Flag an emoji flood
+
+<WorkedExample data={emojiFlood} />
+
+## Trying and ordering rules
+
+### Try a competitor rule in dry run
+
+<WorkedExample data={competitorDryRun} />
+
+### A trusted author beats a keyword rule
+
+<WorkedExample data={trustedAuthorWins} />
+
+### The lower priority number decides
+
+<WorkedExample data={priorityTieBreak} />
+
+### No rule matches
+
+<WorkedExample data={noRuleMatches} />
+
+When no rule decides, the [classifier and the custom policies](./precedence.md#when-no-rule-matches) look at the comment next.

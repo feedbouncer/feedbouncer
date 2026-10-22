@@ -19,6 +19,9 @@ afterAll(async () => {
 });
 
 const tenant = () => seedTenant(h.c, `k${++seq}`);
+// The secret is base64url, so it may itself contain underscores.
+const secretOf = (raw: string) => raw.split('_').slice(2).join('_');
+
 const fill = async (org: string, user: string, n: number) => {
   for (let i = 0; i < n; i++) await keys.create(org, user, { name: `key ${i}`, scope: 'read' });
 };
@@ -31,7 +34,7 @@ describe('PgApiKeys.create', () => {
       scope: 'write',
     });
     expect(key).toMatchObject({ name: 'ci', scope: 'write', createdByUserId: t.userId });
-    const secret = token.reveal().split('_')[2]!;
+    const secret = secretOf(token.reveal());
     const row = (await h.c.query('SELECT * FROM api_key WHERE id = $1', [key.id])).rows[0];
     expect(JSON.stringify(row)).not.toContain(secret);
     expect(Object.values(row).some((v) => typeof v === 'string' && v.includes('fbk_'))).toBe(false);
@@ -90,7 +93,7 @@ describe('PgApiKeys.create', () => {
     expect(rows.map((r) => r.action).sort()).toEqual(['api_key.created', 'api_key.revoked']);
     for (const r of rows) {
       expect(r.details).not.toContain('fbk_');
-      expect(r.details).not.toContain(token.reveal().split('_')[2]);
+      expect(r.details).not.toContain(secretOf(token.reveal()));
     }
   });
 });

@@ -1,5 +1,7 @@
 # Comment classifier
 
+Operator reference. For the user-facing explanation, see the [documentation site](https://feedbouncer.github.io/feedbouncer/docs/concepts/ai-classifier-and-policies/).
+
 The classifier scores every newly ingested comment with a language model and
 applies per-brand thresholds to the scores. It runs only when no moderation
 rule decided the comment, and it never blocks ingestion.

@@ -1,5 +1,7 @@
 # Moderation actions
 
+Operator reference. For the user-facing explanation, see the [documentation site](https://feedbouncer.github.io/feedbouncer/docs/rules/actions/).
+
 A rule does not pick a single action. It carries a list of **steps**, and every
 step that applies runs when the rule decides a comment. This page lists the
 steps, the order they run in, what the outcomes mean, and the limits to know

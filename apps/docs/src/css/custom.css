@@ -1,0 +1,42 @@
+/* Site-wide overrides; keep to Docusaurus theme variables where possible. */
+:root {
+  --ifm-color-primary: #1f5fbf;
+  /* Darker status colors so white text on badges and response tabs reaches 4.5:1. */
+  --ifm-color-success: #0b6b2e;
+  --ifm-color-danger: #b3261e;
+  --ifm-color-info: #0b6a8f;
+  --ifm-color-warning: #8a5a00;
+  /* API reference markers (required, nullable) on light and tinted backgrounds. */
+  --openapi-required: #b3261e;
+  --openapi-nullable: #0b6a8f;
+}
+
+/* Links inside running text must not rely on color alone (WCAG 1.4.1). */
+main p a,
+main li a:not(.table-of-contents__link):not(.breadcrumbs__link),
+main td a {
+  text-decoration: underline;
+}
+
+/* The API reference theme dims names, types and inactive response codes with opacity,
+   which drops them under 4.5:1. Show them at full strength in a darker gray instead. */
+.theme-api-markdown .openapi-schema__name,
+.theme-api-markdown .openapi-schema__type {
+  opacity: 1;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.theme-api-markdown .openapi-tabs__response-code-item:not(.active) {
+  opacity: 1;
+}
+
+.theme-api-markdown [style*='opacity: 0.6'],
+.theme-api-markdown [style*='opacity:0.6'] {
+  opacity: 1 !important;
+  color: var(--ifm-color-emphasis-700);
+}
+
+/* Long type names (for example string<date-time>) must wrap instead of widening the page on phones. */
+.theme-api-markdown .openapi-schema__container {
+  flex-wrap: wrap;
+}

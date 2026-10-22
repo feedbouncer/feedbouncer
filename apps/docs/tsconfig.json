@@ -1,0 +1,12 @@
+{
+  "extends": "@docusaurus/tsconfig",
+  "compilerOptions": {
+    "types": ["node", "@docusaurus/module-type-aliases"],
+    "ignoreDeprecations": "6.0",
+    "noEmit": true,
+    "composite": false,
+    "incremental": true
+  },
+  "include": ["*.ts", "src", "scripts", "test", "e2e"],
+  "exclude": [".docusaurus", "build", "docs"]
+}

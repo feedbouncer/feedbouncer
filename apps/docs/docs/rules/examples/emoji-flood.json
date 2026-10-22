@@ -1,0 +1,24 @@
+{
+  "id": "emoji-flood",
+  "title": "Flag an emoji flood",
+  "case": "emoji_flood",
+  "rules": [
+    {
+      "name": "Flag emoji floods",
+      "conditions": { "type": "emoji", "emoji": [], "maxCount": 5 },
+      "actions": [{ "type": "flag_for_review" }],
+      "mode": "enforce",
+      "priority": 10
+    }
+  ],
+  "brand": { "ownDomains": ["shop.example.com"] },
+  "comment": { "text": "🔥🔥🔥🔥🔥🔥🔥 so good" },
+  "expected": {
+    "decidedRule": "Flag emoji floods",
+    "outcome": "flag",
+    "steps": ["flag_for_review"],
+    "suggestions": [],
+    "alsoMatched": []
+  },
+  "note": "The comment holds seven emoji and the limit is five, so it goes to the review queue for a person to look at."
+}

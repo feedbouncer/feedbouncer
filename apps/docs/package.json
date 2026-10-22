@@ -1,0 +1,67 @@
+{
+  "name": "@feedbouncer/docs",
+  "license": "AGPL-3.0-only",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/prepare-content.mjs && docusaurus gen-api-docs all && node scripts/stamp-generated.mjs && docusaurus build && node scripts/build-search-index.mjs",
+    "start": "node scripts/prepare-content.mjs && docusaurus gen-api-docs all && node scripts/stamp-generated.mjs && docusaurus start",
+    "serve": "docusaurus serve",
+    "reference:write": "tsx scripts/write-reference.ts",
+    "lint": "eslint .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore --ignore-unknown",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
+    "typecheck": "node scripts/prepare-content.mjs && tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
+    "test": "node scripts/prepare-content.mjs && vitest run",
+    "routes:update": "node scripts/check-routes.mjs --update",
+    "test:site": "node scripts/check-routes.mjs && playwright test"
+  },
+  "browserslist": {
+    "production": [
+      ">0.5%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 3 chrome version",
+      "last 3 firefox version",
+      "last 5 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@docusaurus/core": "3.10.2",
+    "@docusaurus/module-type-aliases": "3.10.2",
+    "@docusaurus/plugin-client-redirects": "3.10.2",
+    "@docusaurus/plugin-content-docs": "3.10.2",
+    "@docusaurus/preset-classic": "3.10.2",
+    "@docusaurus/theme-classic": "3.10.2",
+    "@docusaurus/theme-common": "3.10.2",
+    "@docusaurus/tsconfig": "3.10.2",
+    "@docusaurus/types": "3.10.2",
+    "@feedbouncer/actions": "workspace:*",
+    "@feedbouncer/moderation-contract": "workspace:*",
+    "@feedbouncer/public-api": "workspace:*",
+    "@feedbouncer/rules": "workspace:*",
+    "@mdx-js/react": "3.1.1",
+    "@playwright/test": "1.64.1",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "24.13.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "clsx": "2.1.1",
+    "docusaurus-plugin-openapi-docs": "5.2.0",
+    "docusaurus-plugin-sass": "0.2.7",
+    "docusaurus-theme-openapi-docs": "5.2.0",
+    "jsdom": "30.1.3",
+    "pagefind": "1.5.2",
+    "prism-react-renderer": "2.4.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "sass": "1.105.2",
+    "tsx": "4.23.15",
+    "vitest": "5.0.3",
+    "zod": "4.6.5"
+  }
+}

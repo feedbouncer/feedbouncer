@@ -1,5 +1,7 @@
 # Review mode
 
+Operator reference. For the user-facing explanation, see the [documentation site](https://feedbouncer.github.io/feedbouncer/docs/concepts/review-mode/).
+
 For the first 7 days after an account is connected, FeedBouncer only
 **suggests**. Rules, the classifier and custom policies still decide what
 should happen to each comment, but the actions that change anything on the

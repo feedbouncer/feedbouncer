@@ -1,0 +1,124 @@
+---
+title: Tool reference
+description: The seven FeedBouncer MCP tools, with the scope each needs, example prompts, limits and generated input and output tables.
+status: stable
+---
+
+import manifest from '../_generated/tools.json';
+
+The server offers seven <Term id="mcp-tool">tools</Term>. Each one calls one or two `/v1` routes of the [public API](../api/overview.md) with your key, so it sees only that key's workspace.
+
+Every tool returns a text result for the model and, on success, a `structuredContent` object with the same data as JSON. IDs are UUIDs. Times are ISO 8601 with an offset, such as `2026-10-18T09:00:00Z` or `2026-10-18T11:00:00+02:00`. The tables below are generated from the server's tool manifest.
+
+## Limits that differ from the API
+
+The tools are stricter than the API in two places:
+
+- `idempotencyKey` is at most 64 characters (`A-Z a-z 0-9 . _ : -`). The API accepts up to 128.
+- `list_inbox` and `search_inbox` take a `limit` of at most 50 (default 20). The API allows up to 100.
+
+## Errors
+
+A failed call returns `isError: true` and one line of text. Invalid arguments, such as a malformed UUID, an unknown enum value or a missing field, are refused before any request is made, with a message naming the field. Errors from the API map to these messages:
+
+| API error code                    | Message                                                                                                                           |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `not_found`                       | No comment, rule or brand with that ID in this workspace. List the inbox to get current IDs.                                      |
+| `unauthenticated`                 | The API key was rejected.                                                                                                         |
+| `insufficient_scope`              | This API key is read-only. Create a write key on the organization's API keys page.                                                |
+| `rate_limited`                    | Rate limited. Retry after N seconds, taken from `Retry-After`.                                                                    |
+| `unsupported_action`              | The platform of the comment does not support this action.                                                                         |
+| `connection_inactive`             | Reconnect the account in FeedBouncer.                                                                                             |
+| `text_too_long`                   | Reply is longer than the platform allows.                                                                                         |
+| `reply_not_allowed`               | The reason, for example `review_mode_active`.                                                                                     |
+| `reply_to_hidden_comment`         | Facebook does not allow replies to hidden comments. Unhide the comment first.                                                     |
+| `already_deleted`, `comment_gone` | The comment was deleted on the platform.                                                                                          |
+| `rule_rejected`                   | Rule rejected, with a reason. See [`propose_rule_change`](#propose_rule_change).                                                  |
+| `rule_limit_reached`              | This brand already has the maximum number of rules. Archive a rule before adding another.                                         |
+| `pending_limit_reached`           | Too many pending rule changes for this brand. Ask a person to approve or reject some.                                             |
+| `idempotency_key_reused`          | That idempotency key was already used with different input. Use a new key.                                                        |
+| `invalid_request`                 | For example, `to` must be after `from`, or `to` must not be in the future.                                                        |
+| anything else                     | `FeedBouncer API error (code)`. This includes `unreachable` (no answer within 10 seconds, or no connection) and `invalid_cursor`. |
+
+A key of one workspace gets `not_found` for the IDs of every other workspace, exactly as for IDs that do not exist. Filtering `list_inbox` or `search_inbox` by another workspace's `brandId` returns no comments.
+
+## `list_inbox`
+
+Lists comments from the inbox, newest first. Needs a `read` key. Example prompt: "Show my unanswered Instagram comments from this week."
+
+An empty page is `No comments match.`, not an error. Pages are stable: following `nextCursor` neither repeats nor skips comments when new ones arrive in between. In the text result and in `structuredContent`, `text` and `authorName` are wrapped in [untrusted-content delimiters](authentication.mdx#tool-output-is-untrusted).
+
+<McpToolReference name="list_inbox" manifest={manifest} />
+
+## `search_inbox`
+
+Searches comment text and author names, case-insensitively. Needs a `read` key. Example prompt: "Find comments that mention refunds since the first of the month."
+
+It takes every `list_inbox` input plus `query`, and returns the same output and paging. Nothing found is `No comments match.`, not an error.
+
+<McpToolReference name="search_inbox" manifest={manifest} />
+
+## `reply_to_comment`
+
+Posts a public reply as the brand under a comment. Needs a `write` key. Example prompt: "Reply to that comment and say size M is back in stock."
+
+The tool queues the reply, then waits up to 15 seconds for it to post:
+
+- Posted: `Reply posted`, with `status` `posted`.
+- Still queued after 15 seconds: `Queued; calling again with the same text will not post twice.`, with `status` `queued`. The reply is still posted when the worker gets to it.
+- Refused or failed: an error from the table above, followed by `Nothing was posted.` and a note to retry with a new `idempotencyKey`. A comment deleted on the platform gets only `Nothing was posted.`
+
+Without `idempotencyKey`, the key is derived from the comment ID and the text, so calling again with the same text returns the first result instead of posting twice. The same applies to a refusal: retrying with the same key returns the stored refusal, even after the cause is fixed. To try again, pass a new `idempotencyKey`. To post the same text twice on purpose, pass a different key each time. Reusing a key with a different comment or text is refused with `idempotency_key_reused`.
+
+<McpToolReference name="reply_to_comment" manifest={manifest} />
+
+## `set_comment_visibility`
+
+Hides a comment from the public, or makes a hidden comment visible again. Nothing is deleted. Needs a `write` key. Example prompt: "Hide that comment."
+
+Without `idempotencyKey`, every call is a new request. The result is one of:
+
+- Queued: `changed` is `true` and `status` is `pending`. The worker applies it on the platform shortly after.
+- Applied at once: `changed` is `true` and `status` is `applied`.
+- Already in that state, or deleted on the platform: `changed` is `false` with a `reason`. This is not an error.
+
+<McpToolReference name="set_comment_visibility" manifest={manifest} />
+
+## `summarize_period`
+
+Summarises comment activity: totals, categories, the rules that matched most and the threads with the most replies. Needs a `read` key. Example prompt: "Summarise last week's comments."
+
+`from` defaults to 7 days before `to`, and `to` defaults to now and must not be in the future. A period longer than 92 days is cut to the last 92 days, the result says so, and `bounded` is set. A `to` before `from` is `invalid_request`. In `notableThreads`, `textPreview` and `authorName` are wrapped in untrusted-content delimiters.
+
+<McpToolReference name="summarize_period" manifest={manifest} />
+
+## `read_rules`
+
+Lists the live rules of each brand and its recent rule-change proposals. Needs a `read` key. It never changes a rule or a proposal. Example prompt: "What rules does the Acme brand have, and are any changes waiting for approval?"
+
+Each brand has a `ruleRevision`, a counter that goes up on every rule change. See [approving rule changes](approvals.md#stale-proposals-must-be-proposed-again).
+
+<McpToolReference name="read_rules" manifest={manifest} />
+
+## `propose_rule_change`
+
+Proposes creating, changing or archiving a rule. Needs a `write` key. Example prompt: "Propose a rule that hides comments with fake giveaway links, and explain why."
+
+It only creates a pending proposal. No rule changes until a person approves it in the web app, and no tool or key can approve it. See [approving rule changes](approvals.md). The result includes a `reviewUrl` for the person, and any warnings, such as a rule that would never match because another is evaluated first. Proposing a change that is already pending returns the waiting proposal instead of a second one.
+
+`rule` and `patch` may be at most 16,384 characters as JSON. A field that does not belong to the operation is refused.
+
+The API refuses proposals it could never apply, with `rule_rejected` and one of these reasons:
+
+| Reason                     | Meaning                                                      |
+| -------------------------- | ------------------------------------------------------------ |
+| `invalid_rule`             | The rule or patch does not validate.                         |
+| `matches_everything`       | The conditions would match every comment.                    |
+| `duplicate_of_rule`        | Another rule has the same conditions and actions.            |
+| `conflicts_with_rule`      | Another rule has the same conditions but different actions.  |
+| `step_not_allowed_via_api` | `delete` and `ban` steps cannot be proposed through the API. |
+| `no_change`                | The update changes nothing.                                  |
+
+The `matches_everything`, duplicate and conflict checks are skipped when the resulting rule is disabled, so a bad rule can always be switched off.
+
+<McpToolReference name="propose_rule_change" manifest={manifest} />

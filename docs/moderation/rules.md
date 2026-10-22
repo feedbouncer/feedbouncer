@@ -1,5 +1,7 @@
 # Moderation rules
 
+Operator reference. For the user-facing explanation, see the [documentation site](https://feedbouncer.github.io/feedbouncer/docs/rules/overview/).
+
 Rules decide what happens to a comment when it arrives or is edited. They are
 managed per brand under **Rules** in the web app and evaluated by the
 `rule_evaluate` job, so evaluation never slows down ingestion.

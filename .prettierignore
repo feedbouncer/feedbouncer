@@ -9,3 +9,9 @@ next-env.d.ts
 
 # Integration-test migration fixtures
 packages/db/.tmp/
+apps/docs/.docusaurus/
+apps/docs/build/
+apps/docs/docs/_generated/
+apps/docs/docs/api/reference/
+apps/docs/test-results/
+apps/docs/playwright-report/

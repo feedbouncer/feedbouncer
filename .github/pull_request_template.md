@@ -10,7 +10,7 @@ Closes #
 
 - [ ] `pnpm typecheck`, `pnpm lint`, `pnpm format:check` and `pnpm test` pass locally.
 - [ ] Tests added or updated for the change (integration tests too if it touches `db`, `api`, `connectors`, `jobs`, `observability` or `secrets`).
-- [ ] Docs updated (README, CONTRIBUTING or `docs/`) if behavior, commands or configuration changed.
+- [ ] Docs updated (README, CONTRIBUTING, `docs/` or the docs site in `apps/docs`) if behavior, commands or configuration changed.
 - [ ] New migrations include a `down.sql`.
 - [ ] No secrets, real tokens, internal hostnames or personal paths in code, tests, fixtures or this description.
 - [ ] Tenant-scoped reads and writes are authorized and have an isolation test.

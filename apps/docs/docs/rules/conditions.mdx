@@ -1,0 +1,131 @@
+---
+title: Conditions
+description: The six rule condition types, with their fields, defaults and an example of each.
+status: stable
+---
+
+import reference from '../_generated/product-reference.json';
+
+export const summary = {
+  keyword: 'A word or phrase from a list',
+  regex: 'A regular expression',
+  link_domain: 'The domain of a link in the comment',
+  emoji: 'Listed emoji, or too many emoji',
+  author: 'The comment author, from a block, allow or trusted list',
+  competitor: 'A competitor name, handle or domain',
+};
+
+A rule has one condition. The condition says which comments the rule matches, and its `type` decides which other fields it takes. Text is normalised before it is matched: case, Latin, Greek and Cyrillic accents, zero-width characters and full-width forms are folded. Leetspeak is not normalised.
+
+<ReferenceTable
+  kind="conditions"
+  data={reference.rules.conditions.map((c) => ({ type: c.type, summary: summary[c.type] }))}
+/>
+
+Size limits for every field are on the [Limits](./limits.mdx) page.
+
+## Condition types
+
+### `keyword`
+
+Matches when the comment contains any term in the list.
+
+| Field   | Default      | Meaning                                                       |
+| ------- | ------------ | ------------------------------------------------------------- |
+| `terms` | required     | The words or phrases. Duplicates are dropped, blanks ignored. |
+| `match` | `whole_word` | `whole_word` or `contains`.                                   |
+
+Matching is case-insensitive. With `whole_word`, a term does not match inside a longer word. Scripts written without spaces always use substring matching.
+
+```json
+{ "type": "keyword", "terms": ["idiot", "jerk"], "match": "whole_word" }
+```
+
+### `regex`
+
+Matches when any pattern matches the normalised text.
+
+| Field      | Default  | Meaning                    |
+| ---------- | -------- | -------------------------- |
+| `patterns` | required | A list of RE2 expressions. |
+
+RE2 has no backreferences or look-around. An invalid pattern is rejected when the rule is saved, with the position of the problem. A pattern that matches an empty text is too broad and is rejected in a rule change proposal.
+
+```json
+{ "type": "regex", "patterns": ["free\\s+money"] }
+```
+
+### `link_domain`
+
+Matches the domains of the links in a comment, including subdomains and links written without a scheme. E-mail addresses are ignored. Shortened links are matched by their own domain and never followed.
+
+| Field              | Default  | Meaning                                                                                                                     |
+| ------------------ | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `mode`             | required | `blocklist` matches listed domains. `allowlist` matches every other domain.                                                 |
+| `domains`          | required | The domains the mode applies to.                                                                                            |
+| `exemptOwnDomains` | `true`   | Links to the brand's own domains are never matched.                                                                         |
+| `shorteners`       | `match`  | `match` matches a known URL shortener unless an allowlist lists it. `ignore` never matches a link just for being shortened. |
+| `lookalikes`       | `match`  | `match` also matches a host that imitates a listed or own domain.                                                           |
+
+Lookalike detection is heuristic: it covers hosts that mix scripts and a small table of look-alike letters. A domain written entirely in a lookalike script is not detected. Own domains are managed per brand under **Own domains**.
+
+```json
+{
+  "type": "link_domain",
+  "mode": "blocklist",
+  "domains": ["cheap-pills.example.com"],
+  "shorteners": "match"
+}
+```
+
+### `emoji`
+
+Matches a listed emoji, a comment with more emoji than `maxCount`, or both.
+
+| Field      | Default  | Meaning                                                                    |
+| ---------- | -------- | -------------------------------------------------------------------------- |
+| `emoji`    | required | Single emoji to match. May be empty when `maxCount` is set.                |
+| `maxCount` | `null`   | Matches when the comment has more emoji than this. `null` sets no maximum. |
+
+An emoji made of several code points counts once. The rule needs at least one listed emoji or a `maxCount`.
+
+```json
+{ "type": "emoji", "emoji": [], "maxCount": 5 }
+```
+
+### `author`
+
+Matches comments from listed authors on one platform.
+
+| Field      | Default  | Meaning                                                              |
+| ---------- | -------- | -------------------------------------------------------------------- |
+| `list`     | required | `block`, `allow` or `trusted`.                                       |
+| `platform` | required | The platform the entries belong to. The rule never matches another.  |
+| `entries`  | required | One or more entries, each with an `externalId`, a `handle`, or both. |
+
+An author ID is matched before a handle, so a rename does not bypass the list. Handles are display text anyone can copy, so only a `block` list may use them. An `allow` or `trusted` list needs an `externalId` for every entry. Those two lists take no steps, and a `block` list must flag, hide or delete. [Trusted-author rules](./precedence.md#evaluation-order) are checked first.
+
+```json
+{
+  "type": "author",
+  "list": "block",
+  "platform": "facebook",
+  "entries": [{ "externalId": "<AUTHOR_ID>" }]
+}
+```
+
+### `competitor`
+
+Matches names, handles and domains of competitors with one rule and one set of steps. The decision records which of the three matched.
+
+| Field     | Default  | Meaning                                       |
+| --------- | -------- | --------------------------------------------- |
+| `names`   | required | Competitor names, matched as whole words.     |
+| `handles` | required | Competitor handles. A leading `@` is dropped. |
+| `domains` | required | Competitor domains.                           |
+
+Each list may be empty, but at least one entry is needed in total.
+
+```json
+{ "type": "competitor", "names": ["Rivalbrand"], "handles": [], "domains": [] }
+```

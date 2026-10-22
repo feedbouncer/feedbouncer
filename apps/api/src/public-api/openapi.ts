@@ -4,6 +4,7 @@ import {
   PUBLIC_ERROR_CODES,
   PUBLIC_ERROR_STATUS,
   PUBLIC_ROUTE_SPECS,
+  REQUEST_BODY_LIMIT_BYTES,
   type PublicErrorCode,
   type RouteSpec,
 } from '@feedbouncer/public-api';
@@ -65,6 +66,8 @@ const REPLAYED: JsonObject = {
 const RETRY_AFTER: JsonObject = {
   'Retry-After': integerHeader('Whole seconds to wait before retrying (at least 1).'),
 };
+/** The API answers an oversize body with status 413 and the `invalid_request` code. */
+export const BODY_TOO_LARGE = `Request body larger than ${REQUEST_BODY_LIMIT_BYTES / 1024} KiB: status 413 with the \`invalid_request\` code.`;
 const REF_ERROR: JsonObject = { $ref: '#/components/schemas/Error' };
 
 const ERROR_SCHEMA: JsonObject = {
@@ -196,7 +199,40 @@ function responses(spec: RouteSpec, schemas: SchemaCollector): JsonObject {
       content: { 'application/json': { schema: REF_ERROR } },
     };
   }
+  if (spec.body) {
+    out[413] = {
+      description: BODY_TOO_LARGE,
+      content: { 'application/json': { schema: REF_ERROR } },
+    };
+  }
   return Object.fromEntries(Object.entries(out).sort(([a], [b]) => Number(a) - Number(b)));
+}
+
+/**
+ * A copy-pasteable curl command for the route: it reads the server from
+ * $FEEDBOUNCER_URL and the key from $FEEDBOUNCER_API_KEY, so it carries no host
+ * or secret of its own.
+ */
+export function curlExample(spec: RouteSpec): string {
+  const example = spec.example ?? {};
+  const path = spec.path.replace(/\{(\w+)\}/g, (_, name: string) => {
+    const value = example.pathParams?.[name];
+    if (value === undefined) throw new Error(`${spec.id}: example has no value for {${name}}`);
+    return value;
+  });
+  const query = new URLSearchParams(example.query).toString();
+  const lines = [
+    spec.method === 'GET' ? 'curl -sS' : `curl -sS -X ${spec.method}`,
+    `"$FEEDBOUNCER_URL${path}${query ? `?${query}` : ''}"`,
+  ];
+  if (spec.scope !== null) lines.push('-H "Authorization: Bearer $FEEDBOUNCER_API_KEY"');
+  if (spec.idempotent) lines.push('-H "Idempotency-Key: <UNIQUE_KEY>"');
+  if (spec.body) {
+    const body = JSON.stringify(example.body ?? {});
+    if (body.includes("'")) throw new Error(`${spec.id}: example body contains a single quote`);
+    lines.push('-H "Content-Type: application/json"', `-d '${body}'`);
+  }
+  return lines.join(' \\\n  ');
 }
 
 function operation(spec: RouteSpec, schemas: SchemaCollector): JsonObject {
@@ -216,6 +252,7 @@ function operation(spec: RouteSpec, schemas: SchemaCollector): JsonObject {
       },
     }),
     responses: responses(spec, schemas),
+    'x-codeSamples': [{ lang: 'curl', label: 'curl', source: curlExample(spec) }],
   };
 }
 

@@ -1,0 +1,29 @@
+{
+  "id": "competitor-dry-run",
+  "title": "Try a competitor rule in dry run",
+  "case": "competitor_dry_run",
+  "rules": [
+    {
+      "name": "Hide competitor mentions",
+      "conditions": {
+        "type": "competitor",
+        "names": ["Rivalbrand"],
+        "handles": [],
+        "domains": []
+      },
+      "actions": [{ "type": "hide" }],
+      "mode": "suggest",
+      "priority": 10
+    }
+  ],
+  "brand": { "ownDomains": ["shop.example.com"] },
+  "comment": { "text": "Rivalbrand does this better and cheaper." },
+  "expected": {
+    "decidedRule": null,
+    "outcome": "none",
+    "steps": [],
+    "suggestions": ["Hide competitor mentions"],
+    "alsoMatched": []
+  },
+  "note": "A rule in dry run (mode suggest) never decides. It records what it would have done, nothing is hidden, and evaluation goes on to the next rule."
+}

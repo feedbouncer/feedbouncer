@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod';
-import type { Summary } from '../api-client.js';
+import { SummarySchema, type Summary } from '../api-client.js';
 import { UNTRUSTED_NOTICE, wrapUntrusted } from '../present.js';
 import { runTool, text, timestamp, type ToolDeps } from './common.js';
 
@@ -56,6 +56,7 @@ export function registerSummarize(server: McpServer, deps: ToolDeps): void {
       description:
         'Read-only. Summarizes comment activity for a period (at most 92 days): totals, categories, top matching rules and notable threads.',
       inputSchema: input,
+      outputSchema: SummarySchema,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     (args) =>

@@ -1,5 +1,7 @@
 # Custom policies
 
+Operator reference. For the user-facing explanation, see the [documentation site](https://feedbouncer.github.io/feedbouncer/docs/concepts/ai-classifier-and-policies/).
+
 A policy is one sentence that says what you do not want to see, for example
 "Hide comments telling people to DM another account". Each policy has a name,
 the sentence, and an action: **Flag for review**, **Hide** or **Delete**. A

@@ -10,6 +10,7 @@ import { parse } from 'yaml';
 const read = (rel) => readFile(new URL(`../../${rel}`, import.meta.url), 'utf8');
 const workflowText = await read('.github/workflows/ci.yml');
 const actionText = await read('.github/actions/setup/action.yml');
+const docsCheck = parse(await read('.github/actions/docs-check/action.yml'));
 const workflow = parse(workflowText);
 const action = parse(actionText);
 const jobs = Object.entries(workflow.jobs);
@@ -172,4 +173,93 @@ test('compose smoke runs the auth smoke after the lifecycle smoke and before tea
   assert.ok(auth < steps.length - 1, 'auth smoke runs before teardown');
   assert.ok(!steps[auth].env?.COMPOSE_FILE);
   assert.equal(pkg.scripts['stack:auth-smoke'], 'node scripts/dev-stack/auth-smoke.mjs');
+});
+
+const docsDeployText = await read('.github/workflows/docs-deploy.yml');
+const docsDeploy = parse(docsDeployText);
+const deployJobs = Object.entries(docsDeploy.jobs);
+const deploySteps = deployJobs.flatMap(([, job]) => job.steps ?? []);
+
+test('docs-deploy.yml triggers only on push to main', () => {
+  assert.deepEqual(Object.keys(docsDeploy.on), ['push']);
+  assert.deepEqual(docsDeploy.on.push.branches, ['main']);
+  assert.ok(!docsDeploy.on.push.paths && !docsDeploy.on.push['paths-ignore']);
+  assert.deepEqual(docsDeploy.permissions, { contents: 'read' });
+  assert.deepEqual(docsDeploy.concurrency, { group: 'pages', 'cancel-in-progress': false });
+});
+
+test('only the deploy job may write pages or id-token', () => {
+  for (const [id, job] of deployJobs) {
+    if (id === 'deploy') {
+      assert.deepEqual(job.permissions, { pages: 'write', 'id-token': 'write' });
+      assert.equal(job.needs, 'build');
+      assert.equal(job.environment.name, 'github-pages');
+    } else {
+      assert.ok(!job.permissions, `job ${id} must inherit contents: read`);
+    }
+  }
+});
+
+test('docs-deploy.yml actions pinned to SHAs with version comments', () => {
+  for (const step of deploySteps) {
+    if (step.uses && !step.uses.startsWith('./')) {
+      assert.match(step.uses, /^[\w.-]+\/[\w.-]+(\/[\w./-]+)?@[0-9a-f]{40}$/, step.uses);
+    }
+  }
+  for (const line of docsDeployText.split('\n')) {
+    const m = line.match(/^\s*(?:-\s+)?uses:\s*(\S+)(.*)$/);
+    if (!m || m[1].startsWith('./')) continue;
+    assert.match(m[2], /^\s+#\s*v\d+/, `missing "# v<version>" comment: ${line.trim()}`);
+  }
+  for (const step of deploySteps) {
+    if (step.uses?.startsWith('actions/checkout@')) {
+      assert.equal(step.with?.['persist-credentials'], false);
+    }
+  }
+});
+
+test('docs-deploy.yml: every job has timeout-minutes', () => {
+  for (const [id, job] of deployJobs) {
+    assert.equal(typeof job['timeout-minutes'], 'number', `job ${id} has no timeout-minutes`);
+  }
+});
+
+test('docs-deploy.yml: no secrets and no ${{ }} in run', () => {
+  assert.doesNotMatch(docsDeployText, /secrets\s*[.[]/);
+  for (const step of deploySteps) {
+    if (step.run) assert.doesNotMatch(step.run, /\$\{\{/, `expression in run: ${step.name}`);
+  }
+});
+
+// The built-reference test only runs against a build, so the tests must follow the build step.
+function assertUnitTestsAfterBuild(steps) {
+  const runs = steps.map((s) => s.run ?? '');
+  const build = runs.findIndex((r) => /turbo run build --filter=@feedbouncer\/docs/.test(r));
+  const tests = runs.findIndex((r) => /pnpm --filter @feedbouncer\/docs test$/.test(r.trim()));
+  assert.ok(build >= 0 && tests > build, 'docs unit tests must run after the docs build');
+}
+
+test('the docs-check action builds, tests, runs the site checks and checks links', () => {
+  const steps = docsCheck.runs.steps;
+  const runs = steps.map((s) => s.run ?? '').join('\n');
+  assert.match(runs, /turbo run build --filter=@feedbouncer\/docs/);
+  assert.match(runs, /@feedbouncer\/docs run test:site/);
+  assertUnitTestsAfterBuild(steps);
+  const lychee = steps.find((s) => s.uses?.startsWith('lycheeverse/lychee-action@'));
+  assert.equal(lychee.with.fail, true);
+  assert.match(lychee.with.args, /--config apps\/docs\/lychee\.toml/);
+});
+
+test('the docs PR gate and the deploy build both run the docs-check action', () => {
+  for (const steps of [workflow.jobs.docs.steps, docsDeploy.jobs.build.steps]) {
+    assert.ok(steps.some((s) => s.uses === './.github/actions/docs-check'));
+  }
+});
+
+test('the docs job checks out full history', () => {
+  const job = workflow.jobs.docs;
+  assert.equal(job?.name, 'Docs');
+  assert.equal(job['timeout-minutes'], 25);
+  const checkout = job.steps.find((s) => s.uses?.startsWith('actions/checkout@'));
+  assert.equal(checkout.with['fetch-depth'], 0);
 });

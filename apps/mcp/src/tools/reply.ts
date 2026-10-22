@@ -31,6 +31,12 @@ const STORED_REFUSALS: ReadonlySet<string> = new Set([
   'unsupported_action',
 ]);
 
+const output = z.object({
+  status: z.enum(['posted', 'queued']),
+  actionId: z.string(),
+  replyId: z.string().optional(),
+});
+
 export function registerReply(server: McpServer, deps: ToolDeps): void {
   server.registerTool(
     'reply_to_comment',
@@ -39,6 +45,7 @@ export function registerReply(server: McpServer, deps: ToolDeps): void {
       description:
         'Posts a public reply as the brand under a comment. Acts on the live social platform. Retrying with the same text never posts twice.',
       inputSchema: input,
+      outputSchema: output,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -82,7 +89,7 @@ export function registerReply(server: McpServer, deps: ToolDeps): void {
               content: text(`Reply posted (action ${action.id}).`),
               structuredContent: {
                 status: 'posted',
-                replyId: action.platformRef,
+                ...(action.platformRef !== null && { replyId: action.platformRef }),
                 actionId: action.id,
               },
             },

@@ -25,7 +25,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS \\\n  \"$FEEDBOUNCER_URL/v1/openapi.json\""
+          }
+        ]
       }
     },
     "/v1/comments": {
@@ -223,7 +230,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS \\\n  \"$FEEDBOUNCER_URL/v1/comments?status=unanswered&platform=facebook&limit=20\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\""
+          }
+        ]
       }
     },
     "/v1/comments/{id}": {
@@ -341,7 +355,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS \\\n  \"$FEEDBOUNCER_URL/v1/comments/<COMMENT_ID>\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\""
+          }
+        ]
       }
     },
     "/v1/comments/{id}/hide": {
@@ -505,6 +526,16 @@
               }
             }
           },
+          "413": {
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Unprocessable: `idempotency_key_reused`, `unsupported_action`.",
             "content": {
@@ -553,7 +584,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS -X POST \\\n  \"$FEEDBOUNCER_URL/v1/comments/<COMMENT_ID>/hide\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\" \\\n  -H \"Idempotency-Key: <UNIQUE_KEY>\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{}'"
+          }
+        ]
       }
     },
     "/v1/comments/{id}/unhide": {
@@ -717,6 +755,16 @@
               }
             }
           },
+          "413": {
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Unprocessable: `idempotency_key_reused`, `unsupported_action`.",
             "content": {
@@ -765,7 +813,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS -X POST \\\n  \"$FEEDBOUNCER_URL/v1/comments/<COMMENT_ID>/unhide\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\" \\\n  -H \"Idempotency-Key: <UNIQUE_KEY>\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{}'"
+          }
+        ]
       }
     },
     "/v1/comments/{id}/replies": {
@@ -927,6 +982,16 @@
               }
             }
           },
+          "413": {
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Unprocessable: `idempotency_key_reused`, `unsupported_action`, `text_too_long`, `reply_not_allowed`.",
             "content": {
@@ -975,7 +1040,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS -X POST \\\n  \"$FEEDBOUNCER_URL/v1/comments/<COMMENT_ID>/replies\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\" \\\n  -H \"Idempotency-Key: <UNIQUE_KEY>\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"text\":\"Thanks for the feedback!\"}'"
+          }
+        ]
       }
     },
     "/v1/actions/{id}": {
@@ -1093,7 +1165,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS \\\n  \"$FEEDBOUNCER_URL/v1/actions/<ACTION_ID>\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\""
+          }
+        ]
       }
     },
     "/v1/summary": {
@@ -1243,7 +1322,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS \\\n  \"$FEEDBOUNCER_URL/v1/summary?from=2026-01-01T00%3A00%3A00Z&to=2026-01-08T00%3A00%3A00Z\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\""
+          }
+        ]
       }
     },
     "/v1/rules": {
@@ -1371,7 +1457,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS \\\n  \"$FEEDBOUNCER_URL/v1/rules?brandId=00000000-0000-4000-8000-000000000001\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\""
+          }
+        ]
       }
     },
     "/v1/rule-change-proposals": {
@@ -1523,6 +1616,16 @@
               }
             }
           },
+          "413": {
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Unprocessable: `idempotency_key_reused`, `rule_rejected`.",
             "content": {
@@ -1571,7 +1674,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS -X POST \\\n  \"$FEEDBOUNCER_URL/v1/rule-change-proposals\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\" \\\n  -H \"Idempotency-Key: <UNIQUE_KEY>\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"operation\":\"create\",\"brandId\":\"00000000-0000-4000-8000-000000000001\",\"rationale\":\"Hide the recurring spam phrase.\",\"rule\":{\"name\":\"Hide spam phrase\",\"conditions\":{\"type\":\"keyword\",\"terms\":[\"free money\"]},\"actions\":[{\"type\":\"hide\"}],\"mode\":\"suggest\"}}'"
+          }
+        ]
       }
     },
     "/v1/key": {
@@ -1667,7 +1777,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS \\\n  \"$FEEDBOUNCER_URL/v1/key\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\""
+          }
+        ]
       }
     },
     "/v1/flagged-items": {
@@ -1840,7 +1957,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS \\\n  \"$FEEDBOUNCER_URL/v1/flagged-items?status=open&limit=20\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\""
+          }
+        ]
       }
     },
     "/v1/flagged-items/{id}": {
@@ -1958,7 +2082,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS \\\n  \"$FEEDBOUNCER_URL/v1/flagged-items/<FLAGGED_ITEM_ID>\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\""
+          }
+        ]
       }
     },
     "/v1/moderation/check": {
@@ -2046,6 +2177,16 @@
               }
             }
           },
+          "413": {
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Unprocessable: `text_too_long`.",
             "content": {
@@ -2094,7 +2235,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS -X POST \\\n  \"$FEEDBOUNCER_URL/v1/moderation/check\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"text\":\"Win free money now\",\"brandId\":\"00000000-0000-4000-8000-000000000001\",\"ref\":\"draft-42\"}'"
+          }
+        ]
       }
     },
     "/v1/webhook-endpoints": {
@@ -2190,7 +2338,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS \\\n  \"$FEEDBOUNCER_URL/v1/webhook-endpoints\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\""
+          }
+        ]
       },
       "post": {
         "operationId": "createWebhookEndpoint",
@@ -2297,6 +2452,16 @@
               }
             }
           },
+          "413": {
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Unprocessable: `idempotency_key_reused`, `invalid_webhook_url`.",
             "content": {
@@ -2345,7 +2510,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS -X POST \\\n  \"$FEEDBOUNCER_URL/v1/webhook-endpoints\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\" \\\n  -H \"Idempotency-Key: <UNIQUE_KEY>\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"url\":\"https://feedbouncer.example.com/webhooks/feedbouncer\",\"description\":\"Moderation alerts\",\"eventTypes\":[\"comment.received\",\"item.flagged\"]}'"
+          }
+        ]
       }
     },
     "/v1/webhook-endpoints/{id}": {
@@ -2463,7 +2635,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS \\\n  \"$FEEDBOUNCER_URL/v1/webhook-endpoints/<WEBHOOK_ENDPOINT_ID>\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\""
+          }
+        ]
       },
       "patch": {
         "operationId": "updateWebhookEndpoint",
@@ -2590,6 +2769,16 @@
               }
             }
           },
+          "413": {
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Unprocessable: `idempotency_key_reused`, `invalid_webhook_url`.",
             "content": {
@@ -2638,7 +2827,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS -X PATCH \\\n  \"$FEEDBOUNCER_URL/v1/webhook-endpoints/<WEBHOOK_ENDPOINT_ID>\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\" \\\n  -H \"Idempotency-Key: <UNIQUE_KEY>\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"status\":\"disabled\"}'"
+          }
+        ]
       },
       "delete": {
         "operationId": "deleteWebhookEndpoint",
@@ -2747,7 +2943,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS -X DELETE \\\n  \"$FEEDBOUNCER_URL/v1/webhook-endpoints/<WEBHOOK_ENDPOINT_ID>\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\""
+          }
+        ]
       }
     },
     "/v1/webhook-endpoints/{id}/rotate-secret": {
@@ -2878,6 +3081,16 @@
               }
             }
           },
+          "413": {
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Unprocessable: `idempotency_key_reused`.",
             "content": {
@@ -2926,7 +3139,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS -X POST \\\n  \"$FEEDBOUNCER_URL/v1/webhook-endpoints/<WEBHOOK_ENDPOINT_ID>/rotate-secret\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\" \\\n  -H \"Idempotency-Key: <UNIQUE_KEY>\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{}'"
+          }
+        ]
       }
     },
     "/v1/webhook-endpoints/{id}/test": {
@@ -3057,6 +3277,16 @@
               }
             }
           },
+          "413": {
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Unprocessable: `idempotency_key_reused`.",
             "content": {
@@ -3105,7 +3335,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS -X POST \\\n  \"$FEEDBOUNCER_URL/v1/webhook-endpoints/<WEBHOOK_ENDPOINT_ID>/test\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\" \\\n  -H \"Idempotency-Key: <UNIQUE_KEY>\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{}'"
+          }
+        ]
       }
     },
     "/v1/webhook-endpoints/{id}/deliveries": {
@@ -3269,7 +3506,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS \\\n  \"$FEEDBOUNCER_URL/v1/webhook-endpoints/<WEBHOOK_ENDPOINT_ID>/deliveries?status=failed&limit=20\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\""
+          }
+        ]
       }
     },
     "/v1/webhook-endpoints/{id}/deliveries/{deliveryId}/redeliver": {
@@ -3410,6 +3654,16 @@
               }
             }
           },
+          "413": {
+            "description": "Request body larger than 64 KiB: status 413 with the `invalid_request` code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Unprocessable: `idempotency_key_reused`.",
             "content": {
@@ -3458,7 +3712,14 @@
               }
             }
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "curl",
+            "label": "curl",
+            "source": "curl -sS -X POST \\\n  \"$FEEDBOUNCER_URL/v1/webhook-endpoints/<WEBHOOK_ENDPOINT_ID>/deliveries/<WEBHOOK_DELIVERY_ID>/redeliver\" \\\n  -H \"Authorization: Bearer $FEEDBOUNCER_API_KEY\" \\\n  -H \"Idempotency-Key: <UNIQUE_KEY>\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{}'"
+          }
+        ]
       }
     }
   },

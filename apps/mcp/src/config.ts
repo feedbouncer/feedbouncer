@@ -16,6 +16,26 @@ export interface McpConfig {
 
 // Matches the local API published by compose.yaml.
 const DEFAULT_API_URL = 'http://127.0.0.1:3001';
+
+/** The environment the server reads; the docs and tools.json are generated from this. */
+export const MCP_ENV_DOCS: readonly {
+  name: 'FEEDBOUNCER_API_KEY' | 'FEEDBOUNCER_API_URL';
+  required: boolean;
+  default?: string;
+  rule: string;
+}[] = [
+  {
+    name: 'FEEDBOUNCER_API_KEY',
+    required: true,
+    rule: 'A FeedBouncer API key: fbk_<16 characters>_<43 characters>.',
+  },
+  {
+    name: 'FEEDBOUNCER_API_URL',
+    required: false,
+    default: DEFAULT_API_URL,
+    rule: 'Base URL of the FeedBouncer API; blank uses the default. Must use https, except on localhost, 127.0.0.1 or [::1]; no credentials, query string or fragment.',
+  },
+];
 const API_KEY = /^fbk_[a-z2-7]{16}_[A-Za-z0-9_-]{43}$/;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 

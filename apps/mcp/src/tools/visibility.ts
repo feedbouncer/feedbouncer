@@ -19,6 +19,12 @@ const NOOP_MESSAGES: Record<string, string> = {
 const noopMessage = (code: string | null, visibility: string): string =>
   (code !== null ? NOOP_MESSAGES[code] : undefined) ?? `Already ${visibility} — nothing changed.`;
 
+const output = z.object({
+  changed: z.boolean(),
+  status: z.string().optional(),
+  reason: z.string().optional(),
+});
+
 export function registerVisibility(server: McpServer, deps: ToolDeps): void {
   server.registerTool(
     'set_comment_visibility',
@@ -27,6 +33,7 @@ export function registerVisibility(server: McpServer, deps: ToolDeps): void {
       description:
         'Hides a comment from the public or makes a hidden comment visible again. Acts on the live social platform. Nothing is deleted.',
       inputSchema: input,
+      outputSchema: output,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
     (args) =>

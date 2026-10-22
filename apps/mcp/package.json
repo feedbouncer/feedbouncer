@@ -14,6 +14,7 @@
     "format": "prettier --write . --ignore-path ../../.prettierignore --ignore-unknown",
     "format:check": "prettier --check . --ignore-path ../../.prettierignore --ignore-unknown",
     "typecheck": "tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
+    "tools:write": "tsx scripts/write-tool-manifest.ts",
     "test": "vitest run",
     "test:integration": "tsc --build tsconfig.build.json && vitest run --config vitest.integration.config.ts"
   },
@@ -27,6 +28,7 @@
     "@feedbouncer/connector-facebook": "workspace:*",
     "@feedbouncer/public-api": "workspace:*",
     "@modelcontextprotocol/client": "2.3.1",
-    "@types/node": "24.13.6"
+    "@types/node": "24.13.6",
+    "tsx": "4.23.15"
   }
 }

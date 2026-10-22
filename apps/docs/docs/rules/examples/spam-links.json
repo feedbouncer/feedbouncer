@@ -1,0 +1,31 @@
+{
+  "id": "spam-links",
+  "title": "Hide spam links",
+  "case": "spam_links",
+  "rules": [
+    {
+      "name": "Hide blocked and shortened links",
+      "conditions": {
+        "type": "link_domain",
+        "mode": "blocklist",
+        "domains": ["cheap-pills.example.com"],
+        "exemptOwnDomains": true,
+        "shorteners": "match",
+        "lookalikes": "match"
+      },
+      "actions": [{ "type": "hide" }],
+      "mode": "enforce",
+      "priority": 10
+    }
+  ],
+  "brand": { "ownDomains": ["shop.example.com"] },
+  "comment": { "text": "Huge discount today, details at bit.ly/deal123 so hurry up." },
+  "expected": {
+    "decidedRule": "Hide blocked and shortened links",
+    "outcome": "hide",
+    "steps": ["hide"],
+    "suggestions": [],
+    "alsoMatched": []
+  },
+  "note": "The link points at a URL shortener, so the rule matches it by its domain without following it. Links to shop.example.com, the brand's own domain, would not match."
+}

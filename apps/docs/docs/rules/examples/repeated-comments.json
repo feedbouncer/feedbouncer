@@ -1,0 +1,32 @@
+{
+  "id": "repeated-comments",
+  "title": "Hide a repeat poster",
+  "case": "repeated_comments",
+  "rules": [
+    {
+      "name": "Hide the repeat poster",
+      "conditions": {
+        "type": "author",
+        "list": "block",
+        "platform": "facebook",
+        "entries": [{ "externalId": "<AUTHOR_ID>" }]
+      },
+      "actions": [{ "type": "hide" }],
+      "mode": "enforce",
+      "priority": 10
+    }
+  ],
+  "brand": { "ownDomains": ["shop.example.com"] },
+  "comment": {
+    "text": "Same offer again, come and see my page for the deal.",
+    "authorExternalId": "<AUTHOR_ID>"
+  },
+  "expected": {
+    "decidedRule": "Hide the repeat poster",
+    "outcome": "hide",
+    "steps": ["hide"],
+    "suggestions": [],
+    "alsoMatched": []
+  },
+  "note": "The rule matches the author's platform ID, so every comment from that author is hidden, whatever the text says and even if the author renames the account."
+}

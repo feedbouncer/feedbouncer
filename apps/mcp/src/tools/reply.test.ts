@@ -55,6 +55,14 @@ describe('reply_to_comment', () => {
     expect(h.api.callsTo('getAction')).toHaveLength(2);
   });
 
+  it('omits replyId when the platform returned no reference', async () => {
+    h = await connect();
+    h.api.replyAction = { status: 'applied', platformRef: null };
+    const r = await h.call('reply_to_comment', args);
+    expect(r.isError).toBeFalsy();
+    expect(r.structuredContent).toEqual({ status: 'posted', actionId: expect.any(String) });
+  });
+
   it('reports a failed action as an error and says nothing was posted', async () => {
     h = await connect();
     h.api.replyAction = { status: 'failed', code: 'comments_closed' };

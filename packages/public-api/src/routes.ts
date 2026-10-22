@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { MAX_CHECK_TEXT_UNITS, REASON_CODES } from '@feedbouncer/moderation-contract';
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './constants.js';
-import type { ApiKeyScope } from './keys/token.js';
+import { API_KEY_SCOPES, type ApiKeyScope } from './keys/token.js';
 import { ACTION_STATUSES, ActionResource } from './resources/action.js';
 import { CommentResource } from './resources/comment.js';
 import { FlaggedItemResource } from './resources/flagged-item.js';
@@ -67,6 +67,13 @@ export const PUBLIC_ERROR_STATUS: Readonly<Record<PublicErrorCode, number>> = {
   temporarily_unavailable: 503,
 };
 
+/** A runnable request for the documentation. Path-param values are placeholders such as `<COMMENT_ID>`. */
+export interface RouteExample {
+  readonly pathParams?: Readonly<Record<string, string>>;
+  readonly query?: Readonly<Record<string, string>>;
+  readonly body?: unknown;
+}
+
 export interface RouteSpec {
   /** operationId */
   readonly id: string;
@@ -87,6 +94,8 @@ export interface RouteSpec {
   readonly responses: Readonly<Record<number, z.ZodType | null>>;
   /** Errors specific to this route; the ones every authenticated route can return are added by the generator. */
   readonly errors: readonly PublicErrorCode[];
+  /** Required for every route with params, query or body; used to build the curl sample. */
+  readonly example?: RouteExample;
 }
 
 const timestamp = z.iso.datetime({ offset: true });
@@ -237,7 +246,7 @@ export const KeyResource = z
   .object({
     organizationId: z.uuid(),
     name: z.string(),
-    scope: z.enum(['moderate', 'read', 'write']),
+    scope: z.enum(API_KEY_SCOPES),
   })
   .meta({ id: 'Key' });
 
@@ -398,6 +407,7 @@ const moderationSpec = (kind: 'hide' | 'unhide'): RouteSpec => ({
     'idempotency_request_in_progress',
     'invalid_idempotency_key',
   ],
+  example: { pathParams: { id: '<COMMENT_ID>' }, body: {} },
 });
 
 const IDEMPOTENCY_ERRORS = [
@@ -405,6 +415,8 @@ const IDEMPOTENCY_ERRORS = [
   'idempotency_request_in_progress',
   'invalid_idempotency_key',
 ] as const;
+
+const WEBHOOK_ID_EXAMPLE = { pathParams: { id: '<WEBHOOK_ENDPOINT_ID>' } } as const;
 
 function webhookEndpointSpecs(): readonly RouteSpec[] {
   const endpointParams = z.object({ id: z.uuid() });
@@ -434,6 +446,13 @@ function webhookEndpointSpecs(): readonly RouteSpec[] {
         'webhook_endpoint_limit_reached',
         ...IDEMPOTENCY_ERRORS,
       ],
+      example: {
+        body: {
+          url: 'https://feedbouncer.example.com/webhooks/feedbouncer',
+          description: 'Moderation alerts',
+          eventTypes: ['comment.received', 'item.flagged'],
+        },
+      },
     },
     {
       ...base,
@@ -444,6 +463,7 @@ function webhookEndpointSpecs(): readonly RouteSpec[] {
       params: endpointParams,
       responses: { 200: WebhookEndpointResource },
       errors: ['not_found'],
+      example: WEBHOOK_ID_EXAMPLE,
     },
     {
       ...base,
@@ -456,6 +476,7 @@ function webhookEndpointSpecs(): readonly RouteSpec[] {
       body: UpdateWebhookEndpointBody,
       responses: { 200: WebhookEndpointResource },
       errors: ['invalid_request', 'not_found', 'invalid_webhook_url', ...IDEMPOTENCY_ERRORS],
+      example: { ...WEBHOOK_ID_EXAMPLE, body: { status: 'disabled' } },
     },
     {
       ...base,
@@ -466,6 +487,7 @@ function webhookEndpointSpecs(): readonly RouteSpec[] {
       params: endpointParams,
       responses: { 204: null },
       errors: ['not_found'],
+      example: WEBHOOK_ID_EXAMPLE,
     },
     {
       ...base,
@@ -479,6 +501,7 @@ function webhookEndpointSpecs(): readonly RouteSpec[] {
       bodyOptional: true,
       responses: { 200: WebhookSecretRotation },
       errors: ['invalid_request', 'not_found', ...IDEMPOTENCY_ERRORS],
+      example: { ...WEBHOOK_ID_EXAMPLE, body: {} },
     },
     {
       ...base,
@@ -492,6 +515,7 @@ function webhookEndpointSpecs(): readonly RouteSpec[] {
       bodyOptional: true,
       responses: { 202: WebhookDeliveryResource },
       errors: ['invalid_request', 'not_found', 'webhook_endpoint_disabled', ...IDEMPOTENCY_ERRORS],
+      example: { ...WEBHOOK_ID_EXAMPLE, body: {} },
     },
     {
       ...base,
@@ -503,6 +527,7 @@ function webhookEndpointSpecs(): readonly RouteSpec[] {
       query: ListWebhookDeliveriesQuery,
       responses: { 200: pageOf(WebhookDeliveryResource, 'WebhookDeliveryPage') },
       errors: ['invalid_request', 'invalid_cursor', 'not_found'],
+      example: { ...WEBHOOK_ID_EXAMPLE, query: { status: 'failed', limit: '20' } },
     },
     {
       ...base,
@@ -524,6 +549,10 @@ function webhookEndpointSpecs(): readonly RouteSpec[] {
         'webhook_delivery_in_progress',
         ...IDEMPOTENCY_ERRORS,
       ],
+      example: {
+        pathParams: { id: '<WEBHOOK_ENDPOINT_ID>', deliveryId: '<WEBHOOK_DELIVERY_ID>' },
+        body: {},
+      },
     },
   ];
 }
@@ -549,6 +578,7 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     idempotent: false,
     responses: { 200: pageOf(CommentResource, 'CommentPage') },
     errors: ['invalid_request', 'invalid_cursor'],
+    example: { query: { status: 'unanswered', platform: 'facebook', limit: '20' } },
   },
   {
     id: 'getComment',
@@ -560,6 +590,7 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     idempotent: false,
     responses: { 200: CommentResource },
     errors: ['not_found'],
+    example: { pathParams: { id: '<COMMENT_ID>' } },
   },
   moderationSpec('hide'),
   moderationSpec('unhide'),
@@ -585,6 +616,7 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
       'idempotency_request_in_progress',
       'invalid_idempotency_key',
     ],
+    example: { pathParams: { id: '<COMMENT_ID>' }, body: { text: 'Thanks for the feedback!' } },
   },
   {
     id: 'getAction',
@@ -596,6 +628,7 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     idempotent: false,
     responses: { 200: ActionResource },
     errors: ['not_found'],
+    example: { pathParams: { id: '<ACTION_ID>' } },
   },
   {
     id: 'getSummary',
@@ -608,6 +641,7 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     idempotent: false,
     responses: { 200: PeriodSummaryResource },
     errors: ['invalid_request', 'not_found'],
+    example: { query: { from: '2026-01-01T00:00:00Z', to: '2026-01-08T00:00:00Z' } },
   },
   {
     id: 'listRules',
@@ -619,6 +653,7 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     idempotent: false,
     responses: { 200: RuleSetResource },
     errors: ['invalid_request', 'not_found'],
+    example: { query: { brandId: '00000000-0000-4000-8000-000000000001' } },
   },
   {
     id: 'proposeRuleChange',
@@ -638,6 +673,19 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
       'pending_limit_reached',
       ...IDEMPOTENCY_ERRORS,
     ],
+    example: {
+      body: {
+        operation: 'create',
+        brandId: '00000000-0000-4000-8000-000000000001',
+        rationale: 'Hide the recurring spam phrase.',
+        rule: {
+          name: 'Hide spam phrase',
+          conditions: { type: 'keyword', terms: ['free money'] },
+          actions: [{ type: 'hide' }],
+          mode: 'suggest',
+        },
+      },
+    },
   },
   {
     id: 'getApiKey',
@@ -659,6 +707,7 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     idempotent: false,
     responses: { 200: pageOf(FlaggedItemResource, 'FlaggedItemPage') },
     errors: ['invalid_request', 'invalid_cursor'],
+    example: { query: { status: 'open', limit: '20' } },
   },
   {
     id: 'getFlaggedItem',
@@ -670,6 +719,7 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     idempotent: false,
     responses: { 200: FlaggedItemResource },
     errors: ['not_found'],
+    example: { pathParams: { id: '<FLAGGED_ITEM_ID>' } },
   },
   {
     id: 'checkModeration',
@@ -682,6 +732,13 @@ export const PUBLIC_ROUTE_SPECS: readonly RouteSpec[] = [
     idempotent: false,
     responses: { 200: ModerationCheckResult },
     errors: ['invalid_request', 'not_found', 'text_too_long', 'temporarily_unavailable'],
+    example: {
+      body: {
+        text: 'Win free money now',
+        brandId: '00000000-0000-4000-8000-000000000001',
+        ref: 'draft-42',
+      },
+    },
   },
   ...webhookEndpointSpecs(),
 ];

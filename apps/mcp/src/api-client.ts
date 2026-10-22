@@ -25,7 +25,7 @@ const timestamp = z.iso.datetime({ offset: true });
 // operation the API adds later does not break parsing. Inputs stay strict.
 const platform = z.string();
 
-const CommentSchema = z.object({
+export const CommentSchema = z.object({
   id: z.uuid(),
   brandId: z.uuid(),
   connectionId: z.uuid(),
@@ -78,7 +78,7 @@ const ModerationResultSchema = z.object({
   comment: CommentSchema,
 });
 
-const SummarySchema = z.object({
+export const SummarySchema = z.object({
   period: z.object({ from: timestamp, to: timestamp }),
   bounded: z.object({ requestedFrom: timestamp, reason: z.string() }).nullable(),
   totals: z.object({
@@ -104,7 +104,7 @@ const SummarySchema = z.object({
 const proposalOperation = z.string();
 const proposalStatus = z.string();
 
-const RulesSchema = z.object({
+export const RulesSchema = z.object({
   brands: z.array(
     z.object({
       id: z.uuid(),
@@ -135,7 +135,7 @@ const RulesSchema = z.object({
   ),
 });
 
-const ProposalSchema = z.object({
+export const ProposalSchema = z.object({
   id: z.uuid(),
   brandId: z.uuid(),
   operation: proposalOperation,
