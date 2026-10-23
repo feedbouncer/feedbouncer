@@ -78,7 +78,7 @@ Open an issue (choose **Feature request**) and agree on the approach **before** 
 
 ## Updating the roadmap
 
-- The roadmap's source is [apps/docs/src/pages/roadmap.md](apps/docs/src/pages/roadmap.md), and it is published at <https://github.com/feedbouncer/feedbouncer/blob/main/apps/docs/src/pages/roadmap.md>.
+- The roadmap's source is [apps/docs/src/pages/roadmap.md](apps/docs/src/pages/roadmap.md), and it is published at <https://feedbouncer.github.io/feedbouncer/roadmap/>.
 - Each item sits in exactly one of Now, Next, Later or Shipped. It is a bold title and one sentence about what users get, with no dates or delivery promises. An empty group says `Nothing here yet.`
 - **When you change the roadmap, update its "Last updated" date (`YYYY-MM-DD`) in the same pull request.**
 

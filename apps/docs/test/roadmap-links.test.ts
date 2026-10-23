@@ -8,9 +8,9 @@ const readme = readFileSync(join(repoRoot, 'README.md'), 'utf8');
 
 describe('roadmap links', () => {
   it('README links the rendered roadmap URL, never the source file', () => {
+    expect(ROADMAP_URL).toBe('https://feedbouncer.github.io/feedbouncer/roadmap/');
     expect(readme).toContain(`](${ROADMAP_URL})`);
-    expect(readme).not.toMatch(/\]\((\.\/)?apps\/docs\/src\/pages\/roadmap\.md\)/);
-    expect(readme).not.toMatch(/raw\.githubusercontent\.com|\/raw\/main\//);
+    expect(readme).not.toContain('apps/docs/src/pages/roadmap.md');
   });
 
   it('footer links /roadmap/ by client route', async () => {

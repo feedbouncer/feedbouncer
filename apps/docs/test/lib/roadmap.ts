@@ -23,8 +23,13 @@ export function parseRoadmap(md: string): {
 } {
   const text = md.replace(/^---\n[\s\S]*?\n---\n?/, '');
   const lines = text.split('\n');
-  const h1 = lines.flatMap((l) => (/^# (.+?)\s*$/.exec(l) ? [/^# (.+?)\s*$/.exec(l)![1]!] : []));
-  const h2 = lines.flatMap((l) => (/^## (.+?)\s*$/.exec(l) ? [/^## (.+?)\s*$/.exec(l)![1]!] : []));
+  const headings = (marker: '#' | '##') =>
+    lines.flatMap((l) => {
+      const match = new RegExp(`^${marker} (.+?)\\s*$`).exec(l);
+      return match ? [match[1]!] : [];
+    });
+  const h1 = headings('#');
+  const h2 = headings('##');
 
   const h1Index = lines.findIndex((l) => /^# /.test(l));
   const disclaimer = lines.slice(h1Index + 1).find((l) => l.trim() !== '') ?? '';
@@ -52,7 +57,8 @@ export function parseRoadmap(md: string): {
         empty = true;
       }
     }
-    if (items.length > 0 === empty) {
+    const hasItems = items.length > 0;
+    if (hasItems === empty) {
       throw new Error(`${group}: expected items or "${EMPTY_GROUP}"`);
     }
     groups[group] = { items, empty };

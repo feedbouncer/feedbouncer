@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the idea. The [roadmap](https://github.com/feedbouncer/feedbouncer/blob/main/apps/docs/src/pages/roadmap.md) shows intent, not a commitment: we read every suggestion, but a suggestion is not guaranteed to be scheduled.
+        Thanks for the idea. The [roadmap](https://feedbouncer.github.io/feedbouncer/roadmap/) shows intent, not a commitment: we read every suggestion, but a suggestion is not guaranteed to be scheduled.
         Found a bug? Use the Bug report form instead. Report vulnerabilities privately: https://github.com/feedbouncer/feedbouncer/security/advisories/new
   - type: input
     id: short_title

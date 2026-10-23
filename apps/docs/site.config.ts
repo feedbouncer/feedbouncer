@@ -17,5 +17,4 @@ export const ALLOWED_LINK_HOSTS = [
 export const SUPPORTED_MCP_CLIENTS = ['desktop-app', 'cursor', 'vscode'] as const;
 
 export const ROADMAP_ROUTE = '/roadmap/';
-export const ROADMAP_URL =
-  'https://github.com/feedbouncer/feedbouncer/blob/main/apps/docs/src/pages/roadmap.md';
+export const ROADMAP_URL = `${SITE_URL}${BASE_URL}roadmap/`;
