@@ -583,6 +583,22 @@ describe('runScan', () => {
     expect(await row(scanId)).toBeUndefined();
   });
 
+  it('a throwing complete() → one best-effort fail internal clears the token, error rethrown', async () => {
+    const w = await world();
+    w.adPost(30);
+    const scanId = await w.queueScan();
+    const flaky = Object.assign(Object.create(store) as PgScanStore, {
+      complete: async () => {
+        throw new Error('db down');
+      },
+    });
+    await expect(runScan({ ...w.deps, store: flaky }, scanId)).rejects.toThrow('db down');
+    await failedWith(scanId, 'internal');
+    expect(w.lines.filter((l) => l.includes('scan.store_failed'))).toEqual([
+      JSON.stringify({ level: 'error', msg: 'scan.store_failed', scanId, error: 'Error' }),
+    ]);
+  });
+
   it('an unexpected error → failed internal with the token cleared', async () => {
     const w = await world();
     w.adPost(30);

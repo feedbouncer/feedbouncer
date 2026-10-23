@@ -114,7 +114,11 @@ export async function runScan(d: ScanRunnerDeps, scanId: string): Promise<ScanRu
       error: err instanceof Error ? err.name : 'NonError',
       errorCode: failed?.errorCode ?? (err instanceof ConnectorError ? err.code : null),
     });
-    if (!(await d.store.fail(scanId, attempt, reason, new Date(d.nowMs())))) {
+    if (
+      !(await settle(d, scanId, attempt, () =>
+        d.store.fail(scanId, attempt, reason, new Date(d.nowMs())),
+      ))
+    ) {
       return { status: 'skipped' };
     }
     d.metrics.finished({
@@ -125,7 +129,11 @@ export async function runScan(d: ScanRunnerDeps, scanId: string): Promise<ScanRu
     });
     return { status: 'failed', reason };
   }
-  if (!(await d.store.complete(scanId, attempt, result, new Date(d.nowMs())))) {
+  if (
+    !(await settle(d, scanId, attempt, () =>
+      d.store.complete(scanId, attempt, result, new Date(d.nowMs())),
+    ))
+  ) {
     // Deleted by the visitor, or superseded by a newer attempt.
     d.log.info('scan.discarded', { scanId, attempt });
     return { status: 'skipped' };
@@ -139,6 +147,33 @@ export async function runScan(d: ScanRunnerDeps, scanId: string): Promise<ScanRu
     commentsScanned,
   });
   return { status: 'completed' };
+}
+
+/**
+ * Writes the final state. If that write throws, one best-effort fail('internal') tries to
+ * clear the token before the error is rethrown for the queue to retry.
+ */
+async function settle(
+  d: ScanRunnerDeps,
+  scanId: string,
+  attempt: number,
+  write: () => Promise<boolean>,
+): Promise<boolean> {
+  try {
+    return await write();
+  } catch (err) {
+    d.log.error('scan.store_failed', {
+      scanId,
+      error: err instanceof Error ? err.name : 'NonError',
+    });
+    await d.store.fail(scanId, attempt, 'internal', new Date(d.nowMs())).catch((again: unknown) => {
+      d.log.error('scan.store_failed', {
+        scanId,
+        error: again instanceof Error ? again.name : 'NonError',
+      });
+    });
+    throw err;
+  }
 }
 
 async function scan(
@@ -198,7 +233,10 @@ async function platform<T>(call: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Every comment page waits for the Page's background budget, so scans yield to paid traffic. */
+/**
+ * Every comment page first takes a point from a per-Page budget at `background` priority,
+ * whose window allows fewer points than other priorities. It shares no counters with paid connections.
+ */
 function budgeted(d: ScanRunnerDeps, pageId: string): SafeHttp {
   const inner = d.graph.http;
   return {
