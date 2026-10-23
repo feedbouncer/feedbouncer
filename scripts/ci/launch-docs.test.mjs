@@ -321,19 +321,30 @@ test('no copy contains accuracy figures or percentages', () => assertNoFigures(d
 test('AI vendors named in copy are configured providers and the AI is optional', () =>
   assertAiVendors(doc));
 
-test(
-  'copy states the README maturity label',
-  { todo: 'passes once README status is rewritten (task 3)' },
-  () => {
-    const label = /## Project status\n\n\*\*([A-Za-z-]+)\./.exec(read('README.md'))[1];
-    for (const n of [
-      'Hacker News (Show HN)/First comment',
-      'GitHub/Release notes',
-      "Product Hunt/Maker's first comment",
-    ])
-      assert.match(post(n).copy, new RegExp(`\\b${label}\\b`, 'i'), n);
-  },
-);
+test('copy states the README maturity label', () => {
+  const label = /## Project status\n\n\*\*([A-Za-z-]+)\./.exec(read('README.md'))[1];
+  for (const n of [
+    'Hacker News (Show HN)/First comment',
+    'GitHub/Release notes',
+    "Product Hunt/Maker's first comment",
+  ])
+    assert.match(post(n).copy, new RegExp(`\\b${label}\\b`, 'i'), n);
+});
+
+test('README leads with the problem', () => {
+  const why = section(read('README.md'), 'Why FeedBouncer');
+  assert.match(why, /\b(scam|spam|abuse)\b/i);
+  assert.doesNotMatch(why, /\d\s*%/);
+});
+
+test('README status matches connector reality', () => {
+  const s = section(read('README.md'), 'Project status');
+  assert.doesNotMatch(s, /No social platform connector exists/);
+  for (const d of ['connector-facebook', 'connector-instagram'])
+    assert.ok(existsSync(join(ROOT, 'packages', d)), d);
+  assert.match(s, /App Review/);
+  assert.match(s, /\]\(docs\/self-hosting\/meta-app\.md\)/);
+});
 
 test('every post naming a platform carries the non-affiliation statement', () =>
   assertDisclaimer(doc));

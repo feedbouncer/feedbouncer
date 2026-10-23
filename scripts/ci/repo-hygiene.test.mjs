@@ -371,6 +371,7 @@ test('README introduces the project, keeps operational sections and links commun
   const text = read('README.md');
   assert.match(text, /^# FeedBouncer\n\n[^#\n][^\n]*comment/i, 'first paragraph says what it does');
   assertSectionsInOrder('README.md', [
+    '## Why FeedBouncer',
     '## Project status',
     '## Quick start',
     '## Running the tests',

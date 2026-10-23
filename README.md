@@ -2,9 +2,13 @@
 
 FeedBouncer is an open-source comment firewall and inbox for brands that run social ads. It is meant to check every new comment on connected social accounts, hide or remove scams, spam and abuse, and route real questions and complaints to a person. It can be self-hosted.
 
+## Why FeedBouncer
+
+Scam links, spam and abuse pile up in the comments under ads and social posts. Someone on the team has to find and hide them while the ad keeps running, and they hurt both ad performance and the trust of the people reading the thread. FeedBouncer checks new comments against your rules first, then with an optional AI classifier, hides what you have told it to hide, and sends real questions and complaints to a person. Every decision keeps its reason and can be undone, and a review mode makes a person approve actions at first.
+
 ## Project status
 
-**Pre-alpha. Not for production use.** The foundations are in place: workspace and CI, data model and migrations, sign-up and organizations, encrypted token storage, the connector framework, the job queue and observability. **No social platform connector exists yet, so FeedBouncer cannot moderate real comments today.** Interfaces and the database schema will change without notice.
+**Alpha.** Connectors for Facebook Pages and Instagram exist, along with rules, an optional AI classifier, review mode and an undo log. Their behaviour has not been verified against a live Meta app yet; see the known limitations in [docs/connectors/facebook.md](docs/connectors/facebook.md#known-limitations). Meta App Review is not complete, so you self-host and use your own Meta app ([setup guide](docs/self-hosting/meta-app.md)). Interfaces and the database schema may change.
 
 FeedBouncer is not affiliated with or endorsed by Meta, TikTok, Google/YouTube or any other platform it integrates with. Platform names are trademarks of their owners.
 
