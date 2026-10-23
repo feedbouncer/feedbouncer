@@ -19,6 +19,7 @@
     { "path": "packages/classifier" },
     { "path": "packages/policies" },
     { "path": "packages/privacy" },
+    { "path": "packages/scan" },
     { "path": "packages/moderation-check" },
     { "path": "packages/observability" },
     { "path": "apps/placeholder-app" },
