@@ -82,6 +82,7 @@ Noted sections:
 - [ ] Troubleshooting
 - [ ] Keep your app secret and tokens safe
 - [ ] Rotate secrets and tokens
+- [ ] Optional: the free ad-comment scan
 - [ ] When you need App Review or Business Verification
 - [ ] More Pages and accounts
 

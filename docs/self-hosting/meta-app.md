@@ -24,6 +24,7 @@ Nothing in this guide has been verified against a live Meta dashboard yet. Scree
 | Troubleshooting                                    | Not yet verified |
 | Keep your app secret and tokens safe               | Not yet verified |
 | Rotate secrets and tokens                          | Not yet verified |
+| Optional: the free ad-comment scan                 | Not yet verified |
 | When you need App Review or Business Verification  | Not yet verified |
 | More Pages and accounts                            | Not yet verified |
 
@@ -497,7 +498,7 @@ Follow [secrets.md](../operations/secrets.md) to rotate `FB_ENCRYPTION_KEYS`. Ba
 
 ## Optional: the free ad-comment scan
 
-> Not yet verified against Meta's dashboard or documentation. Check: that the four required permissions are enough to read ad-post comments, and what App Review asks for.
+> Not yet verified against Meta's documentation as of 2026-10-23. Check: that the four required permissions are enough to read ad-post comments, and what App Review asks for.
 
 The free scan is a public page where a visitor connects a Facebook Page and sees how many comments on their recent ads look like scams (including phishing) or spam. It is **off by default**. A self-hosted instance only serves it when you set `SCAN_TOOL_ENABLED=true`.
 
