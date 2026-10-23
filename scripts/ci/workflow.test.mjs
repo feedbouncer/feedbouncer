@@ -250,10 +250,14 @@ test('the docs-check action builds, tests, runs the site checks and checks links
   assert.match(lychee.with.args, /--config apps\/docs\/lychee\.toml/);
 });
 
-test('the docs PR gate and the deploy build both run the docs-check action', () => {
-  for (const steps of [workflow.jobs.docs.steps, docsDeploy.jobs.build.steps]) {
-    assert.ok(steps.some((s) => s.uses === './.github/actions/docs-check'));
-  }
+test('the docs PR gate runs the full docs-check action', () => {
+  assert.ok(workflow.jobs.docs.steps.some((s) => s.uses === './.github/actions/docs-check'));
+});
+
+test('the deploy build only builds, it does not repeat the docs-check action', () => {
+  const steps = docsDeploy.jobs.build.steps;
+  assert.ok(!steps.some((s) => s.uses === './.github/actions/docs-check'));
+  assert.ok(steps.some((s) => /turbo run build --filter=@feedbouncer\/docs/.test(s.run ?? '')));
 });
 
 test('the docs job checks out full history', () => {
