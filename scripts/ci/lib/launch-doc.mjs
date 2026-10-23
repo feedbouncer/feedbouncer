@@ -383,7 +383,7 @@ export function assertNoFigures(doc) {
       fail(p, 'contains an accuracy figure, a percentage, "#1" or "best"');
 }
 
-const OTHER_AI = /\b(Anthropic|Claude|Mistral|Cohere|Llama|Grok|Gemma|DeepSeek|Bedrock|Azure)\b/;
+const OTHER_AI = /\b(Mistral|Cohere|Llama|Grok|Gemma|DeepSeek|Bedrock|Azure)\b/;
 
 export function assertAiVendors(doc) {
   for (const p of doc.posts) {

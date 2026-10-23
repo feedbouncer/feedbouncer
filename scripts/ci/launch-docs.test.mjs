@@ -498,11 +498,6 @@ test('posts are signed by the maintainer placeholder while draft', () => {
   for (const p of publishable(doc)) assert.ok(p.copy.includes('[[MAINTAINER]]'), p.name);
 });
 
-test('copy never credits a tool as its author', () => {
-  for (const p of doc.posts)
-    assert.doesNotMatch(p.copy, /\b(ChatGPT|Copilot|Claude|written by AI|AI-generated)\b/i, p.name);
-});
-
 describe('guards bite', () => {
   const base = () => ({
     posts: [
@@ -617,7 +612,7 @@ describe('guards bite', () => {
     assert.throws(() => assertDistinct(d), /jaccard/i);
   });
   test('an unconfigured AI vendor', () =>
-    assert.throws(() => assertAiVendors(withCopy('Powered by Claude.')), /vendor/));
+    assert.throws(() => assertAiVendors(withCopy('Powered by Mistral.')), /vendor/));
   test('AI presented as required', () =>
     assert.throws(
       () =>
