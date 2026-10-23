@@ -458,6 +458,24 @@ test('copy that mentions the release links to the release notes', () => {
   );
 });
 
+test('release notes exist, have the sections, and pass the claim guards', () => {
+  const notesPath = 'docs/launch/release-notes-v0.1.0.md';
+  assert.ok(existsSync(join(ROOT, notesPath)), notesPath);
+  const notes = read(notesPath);
+  assert.deepEqual(
+    [...notes.matchAll(/^## (.+)$/gm)].map((m) => m[1]),
+    ['What FeedBouncer does', 'What works today', 'Known limitations', 'Install', 'Contributing'],
+  );
+  const limits = section(notes, 'Known limitations');
+  assert.match(limits, /App Review/);
+  assert.match(limits, /TikTok/);
+  assert.match(limits, /YouTube/);
+  assert.match(limits, /accuracy/i);
+  assert.match(notes, /\balpha\b/i);
+  const pseudo = { posts: [{ channel: 'GitHub', name: 'Release notes', copy: notes }] };
+  assert.doesNotThrow(() => assertClaims(pseudo, PLATFORM_SUPPORT));
+});
+
 test('channels are not copies of each other', () => assertDistinct(doc));
 
 test('copy is plain text', () => assertPlainText(doc));

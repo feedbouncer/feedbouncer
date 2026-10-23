@@ -88,7 +88,7 @@ Every factual sentence in the copy below traces to one of these rows.
 
 ### Release notes
 
-Short summary for the release announcement. The full notes are `docs/launch/release-notes-v0.1.0.md` (Task 4), published as the body of the v0.1.0 release, which is what the last link points to.
+Short summary for the release announcement. The full notes are [docs/launch/release-notes-v0.1.0.md](https://github.com/feedbouncer/feedbouncer/blob/main/docs/launch/release-notes-v0.1.0.md), published as the body of the v0.1.0 release.
 
 ```text
 Scam links, spam and abuse in the comments under ads have to be found and hidden by someone, while the ad keeps running and people keep reading the thread.
@@ -108,7 +108,7 @@ Install: Meta App Review is not complete, so you self-host and bring your own Me
 
 Contribute: issues and small pull requests are welcome. Setup and checks are in https://github.com/feedbouncer/feedbouncer/blob/main/CONTRIBUTING.md
 
-Full notes: https://github.com/feedbouncer/feedbouncer/releases/tag/v0.1.0
+Full notes: https://github.com/feedbouncer/feedbouncer/blob/main/docs/launch/release-notes-v0.1.0.md
 
 The project is not affiliated with or endorsed by Meta, Google or any other platform it connects to.
 
