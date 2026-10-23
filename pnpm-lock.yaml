@@ -519,6 +519,9 @@ importers:
       '@feedbouncer/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@feedbouncer/scan':
+        specifier: workspace:*
+        version: link:../../packages/scan
       '@feedbouncer/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets

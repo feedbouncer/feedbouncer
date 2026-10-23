@@ -108,6 +108,25 @@ export async function listScanPages(
   return out;
 }
 
+const permissions = z.object({
+  data: z.array(z.object({ permission: z.string().max(64), status: z.string().max(20) })).max(200),
+});
+
+/** The permissions the user token currently holds. */
+export async function grantedScopes(
+  g: ScanGraph,
+  userToken: Secret,
+  signal: AbortSignal,
+): Promise<string[]> {
+  const { body } = await graphRequest(
+    callFor(g.fb, g.nowMs, scanCallContext(g, userToken, 'me', signal)),
+    { method: 'GET', path: ['me', 'permissions'] },
+  );
+  const page = permissions.safeParse(body);
+  if (!page.success) throw new ConnectorError('permanent', 'invalid_graph_response');
+  return page.data.data.filter((p) => p.status === 'granted').map((p) => p.permission);
+}
+
 export async function resolvePage(
   g: ScanGraph,
   userToken: Secret,

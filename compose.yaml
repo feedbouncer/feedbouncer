@@ -321,6 +321,7 @@ services:
       - ./packages/evaluation/src:/repo/packages/evaluation/src:ro
       - ./packages/reports/src:/repo/packages/reports/src:ro
       - ./packages/rules/src:/repo/packages/rules/src:ro
+      - ./packages/scan/src:/repo/packages/scan/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro
       - ./packages/secrets/src:/repo/packages/secrets/src:ro

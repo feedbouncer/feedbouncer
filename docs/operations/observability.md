@@ -246,6 +246,9 @@ carry a `service` label (`api` or `worker`).
 | `feedbouncer_connector_series_truncated`               | gauge     | none                                      | worker    | `1` when more connections exist than `METRICS_MAX_CONNECTIONS`.                                                                                         |
 | `feedbouncer_telemetry_collect_errors_total`           | counter   | `collector`                               | worker    | Scrape-time collectors that failed (`connector_health`, `queues`); their gauges are omitted.                                                            |
 | `feedbouncer_telemetry_negative_lag_total`             | counter   | `source`                                  | api       | Lag samples clamped because the source timestamp was ahead of our clock (`webhook_event`).                                                              |
+| `feedbouncer_scan_finished_total`                      | counter   | `status`, `reason`                        | worker    | Free scans finished. `status` is `completed` or `failed`; `reason` is the failure reason, or `none`.                                                    |
+| `feedbouncer_scan_duration_seconds`                    | histogram | none                                      | worker    | Free scan run time, from claim to the stored result or failure.                                                                                         |
+| `feedbouncer_scan_comments_scanned`                    | histogram | none                                      | worker    | Visible comments counted by a completed free scan.                                                                                                      |
 
 Histogram buckets: call and request durations use 0.01 s to 30 s; queue wait and event
 delay use 0.1 s to 6 h.
@@ -254,8 +257,7 @@ delay use 0.1 s to 6 h.
 
 Allowed label names are `platform`, `queue`, `job_type`, `operation`, `outcome`, `status`,
 `error_code`, `method`, `route`, `status_class`, `collector`, `source`,
-`service` and `connection_id`. (`reason` is reserved by the allow-list but no metric uses
-it today.)
+`service`, `connection_id` and `reason` (a closed set of free scan failure reasons).
 
 - `connection_id` appears only on the per-connection gauges. They are capped at
   `METRICS_MAX_CONNECTIONS` connections (selected in id order), and

@@ -269,6 +269,40 @@ describe('loadWorkerEnv', () => {
     });
   });
 
+  describe('scan', () => {
+    const classifier = {
+      CLASSIFIER_PROVIDER: 'openai',
+      CLASSIFIER_MODEL: 'gpt-x',
+      CLASSIFIER_API_KEY: 'k'.repeat(40),
+    };
+    it('is disabled by default with the documented limits', () => {
+      expect(load(base).scan).toEqual({
+        enabled: false,
+        maxComments: 2000,
+        retentionDays: 30,
+        workerConcurrency: 2,
+      });
+    });
+    it('enables with the Facebook config and a classifier, and says so in the summary', () => {
+      const env = load({ ...base, ...facebook, ...classifier, SCAN_TOOL_ENABLED: 'true' });
+      expect(env.scan.enabled).toBe(true);
+      expect(JSON.stringify(env)).toContain('"scanToolEnabled":true');
+    });
+    it('refuses to start enabled without the Facebook config or a classifier', () => {
+      expect(messageOf(() => load({ ...base, ...classifier, SCAN_TOOL_ENABLED: 'true' }))).toMatch(
+        /SCAN_TOOL_ENABLED=true requires .*FACEBOOK_APP_ID/,
+      );
+      expect(messageOf(() => load({ ...base, ...facebook, SCAN_TOOL_ENABLED: 'true' }))).toMatch(
+        /SCAN_TOOL_ENABLED=true requires CLASSIFIER_PROVIDER/,
+      );
+    });
+    it('rejects SCAN_RETENTION_DAYS above 30', () => {
+      expect(messageOf(() => load({ ...base, SCAN_RETENTION_DAYS: '31' }))).toMatch(
+        /SCAN_RETENTION_DAYS/,
+      );
+    });
+  });
+
   describe('alerts', () => {
     it('is off by default and needs no mail', () => {
       const env = load(without('SMTP_URL', 'PUBLIC_WEB_URL'));

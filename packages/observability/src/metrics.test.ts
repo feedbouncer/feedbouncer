@@ -20,6 +20,9 @@ it('exposes the documented metric names with bounded labels', async () => {
     'feedbouncer_http_request_duration_seconds',
     'feedbouncer_telemetry_collect_errors_total',
     'feedbouncer_telemetry_negative_lag_total',
+    'feedbouncer_scan_finished_total',
+    'feedbouncer_scan_duration_seconds',
+    'feedbouncer_scan_comments_scanned',
   ])
     expect(text).toContain(`# HELP ${name} `);
   expect(text).toContain('service="worker"');
