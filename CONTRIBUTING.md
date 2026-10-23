@@ -76,6 +76,12 @@ Open an issue (choose **Feature request**) and agree on the approach **before** 
 - a change to the public API or configuration variables
 - anything touching authentication, authorization, tenancy, secrets or token handling
 
+## Updating the roadmap
+
+- The roadmap's source is [apps/docs/src/pages/roadmap.md](apps/docs/src/pages/roadmap.md), and it is published at <https://feedbouncer.github.io/feedbouncer/roadmap/>.
+- Each item sits in exactly one of Now, Next, Later or Shipped. It is a bold title and one sentence about what users get, with no dates or delivery promises. An empty group says `Nothing here yet.`
+- **When you change the roadmap, update its "Last updated" date (`YYYY-MM-DD`) in the same pull request.**
+
 ## What reviewers look for
 
 - **Tenant isolation.** Every read and write is scoped to its organization and brand, and authorized on every request path. A cross-tenant leak is a security bug, and it needs a test proving isolation.

@@ -3,7 +3,7 @@ import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import type * as OpenApiPlugin from 'docusaurus-plugin-openapi-docs';
 import { darkCodeTheme, lightCodeTheme } from './prism-theme';
-import { BASE_URL, REPO, SITE_URL } from './site.config';
+import { BASE_URL, REPO, ROADMAP_ROUTE, SITE_URL } from './site.config';
 
 const versionsFile = new URL('./versions.json', import.meta.url);
 const versions: string[] = existsSync(versionsFile)
@@ -104,6 +104,17 @@ const config: Config = {
         },
         { type: 'search', position: 'right' },
         { href: `https://github.com/${REPO}`, label: 'GitHub', position: 'right' },
+      ],
+    },
+    footer: {
+      links: [
+        {
+          title: 'Project',
+          items: [
+            { label: 'Roadmap', to: ROADMAP_ROUTE },
+            { label: 'GitHub', href: `https://github.com/${REPO}` },
+          ],
+        },
       ],
     },
   } satisfies Preset.ThemeConfig,

@@ -24,6 +24,7 @@ const COMMUNITY_FILES = [
   'LICENSE',
   '.github/ISSUE_TEMPLATE/bug_report.yml',
   '.github/ISSUE_TEMPLATE/feature_request.yml',
+  '.github/ISSUE_TEMPLATE/roadmap_suggestion.yml',
   '.github/ISSUE_TEMPLATE/config.yml',
   '.github/pull_request_template.md',
 ];
@@ -289,6 +290,21 @@ test('feature request form asks for the problem and proposed behavior', () => {
   for (const id of ['problem', 'proposal']) assert.ok(req.has(id), `${id} must be required`);
 });
 
+test('roadmap suggestion form asks for a short title, the problem and who it helps', () => {
+  const rel = '.github/ISSUE_TEMPLATE/roadmap_suggestion.yml';
+  const { form } = assertValidForm(rel);
+  const req = requiredIds(form);
+  for (const id of ['short_title', 'problem', 'who']) assert.ok(req.has(id), `${id} must be required`);
+  assert.match(form.description, /not guaranteed/i);
+  assert.deepEqual(form.labels, ['roadmap-suggestion']);
+  const source = read(rel);
+  assert.ok(
+    source.includes('(https://feedbouncer.github.io/feedbouncer/roadmap/)'),
+    'link the published roadmap',
+  );
+  assert.ok(!source.includes('roadmap.md'), 'do not link the roadmap source file');
+});
+
 test('chooser disables blank issues and routes security reports privately', () => {
   const cfg = parse(read('.github/ISSUE_TEMPLATE/config.yml'));
   assert.deepEqual(Object.keys(cfg).sort(), ['blank_issues_enabled', 'contact_links']);
@@ -343,6 +359,7 @@ test('CONTRIBUTING covers setup, conventions, checks, proposals and review, in o
     '## Branches and commits',
     '## Before you ask for review',
     '## Proposing larger changes',
+    '## Updating the roadmap',
     '## What reviewers look for',
     '## Security issues',
   ]);
