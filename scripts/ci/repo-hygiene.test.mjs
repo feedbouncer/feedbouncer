@@ -343,6 +343,7 @@ test('CONTRIBUTING covers setup, conventions, checks, proposals and review, in o
     '## Branches and commits',
     '## Before you ask for review',
     '## Proposing larger changes',
+    '## Updating the roadmap',
     '## What reviewers look for',
     '## Security issues',
   ]);
@@ -412,7 +413,11 @@ test('n8n package has no runtime dependencies and the community keyword', () => 
 
 test('n8n build does not emit a tsbuildinfo into the published dist', () => {
   const { compilerOptions } = JSON.parse(read(`${N8N_PACKAGE}/tsconfig.json`));
-  assert.notEqual(compilerOptions.incremental, true, 'incremental builds write dist/tsconfig.tsbuildinfo');
+  assert.notEqual(
+    compilerOptions.incremental,
+    true,
+    'incremental builds write dist/tsconfig.tsbuildinfo',
+  );
 });
 
 test('README states the n8n version CI tests against', () => {
@@ -420,7 +425,10 @@ test('README states the n8n version CI tests against', () => {
   const version = read(versionFile).trim();
   assert.match(version, /^\d+\.\d+\.\d+$/, versionFile);
   for (const workflow of ['ci.yml', 'release-n8n-node.yml']) {
-    assert.ok(read(`.github/workflows/${workflow}`).includes(versionFile), `${workflow} must read ${versionFile}`);
+    assert.ok(
+      read(`.github/workflows/${workflow}`).includes(versionFile),
+      `${workflow} must read ${versionFile}`,
+    );
   }
   assert.ok(read(`${N8N_PACKAGE}/README.md`).includes(version), 'README must state the version');
 });

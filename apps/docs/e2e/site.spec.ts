@@ -192,3 +192,14 @@ test.describe('roadmap without JavaScript', () => {
     });
   }
 });
+
+for (const from of [BASE_URL, `${BASE_URL}docs/concepts/overview/`]) {
+  test(`footer Roadmap link on ${from} opens the roadmap`, async ({ page }) => {
+    await open(page, from);
+    const link = page.locator('footer').getByRole('link', { name: 'Roadmap', exact: true });
+    await expect(link).toHaveAttribute('href', `${BASE_URL}roadmap/`);
+    await link.click();
+    await expect(page).toHaveURL(new RegExp(`${BASE_URL}roadmap/$`));
+    await expect(page.getByRole('heading', { level: 1, name: 'Roadmap' })).toBeVisible();
+  });
+}
