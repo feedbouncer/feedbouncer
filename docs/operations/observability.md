@@ -249,6 +249,9 @@ carry a `service` label (`api` or `worker`).
 | `feedbouncer_scan_finished_total`                      | counter   | `status`, `reason`                        | worker    | Free scans finished. `status` is `completed` or `failed`; `reason` is the failure reason, or `none`.                                                    |
 | `feedbouncer_scan_duration_seconds`                    | histogram | none                                      | worker    | Free scan run time, from claim to the stored result or failure.                                                                                         |
 | `feedbouncer_scan_comments_scanned`                    | histogram | none                                      | worker    | Visible comments counted by a completed free scan.                                                                                                      |
+| `feedbouncer_scan_authorize_total`                     | counter   | none                                      | api       | Free scan visitors sent to the Facebook dialog.                                                                                                         |
+| `feedbouncer_scan_created_total`                       | counter   | none                                      | api       | Free scans queued.                                                                                                                                      |
+| `feedbouncer_scan_cta_clicks_total`                    | counter   | none                                      | api       | Sign-up links followed from a free scan result.                                                                                                         |
 
 Histogram buckets: call and request durations use 0.01 s to 30 s; queue wait and event
 delay use 0.1 s to 6 h.

@@ -95,6 +95,8 @@ import { OrgAccessGuard } from './tenancy/org-access.guard.js';
 import { ScanController, ScanEnabledGuard } from './scan/scan.controller.js';
 import { ScanOAuthService } from './scan/scan-oauth.service.js';
 import { createScanRateLimits } from './scan/scan-rate-limit.js';
+import { ScanQueueClient } from './scan/scan-queue.client.js';
+import { ScanService } from './scan/scan.service.js';
 import {
   ACCOUNT_DELETION,
   API_KEYS,
@@ -111,6 +113,7 @@ import {
   PUBLIC_API_LIMITS,
   RATE_LIMITS,
   SCAN_LIMITS,
+  SCAN_QUEUE_CLIENT,
   SCAN_STORE,
 } from './tokens.js';
 import type { AppDeps } from './deps.js';
@@ -209,6 +212,7 @@ export class AppModule {
         ModerationCheckService,
         ScanEnabledGuard,
         ScanOAuthService,
+        ScanService,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.
         { provide: CONNECTOR_STACK, useValue: deps.connectors?.stack ?? null },
@@ -252,6 +256,17 @@ export class AppModule {
           provide: SCAN_LIMITS,
           inject: [DEPS],
           useFactory: (d: AppDeps) => createScanRateLimits(d.redis, d.redisKeyPrefix),
+        },
+        {
+          // Stopped by Nest (onModuleDestroy).
+          provide: SCAN_QUEUE_CLIENT,
+          inject: [DEPS],
+          useFactory: (d: AppDeps) =>
+            new ScanQueueClient({
+              redisUrl: d.env.redisUrl.href,
+              prefix: d.env.jobs.prefix,
+              log: d.log,
+            }),
         },
         {
           provide: PUBLIC_API_LIMITS,

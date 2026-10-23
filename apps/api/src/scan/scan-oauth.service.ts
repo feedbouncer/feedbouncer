@@ -61,7 +61,7 @@ const pkceCtx = (stateHash: Buffer) => ({
   connectionId: stateHash.toString('hex'),
   kind: 'scan_pkce_verifier' as const,
 });
-const grantTokenCtx = (grantId: string) => ({
+export const grantTokenCtx = (grantId: string) => ({
   organizationId: SCAN_ENVELOPE_ORG,
   connectionId: grantId,
   kind: 'scan_user_token' as const,

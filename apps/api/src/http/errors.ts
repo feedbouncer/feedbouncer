@@ -241,6 +241,8 @@ export class ApiError extends Error {
       readonly problem?: string;
       /** The text limit in UTF-16 code units, for a 422 text_too_long of the moderation check. */
       readonly maxLength?: number;
+      /** The caller's own running scan of the Page, for a 409 scan_in_progress. */
+      readonly scanId?: string;
     },
     /** Response headers to send with the error (Retry-After, WWW-Authenticate). */
     readonly headers?: Readonly<Record<string, string>>,
@@ -266,6 +268,7 @@ export function errorBody(e: ApiError): {
     field?: string;
     problem?: string;
     maxLength?: number;
+    scanId?: string;
   };
 } {
   return { error: { ...e.details, code: e.code, message: e.message } };

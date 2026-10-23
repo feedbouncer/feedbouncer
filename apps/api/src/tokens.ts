@@ -28,3 +28,5 @@ export const PRIVACY_QUEUE_CLIENT = Symbol('PRIVACY_QUEUE_CLIENT');
 export const SCAN_STORE = Symbol('SCAN_STORE');
 /** The free scan's per-IP, per-visitor, per-Facebook-user and per-Page limits. */
 export const SCAN_LIMITS = Symbol('SCAN_LIMITS');
+/** Puts scan ids on the queue the worker's scan consumer reads. */
+export const SCAN_QUEUE_CLIENT = Symbol('SCAN_QUEUE_CLIENT');

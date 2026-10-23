@@ -23,6 +23,9 @@ it('exposes the documented metric names with bounded labels', async () => {
     'feedbouncer_scan_finished_total',
     'feedbouncer_scan_duration_seconds',
     'feedbouncer_scan_comments_scanned',
+    'feedbouncer_scan_authorize_total',
+    'feedbouncer_scan_created_total',
+    'feedbouncer_scan_cta_clicks_total',
   ])
     expect(text).toContain(`# HELP ${name} `);
   expect(text).toContain('service="worker"');

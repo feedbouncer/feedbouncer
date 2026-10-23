@@ -839,9 +839,23 @@ export const ACCOUNT_ROUTES = [
 /**
  * The anonymous free scan: no session, a visitor cookie instead. The visitor is
  * its own tenant root (every query filters by visitor id), and these routes keep
- * the Origin check.
+ * the Origin check. A shared result is read by its link token alone, and the
+ * CTA is a fixed redirect. scan.integration.test.ts covers cross-visitor access.
  */
-export const SCAN_ROUTES = ['POST /api/v1/scan/authorize', 'GET /api/v1/scan/oauth/meta/callback'];
+export const SCAN_ROUTES = [
+  'POST /api/v1/scan/authorize',
+  'GET /api/v1/scan/oauth/meta/callback',
+  'GET /api/v1/scan/grants/:grantId',
+  'POST /api/v1/scan/scans',
+  'GET /api/v1/scan/scans',
+  'GET /api/v1/scan/scans/:scanId',
+  'DELETE /api/v1/scan/scans/:scanId',
+  'PUT /api/v1/scan/scans/:scanId/share',
+  'DELETE /api/v1/scan/scans/:scanId/share',
+  'GET /api/v1/scan/shared/:token',
+  'DELETE /api/v1/scan/me',
+  'GET /api/v1/scan/cta',
+];
 
 /**
  * /api/v1 routes with no session that authenticate by platform signature or

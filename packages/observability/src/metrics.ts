@@ -22,6 +22,9 @@ export interface FbMetrics {
   readonly scanFinished: Counter<'status' | 'reason'>;
   readonly scanDuration: Histogram<never>;
   readonly scanCommentsScanned: Histogram<never>;
+  readonly scanAuthorize: Counter<never>;
+  readonly scanCreated: Counter<never>;
+  readonly scanCtaClicks: Counter<never>;
   /**
    * Scrape-time preparation hooks. They run before collect_errors_total is read, so a
    * collector that fails during a scrape is counted in that same scrape.
@@ -134,6 +137,21 @@ export function createMetrics(service: 'api' | 'worker'): FbMetrics {
       name: 'feedbouncer_scan_comments_scanned',
       help: 'Visible comments counted by a completed free scan.',
       buckets: SCAN_COMMENTS,
+      registers: r,
+    }),
+    scanAuthorize: new Counter({
+      name: 'feedbouncer_scan_authorize_total',
+      help: 'Free scan visitors sent to the Facebook dialog.',
+      registers: r,
+    }),
+    scanCreated: new Counter({
+      name: 'feedbouncer_scan_created_total',
+      help: 'Free scans queued.',
+      registers: r,
+    }),
+    scanCtaClicks: new Counter({
+      name: 'feedbouncer_scan_cta_clicks_total',
+      help: 'Sign-up links followed from a free scan result.',
       registers: r,
     }),
   };
