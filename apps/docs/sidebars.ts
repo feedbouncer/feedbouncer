@@ -18,6 +18,7 @@ const sidebars: SidebarsConfig = {
         'concepts/review-mode',
         'concepts/ai-classifier-and-policies',
         'concepts/self-hosting',
+        'free-scan',
         'concepts/glossary',
       ],
     },

@@ -149,6 +149,16 @@ the backups rotate out, and FeedBouncer does not touch them.
 Backups also contain encrypted data you may no longer have keys for; see
 [secrets.md](secrets.md#backups-and-restores).
 
+## Free scan data
+
+The free ad-comment scan stores its data apart from the categories above, and `RETENTION_*` settings do not change it.
+
+- **Fixed purge.** A scan and its result are deleted at most 30 days after the scan starts. `SCAN_RETENTION_DAYS` (1 to 30, default 30) can only shorten this. A visitor who deletes their scan removes it immediately.
+- **Tokens.** The Facebook access token for a scan is deleted when the scan finishes or fails, and in any case when the scan is purged.
+- **No commenter identifiers.** Individual comments are not stored. A result holds counts, and up to nine masked example comments with the commenter's name abbreviated. No commenter id, handle or full name is kept.
+- **Subject requests.** Because no commenter identifier is stored, an export or erasure request under [subject-requests.md](subject-requests.md) finds nothing from scans to return or delete. A scan that a visitor started about their own Page is removed by the visitor, or by the purge.
+- **Sharing.** A shared result is deleted with its scan. Revoking the share link stops it working at once.
+
 ## Logs
 
 Service logs on stdout carry ids, counts and durations, not comment text,

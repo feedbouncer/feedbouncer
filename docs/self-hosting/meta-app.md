@@ -495,6 +495,40 @@ Choosing **Reconnect** in FeedBouncer re-issues them. To revoke a Page token, re
 
 Follow [secrets.md](../operations/secrets.md) to rotate `FB_ENCRYPTION_KEYS`. Back up your keys and keep the old key until every connection is re-encrypted; otherwise every connection needs a **Reconnect**.
 
+## Optional: the free ad-comment scan
+
+> Not yet verified against Meta's dashboard or documentation. Check: that the four required permissions are enough to read ad-post comments, and what App Review asks for.
+
+The free scan is a public page where a visitor connects a Facebook Page and sees how many comments on their recent ads look harmful. It is **off by default**. A self-hosted instance only serves it when you set `SCAN_TOOL_ENABLED=true`.
+
+To turn it on:
+
+1. Configure the Meta app and the classifier as in the rest of this guide. The instance refuses to start with `SCAN_TOOL_ENABLED=true` if the `FACEBOOK_*` settings are missing or `CLASSIFIER_PROVIDER` is not set.
+2. Under **Facebook Login for Business**, **Settings**, add this to **Valid OAuth Redirect URIs**: `${PUBLIC_WEB_URL}/api/v1/scan/oauth/meta/callback` (for example `https://feedbouncer.example.com/api/v1/scan/oauth/meta/callback`). This is a separate address from the one in Step 12.
+3. Set the scan variables in your `.env`, then restart the API and worker:
+
+| Variable                  | Values            | Default | What it does                                  |
+| ------------------------- | ----------------- | ------- | --------------------------------------------- |
+| `SCAN_TOOL_ENABLED`       | `true` or `false` | `false` | Turns the scan on                             |
+| `SCAN_MAX_COMMENTS`       | 100 to 5000       | `2000`  | Most comments read in one scan                |
+| `SCAN_RETENTION_DAYS`     | 1 to 30           | `30`    | Days before a scan and its result are deleted |
+| `SCAN_WORKER_CONCURRENCY` | 1 to 16           | `2`     | Scans one worker runs at the same time        |
+
+The scan asks for these permissions, and never uses a write permission:
+
+| Permission                  | Required | Used for                             |
+| --------------------------- | -------- | ------------------------------------ |
+| `pages_show_list`           | Yes      | Listing the visitor's Pages          |
+| `pages_read_engagement`     | Yes      | Reading ad posts and their comments  |
+| `pages_read_user_content`   | Yes      | Reading comments written by users    |
+| `ads_read`                  | Yes      | Finding the Page's recent ads        |
+| `instagram_basic`           | No       | Finding the linked Instagram account |
+| `instagram_manage_comments` | No       | Reading comments on Instagram ads    |
+
+`ads_read` and `pages_read_user_content` need **Advanced Access** through Meta App Review before visitors who have no role on your app can grant them. Until then, only people with a role on the app (administrators, developers, testers) can run a scan. Keep the tool off until review is granted if you want it open to the public.
+
+The visitor-facing description of what is read and stored is in [the free scan page](../../apps/docs/docs/free-scan.md). The deletion schedule is in [data-retention.md](../operations/data-retention.md#free-scan-data).
+
 ## When you need App Review or Business Verification
 
 > Not yet verified against Meta's documentation as of 2026-10-21. Check: the App Review and Business Verification requirements and links against Meta's current pages.
