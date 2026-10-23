@@ -1,5 +1,5 @@
 name: Check docs
-description: Builds the docs site, runs its unit tests, site checks and external link check.
+description: Builds the docs site and runs its unit tests and site checks.
 inputs:
   turbo-cache-scope:
     description: Cache namespace, usually the job id.
@@ -19,8 +19,3 @@ runs:
     - name: Site checks
       shell: bash
       run: pnpm --filter @feedbouncer/docs run test:site
-    - name: Check links
-      uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
-      with:
-        args: --config apps/docs/lychee.toml --root-dir ${{ github.workspace }}/apps/docs/build 'apps/docs/build/**/*.html'
-        fail: true

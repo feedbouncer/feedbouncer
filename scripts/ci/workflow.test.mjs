@@ -239,13 +239,29 @@ function assertUnitTestsAfterBuild(steps) {
   assert.ok(build >= 0 && tests > build, 'docs unit tests must run after the docs build');
 }
 
-test('the docs-check action builds, tests, runs the site checks and checks links', () => {
+test('the docs-check action builds, tests and runs the site checks', () => {
   const steps = docsCheck.runs.steps;
   const runs = steps.map((s) => s.run ?? '').join('\n');
   assert.match(runs, /turbo run build --filter=@feedbouncer\/docs/);
   assert.match(runs, /@feedbouncer\/docs run test:site/);
   assertUnitTestsAfterBuild(steps);
-  const lychee = steps.find((s) => s.uses?.startsWith('lycheeverse/lychee-action@'));
+});
+
+// lychee-action's own final step hardcodes a host runner path that does not
+// resolve inside the docs job's container, so the link check runs as its
+// own uncontainerized job against the built site, passed via artifact.
+test('the docs job uploads the built site, and docs-link-check checks links from it', () => {
+  const docsSteps = workflow.jobs.docs.steps;
+  const upload = docsSteps.find((s) => s.uses?.startsWith('actions/upload-artifact@'));
+  assert.equal(upload.with.name, 'docs-build');
+  assert.equal(upload.with.path, 'apps/docs/build');
+
+  const linkCheck = workflow.jobs['docs-link-check'];
+  assert.equal(linkCheck.needs, 'docs');
+  assert.ok(!linkCheck.container, 'docs-link-check must not run in a container');
+  const download = linkCheck.steps.find((s) => s.uses?.startsWith('actions/download-artifact@'));
+  assert.equal(download.with.name, 'docs-build');
+  const lychee = linkCheck.steps.find((s) => s.uses?.startsWith('lycheeverse/lychee-action@'));
   assert.equal(lychee.with.fail, true);
   assert.match(lychee.with.args, /--config apps\/docs\/lychee\.toml/);
 });
