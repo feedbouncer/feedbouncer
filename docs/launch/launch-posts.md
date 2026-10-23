@@ -50,7 +50,7 @@ Every factual sentence in the copy below traces to one of these rows.
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | FeedBouncer is licensed under AGPL-3.0-only                                                                                                                                 | LICENSE                                                          |
 | FeedBouncer is not affiliated with or endorsed by Meta, TikTok, Google/YouTube or any other platform                                                                        | README.md                                                        |
-| The maturity label is Alpha (decision D4; README status line rewritten in Task 3)                                                                                           | README.md                                                        |
+| The maturity label is Alpha                                                                                                                                                 | README.md                                                        |
 | Scams, spam and abuse in the comments on social ads are the problem FeedBouncer is for; it checks new comments, hides or removes them and routes real questions to a person | README.md                                                        |
 | The classifier's categories include spam, scam or phishing, and harassment or abuse                                                                                         | apps/docs/docs/concepts/ai-classifier-and-policies.md            |
 | Facebook Pages and Instagram are supported                                                                                                                                  | apps/docs/docs/concepts/overview.md                              |
@@ -82,7 +82,7 @@ Every factual sentence in the copy below traces to one of these rows.
 | No accuracy results are published; an evaluation method exists                                                                                                              | docs/evaluation/results/README.md                                |
 | Platform tokens and webhook secrets are stored as encrypted envelopes                                                                                                       | docs/operations/secrets.md                                       |
 | CONTRIBUTING.md covers setup, conventions and the checks a pull request must pass                                                                                           | CONTRIBUTING.md                                                  |
-| The demo clip shows a hide with its reason and its undo (clip: docs/assets/demo.gif from Task 3)                                                                            | apps/docs/docs/concepts/decisions-and-audit.mdx                  |
+| The demo clip shows a hide with its reason and its undo; the clip is docs/assets/demo.gif and must exist before any post goes live                                          | apps/docs/docs/concepts/decisions-and-audit.mdx                  |
 
 ## GitHub
 

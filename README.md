@@ -4,7 +4,7 @@ FeedBouncer is an open-source comment firewall and inbox for brands that run soc
 
 ## Why FeedBouncer
 
-Scam links, spam and abuse pile up in the comments under ads and social posts. Someone on the team has to find and hide them while the ad keeps running, and they hurt both ad performance and the trust of the people reading the thread. FeedBouncer checks new comments against your rules first, then with an optional AI classifier, hides what you have told it to hide, and sends real questions and complaints to a person. Every decision keeps its reason, and hides, bans and flags can be undone, and a review mode makes a person approve actions at first.
+Scam links, spam and abuse pile up in the comments under ads and social posts. Someone on the team has to find and hide them while the ad keeps running, and they hurt both ad performance and the trust of the people reading the thread. FeedBouncer checks new comments against your rules first, then with an optional AI classifier, hides what you have told it to hide, and sends real questions and complaints to a person. Every decision keeps its reason. Hides, bans and flags can be undone. A review mode makes a person approve actions at first.
 
 ## Project status
 

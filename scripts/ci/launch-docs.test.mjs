@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   ALLOWED_LINK_ORIGINS,
+  LIVE_STATUSES,
   assertAiVendors,
   assertClaims,
   assertDisclaimer,
@@ -173,6 +174,11 @@ test('claims ledger sources exist', () => {
   for (const c of doc.claims) assert.ok(existsSync(join(ROOT, c.source.split('#')[0])), c.source);
 });
 
+test('the demo clip exists before any post is scheduled or published', () => {
+  if (doc.schedule.some((r) => LIVE_STATUSES.includes(r.status)))
+    assert.ok(existsSync(join(ROOT, 'docs/assets/demo.gif')), 'docs/assets/demo.gif');
+});
+
 test('scheduled or published rows require approval, an owner and a fully ticked checklist', () =>
   assertGates(doc));
 
@@ -304,14 +310,8 @@ test('channel posts are the agreed ones', () =>
     ],
   ));
 
-test('first paragraph of every post leads with the problem', () => {
-  for (const p of publishable(doc)) {
-    const first = paragraphs(p.copy)[0];
-    assert.match(first, /\b(spam|scams?|abuse|unwanted comments|bot comments)\b/i, p.name);
-    assert.doesNotMatch(first, /^FeedBouncer is\b/, p.name);
-  }
-  assert.doesNotThrow(() => assertProblemFirst(doc));
-});
+test('first paragraph of every post leads with the problem', () =>
+  assert.doesNotThrow(() => assertProblemFirst(doc)));
 
 test('no copy calls a planned platform supported', () =>
   assertPlatformClaims(doc, PLATFORM_SUPPORT));
