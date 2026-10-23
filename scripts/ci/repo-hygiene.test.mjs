@@ -24,6 +24,7 @@ const COMMUNITY_FILES = [
   'LICENSE',
   '.github/ISSUE_TEMPLATE/bug_report.yml',
   '.github/ISSUE_TEMPLATE/feature_request.yml',
+  '.github/ISSUE_TEMPLATE/roadmap_suggestion.yml',
   '.github/ISSUE_TEMPLATE/config.yml',
   '.github/pull_request_template.md',
 ];
@@ -287,6 +288,20 @@ test('feature request form asks for the problem and proposed behavior', () => {
   const { form } = assertValidForm('.github/ISSUE_TEMPLATE/feature_request.yml');
   const req = requiredIds(form);
   for (const id of ['problem', 'proposal']) assert.ok(req.has(id), `${id} must be required`);
+});
+
+test('roadmap suggestion form asks for a short title, the problem and who it helps', () => {
+  const rel = '.github/ISSUE_TEMPLATE/roadmap_suggestion.yml';
+  const { form } = assertValidForm(rel);
+  const req = requiredIds(form);
+  for (const id of ['short_title', 'problem', 'who']) assert.ok(req.has(id), `${id} must be required`);
+  assert.match(form.description, /not guaranteed/i);
+  assert.deepEqual(form.labels, ['roadmap-suggestion']);
+  assert.ok(
+    !read(rel).includes('apps/docs/src/pages/roadmap.md') ||
+      read(rel).includes('/blob/main/apps/docs/src/pages/roadmap.md'),
+    'link the rendered roadmap, not a raw source path',
+  );
 });
 
 test('chooser disables blank issues and routes security reports privately', () => {

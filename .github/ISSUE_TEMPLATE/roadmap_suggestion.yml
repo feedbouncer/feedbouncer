@@ -1,0 +1,31 @@
+name: Roadmap suggestion
+description: Suggest an item for the public roadmap. Suggestions are read but not guaranteed to be scheduled.
+title: '[Roadmap]: '
+labels: ['roadmap-suggestion']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. The [roadmap](https://github.com/feedbouncer/feedbouncer/blob/main/apps/docs/src/pages/roadmap.md) shows intent, not a commitment: we read every suggestion, but a suggestion is not guaranteed to be scheduled.
+        Found a bug? Use the Bug report form instead. Report vulnerabilities privately: https://github.com/feedbouncer/feedbouncer/security/advisories/new
+  - type: input
+    id: short_title
+    attributes:
+      label: Short title
+      description: A few words that name the item.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the problem, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: who
+    attributes:
+      label: Who would this help?
+      description: For example brands, agencies or self-hosters, and how often they hit the problem.
+    validations:
+      required: true

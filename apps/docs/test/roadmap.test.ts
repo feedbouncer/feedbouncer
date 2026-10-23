@@ -62,8 +62,7 @@ describe('roadmap page', () => {
     for (const href of links(md))
       expect(href).toMatch(/^https:\/\/github\.com\/feedbouncer\/feedbouncer\//);
   });
-  // enabled in Task 3
-  it.skip('Suggest an item links an issue form that exists', () => {
+  it('Suggest an item links an issue form that exists', () => {
     const name = section('Suggest an item').match(/issues\/new\?template=([a-z_]+\.yml)\)/)?.[1];
     expect(name).toBe('roadmap_suggestion.yml');
     expect(existsSync(join(repoRoot, '.github/ISSUE_TEMPLATE', name!))).toBe(true);
