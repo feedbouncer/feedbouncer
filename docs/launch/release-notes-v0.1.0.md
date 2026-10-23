@@ -17,7 +17,7 @@ Scam links, spam and abuse in the comments under ads and social posts have to be
 
 ## Known limitations
 
-- Neither the Facebook Pages nor the Instagram connector has been verified against a live Meta app yet. The open points are listed in https://github.com/feedbouncer/feedbouncer/blob/main/docs/connectors/facebook.md
+- Neither the Facebook Pages nor the Instagram connector has been verified against a live Meta app yet. The open points are listed in https://github.com/feedbouncer/feedbouncer/blob/main/docs/connectors/facebook.md and https://github.com/feedbouncer/feedbouncer/blob/main/docs/connectors/instagram.md
 - Meta App Review is not complete. You bring your own Meta app, so connecting accounts means creating and configuring one.
 - TikTok and YouTube are planned, not available yet.
 - There are no published accuracy figures yet. Measure false hides on your own comments with the evaluation method in the docs.
@@ -31,4 +31,4 @@ Self-host with Docker Compose. Start with the quick start in https://github.com/
 
 Issues and small pull requests are welcome. Setup and checks are in https://github.com/feedbouncer/feedbouncer/blob/main/CONTRIBUTING.md
 
-FeedBouncer is not affiliated with or endorsed by Meta, Google or any other platform it connects to.
+FeedBouncer is not affiliated with or endorsed by Meta, Google or any other platform it integrates with.

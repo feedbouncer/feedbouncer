@@ -337,12 +337,22 @@ test('README leads with the problem', () => {
   assert.doesNotMatch(why, /\d\s*%/);
 });
 
+test('README and launch copy do not say every decision can be undone', () => {
+  const texts = [read('README.md'), md, read('docs/launch/release-notes-v0.1.0.md')];
+  for (const t of texts) assert.doesNotMatch(t, /every decision[^,.\n]*can be undone/i);
+});
+
 test('README status matches connector reality', () => {
   const s = section(read('README.md'), 'Project status');
   assert.doesNotMatch(s, /No social platform connector exists/);
   for (const d of ['connector-facebook', 'connector-instagram'])
     assert.ok(existsSync(join(ROOT, 'packages', d)), d);
+  assert.match(s, /^\*\*Alpha\. Not for production use\.\*\*/);
+  assert.match(s, /Facebook Pages/);
+  assert.match(s, /Instagram/);
   assert.match(s, /App Review/);
+  assert.match(s, /connectors\/facebook\.md/);
+  assert.match(s, /connectors\/instagram\.md/);
   assert.match(s, /\]\(docs\/self-hosting\/meta-app\.md\)/);
 });
 
@@ -471,7 +481,10 @@ test('release notes exist, have the sections, and pass the claim guards', () => 
   assert.match(limits, /TikTok/);
   assert.match(limits, /YouTube/);
   assert.match(limits, /accuracy/i);
-  assert.match(notes, /\balpha\b/i);
+  const label = /## Project status\n\n\*\*([A-Za-z-]+)\./.exec(read('README.md'))[1];
+  assert.match(notes, new RegExp(`\\b${label}\\b`, 'i'));
+  assert.match(limits, /connectors\/instagram\.md/);
+  assert.match(notes, /integrates with/);
   const pseudo = { posts: [{ channel: 'GitHub', name: 'Release notes', copy: notes }] };
   assert.doesNotThrow(() => assertClaims(pseudo, PLATFORM_SUPPORT));
 });

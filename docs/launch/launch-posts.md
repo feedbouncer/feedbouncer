@@ -289,7 +289,7 @@ If you manage paid social for a brand, you know what gathers under the ads: scam
 FeedBouncer is an open-source (AGPL-3.0) project aimed at this.
 
 What it does, in plain terms:
-→ It has connectors for Facebook Pages and Instagram accounts, including comments on Meta ads. Both are not yet verified against a live Meta app.
+→ It has connectors for Facebook Pages and Instagram accounts, including comments on Meta ads. Neither is verified yet against a live Meta app.
 → Your own rules act first: keywords, link domains, trusted authors.
 → An AI check is optional. If you turn it on, you choose who runs the model: OpenAI, Google, or an OpenAI-compatible endpoint you host.
 → By default, for the first week after you connect an account, hides, deletes and bans wait as suggestions, so your team sees what it would hide before anything is hidden.
