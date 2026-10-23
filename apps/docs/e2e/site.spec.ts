@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { BASE_URL } from '../site.config';
+import { DISCLAIMER, GROUPS } from '../test/lib/roadmap';
 
 const sitemap = readFileSync(resolve(process.cwd(), 'build/sitemap.xml'), 'utf8');
 const routes = [...new Set([...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, loc]) => loc!))]
@@ -172,4 +173,22 @@ test('unreleased banner is shown on main (unreleased) pages', async ({ page }) =
   const banner = page.locator('.theme-doc-version-banner');
   await expect(banner).toBeVisible();
   await expect(banner).toContainText(/unreleased/i);
+});
+
+test.describe('roadmap without JavaScript', () => {
+  test.use({ javaScriptEnabled: false });
+  for (const width of [1280, 375]) {
+    test(`at ${width}px shows groups, disclaimer and date`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await open(page, `${BASE_URL}roadmap/`);
+      await expect(page.getByRole('heading', { level: 1, name: 'Roadmap' })).toBeVisible();
+      // The accessible name also holds the theme's "Direct link to <group>" anchor label.
+      for (const g of GROUPS)
+        await expect(
+          page.getByRole('heading', { level: 2, name: new RegExp(`^${g}`) }),
+        ).toBeVisible();
+      await expect(page.getByText(DISCLAIMER, { exact: true })).toBeVisible();
+      await expect(page.locator('p', { hasText: 'Last updated:' })).toBeVisible();
+    });
+  }
 });

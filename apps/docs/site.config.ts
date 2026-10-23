@@ -15,3 +15,6 @@ export const ALLOWED_LINK_HOSTS = [
 ] as const;
 
 export const SUPPORTED_MCP_CLIENTS = ['desktop-app', 'cursor', 'vscode'] as const;
+
+export const ROADMAP_ROUTE = '/roadmap/';
+export const ROADMAP_URL = `${SITE_URL}${BASE_URL}roadmap/`;
