@@ -1,3 +1,9 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+
 export const LAUNCH_DOC = 'docs/launch/launch-posts.md';
 export const CHANNELS = [
   'GitHub',
@@ -136,11 +142,11 @@ function parseChecklist(body) {
 function parsePosts(h2Blocks) {
   return CHANNELS.flatMap((channel) => {
     const block = h2Blocks.find((b) => b.heading === channel);
-    return splitBlocks(block.body, 3).map(({ heading, body }) => ({
-      channel,
-      name: heading,
-      copy: [...body.matchAll(/```text\n([\s\S]*?)```/g)].map((m) => m[1].trim()).join('\n\n'),
-    }));
+    return splitBlocks(block.body, 3).flatMap(({ heading, body }) => {
+      const fences = [...body.matchAll(/```text\n([\s\S]*?)```/g)];
+      if (!fences.length) return [];
+      return [{ channel, name: heading, copy: fences.map((m) => m[1].trim()).join('\n\n') }];
+    });
   });
 }
 
@@ -204,4 +210,239 @@ export function assertGates(doc) {
     if (r.owner === 'unassigned') throw new Error(`gate: "${r.post}" has no owner`);
     if (r.plannedUtc === 'unscheduled') throw new Error(`gate: "${r.post}" has no planned time`);
   }
+}
+
+// ---- Channel copy guards ----
+
+export const LIMITS = {
+  productHuntTagline: 60,
+  hnTitle: 80,
+  xPost: 280,
+  linkedIn: 3000,
+  githubDescription: 350,
+};
+export const ALLOWED_LINK_ORIGINS = [
+  'https://github.com/feedbouncer/feedbouncer',
+  'https://feedbouncer.github.io/feedbouncer/',
+];
+const REPO = ALLOWED_LINK_ORIGINS[0];
+const DOCS = ALLOWED_LINK_ORIGINS[1];
+const NOT_COPY = ['Title', 'URL', 'Name and tagline', 'Repository description'];
+const PLATFORM_NAMES = /\b(Meta|Facebook|Instagram|TikTok|YouTube|Google)\b/;
+const DISCLAIMER = /not affiliated with or endorsed by/i;
+
+/** Posts whose copy reads as prose (not a title, URL, name or one-line description). */
+export const publishable = (doc) => doc.posts.filter((p) => !NOT_COPY.includes(p.name));
+
+export const paragraphs = (text) =>
+  text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+export const sentences = (text) =>
+  text
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+/** X thread posts are separated by a line holding only `---`. */
+export const xPosts = (text) =>
+  text
+    .split(/^---$/m)
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+const URL_RE = /https?:\/\/\S+/g;
+
+/** Length as X counts it: every URL is 23 characters, everything else by code point. */
+export const xLength = (text) =>
+  (text.match(URL_RE) ?? []).length * 23 + [...text.replace(URL_RE, '')].length;
+
+export const linksIn = (text) =>
+  (text.match(URL_RE) ?? []).map((u) => u.replace(/[.,;:!?)\]'"]+$/, ''));
+
+const normalize = (text) =>
+  text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+
+const shingles = (text) => {
+  const words = normalize(text).split(' ').filter(Boolean);
+  const set = new Set();
+  for (let i = 0; i + 5 <= words.length; i++) set.add(words.slice(i, i + 5).join(' '));
+  return set;
+};
+
+/** Jaccard similarity of the word 5-gram sets of two texts. */
+export function jaccard5(a, b) {
+  const sa = shingles(a);
+  const sb = shingles(b);
+  const union = new Set([...sa, ...sb]).size;
+  if (!union) return 0;
+  let shared = 0;
+  for (const s of sa) if (sb.has(s)) shared++;
+  return shared / union;
+}
+
+let routes;
+const docsRoutes = () =>
+  (routes ??= new Set(JSON.parse(readFileSync(join(ROOT, 'apps/docs/routes.lock.json'), 'utf8'))));
+
+export function resolveCopyLink(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return { ok: false, why: 'not a URL' };
+  }
+  if (u.protocol !== 'https:') return { ok: false, why: 'not https' };
+  if (/(waitlist|signup|sign-up|register)\b/i.test(u.pathname))
+    return { ok: false, why: 'waitlist or sign-up path' };
+  if (u.search) return { ok: false, why: 'query strings are not allowed' };
+  const href = `${u.origin}${u.pathname}`;
+  if (href === REPO || href === `${REPO}/`) {
+    return u.hash ? { ok: false, why: 'fragment on a non-anchor link' } : { ok: true };
+  }
+  if (href.startsWith(`${REPO}/`)) {
+    const rest = href.slice(REPO.length);
+    const file = /^\/(?:blob|tree)\/main\/(.+?)\/?$/.exec(rest)?.[1];
+    if (file) {
+      return existsSync(join(ROOT, decodeURIComponent(file)))
+        ? { ok: true }
+        : { ok: false, why: `no file ${file} in the repo` };
+    }
+    if (u.hash) return { ok: false, why: 'fragment on a non-anchor link' };
+    if (/^\/(releases\/tag\/v\d+\.\d+\.\d+|issues|discussions)\/?$/.test(rest)) return { ok: true };
+    return { ok: false, why: `unknown repo path ${rest}` };
+  }
+  if (href.startsWith(DOCS)) {
+    const route = u.pathname.slice('/feedbouncer'.length);
+    return docsRoutes().has(route)
+      ? { ok: true }
+      : { ok: false, why: `${route} is not in apps/docs/routes.lock.json` };
+  }
+  return { ok: false, why: 'origin not allowed' };
+}
+
+/** Supported and planned platform names from the concepts overview. */
+export function parsePlatformSupport(md) {
+  const list = (phrase) =>
+    (new RegExp(`([^.>\\n]+?) are ${phrase}\\.`).exec(md)?.[1] ?? '')
+      .split(/,|\band\b/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  return { supported: list('supported'), planned: list('planned') };
+}
+
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** The X and LinkedIn posts may name their own platform without claiming support. */
+export const isChannelSelfReference = (p, name) =>
+  p.channel === 'X and LinkedIn' && ['X', 'LinkedIn'].includes(name);
+
+const fail = (p, msg) => {
+  throw new Error(`${p.channel}/${p.name}: ${msg}`);
+};
+
+export function assertProblemFirst(doc) {
+  for (const p of publishable(doc)) {
+    const first = paragraphs(p.copy)[0] ?? '';
+    if (/^FeedBouncer is\b/.test(first)) fail(p, 'opens with the product, not the problem');
+    if (!/\b(spam|scams?|abuse|unwanted comments|bot comments)\b/i.test(first))
+      fail(p, 'first paragraph does not describe the problem');
+  }
+}
+
+export function assertPlatformClaims(doc, support) {
+  for (const p of doc.posts)
+    for (const s of sentences(p.copy))
+      for (const name of support.planned)
+        if (
+          new RegExp(`\\b${esc(name)}\\b`).test(s) &&
+          !isChannelSelfReference(p, name) &&
+          !/\b(planned|not (yet )?(available|supported)|not yet|roadmap)\b/i.test(s)
+        )
+          fail(p, `names ${name}, which is planned, without saying so: "${s}"`);
+}
+
+export function assertNoFigures(doc) {
+  for (const p of doc.posts)
+    if (/\d\s?%|\b(accuracy|precision|recall)\b[^.]*\d|#1\b|\bbest\b/i.test(p.copy))
+      fail(p, 'contains an accuracy figure, a percentage, "#1" or "best"');
+}
+
+const OTHER_AI = /\b(Anthropic|Claude|Mistral|Cohere|Llama|Grok|Gemma|DeepSeek|Bedrock|Azure)\b/;
+
+export function assertAiVendors(doc) {
+  for (const p of doc.posts) {
+    const other = OTHER_AI.exec(p.copy);
+    if (other) fail(p, `names ${other[1]}, which is not a configured AI vendor`);
+    if (/\b(OpenAI|Gemini)\b/.test(p.copy) && !/\boptional\b/i.test(p.copy))
+      fail(p, 'names an AI vendor without saying the AI is optional');
+  }
+}
+
+export function assertDisclaimer(doc) {
+  for (const p of doc.posts)
+    if (p.name !== 'Title' && PLATFORM_NAMES.test(p.copy) && !DISCLAIMER.test(p.copy))
+      fail(p, 'names a platform but lacks "not affiliated with or endorsed by"');
+}
+
+export function assertNoVoteAsks(doc) {
+  for (const p of doc.posts)
+    if (/\b(up-?votes?|vote for|support us on|please share|boost|hunt us)\b/i.test(p.copy))
+      fail(p, 'asks for votes or shares');
+}
+
+export function assertLinks(doc) {
+  for (const p of doc.posts)
+    for (const u of linksIn(p.copy)) {
+      const r = resolveCopyLink(u);
+      if (!r.ok) fail(p, `${u}: ${r.why}`);
+    }
+}
+
+export function assertPlainText(doc) {
+  for (const p of doc.posts)
+    if (/<[a-z!/]|!\[/i.test(p.copy)) fail(p, 'copy must be plain text (no HTML or images)');
+}
+
+/** No normalized paragraph of 40+ characters in two channels; word 5-gram Jaccard < 0.25. */
+export function assertDistinct(doc) {
+  const channels = [...new Set(doc.posts.map((p) => p.channel))];
+  const text = Object.fromEntries(
+    channels.map((c) => [
+      c,
+      doc.posts
+        .filter((p) => p.channel === c)
+        .map((p) => p.copy)
+        .join('\n\n'),
+    ]),
+  );
+  const seen = new Map();
+  for (const c of channels)
+    for (const para of new Set(paragraphs(text[c]).map(normalize))) {
+      if (para.length < 40) continue;
+      if (seen.has(para) && seen.get(para) !== c)
+        throw new Error(`distinct: paragraph shared by ${seen.get(para)} and ${c}: "${para}"`);
+      seen.set(para, c);
+    }
+  for (const [i, a] of channels.entries())
+    for (const b of channels.slice(i + 1)) {
+      const j = jaccard5(text[a], text[b]);
+      if (j >= 0.25) throw new Error(`distinct: jaccard5(${a}, ${b}) = ${j.toFixed(2)} >= 0.25`);
+    }
+}
+
+/** The truthfulness guards that apply to any published text, including the release notes. */
+export function assertClaims(doc, support) {
+  assertPlatformClaims(doc, support);
+  assertNoFigures(doc);
+  assertAiVendors(doc);
+  assertDisclaimer(doc);
+  assertNoVoteAsks(doc);
+  assertLinks(doc);
+  assertPlainText(doc);
 }
