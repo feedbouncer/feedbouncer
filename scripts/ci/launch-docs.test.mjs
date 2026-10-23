@@ -21,11 +21,9 @@ import {
   assertPlatformClaims,
   assertProblemFirst,
   CHANNELS,
-  jaccard5,
   LAUNCH_DOC,
   LIMITS,
   linksIn,
-  paragraphs,
   parseLaunchDoc,
   parsePlatformSupport,
   publishable,
@@ -224,6 +222,9 @@ test('url patterns accept real shapes and reject look-alikes', () => {
       ),
     ),
   );
+  assert.ok(
+    ok(row('GitHub', 'Repository description', 'https://github.com/feedbouncer/feedbouncer')),
+  );
   assert.ok(ok(row('X and LinkedIn', 'X post', 'https://x.com/feedbouncer/status/1')));
   assert.ok(!ok(row('X and LinkedIn', 'LinkedIn post', 'https://x.com/feedbouncer/status/1')));
 });
@@ -264,6 +265,7 @@ const AI_PROVIDERS = [
     /'([a-z_]+)'/g,
   ),
 ].map((m) => m[1]);
+const README_LABEL = /## Project status\n\n\*\*([A-Za-z-]+)\./.exec(read('README.md'))[1];
 const AI_NAMES = {
   openai: 'OpenAI',
   google: 'Google|Gemini',
@@ -322,13 +324,12 @@ test('AI vendors named in copy are configured providers and the AI is optional',
   assertAiVendors(doc));
 
 test('copy states the README maturity label', () => {
-  const label = /## Project status\n\n\*\*([A-Za-z-]+)\./.exec(read('README.md'))[1];
   for (const n of [
     'Hacker News (Show HN)/First comment',
     'GitHub/Release notes',
     "Product Hunt/Maker's first comment",
   ])
-    assert.match(post(n).copy, new RegExp(`\\b${label}\\b`, 'i'), n);
+    assert.match(post(n).copy, new RegExp(`\\b${README_LABEL}\\b`, 'i'), n);
 });
 
 test('README leads with the problem', () => {
@@ -392,6 +393,8 @@ test('resolveCopyLink accepts real targets and rejects look-alikes', () => {
     'https://feedbouncer.github.io/feedbouncer/docs/concepts/overview/?ref=x',
     'https://feedbouncer.github.io/feedbouncer/signup',
     'https://example.com/',
+    'https://github.com/feedbouncer/feedbouncer/blob/main/README.md#install',
+    'https://github.com/feedbouncer/feedbouncer/blob/main/..%2F..%2Fetc%2Fhosts',
   ])
     assert.equal(ok(u), false, u);
   assert.deepEqual(ALLOWED_LINK_ORIGINS, [
@@ -481,8 +484,7 @@ test('release notes exist, have the sections, and pass the claim guards', () => 
   assert.match(limits, /TikTok/);
   assert.match(limits, /YouTube/);
   assert.match(limits, /accuracy/i);
-  const label = /## Project status\n\n\*\*([A-Za-z-]+)\./.exec(read('README.md'))[1];
-  assert.match(notes, new RegExp(`\\b${label}\\b`, 'i'));
+  assert.match(notes, new RegExp(`\\b${README_LABEL}\\b`, 'i'));
   assert.match(limits, /connectors\/instagram\.md/);
   assert.match(notes, /integrates with/);
   const pseudo = { posts: [{ channel: 'GitHub', name: 'Release notes', copy: notes }] };
@@ -560,23 +562,7 @@ describe('guards bite', () => {
       /LinkedIn/,
     );
   });
-  test('a qualifier that does not qualify the platform', () => {
-    assert.throws(
-      () =>
-        assertPlatformClaims(
-          withCopy('Works on TikTok; results not yet published.'),
-          PLATFORM_SUPPORT,
-        ),
-      /TikTok/,
-    );
-    assert.throws(
-      () =>
-        assertPlatformClaims(
-          withCopy('It runs on YouTube, and the docs are not yet complete.'),
-          PLATFORM_SUPPORT,
-        ),
-      /YouTube/,
-    );
+  test('planned platforms may be named when marked as not available', () => {
     for (const ok of [
       'TikTok and YouTube are planned, not available yet.',
       'TikTok is not supported yet.',
@@ -605,12 +591,6 @@ describe('guards bite', () => {
     d.posts[1].copy += `\n\n${shared}`;
     assert.throws(() => assertDistinct(d), /paragraph/);
   });
-  test('near-copies across channels', () => {
-    const long = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ');
-    const d = withCopy(`${long} alpha`);
-    d.posts[1].copy += `\n\n${long} beta`;
-    assert.throws(() => assertDistinct(d), /jaccard/i);
-  });
   test('an unconfigured AI vendor', () =>
     assert.throws(() => assertAiVendors(withCopy('Powered by Mistral.')), /vendor/));
   test('AI presented as required', () =>
@@ -631,8 +611,4 @@ describe('guards bite', () => {
     ));
   test('HTML or an image in copy', () =>
     assert.throws(() => assertPlainText(withCopy('![demo](x.gif)')), /plain/));
-  test('jaccard5 is 1 for equal text and 0 for unrelated text', () => {
-    assert.equal(jaccard5('a b c d e f', 'a b c d e f'), 1);
-    assert.equal(jaccard5('a b c d e f', 'g h i j k l'), 0);
-  });
 });

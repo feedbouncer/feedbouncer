@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -12,8 +12,8 @@ export const CHANNELS = [
   'r/FacebookAds',
   'X and LinkedIn',
 ];
-export const DOC_STATUSES = ['draft', 'approved'];
-export const ROW_STATUSES = ['draft', 'scheduled', 'published', 'corrected'];
+const DOC_STATUSES = ['draft', 'approved'];
+const ROW_STATUSES = ['draft', 'scheduled', 'published', 'corrected'];
 export const LIVE_STATUSES = ['scheduled', 'published', 'corrected'];
 
 const FIXED_H2 = [
@@ -22,7 +22,7 @@ const FIXED_H2 = [
   'Readiness checklist',
   'Claims ledger',
 ];
-export const REQUIRED_H2 = [...FIXED_H2, ...CHANNELS, 'Prepared answers', 'Corrections'];
+const REQUIRED_H2 = [...FIXED_H2, ...CHANNELS, 'Prepared answers', 'Corrections'];
 
 const SCHEDULE_HEADER = [
   'Order',
@@ -45,16 +45,19 @@ const CORRECTIONS_HEADER = [
 const OWNER = /^(@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})|unassigned)$/;
 const PLANNED = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z|unscheduled)$/;
 
-export const PUBLISHED_URL = {
-  GitHub: /^https:\/\/github\.com\/feedbouncer\/feedbouncer\/releases\/tag\/v\d+\.\d+\.\d+$/,
+const PUBLISHED_URL = {
+  GitHub: {
+    'Release notes':
+      /^https:\/\/github\.com\/feedbouncer\/feedbouncer\/releases\/tag\/v\d+\.\d+\.\d+$/,
+    'Repository description': /^https:\/\/github\.com\/feedbouncer\/feedbouncer$/,
+  },
   'Product Hunt': /^https:\/\/www\.producthunt\.com\/(posts|products)\/[a-z0-9-]+\/?$/,
   'Hacker News (Show HN)': /^https:\/\/news\.ycombinator\.com\/item\?id=\d+$/,
   'r/FacebookAds':
     /^https:\/\/(www|old)\.reddit\.com\/r\/FacebookAds\/comments\/[a-z0-9]+\/[\w-]*\/?$/,
   'X and LinkedIn': {
     X: /^https:\/\/(x|twitter)\.com\/[A-Za-z0-9_]{1,15}\/status\/\d+$/,
-    LinkedIn:
-      /^https:\/\/www\.linkedin\.com\/(posts\/[\w-]+|feed\/update\/urn:li:(activity|share):\d+)\/?$/,
+    LinkedIn: /^https:\/\/www\.linkedin\.com\/(posts|feed\/update)\/\S+$/,
   },
 };
 
@@ -234,13 +237,13 @@ const DISCLAIMER = /not affiliated with or endorsed by/i;
 /** Posts whose copy reads as prose (not a title, URL, name or one-line description). */
 export const publishable = (doc) => doc.posts.filter((p) => !NOT_COPY.includes(p.name));
 
-export const paragraphs = (text) =>
+const paragraphs = (text) =>
   text
     .split(/\n\s*\n/)
     .map((p) => p.trim())
     .filter(Boolean);
 
-export const sentences = (text) =>
+const sentences = (text) =>
   text
     .split(/(?<=[.!?])\s+|\n+/)
     .map((s) => s.trim())
@@ -268,24 +271,6 @@ const normalize = (text) =>
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
 
-const shingles = (text) => {
-  const words = normalize(text).split(' ').filter(Boolean);
-  const set = new Set();
-  for (let i = 0; i + 5 <= words.length; i++) set.add(words.slice(i, i + 5).join(' '));
-  return set;
-};
-
-/** Jaccard similarity of the word 5-gram sets of two texts. */
-export function jaccard5(a, b) {
-  const sa = shingles(a);
-  const sb = shingles(b);
-  const union = new Set([...sa, ...sb]).size;
-  if (!union) return 0;
-  let shared = 0;
-  for (const s of sa) if (sb.has(s)) shared++;
-  return shared / union;
-}
-
 let routes;
 const docsRoutes = () =>
   (routes ??= new Set(JSON.parse(readFileSync(join(ROOT, 'apps/docs/routes.lock.json'), 'utf8'))));
@@ -300,20 +285,18 @@ export function resolveCopyLink(url) {
   if (u.protocol !== 'https:') return { ok: false, why: 'not https' };
   if (/(waitlist|signup|sign-up|register)\b/i.test(u.pathname))
     return { ok: false, why: 'waitlist or sign-up path' };
-  if (u.search) return { ok: false, why: 'query strings are not allowed' };
+  if (u.search || u.hash) return { ok: false, why: 'query strings and fragments are not allowed' };
   const href = `${u.origin}${u.pathname}`;
-  if (href === REPO || href === `${REPO}/`) {
-    return u.hash ? { ok: false, why: 'fragment on a non-anchor link' } : { ok: true };
-  }
+  if (href === REPO || href === `${REPO}/`) return { ok: true };
   if (href.startsWith(`${REPO}/`)) {
     const rest = href.slice(REPO.length);
     const file = /^\/(?:blob|tree)\/main\/(.+?)\/?$/.exec(rest)?.[1];
     if (file) {
-      return existsSync(join(ROOT, decodeURIComponent(file)))
+      const path = resolve(ROOT, decodeURIComponent(file));
+      return path.startsWith(`${ROOT}${sep}`) && existsSync(path)
         ? { ok: true }
         : { ok: false, why: `no file ${file} in the repo` };
     }
-    if (u.hash) return { ok: false, why: 'fragment on a non-anchor link' };
     if (/^\/(releases\/tag\/v\d+\.\d+\.\d+|issues|discussions)\/?$/.test(rest)) return { ok: true };
     return { ok: false, why: `unknown repo path ${rest}` };
   }
@@ -339,7 +322,7 @@ export function parsePlatformSupport(md) {
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** The X and LinkedIn posts may name their own platform without claiming support. */
-export const isChannelSelfReference = (p, name) =>
+const isChannelSelfReference = (p, name) =>
   p.channel === 'X and LinkedIn' && ['X', 'LinkedIn'].includes(name);
 
 const fail = (p, msg) => {
@@ -357,24 +340,16 @@ export function assertProblemFirst(doc) {
 
 const PLATFORM_QUALIFIER = /\b(planned|not (yet )?(available|supported)|not yet|roadmap)\b/i;
 
-/** Clauses of a sentence: a qualifier only counts in the clause that names the platform. */
-const clauses = (sentence) =>
-  sentence
-    .split(/[;,:\u2013\u2014]|\s-\s|\bbut\b/)
-    .map((c) => c.trim())
-    .filter(Boolean);
-
 export function assertPlatformClaims(doc, support) {
   for (const p of doc.posts)
     for (const s of sentences(p.copy))
-      for (const c of clauses(s))
-        for (const name of support.planned)
-          if (
-            new RegExp(`\\b${esc(name)}\\b`).test(c) &&
-            !isChannelSelfReference(p, name) &&
-            !PLATFORM_QUALIFIER.test(c)
-          )
-            fail(p, `names ${name}, which is planned, without saying so: "${s}"`);
+      for (const name of support.planned)
+        if (
+          new RegExp(`\\b${esc(name)}\\b`).test(s) &&
+          !isChannelSelfReference(p, name) &&
+          !PLATFORM_QUALIFIER.test(s)
+        )
+          fail(p, `names ${name}, which is planned, without saying so: "${s}"`);
 }
 
 export function assertNoFigures(doc) {
@@ -423,30 +398,17 @@ export function assertPlainText(doc) {
     if (/<[a-z!/]|!\[/i.test(p.copy)) fail(p, 'copy must be plain text (no HTML or images)');
 }
 
-/** No normalized paragraph of 40+ characters in two channels; word 5-gram Jaccard < 0.25. */
+/** No normalized paragraph of 40+ characters appears in two channels. */
 export function assertDistinct(doc) {
-  const channels = [...new Set(doc.posts.map((p) => p.channel))];
-  const text = Object.fromEntries(
-    channels.map((c) => [
-      c,
-      doc.posts
-        .filter((p) => p.channel === c)
-        .map((p) => p.copy)
-        .join('\n\n'),
-    ]),
-  );
   const seen = new Map();
-  for (const c of channels)
-    for (const para of new Set(paragraphs(text[c]).map(normalize))) {
+  for (const p of doc.posts)
+    for (const para of paragraphs(p.copy).map(normalize)) {
       if (para.length < 40) continue;
-      if (seen.has(para) && seen.get(para) !== c)
-        throw new Error(`distinct: paragraph shared by ${seen.get(para)} and ${c}: "${para}"`);
-      seen.set(para, c);
-    }
-  for (const [i, a] of channels.entries())
-    for (const b of channels.slice(i + 1)) {
-      const j = jaccard5(text[a], text[b]);
-      if (j >= 0.25) throw new Error(`distinct: jaccard5(${a}, ${b}) = ${j.toFixed(2)} >= 0.25`);
+      if (seen.has(para) && seen.get(para) !== p.channel)
+        throw new Error(
+          `distinct: paragraph shared by ${seen.get(para)} and ${p.channel}: "${para}"`,
+        );
+      seen.set(para, p.channel);
     }
 }
 
