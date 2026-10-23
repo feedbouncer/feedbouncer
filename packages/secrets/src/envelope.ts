@@ -18,7 +18,8 @@ export type CredentialKind = (typeof CREDENTIAL_KINDS)[number];
 
 // Envelope-only kinds are sealed outside connection_secret (e.g. oauth_state).
 // connectionId in EnvelopeContext is the bound record id for those kinds
-// (privacy_subject binds the privacy_request id, so a blob cannot move to another request).
+// (privacy_subject binds the privacy_request id, so a blob cannot move to another request;
+// scan_* kinds use organizationId 'scan-tool' and bind the scan or grant id).
 export const ENVELOPE_KINDS = [
   ...CREDENTIAL_KINDS,
   'oauth_pkce_verifier',
@@ -28,6 +29,8 @@ export const ENVELOPE_KINDS = [
   'report_unsubscribe_token',
   'webhook_endpoint_secret',
   'privacy_subject',
+  'scan_pkce_verifier',
+  'scan_user_token',
 ] as const;
 export type EnvelopeKind = (typeof ENVELOPE_KINDS)[number];
 

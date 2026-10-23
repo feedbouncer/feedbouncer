@@ -4,6 +4,8 @@
   "include": ["src"],
   "references": [
     { "path": "../ai/tsconfig.build.json" },
-    { "path": "../classifier/tsconfig.build.json" }
+    { "path": "../classifier/tsconfig.build.json" },
+    { "path": "../db/tsconfig.build.json" },
+    { "path": "../secrets/tsconfig.build.json" }
   ]
 }

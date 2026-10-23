@@ -27,6 +27,7 @@ const NATURAL_KEY_TABLES: Record<string, string> = {
   erased_comment: 'PRIMARY KEY (connection_id, fingerprint)',
   retention_confirmation: 'PRIMARY KEY (category, days)',
   retention_status: 'PRIMARY KEY (id)',
+  scan_oauth_state: 'PRIMARY KEY (state_hash)',
 };
 // Link and grant rows are inserted or deleted, never edited: they keep one event timestamp
 // (added_at, done_at, created_at) instead of created_at/updated_at and have no updated_at trigger.
@@ -36,6 +37,7 @@ const IMMUTABLE_ROW_TABLES = [
   'role_grant',
   'erased_comment',
   'retention_confirmation',
+  'scan_oauth_state',
 ];
 const GLOBAL_TABLES = [
   'organization',
@@ -48,6 +50,11 @@ const GLOBAL_TABLES = [
   'retention_run',
   'retention_confirmation',
   'retention_status',
+  // Free scan tool: anonymous visitors, keyed to scan_visitor, never to a tenant.
+  'scan_visitor',
+  'scan_oauth_state',
+  'scan_grant',
+  'scan',
 ];
 
 // Credential-like columns that are allowed on purpose. Each one holds a hash,
@@ -73,6 +80,10 @@ const ALLOWED_CREDENTIAL_COLUMNS: Record<string, string> = {
     'Reference to the api_key row that created the endpoint, not a credential',
   'rule_change_proposal.proposed_by_api_key_id':
     'Reference to the api_key row that proposed the change, not a credential',
+  'scan_visitor.token_hash':
+    'SHA-256 digest of a random visitor cookie token; the raw token exists only in the cookie',
+  'scan.share_token_hash':
+    'SHA-256 digest of a random share link token; the raw token exists only in the link',
 };
 
 describe('schema conventions', () => {
