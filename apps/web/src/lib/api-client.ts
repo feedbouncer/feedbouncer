@@ -23,6 +23,8 @@ export class ApiRequestError extends Error {
     readonly tag?: { id: string; name: string } | undefined,
     /** The current number of comments with a tag, on tag_count_changed. */
     readonly count?: number | undefined,
+    /** The caller's own running scan of the Page, on scan_in_progress. */
+    readonly scanId?: string | undefined,
   ) {
     super(message);
   }
@@ -76,6 +78,7 @@ export async function apiFetch<T>(
       reason?: unknown;
       tag?: unknown;
       count?: unknown;
+      scanId?: unknown;
     };
   } | null;
   if (!res.ok) {
@@ -91,6 +94,7 @@ export async function apiFetch<T>(
       typeof e?.reason === 'string' ? e.reason : undefined,
       tagOf(e?.tag),
       safeInt(e?.count),
+      typeof e?.scanId === 'string' ? e.scanId : undefined,
     );
   }
   return data as T;
