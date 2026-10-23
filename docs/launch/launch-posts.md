@@ -110,7 +110,7 @@ Contribute: issues and small pull requests are welcome. Setup and checks are in 
 
 Full notes: https://github.com/feedbouncer/feedbouncer/blob/main/docs/launch/release-notes-v0.1.0.md
 
-The project is not affiliated with or endorsed by Meta, Google or any other platform it connects to.
+The project is not affiliated with or endorsed by Meta, Google or any other platform it integrates with.
 
 [[MAINTAINER]]
 ```
