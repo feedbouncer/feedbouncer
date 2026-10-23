@@ -228,7 +228,7 @@ export const ALLOWED_LINK_ORIGINS = [
 const REPO = ALLOWED_LINK_ORIGINS[0];
 const DOCS = ALLOWED_LINK_ORIGINS[1];
 const NOT_COPY = ['Title', 'URL', 'Name and tagline', 'Repository description'];
-const PLATFORM_NAMES = /\b(Meta|Facebook|Instagram|TikTok|YouTube|Google)\b/;
+const PLATFORM_NAMES = /\b(Meta|Facebook|Instagram|TikTok|YouTube|Google)\b/i;
 const DISCLAIMER = /not affiliated with or endorsed by/i;
 
 /** Posts whose copy reads as prose (not a title, URL, name or one-line description). */
@@ -355,16 +355,26 @@ export function assertProblemFirst(doc) {
   }
 }
 
+const PLATFORM_QUALIFIER = /\b(planned|not (yet )?(available|supported)|not yet|roadmap)\b/i;
+
+/** Clauses of a sentence: a qualifier only counts in the clause that names the platform. */
+const clauses = (sentence) =>
+  sentence
+    .split(/[;,:\u2013\u2014]|\s-\s|\bbut\b/)
+    .map((c) => c.trim())
+    .filter(Boolean);
+
 export function assertPlatformClaims(doc, support) {
   for (const p of doc.posts)
     for (const s of sentences(p.copy))
-      for (const name of support.planned)
-        if (
-          new RegExp(`\\b${esc(name)}\\b`).test(s) &&
-          !isChannelSelfReference(p, name) &&
-          !/\b(planned|not (yet )?(available|supported)|not yet|roadmap)\b/i.test(s)
-        )
-          fail(p, `names ${name}, which is planned, without saying so: "${s}"`);
+      for (const c of clauses(s))
+        for (const name of support.planned)
+          if (
+            new RegExp(`\\b${esc(name)}\\b`).test(c) &&
+            !isChannelSelfReference(p, name) &&
+            !PLATFORM_QUALIFIER.test(c)
+          )
+            fail(p, `names ${name}, which is planned, without saying so: "${s}"`);
 }
 
 export function assertNoFigures(doc) {
@@ -392,7 +402,11 @@ export function assertDisclaimer(doc) {
 
 export function assertNoVoteAsks(doc) {
   for (const p of doc.posts)
-    if (/\b(up-?votes?|vote for|support us on|please share|boost|hunt us)\b/i.test(p.copy))
+    if (
+      /\b(up-?votes?|vote for|please vote|give us (a|your) vote|support us on|please share|boost|hunt us)\b/i.test(
+        p.copy,
+      )
+    )
       fail(p, 'asks for votes or shares');
 }
 

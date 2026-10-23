@@ -379,7 +379,7 @@ test('resolveCopyLink accepts real targets and rejects look-alikes', () => {
   ]);
 });
 
-test('Show HN URL is the repo or docs site', () =>
+test('Show HN URL is the repository URL', () =>
   assert.equal(
     post('Hacker News (Show HN)/URL').copy.trim(),
     'https://github.com/feedbouncer/feedbouncer',
@@ -522,6 +522,36 @@ describe('guards bite', () => {
       () => assertPlatformClaims(withCopy('Works on LinkedIn.'), PLATFORM_SUPPORT),
       /LinkedIn/,
     );
+  });
+  test('a qualifier that does not qualify the platform', () => {
+    assert.throws(
+      () =>
+        assertPlatformClaims(
+          withCopy('Works on TikTok; results not yet published.'),
+          PLATFORM_SUPPORT,
+        ),
+      /TikTok/,
+    );
+    assert.throws(
+      () =>
+        assertPlatformClaims(
+          withCopy('It runs on YouTube, and the docs are not yet complete.'),
+          PLATFORM_SUPPORT,
+        ),
+      /YouTube/,
+    );
+    for (const ok of [
+      'TikTok and YouTube are planned, not available yet.',
+      'TikTok is not supported yet.',
+      'YouTube is on the roadmap.',
+    ])
+      assert.doesNotThrow(() => assertPlatformClaims(withCopy(ok), PLATFORM_SUPPORT), ok);
+  });
+  test('a lowercase platform name without the disclaimer', () =>
+    assert.throws(() => assertDisclaimer(withCopy('works with instagram too.', 1)), /affiliated/));
+  test('"please vote" and "give us a vote"', () => {
+    assert.throws(() => assertNoVoteAsks(withCopy('Please vote today.')), /vote/);
+    assert.throws(() => assertNoVoteAsks(withCopy('Give us a vote if you like it.')), /vote/);
   });
   test('a missing disclaimer', () =>
     assert.throws(() => assertDisclaimer(withCopy('Works with Instagram.', 1)), /affiliated/));

@@ -59,7 +59,7 @@ Every factual sentence in the copy below traces to one of these rows.
 | Comments on Meta ads, including dark posts, are read by polling through the Page or Instagram connection; the ad account connection asks for ads_read only                  | docs/connectors/meta-ads.md                                      |
 | Meta sends no webhooks for ad comments                                                                                                                                      | docs/connectors/meta-ads.md                                      |
 | A comment arrives by webhook, poll or backfill and is stored once however often it arrives                                                                                  | apps/docs/docs/concepts/comment-lifecycle.md                     |
-| A retried job reuses its idempotency key, so a retry does not repeat database work                                                                                          | docs/operations/job-queue.md                                     |
+| Replaying a dead-lettered job reuses its idempotency key, so replaying the same entry twice enqueues it once                                                                | docs/operations/job-queue.md                                     |
 | Rules run first, in precedence order; the first enforcing rule that matches decides                                                                                         | apps/docs/docs/concepts/comment-lifecycle.md                     |
 | Rule conditions: keyword, regex, link domain, emoji, author or competitor                                                                                                   | apps/docs/docs/rules/overview.md                                 |
 | The classifier and policies are optional and run only when no rule decided                                                                                                  | apps/docs/docs/concepts/ai-classifier-and-policies.md            |
@@ -67,14 +67,16 @@ Every factual sentence in the copy below traces to one of these rows.
 | AI providers: OpenAI, Google and any OpenAI-compatible endpoint, including a self-hosted one; with no provider nothing is classified                                        | packages/ai/src/config.ts                                        |
 | The provider gets the comment text but never author names; a self-hosted endpoint keeps text on your infrastructure                                                         | apps/docs/docs/concepts/ai-classifier-and-policies.md            |
 | By default, scam or phishing and hate speech are hidden and other categories are flagged for review                                                                         | apps/docs/docs/concepts/ai-classifier-and-policies.md            |
-| New accounts start in review mode: for 7 days hide, delete, ban and replies are suggestions a person approves                                                               | apps/docs/docs/concepts/review-mode.md                           |
+| Review mode is on by default for new connections: for 7 days hide, delete, ban and replies become suggestions a person approves; it can be turned off at connect            | apps/docs/docs/concepts/review-mode.md                           |
 | Every decision is recorded, append-only, with its actor and a readable reason                                                                                               | apps/docs/docs/concepts/decisions-and-audit.mdx                  |
 | The Hidden today page lists hides with their reason and a one-click Unhide                                                                                                  | apps/docs/docs/concepts/decisions-and-audit.mdx                  |
 | Hide, ban and flag can be undone; delete and private replies cannot                                                                                                         | apps/docs/docs/concepts/comment-lifecycle.md                     |
 | Meta App Review is not complete; until an app is approved only people with a role on it can connect Pages                                                                   | docs/connectors/facebook.md#app-review-and-business-verification |
 | Self-hosters create and use their own Meta app                                                                                                                              | apps/docs/docs/concepts/self-hosting.md                          |
+| The Facebook connector has platform behaviours not yet verified against a live Meta app                                                                                     | docs/connectors/facebook.md#known-limitations                    |
 | The Meta app guide has not been checked against a live Meta dashboard                                                                                                       | docs/self-hosting/meta-app.md                                    |
 | The Instagram connector's platform behaviour has not been observed against a Meta app                                                                                       | docs/connectors/instagram.md                                     |
+| The Docker Compose stack is for development and evaluation only, not a production deployment                                                                                | README.md                                                        |
 | Meta needs a public HTTPS URL for the webhook, so a purely local stack needs a tunnel                                                                                       | README.md                                                        |
 | Quick start is `cp .env.example .env` and `docker compose up`; the Compose stack is for development and evaluation                                                          | README.md                                                        |
 | No accuracy results are published; an evaluation method exists                                                                                                              | docs/evaluation/results/README.md                                |
@@ -94,10 +96,10 @@ Scam links, spam and abuse in the comments under ads have to be found and hidden
 This release is alpha. It runs, but interfaces and the database schema can still change.
 
 What works today:
-- Facebook Pages and Instagram business or creator accounts. Comments on Meta ads, dark posts included, are polled.
+- Connectors for Facebook Pages and for Instagram business or creator accounts. Comments on Meta ads, dark posts included, are polled. Neither connector's platform behaviour has been verified against a live Meta app yet.
 - Rules run first: keyword, regex, link domain, emoji, author or competitor.
 - An optional AI classifier and plain-language policies look at what no rule decided. The provider is your choice: OpenAI, Google or any OpenAI-compatible endpoint. With no provider, nothing is classified.
-- Review mode: for the first 7 days after an account is connected, hides, deletes, bans and replies are suggestions that a person approves.
+- Review mode, on by default: for the first 7 days after an account is connected, hides, deletes, bans and replies are suggestions that a person approves.
 - An undo log: every decision keeps its reason, and the Hidden today page undoes a hide in one click.
 
 TikTok and YouTube are planned, not available yet.
@@ -135,7 +137,7 @@ Hide scam and spam comments on your ads, self-hosted
 ```text
 Ad comment threads collect scam replies, spam and abuse, and keeping up with them by hand is slow work.
 
-FeedBouncer reads the comments on a brand's Facebook Pages and Instagram accounts, ad comments included. Your rules decide first, and an optional AI classifier looks at whatever no rule decided. A newly connected account gets a week of suggestions only, and any hide can be undone.
+FeedBouncer has connectors for a brand's Facebook Pages and Instagram accounts, ad comments included. Your rules decide first, and an optional AI classifier looks at whatever no rule decided. By default, a newly connected account spends its first 7 days in review mode, where hides, deletes and bans wait for approval, and any hide can be undone.
 
 Open source under AGPL-3.0. Today you try it by self-hosting. Not affiliated with or endorsed by Meta.
 
@@ -183,16 +185,16 @@ If you run ads on Facebook or Instagram, scam and spam replies show up under the
 
 FeedBouncer is an open-source (AGPL-3.0) service that moderates those comments. It is alpha. How it works:
 
-- A comment can reach it by webhook, by poll (Meta sends no webhooks for ad comments), or a second time when a job is retried. It is stored once either way.
+- A comment can reach it by webhook or by poll (Meta sends no webhooks for ad comments), and the same comment can arrive more than once. It is stored once. Replaying a failed job reuses its idempotency key, so it is queued once.
 - Your rules run first, in precedence order, and the first enforcing match decides. Only when no rule decides do the optional classifier and plain-language policies run. The model provider is yours to pick: OpenAI, Google or an OpenAI-compatible endpoint, self-hosted if you like. With none configured, nothing is classified.
 - Every decision is stored append-only with its actor and a readable reason. Hide, ban and flag can be undone; delete and private replies cannot.
-- New connections start in review mode: for 7 days, hides, deletes, bans and replies wait for a person to approve them.
+- New connections start in review mode by default: for 7 days, hides, deletes, bans and replies wait for a person to approve them.
 
 What it does not do:
 
-- No TikTok or YouTube; both are planned, not available.
+- TikTok and YouTube are planned, not available yet.
 - Meta App Review is not complete. To try it you self-host and create your own Meta app. Meta also needs a public HTTPS URL for the webhook, so a laptop-only setup needs a tunnel.
-- The Meta app guide and the Instagram connector have not been checked against a live Meta app yet.
+- The platform behaviour of both connectors, Facebook Pages and Instagram, is not yet verified against a live Meta app, and the Meta app setup guide has not been checked against a live dashboard.
 - No accuracy numbers are published yet. The evaluation method is in the repo; results are not.
 
 Tradeoffs: rules are predictable but only catch what you describe. The classifier sends comment text, never author names, to the provider you configure, so point it at your own endpoint if text must stay on your machines. Platform tokens are stored as encrypted envelopes.
@@ -218,7 +220,7 @@ Scam and spam comments on Meta ads: a walkthrough for filtering them with a self
 
 Anyone running ads for a brand sees it in the comments: phishing links, spam, now and then a pile-on of abuse. Hiding them one at a time from each ad gets old once several ads are live.
 
-This walkthrough uses FeedBouncer, an open-source project I maintain. It is alpha and you run it on your own server with Docker, so it suits people who are comfortable with that.
+This walkthrough uses FeedBouncer, an open-source project I maintain. It is alpha, and you try it by running its Docker Compose stack yourself. That stack is meant for development and evaluation, not production, so treat this as a trial setup.
 
 1. Connect the Facebook Page and the Instagram account that run the ads, then the ad account. The ad account connection asks for ads_read only. Ad comments, dark posts included, are polled through the Page and Instagram connections.
 2. Write rules first. Conditions can be a keyword, a regex, a link domain, an emoji, an author or a competitor, so you can hide known scam domains and mark trusted authors whose comments are left alone.
@@ -270,9 +272,9 @@ How it decides:
 
 Clip: a scam comment hidden, its reason, then the undo.
 ---
-New accounts start in review mode: for 7 days it only suggests and a person approves.
+By default, new accounts start in review mode: for 7 days hides, deletes and bans are suggestions a person approves.
 
-It works with Facebook Pages and Instagram. Meta App Review is pending, so for now you self-host with your own Meta app.
+Connectors exist for Facebook Pages and Instagram, not yet verified against a live Meta app. Meta App Review is pending, so you self-host with your own Meta app.
 ---
 Code and setup: https://github.com/feedbouncer/feedbouncer
 
@@ -284,16 +286,16 @@ Not affiliated with or endorsed by Meta or Google. [[MAINTAINER]]
 ```text
 If you manage paid social for a brand, you know what gathers under the ads: scam replies, phishing links, spam, and sometimes abuse aimed at the brand or at other commenters. Someone has to clear it, ad after ad.
 
-FeedBouncer is an open-source (AGPL-3.0) tool for exactly this.
+FeedBouncer is an open-source (AGPL-3.0) project aimed at this.
 
 What it does, in plain terms:
-→ It reads new comments on your Facebook Pages and Instagram accounts, including the ones on Meta ads.
+→ It has connectors for Facebook Pages and Instagram accounts, including comments on Meta ads. Both are not yet verified against a live Meta app.
 → Your own rules act first: keywords, link domains, trusted authors.
 → An AI check is optional. If you turn it on, you choose who runs the model: OpenAI, Google, or an OpenAI-compatible endpoint you host.
-→ For the first week after you connect an account it only suggests, so your team sees what it would hide before anything is hidden.
+→ By default, for the first week after you connect an account, hides, deletes and bans wait as suggestions, so your team sees what it would hide before anything is hidden.
 → Every automated hide records why it happened, and a hide can be undone.
 
-Status: alpha. Meta App Review is pending, which means today you run it on your own server with your own Meta app. TikTok and YouTube are planned but not available yet.
+Status: alpha. Meta App Review is pending, which means today you try it by self-hosting the Docker Compose stack, meant for development and evaluation, with your own Meta app. TikTok and YouTube are planned but not available yet.
 
 The demo clip is attached. Code and docs: https://github.com/feedbouncer/feedbouncer
 
@@ -312,7 +314,7 @@ Source: docs/operations/secrets.md, docs/operations/data-deletion.md, docs/opera
 
 ### False positives
 
-For the first 7 days after an account is connected, FeedBouncer only suggests actions and a person approves them. Afterwards, each classifier category has its own threshold (0.80 by default) and action, which an admin can change. Every decision records its reason, and the Hidden today page lists each hidden comment with a one-click Unhide. Delete and private replies cannot be undone.
+By default, for the first 7 days after an account is connected, FeedBouncer suggests hides, deletes, bans and replies, and a person approves them. Afterwards, each classifier category has its own threshold (0.80 by default) and action, which an admin can change. Every decision records its reason, and the Hidden today page lists each hidden comment with a one-click Unhide. Delete and private replies cannot be undone.
 
 Source: apps/docs/docs/concepts/review-mode.md, apps/docs/docs/concepts/ai-classifier-and-policies.md, apps/docs/docs/concepts/decisions-and-audit.mdx
 
