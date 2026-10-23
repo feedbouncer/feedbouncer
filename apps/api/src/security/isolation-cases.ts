@@ -837,9 +837,17 @@ export const ACCOUNT_ROUTES = [
 ];
 
 /**
+ * The anonymous free scan: no session, a visitor cookie instead. The visitor is
+ * its own tenant root (every query filters by visitor id), and these routes keep
+ * the Origin check.
+ */
+export const SCAN_ROUTES = ['POST /api/v1/scan/authorize', 'GET /api/v1/scan/oauth/meta/callback'];
+
+/**
  * /api/v1 routes with no session that authenticate by platform signature or
  * verify token instead. Each declares `config.publicWebhook`, which also exempts
- * it from the Origin check; the route inventory test pins both lists.
+ * it from the Origin check; the route inventory test pins both lists. The scan
+ * routes are public too, but Origin-checked.
  */
 export const PUBLIC_ROUTES = [
   'GET /api/v1/webhooks/facebook',
@@ -851,6 +859,7 @@ export const PUBLIC_ROUTES = [
   'POST /api/v1/alert-recipients/unsubscribe',
   /** The weekly report's one-click unsubscribe link. */
   'POST /api/v1/report-subscriptions/unsubscribe',
+  ...SCAN_ROUTES,
 ];
 
 /** The Better Auth endpoints the /api/auth proxy forwards; everything else is a 404. */

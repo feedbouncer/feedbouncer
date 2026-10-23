@@ -95,7 +95,10 @@ export type ErrorCode =
   | 'webhook_delivery_in_progress'
   | 'reply_not_allowed'
   | 'rule_rejected'
-  | 'pending_limit_reached';
+  | 'pending_limit_reached'
+  | 'scan_in_progress'
+  | 'scan_not_completed'
+  | 'page_not_eligible';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
@@ -193,6 +196,9 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   reply_not_allowed: 'A reply cannot be posted to this comment right now.',
   rule_rejected: 'The rule was rejected.',
   pending_limit_reached: 'Too many proposals are waiting for review.',
+  scan_in_progress: 'A scan of this Page is already running. Try again when it finishes.',
+  scan_not_completed: 'Only a finished scan can be shared.',
+  page_not_eligible: 'This Page cannot be scanned. You need to be able to moderate it.',
 };
 
 export interface ErrorIssue {

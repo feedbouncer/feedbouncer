@@ -2,6 +2,7 @@ import { Module, type DynamicModule } from '@nestjs/common';
 import { PgBackfillStore } from '@feedbouncer/comments';
 import { PgApiKeys } from '@feedbouncer/public-api';
 import { PgPrivacyRequestStore } from '@feedbouncer/privacy';
+import { PgScanStore } from '@feedbouncer/scan';
 import { Reflector } from '@nestjs/core';
 import { createAccountDeletionHooks } from './auth/account-deletion.js';
 import { createAuth, type AuthHooks } from './auth/auth.js';
@@ -91,6 +92,9 @@ import { MeReportsController } from './reports/me-reports.controller.js';
 import { ReportsController } from './reports/reports.controller.js';
 import { ReportsService } from './reports/reports.service.js';
 import { OrgAccessGuard } from './tenancy/org-access.guard.js';
+import { ScanController, ScanEnabledGuard } from './scan/scan.controller.js';
+import { ScanOAuthService } from './scan/scan-oauth.service.js';
+import { createScanRateLimits } from './scan/scan-rate-limit.js';
 import {
   ACCOUNT_DELETION,
   API_KEYS,
@@ -106,6 +110,8 @@ import {
   PRIVACY_REQUESTS,
   PUBLIC_API_LIMITS,
   RATE_LIMITS,
+  SCAN_LIMITS,
+  SCAN_STORE,
 } from './tokens.js';
 import type { AppDeps } from './deps.js';
 import { PrivacyQueueClient } from './privacy/privacy-queue.client.js';
@@ -167,6 +173,7 @@ export class AppModule {
         PublicSummaryController,
         PublicRulesController,
         PublicWebhookEndpointsController,
+        ScanController,
       ],
       providers: [
         Reflector,
@@ -200,6 +207,8 @@ export class AppModule {
         PublicModerationService,
         PublicRuleProposalsService,
         ModerationCheckService,
+        ScanEnabledGuard,
+        ScanOAuthService,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.
         { provide: CONNECTOR_STACK, useValue: deps.connectors?.stack ?? null },
@@ -233,6 +242,16 @@ export class AppModule {
           provide: RATE_LIMITS,
           inject: [DEPS],
           useFactory: (d: AppDeps) => createAuthRateLimits(d.redis, d.redisKeyPrefix),
+        },
+        {
+          provide: SCAN_STORE,
+          inject: [DEPS],
+          useFactory: (d: AppDeps) => new PgScanStore(d.pool),
+        },
+        {
+          provide: SCAN_LIMITS,
+          inject: [DEPS],
+          useFactory: (d: AppDeps) => createScanRateLimits(d.redis, d.redisKeyPrefix),
         },
         {
           provide: PUBLIC_API_LIMITS,

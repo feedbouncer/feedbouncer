@@ -194,6 +194,7 @@ services:
       - ./packages/public-api/src:/repo/packages/public-api/src:ro
       - ./packages/reports/src:/repo/packages/reports/src:ro
       - ./packages/rules/src:/repo/packages/rules/src:ro
+      - ./packages/scan/src:/repo/packages/scan/src:ro
       - ./packages/webhooks/src:/repo/packages/webhooks/src:ro
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro

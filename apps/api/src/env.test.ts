@@ -279,6 +279,31 @@ describe('loadApiEnv', () => {
     });
   });
 
+  describe('scan', () => {
+    const facebook = {
+      FACEBOOK_APP_ID: '1234567890',
+      FACEBOOK_APP_SECRET: 'sentinel-fb-app-secret-0123456789',
+      FACEBOOK_WEBHOOK_VERIFY_TOKEN: 'sentinel-fb-verify-token-0123456789',
+    };
+    const classifier = { CLASSIFIER_PROVIDER: 'google', CLASSIFIER_MODEL: 'gemini-2.5-flash' };
+    it('is disabled by default', () => {
+      expect(load(base).scan.enabled).toBe(false);
+    });
+    it('enables with the Facebook config and a classifier, and says so in the summary', () => {
+      const env = load({ ...base, ...facebook, ...classifier, SCAN_TOOL_ENABLED: 'true' });
+      expect(env.scan.enabled).toBe(true);
+      expect(JSON.stringify(env)).toContain('"scanToolEnabled":true');
+    });
+    it('refuses to start enabled without the Facebook config or a classifier', () => {
+      expect(messageOf(() => load({ ...base, ...classifier, SCAN_TOOL_ENABLED: 'true' }))).toMatch(
+        /SCAN_TOOL_ENABLED=true requires .*FACEBOOK_APP_ID/,
+      );
+      expect(messageOf(() => load({ ...base, ...facebook, SCAN_TOOL_ENABLED: 'true' }))).toMatch(
+        /SCAN_TOOL_ENABLED=true requires CLASSIFIER_PROVIDER/,
+      );
+    });
+  });
+
   describe('facebook and jobs', () => {
     const facebook = {
       FACEBOOK_APP_ID: '1234567890',

@@ -87,7 +87,8 @@ export interface TestApi {
  * `deps` replaces individual AppDeps built by the harness (e.g. a failing
  * producer). Meta-backed deps (Facebook, plus Instagram and Meta Ads when `overrides.instagram`
  * or `overrides.metaAds` is set) exist only when `overrides.facebook` is set;
- * `fetch` (e.g. FakeGraph's) then replaces the network behind their SafeHttp.
+ * `fetch` (e.g. FakeGraph's) then replaces the network behind their SafeHttp
+ * and the free scan's Graph client.
  */
 export async function startTestApi(
   overrides: Partial<ApiEnv> = {},
@@ -129,6 +130,7 @@ export async function startTestApi(
     moderationCheckTimeoutMs: 20_000,
     privacyExportDir: path.join(tmpdir(), 'fb-privacy-exports-unused'),
     webhookAllowedPrivateCidrs: [],
+    scan: { enabled: true, maxComments: 2000, retentionDays: 30, workerConcurrency: 2 },
     alerts: { slack: false, email: false, capPerHour: 30, emailPerMinute: 60 },
     // A random queue prefix per app keeps tests from sharing BullMQ keys.
     jobs: loadJobsConfig({ JOB_QUEUE_PREFIX: `t${randomUUID().replaceAll('-', '').slice(0, 20)}` }),
@@ -161,6 +163,7 @@ export async function startTestApi(
     connectors: meta?.connectors ?? null,
     producer: meta?.producer ?? null,
     comments: meta?.comments ?? null,
+    ...(graphFetch && { scanFetch: graphFetch }),
     ...appDepsOverrides,
   };
   let app: NestFastifyApplication;

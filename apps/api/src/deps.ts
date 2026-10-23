@@ -25,5 +25,7 @@ export interface AppDeps {
   readonly producer: JobProducer | null;
   /** Replaces the network behind the Slack webhook client; tests only. */
   readonly alertsFetch?: typeof fetch;
+  /** Replaces the network behind the free scan's Graph client; tests only. */
+  readonly scanFetch?: typeof fetch;
   readonly comments: { store: PgCommentStore; actions: ModerationActions } | null;
 }

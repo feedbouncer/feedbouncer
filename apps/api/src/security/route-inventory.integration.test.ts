@@ -10,6 +10,7 @@ import {
   CASES,
   PROXY_ROUTES,
   PUBLIC_ROUTES,
+  SCAN_ROUTES,
   TOKEN_CASES,
 } from './isolation-cases.js';
 
@@ -87,7 +88,7 @@ describe('route inventory', () => {
     // The /v1 routes authenticate by bearer key and never read cookies, so they
     // skip the check too; they are pinned separately to the registered /v1 routes.
     expect(exempt.filter((r) => !r.includes(' /v1/')).sort()).toEqual(
-      PUBLIC_ROUTES.filter((r) => r.startsWith('POST ')).sort(),
+      PUBLIC_ROUTES.filter((r) => r.startsWith('POST ') && !SCAN_ROUTES.includes(r)).sort(),
     );
     expect(exempt.filter((r) => r.includes(' /v1/')).sort()).toEqual(
       registered()
