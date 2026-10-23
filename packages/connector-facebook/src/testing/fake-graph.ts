@@ -684,6 +684,17 @@ export class FakeGraph {
         });
       return this.reply(200, { data });
     }
+    const ownPage = path.length === 1 && method === 'GET' ? this.pages.get(first ?? '') : undefined;
+    if (ownPage && who.kind === 'user') {
+      if (ownPage.userId !== who.id) return denied();
+      const ig = linkedAccount(this.ig, ownPage.id);
+      return this.reply(200, {
+        id: ownPage.id,
+        tasks: ownPage.tasks,
+        access_token: ownPage.token,
+        ...(ig ? { instagram_business_account: { id: ig.id } } : {}),
+      });
+    }
     const adsResponse = routeAds(this.ads, this.adsHost, method, path, query, who);
     if (adsResponse) return adsResponse;
     if (first === 'me' || !first || path.length > 2) return missing();

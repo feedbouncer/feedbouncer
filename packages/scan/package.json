@@ -28,8 +28,13 @@
   "dependencies": {
     "@feedbouncer/ai": "workspace:*",
     "@feedbouncer/classifier": "workspace:*",
+    "@feedbouncer/connector-facebook": "workspace:*",
+    "@feedbouncer/connector-instagram": "workspace:*",
+    "@feedbouncer/connector-meta-ads": "workspace:*",
+    "@feedbouncer/connectors": "workspace:*",
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
+    "@feedbouncer/service-runtime": "workspace:*",
     "pg": "8.23.1",
     "zod": "4.6.5"
   },

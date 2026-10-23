@@ -1287,12 +1287,27 @@ importers:
       '@feedbouncer/classifier':
         specifier: workspace:*
         version: link:../classifier
+      '@feedbouncer/connector-facebook':
+        specifier: workspace:*
+        version: link:../connector-facebook
+      '@feedbouncer/connector-instagram':
+        specifier: workspace:*
+        version: link:../connector-instagram
+      '@feedbouncer/connector-meta-ads':
+        specifier: workspace:*
+        version: link:../connector-meta-ads
+      '@feedbouncer/connectors':
+        specifier: workspace:*
+        version: link:../connectors
       '@feedbouncer/db':
         specifier: workspace:*
         version: link:../db
       '@feedbouncer/secrets':
         specifier: workspace:*
         version: link:../secrets
+      '@feedbouncer/service-runtime':
+        specifier: workspace:*
+        version: link:../service-runtime
       pg:
         specifier: 8.23.1
         version: 8.23.1
