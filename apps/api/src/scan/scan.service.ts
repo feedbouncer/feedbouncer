@@ -9,6 +9,7 @@ import {
   ScanResultV1,
   redactForShare,
   scanTokenCtx,
+  type GrantRow,
   type PgScanStore,
   type ScanPageOption,
   type ScanRow,
@@ -16,6 +17,7 @@ import {
   type SharedScanView,
 } from '@feedbouncer/scan';
 import { open, seal } from '@feedbouncer/secrets';
+import type { Secret } from '@feedbouncer/service-runtime';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
 import { DEPS, SCAN_LIMITS, SCAN_QUEUE_CLIENT, SCAN_STORE } from '../tokens.js';
@@ -26,6 +28,7 @@ import type { ScanRateLimits } from './scan-rate-limit.js';
 const LIST_LIMIT = 10;
 const SHARE_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const sha256 = (s: string) => createHash('sha256').update(s).digest();
+const errorName = (err: unknown) => (err instanceof Error ? err.name : 'NonError');
 
 @Injectable()
 export class ScanService {
@@ -59,16 +62,54 @@ export class ScanService {
     if (!grant) throw notFound();
     const page = grant.pages.find((p) => p.pageId === i.pageId);
     if (!page?.eligible) throw new ApiError(422, 'page_not_eligible');
-    await this.limits.createScan({
+    const spent = await this.limits.createScan({
       ip,
       visitorId,
       fbUserHash: grant.fbUserHash.toString('hex'),
       pageId: page.pageId,
     });
 
-    const scanId = randomUUID();
+    let scanId: string;
+    try {
+      scanId = await this.#start(visitorId, grant, page, now);
+    } catch (err) {
+      // No scan came of it: a busy Page or a spent grant must not burn the day's limits.
+      await spent.refund();
+      throw err;
+    }
+    this.deps.metrics.scanCreated.inc();
+    this.deps.log.info('scan.created', { visitorId, scanId });
+    try {
+      await this.queue.enqueue(scanId);
+    } catch (err) {
+      // The scan stays queued in Postgres; maintenance re-enqueues it.
+      this.deps.log.warn('scan.enqueue_failed', { scanId, errorName: errorName(err) });
+    }
+    return { scanId };
+  }
+
+  /** Re-seals the grant's token for a new scan and creates it, spending the grant. */
+  async #start(
+    visitorId: string,
+    grant: GrantRow,
+    page: ScanPageOption,
+    now: Date,
+  ): Promise<string> {
     const keys = this.deps.env.encryption;
-    const userToken = await open(keys, grant.token.blob, grantTokenCtx(grant.id));
+    let userToken: Secret;
+    try {
+      userToken = await open(keys, grant.token.blob, grantTokenCtx(grant.id));
+    } catch (err) {
+      // An unreadable grant can never be used: drop it, like any spent grant.
+      this.deps.log.warn('scan.grant_unreadable', {
+        visitorId,
+        grantId: grant.id,
+        errorName: errorName(err),
+      });
+      await this.store.deleteGrant(grant.id, visitorId);
+      throw notFound();
+    }
+    const scanId = randomUUID();
     const token = await seal(keys, userToken, scanTokenCtx(scanId));
     const outcome = await this.store.createScanFromGrant({
       scanId,
@@ -85,18 +126,7 @@ export class ScanService {
       const own = active?.visitorId === visitorId ? { scanId: active.id } : undefined;
       throw new ApiError(409, 'scan_in_progress', undefined, own);
     }
-    this.deps.metrics.scanCreated.inc();
-    this.deps.log.info('scan.created', { visitorId, scanId });
-    try {
-      await this.queue.enqueue(scanId);
-    } catch (err) {
-      // The scan stays queued in Postgres; maintenance re-enqueues it.
-      this.deps.log.warn('scan.enqueue_failed', {
-        scanId,
-        errorName: err instanceof Error ? err.name : 'NonError',
-      });
-    }
-    return { scanId };
+    return scanId;
   }
 
   async list(visitorId: string): Promise<{ scans: ScanView[] }> {

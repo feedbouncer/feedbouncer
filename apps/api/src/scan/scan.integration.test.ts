@@ -390,6 +390,69 @@ describe('POST /scan/scans', () => {
     );
     expect(left.rows[0].n).toBe(2);
   });
+
+  const pagePoints = async (pid: string) =>
+    Number(
+      (await api.deps.redis.get(
+        `${api.deps.redisKeyPrefix}rl:scan_create_page:${createHash('sha256').update(pid).digest('hex')}`,
+      )) ?? 0,
+    );
+
+  it('busy page then a real scan still within limits (points refunded)', async () => {
+    const a = await visitor();
+    const b = await visitor();
+    const p = page();
+    const ga = await grant(a, [p]);
+    const first = json(await createScan(a, ga.grantId, p.pageId)).scanId as string;
+    // Without refunds these would spend B's 3 a day and the Page's 3 a day.
+    for (let i = 0; i < 3; i++) {
+      const g = await grant(b, [p]);
+      expect((await createScan(b, g.grantId, p.pageId)).status).toBe(409);
+    }
+    expect(await pagePoints(p.pageId)).toBe(1);
+    expect(await store.fail(first, null, 'internal', new Date())).toBe(true);
+    const g = await grant(b, [p]);
+    expect((await createScan(b, g.grantId, p.pageId)).status).toBe(201);
+    expect(await pagePoints(p.pageId)).toBe(2);
+  });
+
+  it('concurrent double POST with the same grant leaves the page counter at 1 point used', async () => {
+    const v = await visitor();
+    const g = await grant(v);
+    const pid = g.pages[0]!.pageId;
+    const statuses = (
+      await Promise.all([createScan(v, g.grantId, pid), createScan(v, g.grantId, pid)])
+    )
+      .map((r) => r.status)
+      .sort();
+    expect(statuses).toEqual([201, 404]);
+    expect(await pagePoints(pid)).toBe(1);
+  });
+
+  it('unreadable grant → 404 and grant gone', async () => {
+    const v = await visitor();
+    const p = page();
+    const id = randomUUID();
+    await store.insertGrant({
+      id,
+      visitorId: v.id,
+      fbUserHash: sha256('user-unreadable'),
+      // Sealed for another grant, so it cannot be opened as this one's.
+      token: await seal(api.deps.env.encryption, new Secret(USER_TOKEN), {
+        organizationId: 'scan-tool',
+        connectionId: randomUUID(),
+        kind: 'scan_user_token',
+      }),
+      scopes: ALL_SCOPES,
+      pages: [p],
+      expiresAt: new Date(Date.now() + 30 * 60_000),
+    });
+    const r = await createScan(v, id, p.pageId);
+    expect(r.status).toBe(404);
+    expect(json(r).error.code).toBe('not_found');
+    expect((await api.pool.query('SELECT 1 FROM scan_grant WHERE id = $1', [id])).rowCount).toBe(0);
+    expect(await pagePoints(p.pageId)).toBe(0);
+  });
 });
 
 describe('GET /scan/scans', () => {

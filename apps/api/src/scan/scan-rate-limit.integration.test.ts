@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 afterAll(() => redis.quit());
 
-const code = async (p: Promise<void>) => {
+const code = async (p: Promise<unknown>) => {
   try {
     await p;
     return 'ok';

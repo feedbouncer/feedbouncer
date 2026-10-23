@@ -182,6 +182,13 @@ export class PgScanStore {
       : null;
   }
 
+  async deleteGrant(id: string, visitorId: string): Promise<void> {
+    await this.pool.query('DELETE FROM scan_grant WHERE id = $1 AND visitor_id = $2', [
+      id,
+      visitorId,
+    ]);
+  }
+
   /** Deletes the grant (and its sealed token) and queues the scan in one transaction; a busy page leaves the grant intact. */
   async createScanFromGrant(i: {
     scanId: string;

@@ -8,13 +8,16 @@ import { ApiError } from '../http/errors.js';
 export interface ScanRateLimits {
   /** 10 per hour per IP. */
   authorize(ip: string): Promise<void>;
-  /** Per day: 3 per visitor, 5 per IP, 5 per Facebook user and 3 per Page. */
+  /**
+   * Per day: 3 per visitor, 5 per IP, 5 per Facebook user and 3 per Page. The
+   * returned refund gives the points back when no scan came of them; it never throws.
+   */
   createScan(k: {
     ip: string;
     visitorId: string;
     fbUserHash: string;
     pageId: string;
-  }): Promise<void>;
+  }): Promise<{ refund(): Promise<void> }>;
   /** 120 per minute per IP. */
   visitorRead(ip: string): Promise<void>;
   /** 60 per minute per IP. */
@@ -63,16 +66,20 @@ export function createScanRateLimits(redis: Redis, prefix: string): ScanRateLimi
         [createPage, h(k.pageId)],
       ];
       const spent: [RateLimiterRedis, string][] = [];
+      const refund = async () => {
+        await Promise.all(spent.map(([s, sk]) => s.reward(sk, 1).catch(() => undefined)));
+      };
       for (const [l, key] of counters) {
         try {
           await consume(l, key);
         } catch (e) {
           // One exhausted counter must not burn the others' budgets.
-          await Promise.all(spent.map(([s, sk]) => s.reward(sk, 1).catch(() => undefined)));
+          await refund();
           throw e;
         }
         spent.push([l, key]);
       }
+      return { refund };
     },
     visitorRead: (ip) => consume(readIp, clientIpKey(ip)),
     sharedRead: (ip) => consume(sharedIp, clientIpKey(ip)),
