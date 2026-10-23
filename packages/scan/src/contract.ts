@@ -85,7 +85,7 @@ export const ScanResultV1 = z.strictObject({
         category: z.enum(SCAN_CATEGORIES),
         tags: z.array(z.enum(SCAN_TAGS)),
         text: z.string().max(1200),
-        authorLabel: z.string().max(12),
+        authorLabel: z.string().max(12).nullable(),
         adOrdinal: z.int().positive(),
         reason: z.string().max(300),
         repeatCount: z.int().positive(),

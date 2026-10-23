@@ -1,4 +1,4 @@
-import { type NormalizedComment, ConnectorError } from '@feedbouncer/connectors';
+import type { NormalizedComment } from '@feedbouncer/connectors';
 import { listComments } from '@feedbouncer/connector-facebook';
 import { listComments as listIgComments } from '@feedbouncer/connector-instagram';
 import type { Secret } from '@feedbouncer/service-runtime';
@@ -27,9 +27,7 @@ export async function* readPostComments(
     const req = { sourceExternalId: post.postExternalId, cursor, limit: PAGE_LIMIT };
     let page;
     if (post.platform === 'facebook') page = await listComments(g.fb, g.nowMs, ctx, req);
-    else if (g.ig) {
-      page = await listIgComments(g.ig, g.nowMs, ctx, { ...req, includeReplies: true });
-    } else throw new ConnectorError('permanent', 'instagram_unavailable');
+    else page = await listIgComments(g.ig, g.nowMs, ctx, { ...req, includeReplies: true });
     for (const c of page.items) {
       if (c.postedAt.getTime() < sinceMs) return;
       if (seen.has(c.externalId)) continue;

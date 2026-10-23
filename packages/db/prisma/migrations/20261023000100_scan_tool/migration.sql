@@ -68,7 +68,6 @@ CREATE TABLE scan (
   page_external_id text NOT NULL,
   page_name text NOT NULL,
   ig_user_id text,
-  fb_user_hash bytea NOT NULL,
   status text NOT NULL DEFAULT 'queued',
   failure_reason text,
   attempt integer NOT NULL DEFAULT 0,
@@ -83,7 +82,6 @@ CREATE TABLE scan (
   CONSTRAINT scan_pkey PRIMARY KEY (id),
   CONSTRAINT scan_share_token_hash_key UNIQUE (share_token_hash),
   CONSTRAINT scan_page_external_id_check CHECK (page_external_id ~ '^\d{1,32}$'),
-  CONSTRAINT scan_fb_user_hash_check CHECK (octet_length(fb_user_hash) = 32),
   CONSTRAINT scan_share_token_hash_check CHECK (share_token_hash IS NULL OR octet_length(share_token_hash) = 32),
   CONSTRAINT scan_status_check CHECK (status IN ('queued', 'running', 'completed', 'failed')),
   CONSTRAINT scan_failure_reason_check CHECK (failure_reason IS NULL OR failure_reason IN (

@@ -52,7 +52,7 @@ Everything from a scan is deleted after at most 30 days. You can delete it soone
 
 ## Sharing
 
-A result is private to you until you choose to share it. Sharing is opt-in and creates a link that you can revoke at any time. A shared result hides the names of your ads. It still includes the example comments, without commenter names. Revoking the link stops it working at once.
+A result is private to you until you choose to share it. Sharing is opt-in and creates a link that you can revoke at any time. A shared result hides the names of your ads and the initials of commenters. It still includes the example comments. Revoking the link stops it working at once.
 
 ## Limits per day
 

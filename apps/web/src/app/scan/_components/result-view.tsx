@@ -108,7 +108,6 @@ function Details({ result, mode }: { result: ScanResultV1; mode: 'owner' | 'shar
       <ul>
         {result.examples.map((e, i) => (
           <li key={i}>
-            {/* Shared views never show commenter labels, even abbreviated ones. */}
             {mode === 'owner' ? (
               <>
                 <strong>{e.authorLabel}</strong> on Ad {e.adOrdinal}

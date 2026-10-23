@@ -21,10 +21,25 @@ const MODERATE = 'MODERATE';
 
 export interface ScanGraph {
   fb: FacebookConfig;
-  ig: InstagramConfig | null;
+  ig: InstagramConfig;
   meta: MetaAdsConfig;
   http: SafeHttp;
   nowMs: () => number;
+}
+
+/** The scan reads Instagram through the same Meta app as Facebook, and ads through `metaAds` when configured. */
+export function createScanGraph(
+  fb: FacebookConfig,
+  metaAds: MetaAdsConfig | null | undefined,
+  http: SafeHttp,
+): ScanGraph {
+  return {
+    fb,
+    ig: { meta: fb },
+    meta: metaAds ?? { meta: fb, activeStatuses: ['ACTIVE'] },
+    http: readOnlyHttp(http),
+    nowMs: Date.now,
+  };
 }
 
 export function scanCallContext(

@@ -156,5 +156,9 @@ export class ResultBuilder {
 }
 
 export function redactForShare(r: ScanResultV1): ScanResultV1 {
-  return { ...r, perAd: r.perAd.map((p) => ({ ...p, label: null })) };
+  return {
+    ...r,
+    perAd: r.perAd.map((p) => ({ ...p, label: null })),
+    examples: r.examples.map((e) => ({ ...e, authorLabel: null })),
+  };
 }

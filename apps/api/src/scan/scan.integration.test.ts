@@ -529,9 +529,10 @@ describe('sharing', () => {
     expect(Object.keys(body).sort()).toEqual(['finishedAt', 'pageName', 'result']);
     expect(body.pageName).toBe('Acme');
     expect(body.result.perAd.map((p: { label: unknown }) => p.label)).toEqual([null]);
-    expect(body.result.examples.map((e: { authorLabel: string }) => e.authorLabel)).toEqual([
-      'J. D.',
+    expect(body.result.examples.map((e: { authorLabel: unknown }) => e.authorLabel)).toEqual([
+      null,
     ]);
+    expect(shared.text).not.toContain('J. D.');
     expect(shared.text).not.toContain('Spring sale');
     expect(shared.text).not.toContain(id);
     expect(shared.text).not.toContain(v.id);

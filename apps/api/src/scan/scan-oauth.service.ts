@@ -24,11 +24,10 @@ import {
   SCAN_ENVELOPE_ORG,
   SCAN_OPTIONAL_SCOPES,
   SCAN_REQUIRED_SCOPES,
+  createScanGraph,
   listScanPages,
   missingScopes,
-  readOnlyHttp,
   type PgScanStore,
-  type ScanGraph,
 } from '@feedbouncer/scan';
 import { open, seal } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
@@ -162,13 +161,7 @@ export class ScanOAuthService {
       return { redirectTo: `/scan?error=missing_permissions&missing=${missing.join(',')}` };
     }
 
-    const graph: ScanGraph = {
-      fb,
-      ig: { meta: fb },
-      meta: this.deps.env.metaAds ?? { meta: fb, activeStatuses: ['ACTIVE'] },
-      http: readOnlyHttp(this.#http),
-      nowMs: Date.now,
-    };
+    const graph = createScanGraph(fb, this.deps.env.metaAds, this.#http);
     const pages = await listScanPages(
       graph,
       tokens.accessToken,

@@ -37,9 +37,8 @@ const SCOPE_COPY: Record<string, string> = {
 
 export const scopeLabel = (scope: string): string | null => lookup(SCOPE_COPY, scope);
 
-// The shared result still carries example comments and their authors' initials.
 export const SHARE_LINK_NOTE =
-  "Anyone with this link can see the result, including the example comments. Commenters' names are cut to initials and ad names are hidden.";
+  "Anyone with this link can see the result, including the example comments. Ad names and commenters' initials are hidden.";
 
 export const NOTICE_COPY: Record<ScanNotice, string> = {
   sampled_comment_cap: 'This result is based on a sample: we read only the most recent comments.',

@@ -83,8 +83,8 @@ export async function discoverRecentAdPosts(
   target: { pageId: string; igUserId: string | null },
   signal: AbortSignal,
 ): Promise<AdPost[]> {
-  const oauth = { http: scanCallContext(g, userToken, 'me', signal).http, signal, redirectUri: '' };
-  const accounts = (await listAdAccounts(g.meta, g.nowMs, userToken, oauth)).slice(
+  const { http } = scanCallContext(g, userToken, 'me', signal);
+  const accounts = (await listAdAccounts(g.meta, g.nowMs, userToken, { http, signal })).slice(
     0,
     MAX_AD_ACCOUNTS,
   );

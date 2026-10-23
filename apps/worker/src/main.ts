@@ -31,7 +31,7 @@ import {
 } from '@feedbouncer/policies';
 import { PgPrivacyRequestStore, publishRetentionStatus } from '@feedbouncer/privacy';
 import { PgRuleStore, RuleSetCache } from '@feedbouncer/rules';
-import { PgScanStore, readOnlyHttp } from '@feedbouncer/scan';
+import { PgScanStore, createScanGraph } from '@feedbouncer/scan';
 import { BrandSlots, createPool, runJobOnce } from '@feedbouncer/db';
 import {
   JobMetrics,
@@ -316,13 +316,11 @@ try {
           deps: {
             store: scanStore,
             keys: env.encryption,
-            graph: {
-              fb: facebook,
-              ig: { meta: facebook },
-              meta: env.metaAds ?? { meta: facebook, activeStatuses: ['ACTIVE'] },
-              http: readOnlyHttp(createSafeHttp({ allowedHosts: ['graph.facebook.com'] })),
-              nowMs: Date.now,
-            },
+            graph: createScanGraph(
+              facebook,
+              env.metaAds,
+              createSafeHttp({ allowedHosts: ['graph.facebook.com'] }),
+            ),
             classifier: createClassifierProvider(env.classifier),
             languages: env.classifier.languages,
             budget: redisBudget(producerRedis, env.jobs.prefix),

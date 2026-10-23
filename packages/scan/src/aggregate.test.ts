@@ -159,10 +159,12 @@ describe('ResultBuilder', () => {
   });
 });
 
-test('redactForShare nulls ad labels and keeps counts', () => {
+test('redactForShare nulls ad labels and author labels and keeps counts', () => {
   const r = builderWith([['scam_spam', 2]]).build();
   const red = redactForShare(r);
   expect(red.perAd.every((p) => p.label === null)).toBe(true);
+  expect(red.examples.length).toBeGreaterThan(0);
+  expect(red.examples.every((e) => e.authorLabel === null)).toBe(true);
   expect(red.totals).toEqual(r.totals);
   expect(ScanResultV1.safeParse(red).success).toBe(true);
 });

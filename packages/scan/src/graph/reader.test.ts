@@ -299,14 +299,6 @@ describe('readPostComments', () => {
     expect(out[1]!.parentExternalId).toBe(top.commentId);
   });
 
-  it('rejects instagram posts when instagram is not configured', async () => {
-    const w = await world();
-    w.g.ig = null;
-    await expect(
-      collect(readPostComments(w.g, w.page, post('17900000000000001', 'instagram'), 0, 5, signal)),
-    ).rejects.toMatchObject({ kind: 'permanent' });
-  });
-
   it('surfaces Graph 190 as auth_expired and 613 as rate_limited with retryAfterMs', async () => {
     const w = await commented(1);
     w.graph.failNext(190);

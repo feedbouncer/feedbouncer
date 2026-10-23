@@ -34,9 +34,9 @@ describe('scan copy', () => {
     for (const s of ['evil', 'instagram_basic', 'toString']) expect(scopeLabel(s)).toBeNull();
   });
 
-  it('the share note says initials are included and ad names are hidden', () => {
-    expect(SHARE_LINK_NOTE).not.toMatch(/without comment authors/i);
+  it('the share note says ad names and commenter initials are hidden', () => {
     expect(SHARE_LINK_NOTE).toMatch(/initials/);
-    expect(SHARE_LINK_NOTE).toMatch(/ad names are hidden/i);
+    expect(SHARE_LINK_NOTE).toMatch(/ad names/i);
+    expect(SHARE_LINK_NOTE).toMatch(/hidden/);
   });
 });

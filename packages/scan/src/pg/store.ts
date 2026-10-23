@@ -200,24 +200,22 @@ export class PgScanStore {
   }): Promise<'created' | 'grant_gone' | 'page_busy'> {
     try {
       return await withTransaction(this.pool, async (client) => {
-        const spent = await client.query<{ fb_user_hash: Buffer }>(
+        const spent = await client.query(
           `DELETE FROM scan_grant
-            WHERE id = $1 AND visitor_id = $2 AND expires_at > $3
-            RETURNING fb_user_hash`,
+            WHERE id = $1 AND visitor_id = $2 AND expires_at > $3`,
           [i.grantId, i.visitorId, i.now],
         );
-        if (!spent.rows[0]) return 'grant_gone' as const;
+        if (spent.rowCount === 0) return 'grant_gone' as const;
         await client.query(
           `INSERT INTO scan
-             (id, visitor_id, page_external_id, page_name, ig_user_id, fb_user_hash, key_id, encrypted_user_token)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+             (id, visitor_id, page_external_id, page_name, ig_user_id, key_id, encrypted_user_token)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
             i.scanId,
             i.visitorId,
             i.page.pageId,
             i.page.name,
             i.page.igUserId,
-            spent.rows[0].fb_user_hash,
             i.token.keyId,
             i.token.blob,
           ],
