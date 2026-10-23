@@ -16,9 +16,6 @@ runs:
     - name: Unit tests (including the built reference)
       shell: bash
       run: pnpm --filter @feedbouncer/docs test
-    - name: Install browser
-      shell: bash
-      run: pnpm --filter @feedbouncer/docs exec playwright install --with-deps chromium
     - name: Site checks
       shell: bash
       run: pnpm --filter @feedbouncer/docs run test:site

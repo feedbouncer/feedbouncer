@@ -21,15 +21,17 @@ jobs:
   build:
     name: Build docs
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: ./.github/actions/docs-check
+      - uses: ./.github/actions/setup
         with:
           turbo-cache-scope: docs-deploy
+      - name: Build
+        run: pnpm turbo run build --filter=@feedbouncer/docs
       - name: Upload site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
