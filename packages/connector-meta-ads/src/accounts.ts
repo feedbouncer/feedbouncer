@@ -34,7 +34,7 @@ export async function listAdAccounts(
   cfg: MetaAdsConfig,
   nowMs: () => number,
   userToken: Secret,
-  ctx: OAuthContext,
+  ctx: Pick<OAuthContext, 'http' | 'signal'>,
 ): Promise<readonly GrantableAccount[]> {
   const c: GraphCall = {
     http: ctx.http,

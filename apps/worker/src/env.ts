@@ -49,6 +49,7 @@ import {
 } from '@feedbouncer/observability';
 import { loadRetentionSettings, readExportDir, type RetentionSettings } from '@feedbouncer/privacy';
 import { ENCRYPTION_FILE_VARS, loadEncryptionKeyring, type Keyring } from '@feedbouncer/secrets';
+import { parseScanEnv, type ScanSettings } from '@feedbouncer/scan';
 
 const SMTP_PROTOCOLS = ['smtp:', 'smtps:'] as const;
 const HTTP_PROTOCOLS = ['http:', 'https:'] as const;
@@ -111,6 +112,8 @@ export interface WorkerEnv {
   /** Per-category retention periods and purge tuning; every period defaults to forever. */
   readonly retention: RetentionSettings;
   readonly privacy: PrivacyConfig;
+  /** The free scan tool; when enabled it requires the Facebook config and a classifier. */
+  readonly scan: ScanSettings;
 }
 
 export interface PrivacyConfig {
@@ -291,6 +294,7 @@ export function loadWorkerEnv(
     webhookAllowedPrivateCidrs: readAllowedPrivateCidrs(env),
     retention: loadRetentionSettings(env),
     privacy: readPrivacyConfig(env),
+    scan: parseScanEnv(env, { facebook, classifierProvider: classifier.model?.provider ?? 'none' }),
   };
   // A whole-config dump (JSON, util.inspect) must never carry URL passwords or keys.
   return redactOnSerialize(config, {
@@ -305,6 +309,7 @@ export function loadWorkerEnv(
     alertSlackEnabled: alerts.slack,
     alertEmailEnabled: alerts.email,
     weeklyReportsEnabled: weeklyReports,
+    scanToolEnabled: config.scan.enabled,
     activeKeyId: config.encryption.activeKeyId,
     jobQueuePrefix: config.jobs.prefix,
     classifierEnabled: config.classifier.model !== null,

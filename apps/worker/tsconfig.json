@@ -21,6 +21,7 @@
     { "path": "../../packages/evaluation/tsconfig.build.json" },
     { "path": "../../packages/webhooks/tsconfig.build.json" },
     { "path": "../../packages/moderation-check/tsconfig.build.json" },
-    { "path": "../../packages/privacy/tsconfig.build.json" }
+    { "path": "../../packages/privacy/tsconfig.build.json" },
+    { "path": "../../packages/scan/tsconfig.build.json" }
   ]
 }

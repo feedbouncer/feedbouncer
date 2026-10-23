@@ -57,6 +57,7 @@ pnpm test
 | `packages/moderation-check`          | Stateless text check: rules, classifier and policies combined into one verdict, plus the queue consumer      |
 | `packages/moderation-contract`       | Constants of the text check shared with the public API contract: size limit and reason codes                 |
 | `packages/privacy`                   | Data retention settings and status; subject export and erasure                                               |
+| `packages/scan`                      | Free ad comment scan: read-only Graph reads, aggregation and the scan queue                                  |
 | `packages/public-api`                | Public REST API: API key generation, hashed storage and authentication                                       |
 | `packages/webhooks`                  | Outgoing webhooks: Standard Webhooks signing, destination policy and SSRF-guarded transport                  |
 | `packages/placeholder`               | Minimal package used as the template for new packages                                                        |

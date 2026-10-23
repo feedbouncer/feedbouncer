@@ -95,7 +95,10 @@ export type ErrorCode =
   | 'webhook_delivery_in_progress'
   | 'reply_not_allowed'
   | 'rule_rejected'
-  | 'pending_limit_reached';
+  | 'pending_limit_reached'
+  | 'scan_in_progress'
+  | 'scan_not_completed'
+  | 'page_not_eligible';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
@@ -193,6 +196,9 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   reply_not_allowed: 'A reply cannot be posted to this comment right now.',
   rule_rejected: 'The rule was rejected.',
   pending_limit_reached: 'Too many proposals are waiting for review.',
+  scan_in_progress: 'A scan of this Page is already running. Try again when it finishes.',
+  scan_not_completed: 'Only a finished scan can be shared.',
+  page_not_eligible: 'This Page cannot be scanned. You need to be able to moderate it.',
 };
 
 export interface ErrorIssue {
@@ -235,6 +241,8 @@ export class ApiError extends Error {
       readonly problem?: string;
       /** The text limit in UTF-16 code units, for a 422 text_too_long of the moderation check. */
       readonly maxLength?: number;
+      /** The caller's own running scan of the Page, for a 409 scan_in_progress. */
+      readonly scanId?: string;
     },
     /** Response headers to send with the error (Retry-After, WWW-Authenticate). */
     readonly headers?: Readonly<Record<string, string>>,
@@ -260,6 +268,7 @@ export function errorBody(e: ApiError): {
     field?: string;
     problem?: string;
     maxLength?: number;
+    scanId?: string;
   };
 } {
   return { error: { ...e.details, code: e.code, message: e.message } };

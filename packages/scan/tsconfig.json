@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist", "rootDir": "src", "types": ["node"] },
+  "include": ["src"],
+  "references": [
+    { "path": "../ai/tsconfig.build.json" },
+    { "path": "../classifier/tsconfig.build.json" },
+    { "path": "../connector-facebook/tsconfig.build.json" },
+    { "path": "../connector-instagram/tsconfig.build.json" },
+    { "path": "../connector-meta-ads/tsconfig.build.json" },
+    { "path": "../connectors/tsconfig.build.json" },
+    { "path": "../db/tsconfig.build.json" },
+    { "path": "../secrets/tsconfig.build.json" },
+    { "path": "../service-runtime/tsconfig.build.json" }
+  ]
+}

@@ -17,6 +17,7 @@ export interface Ad {
   accountId: string;
   status: string;
   name: string | null;
+  createdAtMs: number;
   updatedAtMs: number;
   creative: Record<string, unknown>;
 }
@@ -83,6 +84,7 @@ export function addAd(
     accountId: adAccountId,
     status: o.status ?? 'ACTIVE',
     name: o.name ?? null,
+    createdAtMs: now,
     updatedAtMs: now,
     creative: o.raw ?? {
       id: ids.creativeId,
@@ -235,6 +237,7 @@ export function routeAds(
         account_id: a.accountId,
         name: a.name,
         effective_status: a.status,
+        created_time: host.graphTime(a.createdAtMs),
         updated_time: host.graphTime(a.updatedAtMs),
         creative: a.creative,
       })),

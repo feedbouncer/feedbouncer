@@ -172,6 +172,11 @@ services:
       CLASSIFIER_MODEL: ${CLASSIFIER_MODEL:-}
       # Subject exports are written by the worker; the api only serves downloads from here.
       PRIVACY_EXPORT_DIR: /var/lib/feedbouncer/privacy-exports
+      # Free ad-comment scan; empty means the default (docs/self-hosting/meta-app.md).
+      SCAN_TOOL_ENABLED: ${SCAN_TOOL_ENABLED:-}
+      SCAN_MAX_COMMENTS: ${SCAN_MAX_COMMENTS:-}
+      SCAN_RETENTION_DAYS: ${SCAN_RETENTION_DAYS:-}
+      SCAN_WORKER_CONCURRENCY: ${SCAN_WORKER_CONCURRENCY:-}
     ports:
       - '${FB_BIND_ADDRESS:-127.0.0.1}:${API_HOST_PORT:-3001}:3001'
     volumes:
@@ -194,6 +199,7 @@ services:
       - ./packages/public-api/src:/repo/packages/public-api/src:ro
       - ./packages/reports/src:/repo/packages/reports/src:ro
       - ./packages/rules/src:/repo/packages/rules/src:ro
+      - ./packages/scan/src:/repo/packages/scan/src:ro
       - ./packages/webhooks/src:/repo/packages/webhooks/src:ro
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro
@@ -277,6 +283,11 @@ services:
       AD_IG_DEEP_SCAN_INTERVAL_SEC: ${AD_IG_DEEP_SCAN_INTERVAL_SEC:-}
       AD_SCHEDULER_TICK_SEC: ${AD_SCHEDULER_TICK_SEC:-}
       AD_SCHEDULER_MAX_CONNECTIONS_PER_TICK: ${AD_SCHEDULER_MAX_CONNECTIONS_PER_TICK:-}
+      # Free ad-comment scan; empty means the default (docs/self-hosting/meta-app.md).
+      SCAN_TOOL_ENABLED: ${SCAN_TOOL_ENABLED:-}
+      SCAN_MAX_COMMENTS: ${SCAN_MAX_COMMENTS:-}
+      SCAN_RETENTION_DAYS: ${SCAN_RETENTION_DAYS:-}
+      SCAN_WORKER_CONCURRENCY: ${SCAN_WORKER_CONCURRENCY:-}
       # Data retention (docs/operations/data-retention.md). Each period is a number of days
       # (1-36500) or "forever"; forever keeps today's behaviour. The tuning values may be empty.
       RETENTION_COMMENTS_DAYS: ${RETENTION_COMMENTS_DAYS:-forever}
@@ -321,6 +332,7 @@ services:
       - ./packages/evaluation/src:/repo/packages/evaluation/src:ro
       - ./packages/reports/src:/repo/packages/reports/src:ro
       - ./packages/rules/src:/repo/packages/rules/src:ro
+      - ./packages/scan/src:/repo/packages/scan/src:ro
       - ./packages/service-runtime/src:/repo/packages/service-runtime/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro
       - ./packages/secrets/src:/repo/packages/secrets/src:ro

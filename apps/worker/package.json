@@ -37,6 +37,7 @@
     "@feedbouncer/public-api": "workspace:*",
     "@feedbouncer/reports": "workspace:*",
     "@feedbouncer/rules": "workspace:*",
+    "@feedbouncer/scan": "workspace:*",
     "@feedbouncer/secrets": "workspace:*",
     "@feedbouncer/service-runtime": "workspace:*",
     "@feedbouncer/webhooks": "workspace:*",

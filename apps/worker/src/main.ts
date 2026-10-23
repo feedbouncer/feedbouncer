@@ -11,6 +11,8 @@ import {
 import {
   PgSyncRecorder,
   buildPgConnectorStack,
+  createSafeHttp,
+  redisBudget,
   systemClock,
   type ConnectionDirectory,
 } from '@feedbouncer/connectors';
@@ -29,6 +31,7 @@ import {
 } from '@feedbouncer/policies';
 import { PgPrivacyRequestStore, publishRetentionStatus } from '@feedbouncer/privacy';
 import { PgRuleStore, RuleSetCache } from '@feedbouncer/rules';
+import { PgScanStore, createScanGraph } from '@feedbouncer/scan';
 import { BrandSlots, createPool, runJobOnce } from '@feedbouncer/db';
 import {
   JobMetrics,
@@ -66,6 +69,12 @@ import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { startReportLoops } from './reports.js';
 import { startPrivacyRequestWorker } from './privacy-requests.js';
 import { startRetentionLoop } from './retention.js';
+import {
+  promScanMetrics,
+  startScanMaintenanceLoop,
+  startScanWorker,
+  warnIfScanConsumerMissing,
+} from './scan.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
 import { buildConnectorRegistry, buildJobRegistry } from './registries.js';
 import { reportStartupFailure } from './startup.js';
@@ -117,7 +126,9 @@ try {
       2 +
       jobConsumerConnections +
       Math.min(32, laneConsumerConnections) +
-      env.privacy.requestConcurrency,
+      env.privacy.requestConcurrency +
+      (env.scan.enabled ? env.scan.workerConcurrency : 0) +
+      1,
     onIdleError: (err) => log.warn('postgres idle client error', errorFields(err)),
   });
   // PgRefreshLock holds a session per refresh, so it gets a small pool of its own.
@@ -159,6 +170,7 @@ try {
   let reportLoops: ReturnType<typeof startReportLoops> = null;
   let idempotencyPurge: ReturnType<typeof startIdempotencyPurge> | null = null;
   let retentionLoop: ReturnType<typeof startRetentionLoop> | null = null;
+  let scanMaintenance: ReturnType<typeof startScanMaintenanceLoop> | null = null;
   let webhookLoops: ReturnType<typeof startWebhookLoops> | null = null;
   if (facebook && mail && mailer) {
     const stack = buildPgConnectorStack({
@@ -291,6 +303,40 @@ try {
       log,
     },
   });
+  const scanStore = new PgScanStore(pool);
+  const facebookConnector = connectors.get('facebook');
+  // A free scan only ever reads, so its Graph client refuses anything but GET.
+  const scanWorker =
+    env.scan.enabled && facebook && facebookConnector
+      ? startScanWorker({
+          connection: redis,
+          prefix: env.jobs.prefix,
+          concurrency: env.scan.workerConcurrency,
+          log,
+          deps: {
+            store: scanStore,
+            keys: env.encryption,
+            graph: createScanGraph(
+              facebook,
+              env.metaAds,
+              createSafeHttp({ allowedHosts: ['graph.facebook.com'] }),
+            ),
+            classifier: createClassifierProvider(env.classifier),
+            languages: env.classifier.languages,
+            budget: redisBudget(producerRedis, env.jobs.prefix),
+            facebookRatePolicy: facebookConnector.capabilities.rateLimit,
+            settings: env.scan,
+            nowMs: Date.now,
+            sleep,
+            log,
+            metrics: promScanMetrics(telemetry.metrics),
+          },
+        })
+      : null;
+  warnIfScanConsumerMissing(
+    { enabled: env.scan.enabled, started: scanWorker !== null, facebookConfigured: !!facebook },
+    log,
+  );
   const health = await startHealthServer({
     host: '127.0.0.1',
     port: env.healthPort,
@@ -321,6 +367,7 @@ try {
     reportLoops?.stop();
     idempotencyPurge?.stop();
     retentionLoop?.stop();
+    await scanMaintenance?.stop();
     await webhookLoops?.stop();
     await scheduler?.stop();
     await Promise.all([
@@ -328,6 +375,7 @@ try {
       jobWorkers.close(),
       moderationCheck.close(),
       privacyRequests.close(),
+      scanWorker?.close(),
     ]);
     await queues.close();
     await health.close();
@@ -388,6 +436,15 @@ try {
     settings: env.retention,
     log,
     exportDir: env.privacy.exportDir,
+  });
+  // Runs even with the tool disabled, so stored scans still expire on time.
+  scanMaintenance = startScanMaintenanceLoop({
+    connection: producerRedis,
+    prefix: env.jobs.prefix,
+    pool,
+    store: scanStore,
+    settings: env.scan,
+    log,
   });
   webhookLoops = startWebhookLoops(
     {

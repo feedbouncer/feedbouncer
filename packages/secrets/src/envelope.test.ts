@@ -43,6 +43,17 @@ describe('envelope v1', () => {
     await expect(open(ringK1, blob, { ...gctx, connectionId: 'grant-2' })).rejects.toThrow();
   });
 
+  it('seals scan_user_token and scan_pkce_verifier bound to the scan record', async () => {
+    for (const kind of ['scan_user_token', 'scan_pkce_verifier'] as const) {
+      const sctx = { organizationId: 'scan-tool', connectionId: 'scan-1', kind };
+      const { blob } = await seal(ringK1, new Secret('EAAG-visitor-token'), sctx);
+      expect((await open(ringK1, blob, sctx)).reveal()).toBe('EAAG-visitor-token');
+      await expect(open(ringK1, blob, { ...sctx, connectionId: 'scan-2' })).rejects.toBeInstanceOf(
+        CredentialUnreadableError,
+      );
+    }
+  });
+
   it('seal/open round-trips both alert kinds; context with a different channel id fails to open', async () => {
     for (const kind of ['alert_slack_webhook', 'alert_unsubscribe_token'] as const) {
       const actx = { organizationId: 'org', connectionId: 'channel-1', kind };

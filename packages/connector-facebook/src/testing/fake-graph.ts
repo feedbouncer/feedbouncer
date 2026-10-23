@@ -54,6 +54,7 @@ interface Comment {
   postId: string;
   parentId: string | null;
   authorId: string;
+  authorName: string | null;
   message: string;
   createdAtMs: number;
   hidden: boolean;
@@ -337,6 +338,8 @@ export class FakeGraph {
     opts: {
       postId?: string;
       authorId?: string;
+      /** Returned as `from.name` by the paged comment list. */
+      authorName?: string;
       parentId?: string;
       message?: string;
       createdAtMs?: number;
@@ -353,6 +356,7 @@ export class FakeGraph {
       postId,
       parentId: opts.parentId ?? null,
       authorId: opts.authorId ?? this.nextId(3_000_000_000),
+      authorName: opts.authorName ?? null,
       message: opts.message ?? 'hello',
       createdAtMs: opts.createdAtMs ?? this.clock(),
       hidden: false,
@@ -684,6 +688,17 @@ export class FakeGraph {
         });
       return this.reply(200, { data });
     }
+    const ownPage = path.length === 1 && method === 'GET' ? this.pages.get(first ?? '') : undefined;
+    if (ownPage && who.kind === 'user') {
+      if (ownPage.userId !== who.id) return denied();
+      const ig = linkedAccount(this.ig, ownPage.id);
+      return this.reply(200, {
+        id: ownPage.id,
+        tasks: ownPage.tasks,
+        access_token: ownPage.token,
+        ...(ig ? { instagram_business_account: { id: ig.id } } : {}),
+      });
+    }
     const adsResponse = routeAds(this.ads, this.adsHost, method, path, query, who);
     if (adsResponse) return adsResponse;
     if (first === 'me' || !first || path.length > 2) return missing();
@@ -782,7 +797,7 @@ export class FakeGraph {
             id: c.id,
             message: c.message,
             created_time: graphTime(c.createdAtMs),
-            from: { id: c.authorId },
+            from: { id: c.authorId, ...(c.authorName ? { name: c.authorName } : {}) },
             ...(c.parentId ? { parent: { id: c.parentId } } : {}),
             is_hidden: c.hidden,
           }));

@@ -2,6 +2,8 @@ import { collectDefaultMetrics, Counter, Histogram, Registry } from '@prometheus
 
 const LATENCY = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30];
 const WAIT = [0.1, 0.5, 1, 5, 15, 60, 300, 900, 3600, 21600];
+const SCAN_DURATION = [5, 15, 30, 60, 120, 240, 600];
+const SCAN_COMMENTS = [0, 20, 50, 100, 250, 500, 1000, 2000, 5000];
 
 export interface FbMetrics {
   readonly registry: Registry;
@@ -17,6 +19,12 @@ export interface FbMetrics {
   readonly httpDuration: Histogram<'method' | 'route'>;
   readonly collectErrors: Counter<'collector'>;
   readonly negativeLag: Counter<'source'>;
+  readonly scanFinished: Counter<'status' | 'reason'>;
+  readonly scanDuration: Histogram<never>;
+  readonly scanCommentsScanned: Histogram<never>;
+  readonly scanAuthorize: Counter<never>;
+  readonly scanCreated: Counter<never>;
+  readonly scanCtaClicks: Counter<never>;
   /**
    * Scrape-time preparation hooks. They run before collect_errors_total is read, so a
    * collector that fails during a scrape is counted in that same scrape.
@@ -111,6 +119,39 @@ export function createMetrics(service: 'api' | 'worker'): FbMetrics {
       name: 'feedbouncer_telemetry_negative_lag_total',
       help: 'Lag samples clamped because the source timestamp was in the future.',
       labelNames: ['source'] as const,
+      registers: r,
+    }),
+    scanFinished: new Counter({
+      name: 'feedbouncer_scan_finished_total',
+      help: 'Free scans finished, by status (completed, failed) and failure reason (none when completed).',
+      labelNames: ['status', 'reason'] as const,
+      registers: r,
+    }),
+    scanDuration: new Histogram({
+      name: 'feedbouncer_scan_duration_seconds',
+      help: 'Free scan run time, from claim to the stored result or failure.',
+      buckets: SCAN_DURATION,
+      registers: r,
+    }),
+    scanCommentsScanned: new Histogram({
+      name: 'feedbouncer_scan_comments_scanned',
+      help: 'Visible comments counted by a completed free scan.',
+      buckets: SCAN_COMMENTS,
+      registers: r,
+    }),
+    scanAuthorize: new Counter({
+      name: 'feedbouncer_scan_authorize_total',
+      help: 'Free scan visitors sent to the Facebook dialog.',
+      registers: r,
+    }),
+    scanCreated: new Counter({
+      name: 'feedbouncer_scan_created_total',
+      help: 'Free scans queued.',
+      registers: r,
+    }),
+    scanCtaClicks: new Counter({
+      name: 'feedbouncer_scan_cta_clicks_total',
+      help: 'Sign-up links followed from a free scan result.',
       registers: r,
     }),
   };

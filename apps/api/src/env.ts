@@ -39,6 +39,7 @@ import {
   type HealthPolicy,
   type TelemetryConfig,
 } from '@feedbouncer/observability';
+import { parseScanEnv, type ScanSettings } from '@feedbouncer/scan';
 import { ENCRYPTION_FILE_VARS, loadEncryptionKeyring, type Keyring } from '@feedbouncer/secrets';
 
 export const SMTP_PROTOCOLS = ['smtp:', 'smtps:'] as const;
@@ -98,6 +99,8 @@ export interface ApiEnv {
   readonly privacyExportDir: string;
   /** Private networks, besides public addresses, that webhook endpoints may point at. Empty by default. */
   readonly webhookAllowedPrivateCidrs: readonly string[];
+  /** The free scan tool; when enabled it requires the Facebook config and a classifier. */
+  readonly scan: ScanSettings;
   readonly telemetry: TelemetryConfig;
   readonly health: HealthPolicy;
   /** Which alert channels this deployment offers and the per-workspace hourly alert cap. */
@@ -153,6 +156,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
   checkNotPlaceholder(appEnv, 'REDIS_URL', redisUrl.href, opts.warn);
   checkNotPlaceholder(appEnv, 'AUTH_SECRET', authSecret, opts.warn);
   const facebook = parseFacebookEnv(env, opts.warn);
+  const classifier = describeClassifierProvider(env);
   const config: ApiEnv = {
     appEnv,
     databaseUrl,
@@ -177,7 +181,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     instagram: parseInstagramEnv(env, facebook),
     metaAds: parseMetaAdsEnv(env, facebook),
     jobs: loadJobsConfig(env),
-    classifier: describeClassifierProvider(env),
+    classifier,
     policy: loadPolicyLimits(env),
     publicApiRateLimitPerMinute: readInt(env, 'PUBLIC_API_RATE_LIMIT_PER_MINUTE', {
       min: 1,
@@ -196,6 +200,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     }),
     privacyExportDir: readExportDir(env),
     webhookAllowedPrivateCidrs: readAllowedPrivateCidrs(env),
+    scan: parseScanEnv(env, { facebook, classifierProvider: classifier.id }),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),
     alerts: {
@@ -216,6 +221,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     facebookEnabled: config.facebook !== null,
     instagramEnabled: config.instagram !== null,
     metaAdsEnabled: config.metaAds !== null,
+    scanToolEnabled: config.scan.enabled,
     alertSlackEnabled: config.alerts.slack,
     alertEmailEnabled: config.alerts.email,
     classifierEnabled: config.classifier.enabled,
