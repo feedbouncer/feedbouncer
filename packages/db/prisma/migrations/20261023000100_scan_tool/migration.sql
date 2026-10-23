@@ -47,7 +47,6 @@ CREATE TABLE scan_grant (
   granted_scopes text[] NOT NULL DEFAULT '{}',
   pages jsonb NOT NULL DEFAULT '[]'::jsonb,
   expires_at timestamptz(3) NOT NULL,
-  consumed_at timestamptz(3),
   created_at timestamptz(3) NOT NULL DEFAULT now(),
   updated_at timestamptz(3) NOT NULL DEFAULT now(),
   CONSTRAINT scan_grant_pkey PRIMARY KEY (id),

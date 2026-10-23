@@ -116,6 +116,7 @@ describe('PgScanStore', () => {
     await store.fail(scanId, null, 'internal', NOW);
     const input = { grantId, visitorId, page: p, token: sealed(), now: NOW };
     expect(await store.createScanFromGrant({ ...input, scanId: randomUUID() })).toBe('created');
+    expect(await count('SELECT count(*) AS n FROM scan_grant WHERE id = $1', [grantId])).toBe(0);
     expect(await store.grantForVisitor(grantId, visitorId, NOW)).toBeNull();
     expect(await store.createScanFromGrant({ ...input, scanId: randomUUID() })).toBe('grant_gone');
   });
@@ -172,6 +173,11 @@ describe('PgScanStore', () => {
       failureReason: 'timeout',
       result: null,
     });
+    const { rows } = await pool.query(
+      'SELECT encrypted_user_token, result FROM scan WHERE id = $1',
+      [scanId],
+    );
+    expect(rows[0]).toEqual({ encrypted_user_token: null, result: null });
   });
 
   it('terminal status with a token violates the CHECK', async () => {
@@ -270,7 +276,7 @@ describe('PgScanStore', () => {
   });
 
   it('deleteVisitor cascades to states, grants and scans', async () => {
-    const { scanId, visitorId } = await queuedScan();
+    const { visitorId } = await queuedScan();
     await store.insertOAuthState({
       stateHash: hash(),
       visitorId,
@@ -284,6 +290,5 @@ describe('PgScanStore', () => {
         0,
       );
     }
-    expect(scanId).toBeDefined();
   });
 });

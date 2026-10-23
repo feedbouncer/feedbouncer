@@ -165,7 +165,7 @@ export class PgScanStore {
     }>(
       `SELECT id, visitor_id, fb_user_hash, key_id, encrypted_user_token, granted_scopes, pages, expires_at
          FROM scan_grant
-        WHERE id = $1 AND visitor_id = $2 AND consumed_at IS NULL AND expires_at > $3`,
+        WHERE id = $1 AND visitor_id = $2 AND expires_at > $3`,
       [id, visitorId, now],
     );
     const r = rows[0];
@@ -182,7 +182,7 @@ export class PgScanStore {
       : null;
   }
 
-  /** Spends the grant and queues the scan in one transaction; a busy page leaves the grant intact. */
+  /** Deletes the grant (and its sealed token) and queues the scan in one transaction; a busy page leaves the grant intact. */
   async createScanFromGrant(i: {
     scanId: string;
     grantId: string;
@@ -194,8 +194,8 @@ export class PgScanStore {
     try {
       return await withTransaction(this.pool, async (client) => {
         const spent = await client.query<{ fb_user_hash: Buffer }>(
-          `UPDATE scan_grant SET consumed_at = $3
-            WHERE id = $1 AND visitor_id = $2 AND consumed_at IS NULL AND expires_at > $3
+          `DELETE FROM scan_grant
+            WHERE id = $1 AND visitor_id = $2 AND expires_at > $3
             RETURNING fb_user_hash`,
           [i.grantId, i.visitorId, i.now],
         );
@@ -223,6 +223,7 @@ export class PgScanStore {
     }
   }
 
+  /** The returned visitorId is internal: never expose it to the page's other users. */
   async activeScanForPage(
     pageExternalId: string,
   ): Promise<{ id: string; visitorId: string } | null> {
@@ -346,15 +347,12 @@ export class PgScanStore {
     return r ? { pageName: r.page_name, finishedAt: r.finished_at, result: r.result } : null;
   }
 
-  /** Deletes scans past retention, spent or expired grants and states, and idle visitors left with nothing. */
+  /** Deletes scans past retention, expired grants and states, and idle visitors left with nothing. */
   async purge(now: Date, retentionDays: number): Promise<PurgeCounts> {
     const cutoff = new Date(now.getTime() - retentionDays * DAY_MS);
     return withTransaction(this.pool, async (client) => {
       const scans = await client.query('DELETE FROM scan WHERE created_at < $1', [cutoff]);
-      const grants = await client.query(
-        'DELETE FROM scan_grant WHERE consumed_at IS NOT NULL OR expires_at < $1',
-        [now],
-      );
+      const grants = await client.query('DELETE FROM scan_grant WHERE expires_at < $1', [now]);
       const states = await client.query('DELETE FROM scan_oauth_state WHERE expires_at < $1', [
         now,
       ]);
