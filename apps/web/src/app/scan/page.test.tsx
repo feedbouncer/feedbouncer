@@ -33,6 +33,15 @@ describe('scan landing page', () => {
     expect(html).not.toContain('evil');
   });
 
+  it('lists each missing purpose once, even when it repeats in the query', async () => {
+    const html = await render({
+      error: 'missing_permissions',
+      missing: 'ads_read,ads_read,pages_show_list',
+    });
+    expect(html.match(/Read your ads and the comments on them/g)).toHaveLength(1);
+    expect(html).toContain('See the Pages you manage');
+  });
+
   it('lists previous scans with links', async () => {
     serverGet.mockResolvedValue({
       status: 200,

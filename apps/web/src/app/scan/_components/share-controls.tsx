@@ -2,6 +2,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { apiFetch } from '../../../lib/api-client';
+import { SHARE_LINK_NOTE } from './copy';
 
 export function ShareControls({ scanId, shared }: { scanId: string; shared: boolean }) {
   const router = useRouter();
@@ -56,8 +57,7 @@ export function ShareControls({ scanId, shared }: { scanId: string; shared: bool
       </button>
       {url ? (
         <p>
-          Anyone with this link can see the result, without comment authors:{' '}
-          <input readOnly value={url} aria-label="Share link" size={60} />
+          {SHARE_LINK_NOTE} <input readOnly value={url} aria-label="Share link" size={60} />
         </p>
       ) : null}
       {error ? <p role="alert">{error}</p> : null}

@@ -1,6 +1,6 @@
 import { SCAN_FAILURES } from '@feedbouncer/scan/contract';
 import { describe, expect, it } from 'vitest';
-import { errorCopy, scopeLabel } from './copy';
+import { SHARE_LINK_NOTE, errorCopy, scopeLabel } from './copy';
 
 describe('scan copy', () => {
   it('maps every callback code and failure to a message', () => {
@@ -32,5 +32,11 @@ describe('scan copy', () => {
       expect(scopeLabel(s)).toEqual(expect.any(String));
     }
     for (const s of ['evil', 'instagram_basic', 'toString']) expect(scopeLabel(s)).toBeNull();
+  });
+
+  it('the share note says initials are included and ad names are hidden', () => {
+    expect(SHARE_LINK_NOTE).not.toMatch(/without comment authors/i);
+    expect(SHARE_LINK_NOTE).toMatch(/initials/);
+    expect(SHARE_LINK_NOTE).toMatch(/ad names are hidden/i);
   });
 });

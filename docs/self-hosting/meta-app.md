@@ -499,7 +499,7 @@ Follow [secrets.md](../operations/secrets.md) to rotate `FB_ENCRYPTION_KEYS`. Ba
 
 > Not yet verified against Meta's dashboard or documentation. Check: that the four required permissions are enough to read ad-post comments, and what App Review asks for.
 
-The free scan is a public page where a visitor connects a Facebook Page and sees how many comments on their recent ads look harmful. It is **off by default**. A self-hosted instance only serves it when you set `SCAN_TOOL_ENABLED=true`.
+The free scan is a public page where a visitor connects a Facebook Page and sees how many comments on their recent ads look like scams (including phishing) or spam. It is **off by default**. A self-hosted instance only serves it when you set `SCAN_TOOL_ENABLED=true`.
 
 To turn it on:
 
@@ -514,7 +514,7 @@ To turn it on:
 | `SCAN_RETENTION_DAYS`     | 1 to 30           | `30`    | Days before a scan and its result are deleted |
 | `SCAN_WORKER_CONCURRENCY` | 1 to 16           | `2`     | Scans one worker runs at the same time        |
 
-The scan asks for these permissions, and never uses a write permission:
+The scan asks for these permissions, and never writes with any of them:
 
 | Permission                  | Required | Used for                             |
 | --------------------------- | -------- | ------------------------------------ |
@@ -524,6 +524,10 @@ The scan asks for these permissions, and never uses a write permission:
 | `ads_read`                  | Yes      | Finding the Page's recent ads        |
 | `instagram_basic`           | No       | Finding the linked Instagram account |
 | `instagram_manage_comments` | No       | Reading comments on Instagram ads    |
+
+Meta requires `instagram_manage_comments` to read Instagram comments, so the scan requests it only for that. It is never used to hide, delete or reply to a comment.
+
+The scan's Graph client refuses anything but GET requests. The only POST requests the tool makes go to Meta's token endpoint, when the sign-in code is exchanged for an access token. They make no change to the visitor's Page or ads.
 
 `ads_read` and `pages_read_user_content` need **Advanced Access** through Meta App Review before visitors who have no role on your app can grant them. Until then, only people with a role on the app (administrators, developers, testers) can run a scan. Keep the tool off until review is granted if you want it open to the public.
 

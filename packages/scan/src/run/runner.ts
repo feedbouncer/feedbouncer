@@ -25,6 +25,7 @@ import { discoverRecentAdPosts, type AdPost } from '../graph/ads.js';
 import { readPostComments } from '../graph/comments.js';
 import { grantedScopes, resolvePage, type ScanGraph } from '../graph/pages.js';
 import {
+  CLASSIFY_RESERVE_MS,
   FETCH_DEADLINE_MS,
   JOB_DEADLINE_MS,
   MAX_COMMENTS_PER_AD,
@@ -91,6 +92,15 @@ type Fetched = Pick<
 type Classified = Pick<ScannedComment, 'bucket' | 'category' | 'score' | 'reason'> & {
   providerError: boolean;
 };
+/** A text never classified because the classification budget ran out. */
+const TIME_LIMITED = 'time_limited';
+type Outcome = Classified | typeof TIME_LIMITED;
+
+/** Wall-clock budget for one phase, on the runner's clock, with a matching abort signal. */
+interface Budget {
+  deadlineMs: number;
+  signal: AbortSignal;
+}
 
 export async function runScan(d: ScanRunnerDeps, scanId: string): Promise<ScanRunOutcome> {
   const startedMs = d.nowMs();
@@ -181,6 +191,7 @@ async function scan(
   scanId: string,
   claimed: ClaimedScan,
 ): Promise<ScanResultV1> {
+  const jobDeadlineMs = d.nowMs() + JOB_DEADLINE_MS;
   const signal = AbortSignal.timeout(JOB_DEADLINE_MS);
   const g = d.graph;
   const userToken = await open(d.keys, claimed.token.blob, scanTokenCtx(scanId));
@@ -209,8 +220,15 @@ async function scan(
     pageToken: page.pageToken,
     posts,
     signal,
+    // Fetching never eats into the share of the job reserved for classification.
+    budgetMs: Math.min(FETCH_DEADLINE_MS, jobDeadlineMs - CLASSIFY_RESERVE_MS - d.nowMs()),
   });
-  await classifyInto(d, builder, fetched, signal);
+  // Classification has its own budget: whatever is left of the job, not the job signal.
+  const classifyMs = Math.max(0, jobDeadlineMs - d.nowMs());
+  await classifyInto(d, builder, fetched, {
+    deadlineMs: d.nowMs() + classifyMs,
+    signal: AbortSignal.timeout(classifyMs),
+  });
   return builder.build();
 }
 
@@ -255,11 +273,19 @@ function budgeted(d: ScanRunnerDeps, pageId: string): SafeHttp {
 async function fetchComments(
   d: ScanRunnerDeps,
   builder: ResultBuilder,
-  t: { pageId: string; pageName: string; pageToken: Secret; posts: AdPost[]; signal: AbortSignal },
+  t: {
+    pageId: string;
+    pageName: string;
+    pageToken: Secret;
+    posts: AdPost[];
+    signal: AbortSignal;
+    budgetMs: number;
+  },
 ): Promise<Fetched[]> {
   const startMs = d.nowMs();
-  const timeLeft = () => FETCH_DEADLINE_MS - (d.nowMs() - startMs);
-  const signal = AbortSignal.any([t.signal, AbortSignal.timeout(FETCH_DEADLINE_MS)]);
+  const budgetMs = Math.max(0, t.budgetMs);
+  const timeLeft = () => budgetMs - (d.nowMs() - startMs);
+  const signal = AbortSignal.any([t.signal, AbortSignal.timeout(budgetMs)]);
   const g = { ...d.graph, http: budgeted(d, t.pageId) };
   const sinceMs = startMs - WINDOW_DAYS * DAY_MS;
   const seen = new Set<string>();
@@ -343,30 +369,35 @@ const UNCLASSIFIED: Classified = {
   providerError: false,
 };
 
-/** One provider call, retried once after 250 ms on a retryable error; null when it still fails. */
+const timeUp = (b: Budget, now: number) => b.signal.aborted || now >= b.deadlineMs;
+
+/**
+ * One provider call, retried once after 250 ms on a retryable error; null when it still
+ * fails, TIME_LIMITED when the classification budget ran out first.
+ */
 async function callProvider(
   d: ScanRunnerDeps,
   input: PreparedInput,
-  signal: AbortSignal,
-): Promise<RawClassification | null> {
+  b: Budget,
+): Promise<RawClassification | null | typeof TIME_LIMITED> {
   for (let attempt = 0; ; attempt++) {
+    if (timeUp(b, d.nowMs())) return TIME_LIMITED;
     try {
-      return await d.classifier.classify(input, signal);
+      return await d.classifier.classify(input, b.signal);
     } catch (e) {
+      if (timeUp(b, d.nowMs())) return TIME_LIMITED;
       if (attempt > 0 || !RETRYABLE.has(mapProviderError(e).code)) return null;
+      if (d.nowMs() + RETRY_DELAY_MS >= b.deadlineMs) return TIME_LIMITED;
       await d.sleep(RETRY_DELAY_MS);
     }
   }
 }
 
-async function classifyText(
-  d: ScanRunnerDeps,
-  text: string,
-  signal: AbortSignal,
-): Promise<Classified> {
+async function classifyText(d: ScanRunnerDeps, text: string, b: Budget): Promise<Outcome> {
   const input = prepareInput(text);
   if (input.empty || input.lowSignal) return UNCLASSIFIED;
-  const raw = await callProvider(d, input, signal);
+  const raw = await callProvider(d, input, b);
+  if (raw === TIME_LIMITED) return TIME_LIMITED;
   if (raw === null) return { ...UNCLASSIFIED, providerError: true };
   const s = scoreClassification(raw, input, DEFAULT_THRESHOLDS, d.languages);
   return {
@@ -389,25 +420,44 @@ async function eachLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
 }
 
-/** Classifies each distinct visible text once; hidden comments are never sent. */
+/**
+ * Classifies each distinct visible text once; hidden comments are never sent. Texts left
+ * unclassified because time ran out are dropped from the sample (with sampled_time_limit),
+ * never counted as provider errors; too few classified comments left fails with timeout.
+ */
 async function classifyInto(
   d: ScanRunnerDeps,
   builder: ResultBuilder,
   fetched: Fetched[],
-  signal: AbortSignal,
+  b: Budget,
 ): Promise<void> {
-  const visible = fetched.filter((c) => !c.hidden);
   const texts = new Map<string, string>();
-  for (const c of visible) if (!texts.has(c.normText)) texts.set(c.normText, c.text);
-  const outcomes = new Map<string, Classified>();
+  for (const c of fetched) if (!c.hidden && !texts.has(c.normText)) texts.set(c.normText, c.text);
+  const outcomes = new Map<string, Outcome>();
   await eachLimit([...texts], CLASSIFY_CONCURRENCY, async ([norm, text]) => {
-    outcomes.set(norm, await classifyText(d, text, signal));
+    outcomes.set(norm, await classifyText(d, text, b));
   });
+  let assessed = 0;
   let providerErrors = 0;
+  let classified = 0;
+  let timeLimited = false;
   for (const c of fetched) {
-    const { providerError, ...verdict } = c.hidden ? UNCLASSIFIED : outcomes.get(c.normText)!;
-    if (providerError) providerErrors++;
+    const outcome = c.hidden ? UNCLASSIFIED : outcomes.get(c.normText)!;
+    if (outcome === TIME_LIMITED) {
+      timeLimited = true;
+      continue;
+    }
+    const { providerError, ...verdict } = outcome;
+    if (!c.hidden) {
+      assessed++;
+      if (providerError) providerErrors++;
+      if (verdict.bucket !== 'unclassified') classified++;
+    }
     builder.add({ ...c, ...verdict });
   }
-  if (providerErrors * 2 > visible.length) throw new ScanFailed('classifier_unavailable');
+  if (providerErrors * 2 > assessed) throw new ScanFailed('classifier_unavailable');
+  if (timeLimited) {
+    if (classified < MIN_RELIABLE_SAMPLE) throw new ScanFailed('timeout');
+    builder.notice('sampled_time_limit');
+  }
 }

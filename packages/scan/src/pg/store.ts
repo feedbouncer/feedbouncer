@@ -391,6 +391,18 @@ export class PgScanStore {
     return r.rowCount ?? 0;
   }
 
+  /** Fails scans whose job never started within `staleMs`, so no sealed token lingers. */
+  async failStaleQueued(now: Date, staleMs: number): Promise<number> {
+    const r = await this.pool.query(
+      `UPDATE scan
+          SET status = 'failed', failure_reason = 'timeout', result = NULL, key_id = NULL,
+              encrypted_user_token = NULL, finished_at = $1
+        WHERE status = 'queued' AND created_at < $2`,
+      [now, new Date(now.getTime() - staleMs)],
+    );
+    return r.rowCount ?? 0;
+  }
+
   async queuedOlderThan(now: Date, ms: number): Promise<string[]> {
     const { rows } = await this.pool.query<{ id: string }>(
       "SELECT id FROM scan WHERE status = 'queued' AND created_at < $1 ORDER BY created_at",

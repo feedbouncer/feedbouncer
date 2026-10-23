@@ -27,6 +27,20 @@ export function promScanMetrics(m: FbMetrics): ScanMetrics {
   };
 }
 
+/**
+ * SCAN_TOOL_ENABLED with no running consumer means scans would queue and then time out,
+ * so say so at startup. Logs no configuration values.
+ */
+export function warnIfScanConsumerMissing(
+  s: { enabled: boolean; started: boolean; facebookConfigured: boolean },
+  log: Logger,
+): void {
+  if (!s.enabled || s.started) return;
+  log.warn('scan.consumer_not_started', {
+    reason: s.facebookConfigured ? 'facebook_connector_unavailable' : 'facebook_not_configured',
+  });
+}
+
 /** Consumes the scan queue, which carries scan ids only; the sealed token stays in Postgres. */
 export function startScanWorker(d: {
   connection: Redis;

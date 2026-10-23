@@ -69,7 +69,12 @@ import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { startReportLoops } from './reports.js';
 import { startPrivacyRequestWorker } from './privacy-requests.js';
 import { startRetentionLoop } from './retention.js';
-import { promScanMetrics, startScanMaintenanceLoop, startScanWorker } from './scan.js';
+import {
+  promScanMetrics,
+  startScanMaintenanceLoop,
+  startScanWorker,
+  warnIfScanConsumerMissing,
+} from './scan.js';
 import { SYSTEM_QUEUE, createProcessor } from './processor.js';
 import { buildConnectorRegistry, buildJobRegistry } from './registries.js';
 import { reportStartupFailure } from './startup.js';
@@ -330,6 +335,10 @@ try {
           },
         })
       : null;
+  warnIfScanConsumerMissing(
+    { enabled: env.scan.enabled, started: scanWorker !== null, facebookConfigured: !!facebook },
+    log,
+  );
   const health = await startHealthServer({
     host: '127.0.0.1',
     port: env.healthPort,

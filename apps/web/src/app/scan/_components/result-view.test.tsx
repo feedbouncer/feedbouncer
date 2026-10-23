@@ -35,6 +35,49 @@ describe('ResultView', () => {
     expect(html).not.toContain('%');
   });
 
+  it('comments read but none assessed says so, not "no comments"', () => {
+    const html = render(
+      sampleResult({
+        sharePct: null,
+        reliable: false,
+        totals: {
+          ...sampleResult().totals,
+          commentsScanned: 12,
+          scamSpam: 0,
+          uncertain: 0,
+          clean: 0,
+          unclassified: 12,
+        },
+      }),
+    );
+    expect(html).toContain('We read 12 comments on your recent ads, but none could be assessed.');
+    expect(html).not.toContain('we found no comments');
+    expect(html).not.toContain('%');
+  });
+
+  it('the truly empty result keeps the exact empty-state sentence', () => {
+    const html = render(sampleResult({ empty: true, sharePct: null, reliable: false }));
+    expect(html).toContain(
+      'Nothing to scan yet: we found no comments on your recent ads in the last 30 days.',
+    );
+  });
+
+  it('shared mode never renders the author element, even with a non-empty authorLabel', () => {
+    const base = sampleResult();
+    const result = { ...base, examples: [{ ...base.examples[0]!, authorLabel: 'Z. Q.' }] };
+    const shared = render(result, 'shared');
+    expect(shared).not.toContain('Z. Q.');
+    expect(shared).not.toContain('<strong>');
+    expect(shared).toContain('Win a free phone');
+    expect(render(result)).toContain('<strong>Z. Q.</strong>');
+  });
+
+  it('shared mode keeps the 30-day sentence but does not offer deletion', () => {
+    const shared = render(sampleResult(), 'shared');
+    expect(shared).toContain('We keep this result for 30 days.');
+    expect(shared).not.toContain('You can delete it now.');
+  });
+
   it('unreliable result shows the label next to the number', () => {
     const html = render(sampleResult({ reliable: false }));
     expect(html).toContain('20%');

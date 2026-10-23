@@ -275,6 +275,46 @@ describe('PgScanStore', () => {
     expect(await store.queuedOlderThan(NOW, 60_000)).not.toContain(waiting.scanId);
   });
 
+  it('failStaleQueued fails queued scans older than the cutoff and clears their token', async () => {
+    const old = await queuedScan();
+    const fresh = await queuedScan();
+    const running = await queuedScan();
+    await pool.query('UPDATE scan SET created_at = $2 WHERE id = ANY($1)', [
+      [old.scanId, running.scanId],
+      new Date(NOW.getTime() - 16 * 60_000),
+    ]);
+    await pool.query('UPDATE scan SET created_at = $2 WHERE id = $1', [
+      fresh.scanId,
+      new Date(NOW.getTime() - 14 * 60_000),
+    ]);
+    await store.claim(running.scanId, NOW);
+
+    expect(await store.failStaleQueued(NOW, 15 * 60_000)).toBeGreaterThanOrEqual(1);
+    const { rows } = await pool.query<{
+      id: string;
+      status: string;
+      failure_reason: string | null;
+      encrypted_user_token: Buffer | null;
+      key_id: string | null;
+      finished_at: Date | null;
+    }>(
+      `SELECT id, status, failure_reason, encrypted_user_token, key_id, finished_at
+         FROM scan WHERE id = ANY($1)`,
+      [[old.scanId, fresh.scanId, running.scanId]],
+    );
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(old.scanId)).toMatchObject({
+      status: 'failed',
+      failure_reason: 'timeout',
+      encrypted_user_token: null,
+      key_id: null,
+      finished_at: NOW,
+    });
+    expect(byId.get(fresh.scanId)).toMatchObject({ status: 'queued', failure_reason: null });
+    expect(byId.get(fresh.scanId)!.encrypted_user_token).not.toBeNull();
+    expect(byId.get(running.scanId)).toMatchObject({ status: 'running' });
+  });
+
   it('deleteVisitor cascades to states, grants and scans', async () => {
     const { visitorId } = await queuedScan();
     await store.insertOAuthState({

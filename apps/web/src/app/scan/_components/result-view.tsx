@@ -23,7 +23,9 @@ export function ResultView({
       <h2>
         {hasShare
           ? `${pct(result.sharePct ?? 0)} of comments on your last ${ads} look like scam or spam`
-          : 'Nothing to scan yet: we found no comments on your recent ads in the last 30 days.'}
+          : result.empty
+            ? 'Nothing to scan yet: we found no comments on your recent ads in the last 30 days.'
+            : `We read ${plural(totals.commentsScanned, 'comment', 'comments')} on your recent ads, but none could be assessed.`}
       </h2>
       {hasShare ? (
         <p>
@@ -44,7 +46,11 @@ export function ResultView({
         This is an estimate from an automated classifier, not a verdict. It can be wrong in both
         directions.
       </p>
-      <p>We keep this result for 30 days. You can delete it now.</p>
+      <p>
+        {mode === 'owner'
+          ? 'We keep this result for 30 days. You can delete it now.'
+          : 'We keep this result for 30 days.'}
+      </p>
       <p>
         <a href="/api/v1/scan/cta">FeedBouncer can hide comments like these automatically</a>
       </p>
@@ -102,7 +108,14 @@ function Details({ result, mode }: { result: ScanResultV1; mode: 'owner' | 'shar
       <ul>
         {result.examples.map((e, i) => (
           <li key={i}>
-            <strong>{e.authorLabel}</strong> on Ad {e.adOrdinal}
+            {/* Shares are served with authors redacted; never render one here either. */}
+            {mode === 'owner' ? (
+              <>
+                <strong>{e.authorLabel}</strong> on Ad {e.adOrdinal}
+              </>
+            ) : (
+              `On Ad ${e.adOrdinal}`
+            )}
             {e.repeatCount > 1 ? ` (posted ×${e.repeatCount})` : null}
             <blockquote>{e.text}</blockquote>
             <small>{e.reason}</small>

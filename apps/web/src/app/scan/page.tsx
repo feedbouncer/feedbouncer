@@ -21,7 +21,9 @@ export default async function ScanPage({
 }) {
   const sp = await searchParams;
   const error = errorCopy(first(sp.error));
-  const missing = (first(sp.missing) ?? '').split(',').flatMap((s) => scopeLabel(s) ?? []);
+  const missing = [
+    ...new Set((first(sp.missing) ?? '').split(',').flatMap((s) => scopeLabel(s) ?? [])),
+  ];
   const list = await serverGet<{ scans: ScanView[] }>('/api/v1/scan/scans');
   const scans = list.data?.scans ?? [];
   return (

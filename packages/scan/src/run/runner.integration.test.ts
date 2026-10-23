@@ -228,6 +228,8 @@ async function world(o: { tasks?: string[]; decline?: string[] } = {}) {
     graph,
     deps,
     classifier,
+    clock: () => now,
+    advance: (ms: number) => void (now += ms),
     slept,
     lines,
     finished,
@@ -499,6 +501,119 @@ describe('runScan', () => {
     expect(w.slept.every((ms) => ms === 250)).toBe(true);
   });
 
+  /** Fast for the first `slowAt` texts; text `slowAt` takes `slowMs`; calls past the job deadline throw. */
+  function slowAfter(w: Awaited<ReturnType<typeof world>>, slowAt: number, slowMs: number) {
+    const sent: string[] = [];
+    let i = 0;
+    const deadline = NOW + 240_000;
+    return {
+      sent,
+      classifier: {
+        id: 'slow',
+        model: 'slow',
+        classify: async (input: PreparedInput) => {
+          sent.push(input.text);
+          if (w.clock() > deadline) throw new ProviderError('timeout', true);
+          if (i++ === slowAt) w.advance(slowMs);
+          return { scores: { ...zero }, language: 'en' };
+        },
+      } satisfies ClassifierProvider,
+    };
+  }
+
+  it('classification out of time with >= 20 classified → completed with sampled_time_limit, unsent texts not provider errors', async () => {
+    const w = await world();
+    w.adPost(40, (i) => ({ message: `distinct comment ${i}` }));
+    const scanId = await w.queueScan();
+    const slow = slowAfter(w, 20, 250_000);
+
+    expect(await runScan({ ...w.deps, classifier: slow.classifier }, scanId)).toEqual({
+      status: 'completed',
+    });
+    const result = await completed(scanId);
+    expect(result.notices).toContain('sampled_time_limit');
+    expect(result.totals).toMatchObject({ commentsScanned: 21, clean: 21, unclassified: 0 });
+    expect(result.reliable).toBe(true);
+    // Nothing is sent to the provider once the classification budget is spent.
+    expect(slow.sent.length).toBeLessThan(40);
+    expect(w.slept).toEqual([]);
+  });
+
+  it('classification out of time with < 20 classified → failed timeout', async () => {
+    const w = await world();
+    w.adPost(40, (i) => ({ message: `distinct comment ${i}` }));
+    const scanId = await w.queueScan();
+    const slow = slowAfter(w, 5, 250_000);
+
+    expect(await runScan({ ...w.deps, classifier: slow.classifier }, scanId)).toEqual({
+      status: 'failed',
+      reason: 'timeout',
+    });
+    await failedWith(scanId, 'timeout');
+    expect(w.finished).toEqual([expect.objectContaining({ status: 'failed', reason: 'timeout' })]);
+  });
+
+  it('a call failing after the classification deadline is time-limited, not a provider error', async () => {
+    const w = await world();
+    w.adPost(30, (i) => ({ message: `distinct comment ${i}` }));
+    const scanId = await w.queueScan();
+    let i = 0;
+    const classifier: ClassifierProvider = {
+      id: 'x',
+      model: 'x',
+      classify: async () => {
+        if (i++ === 22) {
+          w.advance(250_000);
+          throw new ProviderError('timeout', true);
+        }
+        return { scores: { ...zero }, language: 'en' };
+      },
+    };
+
+    expect(await runScan({ ...w.deps, classifier }, scanId)).toEqual({ status: 'completed' });
+    const result = await completed(scanId);
+    expect(result.notices).toContain('sampled_time_limit');
+    expect(result.totals.unclassified).toBe(0);
+    expect(result.totals.commentsScanned).toBeGreaterThanOrEqual(20);
+    expect(w.slept).toEqual([]);
+  });
+
+  it('fetching stops early enough to leave classification its reserved share of the job', async () => {
+    const w = await world();
+    for (let p = 0; p < 3; p++) w.adPost(10, (i) => ({ message: `post ${p} comment ${i}` }));
+    const scanId = await w.queueScan();
+    // Setup takes 140 s of the 240 s job, so fetching gets 240 - 140 - 90 = 10 s;
+    // each comments page takes 6 s, so reading stops one comment into the second post.
+    const inner = w.deps.graph.http;
+    let setup = true;
+    const http: typeof inner = {
+      request: async (req, signal) => {
+        if (setup) {
+          setup = false;
+          w.advance(140_000);
+        }
+        if (new URL(String(req.url)).pathname.endsWith('/comments')) w.advance(6_000);
+        return inner.request(req, signal);
+      },
+    };
+    const sent: string[] = [];
+    const classifier: ClassifierProvider = {
+      id: 'x',
+      model: 'x',
+      classify: async (input) => {
+        sent.push(input.text);
+        return { scores: { ...zero }, language: 'en' };
+      },
+    };
+    const deps = { ...w.deps, graph: { ...w.deps.graph, http }, classifier };
+
+    expect(await runScan(deps, scanId)).toEqual({ status: 'completed' });
+    const result = await completed(scanId);
+    expect(result.notices).toContain('sampled_time_limit');
+    expect(result.totals.commentsScanned).toBe(11);
+    expect(sent).toHaveLength(11);
+  });
+
   it('emoji-only and unsupported-language comments → unclassified, excluded from sharePct', async () => {
     const w = await world();
     w.adPost(25, (i) => ({
@@ -645,6 +760,40 @@ describe('runScanMaintenance', () => {
       { v: 1, scanId: queued },
       expect.objectContaining({ jobId: `scan-${queued}` }),
     ]);
+  });
+
+  it('fails queued scans older than 15 min with timeout before re-enqueueing the rest', async () => {
+    const w = await world();
+    const abandoned = await w.queueScan(otherPage());
+    await pool.query('UPDATE scan SET created_at = $2 WHERE id = $1', [
+      abandoned,
+      new Date(NOW - 16 * 60_000),
+    ]);
+    const waiting = await w.queueScan(otherPage());
+    await pool.query('UPDATE scan SET created_at = $2 WHERE id = $1', [
+      waiting,
+      new Date(NOW - 14 * 60_000),
+    ]);
+    const added: Array<[string, { scanId: string }]> = [];
+    const queue = {
+      add: async (name: string, data: { scanId: string }) => void added.push([name, data]),
+    };
+
+    await runScanMaintenance({
+      pool,
+      store,
+      queue,
+      settings: SETTINGS,
+      now: () => new Date(NOW),
+      log: w.deps.log,
+    });
+
+    await failedWith(abandoned, 'timeout');
+    expect((await row(waiting))!.status).toBe('queued');
+    const requeued = added.map(([, data]) => data.scanId);
+    expect(requeued).toContain(waiting);
+    expect(requeued).not.toContain(abandoned);
+    expect(w.lines.find((l) => l.includes('scan.maintenance'))).toContain('"expiredQueued":1');
   });
 
   it('skips the run while another process holds the maintenance lock', async () => {

@@ -60,3 +60,28 @@ describe('createScan', () => {
     expect(keys.join(' ')).not.toContain('visitor-raw-id');
   });
 });
+
+describe('without Redis', () => {
+  it('every limit fails closed with 503 temporarily_unavailable', async () => {
+    const down = new Redis('redis://127.0.0.1:1/0', {
+      maxRetriesPerRequest: 0,
+      enableOfflineQueue: false,
+      lazyConnect: true,
+      retryStrategy: () => null,
+    });
+    try {
+      const l = createScanRateLimits(down, `fbtest:${randomUUID()}:`);
+      const unavailable = '503 temporarily_unavailable';
+      expect(await code(l.authorize('203.0.113.7'))).toBe(unavailable);
+      expect(
+        await code(
+          l.createScan({ ip: '203.0.113.7', visitorId: 'v', fbUserHash: 'u', pageId: '1' }),
+        ),
+      ).toBe(unavailable);
+      expect(await code(l.visitorRead('203.0.113.7'))).toBe(unavailable);
+      expect(await code(l.sharedRead('203.0.113.7'))).toBe(unavailable);
+    } finally {
+      down.disconnect();
+    }
+  });
+});

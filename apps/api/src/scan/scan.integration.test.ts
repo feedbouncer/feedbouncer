@@ -648,6 +648,59 @@ describe('GET /scan/cta', () => {
   });
 });
 
+describe('without Redis', () => {
+  it('scan rate limits fail closed with 503 temporarily_unavailable', async () => {
+    const broken = await startTestApi({
+      facebook: FACEBOOK,
+      redisUrl: new URL('redis://127.0.0.1:1/0'),
+    });
+    try {
+      const v = await (async () => {
+        const token = randomBytes(32).toString('base64url');
+        const id = await new PgScanStore(broken.pool).createVisitor(sha256(token));
+        return { id, cookie: `fb_scan_visitor=${token}` };
+      })();
+      const headers = { origin: WEB, 'content-type': 'application/json' };
+      const requests: Array<[string, string, Record<string, string>, string?]> = [
+        ['POST', `${BASE}/authorize`, headers, '{}'],
+        ['GET', `${BASE}/scans`, { origin: WEB, cookie: v.cookie }],
+        ['GET', `${BASE}/shared/${'a'.repeat(43)}`, { origin: WEB }],
+      ];
+      for (const [method, url, h, body] of requests) {
+        const r = await broken.raw(method, url, { headers: h, ...(body && { body }) });
+        expect(r.status, `${method} ${url}`).toBe(503);
+        expect(json(r).error.code).toBe('temporarily_unavailable');
+      }
+      // Creating a scan spends the per-day counters: no Redis, no scan.
+      const store2 = new PgScanStore(broken.pool);
+      const p = page();
+      const grantId = randomUUID();
+      await store2.insertGrant({
+        id: grantId,
+        visitorId: v.id,
+        fbUserHash: sha256('user-no-redis'),
+        token: await seal(broken.deps.env.encryption, new Secret(USER_TOKEN), {
+          organizationId: 'scan-tool',
+          connectionId: grantId,
+          kind: 'scan_user_token',
+        }),
+        scopes: ALL_SCOPES,
+        pages: [p],
+        expiresAt: new Date(Date.now() + 30 * 60_000),
+      });
+      const r = await broken.raw('POST', `${BASE}/scans`, {
+        headers: { ...headers, cookie: v.cookie },
+        body: JSON.stringify({ grantId, pageId: p.pageId }),
+      });
+      expect(r.status).toBe(503);
+      expect(json(r).error.code).toBe('temporarily_unavailable');
+      expect(await store2.activeScanForPage(p.pageId)).toBeNull();
+    } finally {
+      await broken.close();
+    }
+  });
+});
+
 describe('secrets', () => {
   it('no log line carries the user token, a share token or a visitor cookie', () => {
     for (const line of api.logLines) {
