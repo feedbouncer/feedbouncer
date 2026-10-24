@@ -45,13 +45,19 @@ check instead.
 | `apiHosts`, `authorizationHosts` | Exact lowercase hostnames. `SafeHttp` and the authorization URL check are limited to them.      |
 | `defaultScopes`                  | Scopes requested at connect time.                                                               |
 | `maxPageSize`                    | 1 to 500. The runtime clamps `limit` to it.                                                     |
+| `accountIdPattern`               | Optional. The shape of the platform's account ids. Default: numeric Graph ids.                  |
+| `oauthCodeParam`                 | Optional. `code` (default) or `auth_code`: the callback query parameter carrying the code.      |
+| `connectionComments`             | Optional. `true` exactly when the connector implements `listConnectionComments`.                |
+| `partialCommentLookup`           | Optional. `true` when `getComment` only searches recent comments, so its `null` is not "gone".  |
 
 `validateConnector` runs at registration and throws on: an unknown platform,
 duplicate or unknown actions, a rate limit outside its bounds (`points` 1 to
 1,000,000, `durationSec` 1 to 86,400, `urgentReservePoints` below `points`,
 `defaultRetryAfterMs` 1,000 to 86,400,000), empty or malformed host lists, a
-page size outside 1 to 500, rotation without refresh, `listSources` that
-disagrees with the capability, a `webhook` that disagrees with `ingestion`, a
+page size outside 1 to 500, rotation without refresh, `listSources` or
+`connectionComments` that disagrees with the method, an `accountIdPattern` that
+is not a regular expression, an `oauthCodeParam` other than `code` or
+`auth_code`, a `webhook` that disagrees with `ingestion`, a
 malformed signature header name, and a `toleranceSec` outside 1 to 600 when a
 timestamp header is used.
 
@@ -102,7 +108,16 @@ stores them; you only place them in the URL.
 `buildAuthorizationUrl` must carry `state` verbatim, send `codeChallenge` with
 `code_challenge_method=S256`, and point at a host in `authorizationHosts`.
 `OAuthFlow.start` refuses a URL whose `state` parameter differs or whose host
-is not allowed.
+is not allowed. A platform that does not take PKCE may leave the challenge out
+(the TikTok connectors do); the single-use, session-bound `state` and the exact
+redirect URI then carry the protection alone.
+
+The callback reads the code from the `code` query parameter. A platform that
+names it differently declares `capabilities.oauthCodeParam` (TikTok's
+Marketing API sends `auth_code`); a callback with only the other name is
+rejected. A callback with `error=access_denied` (RFC 6749), or Meta's
+`error_reason=user_denied`, is a denial: `OAuthFlow.complete` returns `denied`
+and no code is exchanged.
 
 ```ts from=reference/connector.ts
 buildAuthorizationUrl: ({ state, codeChallenge, redirectUri, scopes }) => {
@@ -184,6 +199,11 @@ By default one authorization yields one account: `exchangeCode` returns it and
   own encrypted token. A result per account reports `connected`,
   `reconnected`, `not_eligible`, `not_found`, `connected_elsewhere` or
   `connection_inactive`.
+- Account ids, both those `listAccounts` returns and those a connect request
+  names, must match `capabilities.accountIdPattern`. The default accepts
+  numeric Graph ids only; declare a pattern when the platform's ids look
+  different (TikTok's `open_id`, for example). Keep it tight: the ids reach
+  URLs and queries.
 - A platform account can be live in only one workspace. The directory's
   `findLiveByAccount` (the one cross-tenant lookup) reports it so the picker
   can mark it, and the connect step enforces it.
@@ -303,6 +323,31 @@ one with `listComments`.
   Do not follow `paging.next` URLs; build requests yourself.
 - Backfill calls use `background` priority, the lowest, so they never delay actions or webhook fetches.
   See [backfill.md](backfill.md).
+
+## Listing a whole connection (`listConnectionComments`)
+
+Some platforms list comments per account rather than per post (TikTok's
+Marketing API lists every comment of an advertiser at once, paged by number).
+Implement the optional `listConnectionComments(ctx, { since, until, page, pageSize })`
+and set `capabilities.connectionComments` to `true`.
+
+- It returns a `ConnectionCommentsPage`: the comments within `[since, until]`
+  (each with its `sourceExternalId`), every source those comments reference
+  (deduplicated, as `NormalizedSource`s), and `hasMore`.
+- The runtime refuses invalid dates, a page below 1 or a non-integer page size
+  before any call, and clamps `pageSize` to `maxPageSize`. Without the
+  capability it throws `unsupported` without any I/O.
+- A per-source `listComments` may then reject with `unsupported`; nothing in
+  the core calls it for such a connector.
+- Page-number paging shifts when items are added or deleted between pages. The
+  poll job that uses it makes that loss-free (it moves its high-water mark only
+  after a completed pass, less an overlap); the connector only has to return
+  what the platform returns, newest first.
+
+Set `capabilities.partialCommentLookup` when `getComment` cannot find every
+comment (TikTok has no lookup by id, so its connectors search recent comments
+only). The executor then treats a `null` from `getComment` as "not found here",
+never as "deleted", and does not request a resync after an action.
 
 ## Acting
 
@@ -540,6 +585,17 @@ Rules:
 - The message is built from the kind and code only. Never put a response body,
   URL, header or token into an error, and never `catch` and re-wrap a foreign
   error with its message.
+- A permission the account did not grant is not a token problem. Throw
+  `ConnectorError('auth_expired', 'scope_missing', { reauthorize: true, missingScopes: ['video.list'] })`
+  from a connection-level call (the account, the source list, a
+  whole-connection listing, an action). The runtime skips the
+  refresh-and-retry, marks the connection `reconnect_required` with reason
+  `oauth_scope_missing`, stores the names on the connection (its health then
+  shows "Missing permission: ..."), and owners are emailed. `missingScopes`
+  keeps at most 20 names matching `^[a-z0-9_.]{1,64}$` and drops the rest, so
+  use the connector's own scope names, never platform text. A permission
+  error on one post's comments should not do this: report it for that post
+  only, so one bad object never takes the connection down.
 - If you throw something that is not a `ConnectorError`, the framework
   replaces it with `permanent` / `connector_failure` and logs only
   `err.name`. Map errors instead of relying on that.

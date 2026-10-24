@@ -17,10 +17,19 @@ The [comment lifecycle](./comment-lifecycle.md) walks through this in order.
 
 ## Supported platforms
 
-Facebook Pages and Instagram are supported.
+You can connect:
+
+- Facebook Pages and Instagram accounts.
+- Meta ad accounts, for comments on your Facebook and Instagram ads.
+- TikTok Business accounts, for comments on your own videos.
+- TikTok ad accounts, for comments on your TikTok ads.
+
+<FeatureStatus status="partial">
+  The TikTok connections have not yet been checked against the live TikTok API, and their comments arrive by polling only, every few minutes. See [TikTok and TikTok ads](./tiktok.md).
+</FeatureStatus>
 
 <FeatureStatus status="planned">
-  TikTok, YouTube, Threads, LinkedIn, X and Bluesky are planned. They are not available yet.
+  YouTube, Threads, LinkedIn, X and Bluesky are planned. They are not available yet.
 </FeatureStatus>
 
 ## Where to go next

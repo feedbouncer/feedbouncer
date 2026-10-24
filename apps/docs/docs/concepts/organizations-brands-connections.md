@@ -14,10 +14,12 @@ A <Term id="brand">brand</Term> belongs to one organization. Rules, classifier s
 
 ## Connection
 
-A <Term id="connection">connection</Term> links a brand to one account on a <Term id="platform">platform</Term>: a Facebook Page or an Instagram account. A brand can have several connections. Comments arrive per connection. Reconnecting the same account does not restart review mode.
+A <Term id="connection">connection</Term> links a brand to one account on a <Term id="platform">platform</Term>: a Facebook Page, an Instagram account, a Meta ad account, a TikTok Business account or a TikTok ad account. A brand can have several connections. Comments arrive per connection. Reconnecting the same account does not restart review mode.
+
+A TikTok account and a TikTok ad account are separate connections. Either works without the other, and a problem with one does not stop the other. See [TikTok and TikTok ads](./tiktok.md).
 
 <FeatureStatus status="planned">
-  Connections to TikTok, YouTube, Threads, LinkedIn, X and Bluesky are planned.
+  Connections to YouTube, Threads, LinkedIn, X and Bluesky are planned.
 </FeatureStatus>
 
 ## API keys

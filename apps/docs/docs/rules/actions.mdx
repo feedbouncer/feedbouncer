@@ -86,10 +86,12 @@ An undone step is a moderator override: FeedBouncer will not apply that step to 
 
 ## When Hide or Delete fails
 
-If a Hide or Delete step ends as failed or not supported, for example because the permission was revoked, the connection needs reconnecting or retries ran out, the comment is **flagged for review** instead, and the decision shows why. Other steps do not fall back, and their outcome is in the action log. A step that is only deferred, because it was rate limited or is waiting for a reconnect, stays pending and falls back only if it finally fails.
+If a Hide or Delete step ends as failed or not supported, for example because the permission was revoked, the connection needs reconnecting or retries ran out, the comment is **flagged for review** instead, and the decision shows why. A step of any other type falls back the same way when the comment's platform does not support it or a permission is missing. Other failures of those steps do not fall back, and their outcome is in the action log. A step that is only deferred, because it was rate limited or is waiting for a reconnect, stays pending and falls back only if it finally fails.
+
+FeedBouncer never runs a different action in place of one that cannot run. A rule that deletes does not hide where delete is not possible: it flags the comment for review, and the review queue says why, for example "TikTok doesn't support ban author; review manually." The reason codes are `action_not_supported:<platform>:<step>` and `missing_permission:<scopes>`.
 
 ## Platform support
 
-Steps the connected accounts do not support are not offered in the editor. Ban is not available on Instagram, and Instagram replies are not allowed on hidden comments. A private reply on Instagram works on top-level comments only. A step that no connected account supports cannot be saved.
+Steps the connected accounts do not support are not offered in the editor. Ban is not available on Instagram, and Instagram replies are not allowed on hidden comments. A private reply on Instagram works on top-level comments only. TikTok and TikTok ads offer Hide, Delete and Auto-reply, but not Ban or Private reply; see [TikTok and TikTok ads](../concepts/tiktok.md#what-feedbouncer-can-do). A step that no connected account supports cannot be saved. A step that some connected accounts support and others do not is saved, and on the others it flags the comment for review.
 
 Reason codes, template variables and length rules, and rate-limit and retry behaviour are in the <RepoLink path="docs/moderation/actions.md">actions operator reference</RepoLink>.

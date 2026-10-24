@@ -69,10 +69,24 @@ rate limited like a manual action.
 
 If a Hide or Delete step ends as failed or not supported (for example the
 permission was revoked, the connection needs reconnecting, or retries ran out),
-the comment is **flagged for review** instead and the decision shows why. Other
-steps do not fall back; their outcome is in the action log. A step that is
-only deferred (rate limited, or waiting for a reconnect) stays pending and
-falls back only if it finally fails.
+the comment is **flagged for review** instead and the decision shows why. A
+step of any other type falls back the same way when it is not supported on the
+comment's platform or lacks a permission there, with the reason
+`action_not_supported:<platform>:<step>` or `missing_permission:<scopes>`
+([actions.md](actions.md#steps-the-platform-cannot-run)). Other failures of
+those steps do not fall back; their outcome is in the action log. A step that
+is only deferred (rate limited, or waiting for a reconnect) stays pending and
+falls back only if it finally fails. FeedBouncer never runs a different action
+in place of one that cannot run.
+
+## Applies to
+
+Each rule has an **Applies to** setting (`appliesTo` in the API): `all` (the
+default), `organic` or `ad`. A rule set to `organic` only sees comments on the
+brand's own posts and videos; one set to `ad` only sees comments on ads (Meta
+ads, and TikTok ad comments). A rule that does not apply to a comment is skipped
+before its conditions are checked, as if it were not in the list, so the next
+rule can decide. Existing rules apply to all comments.
 
 ## During review mode
 
