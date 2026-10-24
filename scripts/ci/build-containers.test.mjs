@@ -201,3 +201,13 @@ test('each published app has a Dockerfile whose last stage is runtime', async ()
     assert.match(dockerfile, /^ARG NODE_VERSION/m, app);
   }
 });
+
+test('self-hosting docs list every published image and both tags', async () => {
+  const doc = await read('docs/self-hosting/container-images.md');
+  for (const app of APPS) assert.ok(doc.includes(IMAGE(app)), `docs lack ${IMAGE(app)}`);
+  assert.match(doc, /`latest`/);
+  assert.match(doc, /full commit SHA/i);
+  assert.match(doc, /linux\/amd64/);
+  assert.match(doc, /linux\/arm64/);
+  assert.ok((await read('docs/self-hosting/README.md')).includes('](container-images.md)'));
+});
