@@ -94,9 +94,10 @@ async function fetchPage(
     searchValue: string;
   },
 ) {
-  const span = q.until.getTime() - q.since.getTime();
+  // The request carries whole UTC dates, both inclusive.
+  const dates = (Date.parse(day(q.until)) - Date.parse(day(q.since))) / DAY_MS + 1;
   if (
-    !(span >= 0 && span <= MAX_WINDOW_DAYS * DAY_MS) ||
+    !(q.until >= q.since && dates <= MAX_WINDOW_DAYS) ||
     !inRange(q.page, MAX_PAGE_NO) ||
     !inRange(q.pageSize, MAX_PAGE_SIZE)
   ) {
@@ -155,7 +156,7 @@ export async function listConnectionComments(
 }
 
 /**
- * V19: finds one comment by id within the last 30 days (the list endpoint is windowed and
+ * V19: finds one comment by id within the last 29 days plus today (the list endpoint is windowed and
  * `ActionRequest` carries no creation time). Older comments read as not found.
  */
 export async function findComment(
@@ -165,7 +166,7 @@ export async function findComment(
   commentId: string,
 ): Promise<AdComment | null> {
   const until = new Date(now());
-  const since = new Date(until.getTime() - MAX_WINDOW_DAYS * DAY_MS);
+  const since = new Date(until.getTime() - (MAX_WINDOW_DAYS - 1) * DAY_MS);
   const { items } = await fetchPage(log, ctx, {
     since,
     until,

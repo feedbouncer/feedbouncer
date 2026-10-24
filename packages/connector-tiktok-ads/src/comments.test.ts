@@ -99,6 +99,19 @@ describe('listConnectionComments', () => {
     expect(w.fake.calls('adCommentList')).toHaveLength(0);
   });
 
+  it('a window touching 31 calendar dates is rejected before I/O', async () => {
+    const w = await seeded();
+    await expect(
+      w.connector.listConnectionComments!(w.ctx, {
+        since: at('2026-09-01T12:00:00Z'),
+        until: at('2026-10-01T12:00:00Z'),
+        page: 1,
+        pageSize: 50,
+      }),
+    ).rejects.toMatchObject({ kind: 'permanent', code: 'invalid_request' });
+    expect(w.fake.calls('adCommentList')).toHaveLength(0);
+  });
+
   it.each([
     { page: 0, pageSize: 50 },
     { page: 100_001, pageSize: 50 },

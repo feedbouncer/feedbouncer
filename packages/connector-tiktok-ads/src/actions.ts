@@ -64,7 +64,8 @@ export async function respond(
   if (req.kind !== 'public_reply') throw new ConnectorError('unsupported', 'response_unsupported');
   const commentId = opaqueId(req.target.externalId);
   const found = await findComment(log, now, ctx, commentId);
-  if (found === null) return { status: 'not_found' };
+  // The lookup only covers recent comments, so a miss does not mean the comment is gone.
+  if (found === null) throw new ConnectorError('permanent', 'comment_lookup_missed');
   const res = await gone(() =>
     scoped(() =>
       tiktokRequest(callOf(ctx), {

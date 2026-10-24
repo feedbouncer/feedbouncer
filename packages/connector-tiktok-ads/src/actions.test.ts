@@ -101,12 +101,12 @@ describe('respond', () => {
     expect(JSON.stringify(log.mock.calls)).not.toContain('unique-reply-text');
   });
 
-  it('a reply to a comment that cannot be found is not_found without posting', async () => {
+  it('a reply whose comment the lookup misses fails without posting or claiming it is gone', async () => {
     const { fake, connector, ctx, commentId, target } = await withComment();
     fake.deleteComment(commentId);
     await expect(
       connector.respond!(ctx, { kind: 'public_reply', target, text: 'x' }),
-    ).resolves.toEqual({ status: 'not_found' });
+    ).rejects.toMatchObject({ kind: 'permanent', code: 'comment_lookup_missed' });
     expect(fake.calls('adCommentPost')).toHaveLength(0);
   });
 

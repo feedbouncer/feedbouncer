@@ -16,9 +16,10 @@ import { DAY_MS, SEC, activeAccount, ingestComment, type TikTokPollDeps } from '
 
 const BG = { priority: 'background' } as const;
 const PAGE_SIZE = 100;
-const MAX_WINDOW_MS = 30 * DAY_MS;
+/** TikTok reads at most 30 calendar dates per call, both ends inclusive. */
+const MAX_WINDOW_MS = 29 * DAY_MS;
 
-/** `[lower, until]` as windows of at most 30 days, newest first. */
+/** `[lower, until]` as windows of at most 29 days, newest first. */
 function adWindows(lower: Date, until: Date): { since: Date; until: Date }[] {
   const out: { since: Date; until: Date }[] = [];
   let end = until.getTime();

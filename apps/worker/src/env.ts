@@ -253,39 +253,47 @@ function readTikTokPollingConfig(
 ): TikTokPollingConfig {
   const sec = (name: string, min: number, max: number, fallback: number) =>
     readInt(env, name, { min, max, fallback });
-  // A connector that is off has its variables left unread.
-  const organic = on.organic
-    ? {
-        pollIntervalSec: sec('TIKTOK_POLL_INTERVAL_SEC', 60, 3600, 300),
-        quietVideoPollIntervalSec: sec('TIKTOK_QUIET_VIDEO_POLL_INTERVAL_SEC', 300, 86_400, 21_600),
-        activeVideoDays: sec('TIKTOK_ACTIVE_VIDEO_DAYS', 1, 365, 30),
-        videoDiscoveryIntervalSec: sec('TIKTOK_VIDEO_DISCOVERY_INTERVAL_SEC', 300, 86_400, 900),
-        deepScanIntervalSec: sec('TIKTOK_DEEP_SCAN_INTERVAL_SEC', 3600, 604_800, 86_400),
-        sourceUnavailableRetrySec: sec('TIKTOK_SOURCE_UNAVAILABLE_RETRY_SEC', 300, 604_800, 21_600),
-        maxSourcesPerJob: sec('TIKTOK_MAX_SOURCES_PER_JOB', 1, 200, 25),
-      }
-    : {
-        pollIntervalSec: 300,
-        quietVideoPollIntervalSec: 21_600,
-        activeVideoDays: 30,
-        videoDiscoveryIntervalSec: 900,
-        deepScanIntervalSec: 86_400,
-        sourceUnavailableRetrySec: 21_600,
-        maxSourcesPerJob: 25,
-      };
-  const ads = on.ads
-    ? {
-        adsPollIntervalSec: sec('TIKTOK_ADS_POLL_INTERVAL_SEC', 60, 3600, 300),
-        adsOverlapSec: sec('TIKTOK_ADS_POLL_OVERLAP_SEC', 0, 86_400, 900),
-        adsFullScanIntervalSec: sec('TIKTOK_ADS_FULL_SCAN_INTERVAL_SEC', 3600, 604_800, 86_400),
-      }
-    : { adsPollIntervalSec: 300, adsOverlapSec: 900, adsFullScanIntervalSec: 86_400 };
+  // A connector that is off has its variables left unread: it gets the defaults.
+  const read = (enabled: boolean, name: string, min: number, max: number, fallback: number) =>
+    enabled ? sec(name, min, max, fallback) : fallback;
+  const { organic, ads } = on;
+  const poll = {
+    pollIntervalSec: read(organic, 'TIKTOK_POLL_INTERVAL_SEC', 60, 3600, 300),
+    quietVideoPollIntervalSec: read(
+      organic,
+      'TIKTOK_QUIET_VIDEO_POLL_INTERVAL_SEC',
+      300,
+      86_400,
+      21_600,
+    ),
+    activeVideoDays: read(organic, 'TIKTOK_ACTIVE_VIDEO_DAYS', 1, 365, 30),
+    videoDiscoveryIntervalSec: read(
+      organic,
+      'TIKTOK_VIDEO_DISCOVERY_INTERVAL_SEC',
+      300,
+      86_400,
+      900,
+    ),
+    deepScanIntervalSec: read(organic, 'TIKTOK_DEEP_SCAN_INTERVAL_SEC', 3600, 604_800, 86_400),
+    sourceUnavailableRetrySec: read(
+      organic,
+      'TIKTOK_SOURCE_UNAVAILABLE_RETRY_SEC',
+      300,
+      604_800,
+      21_600,
+    ),
+    maxSourcesPerJob: read(organic, 'TIKTOK_MAX_SOURCES_PER_JOB', 1, 200, 25),
+    adsPollIntervalSec: read(ads, 'TIKTOK_ADS_POLL_INTERVAL_SEC', 60, 3600, 300),
+    adsOverlapSec: read(ads, 'TIKTOK_ADS_POLL_OVERLAP_SEC', 0, 86_400, 900),
+    adsFullScanIntervalSec: read(ads, 'TIKTOK_ADS_FULL_SCAN_INTERVAL_SEC', 3600, 604_800, 86_400),
+    maxPagesPerJob: sec('TIKTOK_MAX_PAGES_PER_JOB', 1, 200, 20),
+  };
   return {
     platforms: [
-      ...(on.organic ? (['tiktok'] as const) : []),
-      ...(on.ads ? (['tiktok_ads'] as const) : []),
+      ...(organic ? (['tiktok'] as const) : []),
+      ...(ads ? (['tiktok_ads'] as const) : []),
     ],
-    poll: { ...organic, ...ads, maxPagesPerJob: sec('TIKTOK_MAX_PAGES_PER_JOB', 1, 200, 20) },
+    poll,
     scheduler: {
       tickSec: sec('TIKTOK_SCHEDULER_TICK_SEC', 5, 300, 30),
       maxConnectionsPerTick: sec('TIKTOK_SCHEDULER_MAX_CONNECTIONS_PER_TICK', 1, 5000, 200),
