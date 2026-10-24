@@ -103,6 +103,28 @@ describe('FakeTikTok', () => {
     expect(win.comments.every((c: Obj) => !c.create_time.startsWith('2026-03-01'))).toBe(true);
   });
 
+  it('ads comment list treats comment_type ["ALL"] as every type', async () => {
+    const { fake, call, adLogin } = world();
+    const a = await adLogin();
+    const top = fake.addAdComment(a.advertiserId, {
+      adId: 'ad1',
+      itemId: 'v1',
+      text: 'top',
+      createdAt: new Date('2026-03-01T00:00:00Z'),
+    });
+    fake.addAdComment(a.advertiserId, {
+      adId: 'ad1',
+      itemId: 'v1',
+      text: 'reply',
+      createdAt: new Date('2026-03-01T01:00:00Z'),
+      parentId: top.commentId,
+    });
+    const r = await call('adCommentList', a.token, {
+      query: { advertiser_id: a.advertiserId, comment_type: '["ALL"]' },
+    });
+    expect(r.comments).toHaveLength(2);
+  });
+
   it('mutateBetweenPages lets a test delete an item mid-pass', async () => {
     const { fake, call, ttLogin } = world();
     const a = await ttLogin();

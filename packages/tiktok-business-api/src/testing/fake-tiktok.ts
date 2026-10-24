@@ -538,7 +538,9 @@ export class FakeTikTok {
       .filter((c) => q.end_time === undefined || date(c) <= String(q.end_time))
       .filter(
         (c) =>
-          !Array.isArray(types) || types.includes(c.parentId === undefined ? 'COMMENT' : 'REPLY'),
+          !Array.isArray(types) ||
+          types.includes('ALL') ||
+          types.includes(c.parentId === undefined ? 'COMMENT' : 'REPLY'),
       )
       .filter(
         (c) =>

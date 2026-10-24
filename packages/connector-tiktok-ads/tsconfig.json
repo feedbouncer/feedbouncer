@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist", "rootDir": "src", "types": ["node"] },
+  "include": ["src"],
+  "references": [
+    { "path": "../connectors/tsconfig.build.json" },
+    { "path": "../connector-tiktok/tsconfig.build.json" },
+    { "path": "../service-runtime/tsconfig.build.json" },
+    { "path": "../tiktok-business-api/tsconfig.build.json" }
+  ]
+}
