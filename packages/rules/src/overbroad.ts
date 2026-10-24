@@ -19,6 +19,7 @@ const probe = (body: string): CommentFacts => ({
   platform: 'instagram',
   authorExternalId: null,
   authorName: '',
+  origin: 'organic',
 });
 
 /** 'matches_everything' when the conditions would catch every ordinary comment, else null. */
@@ -34,6 +35,7 @@ export function checkOverbroad(conditions: RuleConditions): string | null {
     mode: 'enforce',
     priority: 0,
     enabled: true,
+    appliesTo: 'all',
     createdAt: new Date(0),
   };
   const set = compileRuleSet([record], { ownDomains: [] }, 'probe');

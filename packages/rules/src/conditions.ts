@@ -5,7 +5,7 @@ import { normalizeDomainEntry } from './domains.js';
 import { isSingleEmoji } from './emoji.js';
 import { normalizeText } from './normalize.js';
 import { compilePattern, RegexCompileError } from './regex.js';
-import { RULE_MODES } from './types.js';
+import { RULE_APPLIES_TO, RULE_MODES } from './types.js';
 
 export const CONDITION_LIMITS = {
   terms: 5000,
@@ -232,6 +232,7 @@ export const ruleInputSchema = z.strictObject({
   actions: actionStepsSchema,
   mode: z.enum(RULE_MODES).default('suggest'),
   enabled: z.boolean().default(true),
+  appliesTo: z.enum(RULE_APPLIES_TO).default('all'),
 });
 export const rulePatchSchema = z
   .strictObject({
@@ -240,6 +241,7 @@ export const rulePatchSchema = z
     actions: actionStepsSchema.optional(),
     mode: z.enum(RULE_MODES).optional(),
     enabled: z.boolean().optional(),
+    appliesTo: z.enum(RULE_APPLIES_TO).optional(),
   })
   .refine((p) => Object.keys(p).length > 0, { message: 'Nothing to update.' });
 export type RuleInput = z.output<typeof ruleInputSchema>;

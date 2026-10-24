@@ -80,6 +80,7 @@ export function ruleEvaluateJob(d: {
             platform: row.platform,
             authorExternalId: row.authorExternalId,
             authorName: row.authorName,
+            origin: row.origin,
           },
           {
             ...(clock ? { now: () => clock.now() } : {}),

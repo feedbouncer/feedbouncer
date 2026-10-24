@@ -21,6 +21,7 @@ export function createTikTokAdsConnector(
       listSources: false,
       recentSources: false,
       connectionComments: true,
+      partialCommentLookup: true,
       ingestion: 'polling',
       accountSelection: 'multiple',
       accountIdPattern: NUMERIC_ID,

@@ -93,6 +93,7 @@ export class FakeApi implements ApiPort {
             mode: 'enforce',
             priority: 1,
             enabled: true,
+            appliesTo: 'ad',
           },
         ],
         changes: [

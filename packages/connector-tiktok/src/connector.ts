@@ -57,6 +57,7 @@ export function createTikTokConnector(
       },
       listSources: true,
       recentSources: false,
+      partialCommentLookup: true,
       ingestion: 'polling',
       accountSelection: 'multiple',
       accountIdPattern: OPAQUE_ID,

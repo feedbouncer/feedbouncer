@@ -136,6 +136,7 @@ export async function checkText(
     platform: null,
     authorExternalId: null,
     authorName: null,
+    origin: 'organic',
   });
   if (decided) return combine(decided, null, null);
   const [classifier, policy] = await Promise.all([

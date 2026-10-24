@@ -96,8 +96,8 @@ async function addConn(
     ...t,
     brandId,
     connectionId,
-    sourceId: await src('ad_post'),
-    otherSourceId: await src('ad_post'),
+    sourceId: await src('organic_post'),
+    otherSourceId: await src('organic_post'),
     authorId,
   };
 }
@@ -164,8 +164,10 @@ const link = (
   platform: 'facebook' | 'instagram' = 'facebook',
   unlinked = false,
 ) =>
+  // Linking an ad promotes its source to an ad post, as ad tracking does.
   q(
-    `INSERT INTO meta_ad_source (organization_id, brand_id, ad_id, source_id, platform, unlinked_at)
+    `WITH promoted AS (UPDATE source SET kind = 'ad_post' WHERE id = $4)
+     INSERT INTO meta_ad_source (organization_id, brand_id, ad_id, source_id, platform, unlinked_at)
      VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 THEN now() END)`,
     [ads.organizationId, ads.brandId, adId, sourceId, platform, unlinked],
   );

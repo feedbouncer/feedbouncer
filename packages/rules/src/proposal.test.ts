@@ -16,6 +16,7 @@ const rec = (over: Partial<RuleRecord> = {}): RuleRecord => ({
   mode: 'enforce',
   priority: n * 10,
   enabled: true,
+  appliesTo: 'all',
   createdAt: new Date(0),
   ...over,
 });
@@ -27,7 +28,7 @@ describe('validateRuleProposal create', () => {
     expect(validateRuleProposal({ operation: 'create', rule: valid }, [])).toEqual({
       ok: true,
       before: null,
-      after: { ...valid, mode: 'suggest', enabled: true },
+      after: { ...valid, mode: 'suggest', enabled: true, appliesTo: 'all' },
       warnings: [],
     });
   });
@@ -217,6 +218,7 @@ describe('ruleDiff', () => {
     actions: hide,
     mode: 'enforce',
     enabled: true,
+    appliesTo: 'all',
   };
   it('lists changed fields only', () => {
     expect(ruleDiff(before, { ...before, enabled: false })).toEqual([
@@ -230,7 +232,8 @@ describe('ruleDiff', () => {
       'actions',
       'mode',
       'enabled',
+      'appliesTo',
     ]);
-    expect(ruleDiff(before, null)).toHaveLength(5);
+    expect(ruleDiff(before, null)).toHaveLength(6);
   });
 });

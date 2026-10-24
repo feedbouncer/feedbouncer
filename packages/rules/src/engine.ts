@@ -11,16 +11,18 @@ import { compileKeywordRule } from './matchers/keywords.js';
 import { compileLinkRule } from './matchers/links.js';
 import { compileRegexRule } from './matchers/regex.js';
 import type { Matcher } from './matchers/types.js';
-import type {
-  BrandContext,
-  CommentFacts,
-  RuleAction,
-  RuleHit,
-  RuleKind,
-  RuleMode,
-  RuleRecord,
-  TraceEntry,
-  Verdict,
+import {
+  ruleApplies,
+  type BrandContext,
+  type CommentFacts,
+  type RuleAction,
+  type RuleAppliesTo,
+  type RuleHit,
+  type RuleKind,
+  type RuleMode,
+  type RuleRecord,
+  type TraceEntry,
+  type Verdict,
 } from './types.js';
 import { CommentView } from './view.js';
 
@@ -33,6 +35,7 @@ export interface CompiledRule {
   action: RuleAction;
   actions: ActionStep[];
   mode: RuleMode;
+  appliesTo: RuleAppliesTo;
   pinned: boolean;
   matcher: Matcher;
 }
@@ -117,6 +120,7 @@ export function compileRuleSet(
       action: r.action,
       actions: r.actions,
       mode: r.mode,
+      appliesTo: r.appliesTo,
       pinned: order.pinned,
       matcher,
     });
@@ -143,7 +147,7 @@ export function evaluate(
   let decided: RuleHit | null = null;
   const view = new CommentView(facts);
   for (const r of set.rules) {
-    if (decided && r.mode === 'suggest') continue;
+    if ((decided && r.mode === 'suggest') || !ruleApplies(r, facts)) continue;
     let res: ReturnType<Matcher>;
     try {
       res = r.matcher(view, { now, startedAt: now(), limitMs });

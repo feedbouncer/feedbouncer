@@ -8,7 +8,7 @@ const input = z.object({ brandId: z.uuid().optional().describe('Only rules for t
 function renderBrand(b: RulesResponse['brands'][number]): string {
   const rules = b.rules.map(
     (r) =>
-      `- ${r.name} [${r.id}] mode: ${r.mode}, priority: ${r.priority}, ${r.enabled ? 'enabled' : 'disabled'}\n` +
+      `- ${r.name} [${r.id}] mode: ${r.mode}, priority: ${r.priority}, applies to: ${r.appliesTo}, ${r.enabled ? 'enabled' : 'disabled'}\n` +
       `  conditions: ${JSON.stringify(r.conditions)}\n  actions: ${JSON.stringify(r.actions)}`,
   );
   const changes = b.changes.map(

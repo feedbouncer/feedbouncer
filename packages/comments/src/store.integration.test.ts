@@ -4,7 +4,7 @@ import { commentFingerprint, createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import type { NormalizedComment } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import { PgCommentStore, setCommentPlatformState } from './store.js';
+import { PgCommentStore, setCommentPlatformState, upsertListedSource } from './store.js';
 import { applyPlatformComment } from './apply.js';
 import { applyStored, upsertStored } from './testing/index.js';
 
@@ -232,6 +232,36 @@ describe('PgCommentStore', () => {
       origin: 'organic',
       ads: [],
     });
+  });
+
+  it('comments under an ad_post source report origin ad; tiktok video comments report organic', async () => {
+    const connect = async (platform: string, ext: string): Promise<ConnectionScope> => {
+      const r = await ctx.c.query<{ id: string }>(
+        `INSERT INTO connection (organization_id, brand_id, platform, external_account_id)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [t.organizationId, t.brandId, platform, ext],
+      );
+      return { ...scope(), connectionId: r.rows[0]!.id };
+    };
+    const ads = await connect('tiktok_ads', '7300000000000000101');
+    const tiktok = await connect('tiktok', 'tt-origin-1');
+    await upsertListedSource(pool, ads, 'ad-origin-1', 'ad_post');
+    await upsertListedSource(pool, tiktok, 'video-origin-1', 'video');
+    const ad = await upsertStored(store, ads, comment({ sourceExternalId: 'ad-origin-1' }), own(1));
+    const video = await upsertStored(
+      store,
+      tiktok,
+      comment({ sourceExternalId: 'video-origin-1' }),
+      own(1),
+    );
+    expect((await store.load(t, ad.commentId))?.origin).toBe('ad');
+    expect((await store.load(t, video.commentId))?.origin).toBe('organic');
+    const listed = async (origin: 'ad' | 'organic', connectionId: string) =>
+      (await store.list(t, { before: null, limit: 50, origin, connectionId })).map((r) => r.id);
+    expect(await listed('ad', ads.connectionId)).toEqual([ad.commentId]);
+    expect(await listed('organic', ads.connectionId)).toEqual([]);
+    expect(await listed('organic', tiktok.connectionId)).toEqual([video.commentId]);
+    expect(await listed('ad', tiktok.connectionId)).toEqual([]);
   });
 
   it('a newer snapshot wins, an older one never overwrites (out of order)', async () => {

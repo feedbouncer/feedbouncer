@@ -4,7 +4,13 @@ import { CommentView } from '../view.js';
 import { compileRegexRule } from './regex.js';
 
 const v = (body: string) =>
-  new CommentView({ body, platform: 'facebook', authorExternalId: null, authorName: null });
+  new CommentView({
+    body,
+    platform: 'facebook',
+    authorExternalId: null,
+    authorName: null,
+    origin: 'organic',
+  });
 
 it('runs patterns against normalised text and reports the index', () => {
   const m = compileRegexRule(

@@ -14,6 +14,7 @@ describe('read_rules', () => {
     expect(text).toContain('Acme');
     expect(text).toContain('No links');
     expect(text).toContain(RULE_ID);
+    expect(text).toContain('applies to: ad');
     expect(text).toMatch(/update .*pending/);
     expect(r.structuredContent).toEqual(h.api.rulesResult);
   });

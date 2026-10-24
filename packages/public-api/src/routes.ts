@@ -254,7 +254,7 @@ export const ListRulesQuery = z.strictObject({ brandId: z.uuid().optional() });
 
 const PROPOSAL_OPERATIONS = ['create', 'update', 'archive'] as const;
 const PROPOSAL_STATUSES = ['pending', 'approved', 'rejected', 'expired', 'stale'] as const;
-const RULE_FIELDS = ['name', 'conditions', 'actions', 'mode', 'enabled'] as const;
+const RULE_FIELDS = ['name', 'conditions', 'actions', 'mode', 'enabled', 'appliesTo'] as const;
 
 export const RuleResource = z
   .object({
@@ -265,6 +265,9 @@ export const RuleResource = z
     mode: z.enum(['enforce', 'suggest']),
     priority: z.int(),
     enabled: z.boolean(),
+    appliesTo: z
+      .enum(['all', 'organic', 'ad'])
+      .meta({ description: 'Which comments the rule evaluates: all, organic only or ads only.' }),
   })
   .meta({ id: 'Rule' });
 
@@ -307,7 +310,7 @@ export const ProposeRuleChangeBody = z
       operation: z.literal('create'),
       rule: ruleFields.meta({
         description:
-          '`name`, `conditions`, `actions`, `mode` (default `suggest`) and `enabled` (default true), as in the rules of `listRules`.',
+          '`name`, `conditions`, `actions`, `mode` (default `suggest`), `enabled` (default true) and `appliesTo` (`all`, `organic` or `ad`; default `all`), as in the rules of `listRules`.',
       }),
     }),
     z.strictObject({

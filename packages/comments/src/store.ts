@@ -50,7 +50,7 @@ export interface CommentRow {
   readonly reviewMode: ReviewModeColumns;
   /** A private reply to this comment is pending or applied (the platform allows one). */
   readonly privateReplied: boolean;
-  /** 'ad' when its source is linked to an ad, or it was also seen through an ad's source. */
+  /** 'ad' when its source is an ad post or linked to an ad, or it was also seen through an ad's source. */
   readonly origin: CommentOrigin;
   /** Up to 5 linked ads, by ad id. */
   readonly ads: readonly { adId: string; adAccountId: string }[];
@@ -73,11 +73,14 @@ const noNul = (s: string): string => s.replaceAll('\u0000', '�');
 export const storedCommentBody = noNul;
 const outOfScope = () => new Error('comment store: connection is not in the given scope');
 
-/** Over `comment c`: true when the comment came through an ad. */
+/** Over `comment c`: true when the comment came through an ad or sits under an ad post. */
 const IS_AD_SQL = `(c.ad_source_id IS NOT NULL OR EXISTS (
     SELECT 1 FROM meta_ad_source mas
      WHERE mas.organization_id = c.organization_id AND mas.brand_id = c.brand_id
-       AND mas.source_id = c.source_id))`;
+       AND mas.source_id = c.source_id) OR EXISTS (
+    SELECT 1 FROM source ads
+     WHERE ads.id = c.source_id AND ads.organization_id = c.organization_id
+       AND ads.brand_id = c.brand_id AND ads.kind = 'ad_post'))`;
 
 export const COMMENT_IS_AD_SQL = IS_AD_SQL;
 

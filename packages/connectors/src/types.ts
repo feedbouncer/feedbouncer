@@ -219,6 +219,8 @@ export interface ConnectorCapabilities {
   readonly oauthCodeParam?: 'code' | 'auth_code';
   /** Implements listConnectionComments (every comment of the connection, not per source). Default false. */
   readonly connectionComments?: boolean;
+  /** getComment only searches recent comments, so its null does not mean deleted. Default false. */
+  readonly partialCommentLookup?: boolean;
   /** 1..500 */
   readonly maxPageSize: number;
 }

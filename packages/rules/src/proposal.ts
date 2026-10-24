@@ -9,7 +9,7 @@ import {
 import { checkOverbroad } from './overbroad.js';
 import { analyzeRules } from './shadowing.js';
 import { MAX_RULES_PER_BRAND } from './store.js';
-import type { RuleMode, RuleRecord } from './types.js';
+import type { RuleAppliesTo, RuleMode, RuleRecord } from './types.js';
 
 export type RuleProposalInput =
   | { operation: 'create'; rule: unknown }
@@ -32,13 +32,14 @@ export interface RuleSnapshot {
   actions: ActionStep[];
   mode: RuleMode;
   enabled: boolean;
+  appliesTo: RuleAppliesTo;
 }
 
 export type ProposalResult =
   | { ok: true; after: RuleSnapshot | null; before: RuleSnapshot | null; warnings: string[] }
   | { ok: false; reason: ProposalRejection; message: string; ruleId?: string };
 
-const FIELDS = ['name', 'conditions', 'actions', 'mode', 'enabled'] as const;
+const FIELDS = ['name', 'conditions', 'actions', 'mode', 'enabled', 'appliesTo'] as const;
 const BLOCKED_STEPS = new Set(['delete', 'ban']);
 
 const reject = (reason: ProposalRejection, message: string, ruleId?: string): ProposalResult => ({
@@ -76,6 +77,7 @@ const snapshotOf = (r: RuleRecord): RuleSnapshot => {
     actions: r.actions,
     mode: r.mode,
     enabled: r.enabled,
+    appliesTo: r.appliesTo,
   };
 };
 
@@ -104,6 +106,7 @@ function warningsFor(
     actions: candidate.actions,
     mode: candidate.mode,
     enabled: candidate.enabled,
+    appliesTo: candidate.appliesTo,
     priority: replacing?.priority ?? Math.max(0, ...current.map((r) => r.priority)) + 1,
     createdAt: replacing?.createdAt ?? new Date(),
   };
@@ -145,13 +148,14 @@ export function validateRuleProposal(
     const patch = rulePatchSchema.safeParse(input.patch);
     if (!patch.success)
       return reject('invalid_rule', patch.error.issues[0]?.message ?? 'Invalid patch.');
-    const { name, conditions, actions, mode, enabled } = patch.data;
+    const { name, conditions, actions, mode, enabled, appliesTo } = patch.data;
     after = {
       name: name ?? before!.name,
       conditions: conditions ?? before!.conditions,
       actions: actions ?? before!.actions,
       mode: mode ?? before!.mode,
       enabled: enabled ?? before!.enabled,
+      appliesTo: appliesTo ?? before!.appliesTo,
     };
   }
 

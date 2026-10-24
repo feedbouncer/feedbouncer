@@ -112,6 +112,22 @@ describe('PgRuleStore rules', () => {
     expect(row.rows[0]).toEqual({ action: 'approve', actions: [] });
   });
 
+  it('stores appliesTo, defaulting to all, and loads it for the engine', async () => {
+    const { scope } = await fresh();
+    const all = await tx((c) => store.create(c, scope, kw('all')));
+    const ads = await tx((c) => store.create(c, scope, kw('ads', { appliesTo: 'ad' })));
+    expect([all.appliesTo, ads.appliesTo]).toEqual(['all', 'ad']);
+    const moved = await tx((c) => store.update(c, scope, ads.id, { appliesTo: 'organic' }));
+    expect(moved).toMatchObject({ appliesTo: 'organic', name: 'ads' });
+    const renamed = await tx((c) => store.update(c, scope, ads.id, { name: 'renamed' }));
+    expect(renamed?.appliesTo).toBe('organic');
+    const loaded = (await store.loadActive(scope)).records.map((r) => [r.id, r.appliesTo]);
+    expect(loaded).toEqual([
+      [all.id, 'all'],
+      [ads.id, 'organic'],
+    ]);
+  });
+
   it('lists in evaluation order, hides archived, and isolates tenants', async () => {
     const { scope } = await fresh();
     const other = await fresh();

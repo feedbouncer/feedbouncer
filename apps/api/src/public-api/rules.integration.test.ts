@@ -130,6 +130,7 @@ describe('GET /v1/rules', () => {
       mode: 'suggest',
       priority: expect.any(Number),
       enabled: true,
+      appliesTo: 'all',
     });
     expect(JSON.stringify(all.body)).not.toContain(ruleB);
 
@@ -180,7 +181,8 @@ describe('POST /v1/rule-change-proposals', () => {
     expect(r.body.diff).toEqual(
       expect.arrayContaining([{ field: 'name', before: null, after: 'giveaway' }]),
     );
-    expect(r.body.diff).toHaveLength(5);
+    expect(r.body.diff).toHaveLength(6);
+    expect(r.body.diff).toContainEqual({ field: 'appliesTo', before: null, after: 'all' });
     expect(Math.abs(Date.parse(r.body.expiresAt) - (Date.now() + 24 * HOUR))).toBeLessThan(60_000);
     expect(await liveState(A.brandId)).toEqual(before);
   });
@@ -195,6 +197,24 @@ describe('POST /v1/rule-change-proposals', () => {
     expect(up.status).toBe(201);
     expect(up.body).toMatchObject({ operation: 'update', ruleId: ruleA });
     expect(up.body.diff).toEqual([{ field: 'enabled', before: true, after: false }]);
+
+    const scoped = await propose({
+      brandId: A.brandId,
+      operation: 'update',
+      ruleId: ruleA,
+      patch: { appliesTo: 'ad' },
+    });
+    expect(scoped.status).toBe(201);
+    routeSpec('proposeRuleChange').responses[201]!.parse(scoped.body);
+    expect(scoped.body.diff).toEqual([{ field: 'appliesTo', before: 'all', after: 'ad' }]);
+    const bad = await propose({
+      brandId: A.brandId,
+      operation: 'update',
+      ruleId: ruleA,
+      patch: { appliesTo: 'paid' },
+    });
+    expect(bad.status).toBe(422);
+    expect(bad.body.error).toMatchObject({ code: 'rule_rejected', reason: 'invalid_rule' });
 
     const arch = await propose({ brandId: A.brandId, operation: 'archive', ruleId: ruleA });
     expect(arch.status).toBe(201);

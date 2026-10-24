@@ -2,7 +2,7 @@
 export const COMMENT_STATUSES = ['new', 'flagged', 'awaiting_action', 'reviewed'] as const;
 export type CommentStatus = (typeof COMMENT_STATUSES)[number];
 
-/** Platforms whose comments are listed (every connector platform except the ads-only one). */
+/** Platforms whose comments are listed (every connector platform except Meta ads, which holds none). */
 export const LISTABLE_PLATFORMS = [
   'facebook',
   'instagram',
@@ -12,6 +12,7 @@ export const LISTABLE_PLATFORMS = [
   'linkedin',
   'x',
   'bluesky',
+  'tiktok_ads',
 ] as const;
 
 /** Shape of a category slug in a filter value. `_` cannot start one, so `_none` stays distinct. */

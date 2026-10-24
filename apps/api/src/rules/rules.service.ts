@@ -86,6 +86,7 @@ function suggestionChange(
   const retired =
     (before.enabled && !after.enabled) ||
     (before.mode !== 'suggest' && after.mode === 'suggest') ||
+    before.appliesTo !== after.appliesTo ||
     differs(before.conditions, after.conditions);
   if (retired) return 'retired';
   return differs(before.actions, after.actions) ? { actions: after.actions } : null;
@@ -140,6 +141,7 @@ export class RulesService {
         actions: r.actions,
         mode: r.mode,
         enabled: r.enabled,
+        appliesTo: r.appliesTo,
         position: i + 1,
         createdAt: r.createdAt.toISOString(),
         updatedAt: r.updatedAt.toISOString(),
@@ -181,6 +183,7 @@ export class RulesService {
       steps: r.actions.map((a) => a.type).join(','),
       mode: r.mode,
       enabled: r.enabled,
+      appliesTo: r.appliesTo,
       ...(changed && { changed: changed.join(',') }),
     };
   }

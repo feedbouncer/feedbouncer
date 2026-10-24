@@ -1,3 +1,4 @@
+import type { StepType } from '@feedbouncer/actions';
 import type { Platform } from '@feedbouncer/connectors';
 import type { Evidence, RuleHit, RuleKind } from './types.js';
 
@@ -47,6 +48,8 @@ export function describeDecision(hit: RuleHit): string {
 
 const FALLBACK_TEXT: Record<string, string> = {
   unsupported: 'does not allow it',
+  action_not_supported: 'does not allow it',
+  missing_permission: 'FeedBouncer lacks the permission for it',
   connection_needs_reconnect: 'the connection needs reconnecting',
   connection_inactive: 'the connection is disconnected',
   rate_limited: 'the platform is rate-limiting us (still retrying)',
@@ -54,23 +57,38 @@ const FALLBACK_TEXT: Record<string, string> = {
   auth_expired: 'permission was revoked',
 };
 
-const PLATFORM_LABEL: Record<string, string> = { facebook: 'Facebook', instagram: 'Instagram' };
+const PLATFORM_LABEL: Record<string, string> = {
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  tiktok_ads: 'TikTok ads',
+};
 
+const VERB: Record<'hide' | 'remove' | Exclude<StepType, 'flag_for_review'>, string> = {
+  hide: 'hide this comment',
+  remove: 'delete this comment',
+  delete: 'delete this comment',
+  ban: 'ban the author of this comment',
+  auto_reply: 'reply to this comment',
+  private_reply: 'reply privately to this comment',
+};
+
+/** `code` may carry detail after a colon, e.g. `action_not_supported:tiktok:delete`. */
 export function describeFallback(
   ruleName: string,
-  action: 'hide' | 'remove',
+  action: keyof typeof VERB,
   code: string,
   platform: Platform,
 ): string {
-  const verb = action === 'remove' ? 'delete' : 'hide';
-  const known = Object.hasOwn(FALLBACK_TEXT, code);
-  const why = known ? FALLBACK_TEXT[code]! : 'the platform call failed';
+  const base = code.split(':', 1)[0]!;
+  const known = Object.hasOwn(FALLBACK_TEXT, base);
+  const why = known ? FALLBACK_TEXT[base]! : 'the platform call failed';
   const plat = Object.hasOwn(PLATFORM_LABEL, platform)
     ? PLATFORM_LABEL[platform]!
     : String(platform);
   // Platform name leads only for the "does not allow it" reading.
-  const reason = code === 'unsupported' ? `${plat} ${why}` : why;
+  const reason = why === FALLBACK_TEXT.unsupported ? `${plat} ${why}` : why;
   return clip(
-    `Rule "${ruleName}" wanted to ${verb} this comment, but ${reason} (${code}). Flagged for review instead.`,
+    `Rule "${ruleName}" wanted to ${VERB[action]}, but ${reason} (${code}). Flagged for review instead.`,
   );
 }

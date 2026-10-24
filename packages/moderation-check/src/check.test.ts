@@ -58,6 +58,7 @@ const rule = (term: string, o: { action?: RuleAction; mode?: RuleMode } = {}): R
   mode: o.mode ?? 'enforce',
   priority: 1,
   enabled: true,
+  appliesTo: 'all',
   createdAt: new Date(0),
 });
 

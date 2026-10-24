@@ -23,7 +23,11 @@ const input = z
   .object({
     brandId: z.uuid(),
     operation: z.enum(['create', 'update', 'archive']),
-    rule: fields.optional().describe('create only: the new rule.'),
+    rule: fields
+      .optional()
+      .describe(
+        'create only: the new rule (name, conditions, actions, mode, enabled, appliesTo: all, organic or ad).',
+      ),
     ruleId: z.uuid().optional().describe('update and archive only: the rule to change.'),
     patch: fields.optional().describe('update only: the rule fields to change.'),
     rationale: z

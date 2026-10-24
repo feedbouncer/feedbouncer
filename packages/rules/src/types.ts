@@ -21,6 +21,8 @@ export const RULE_KINDS = [
   'competitor',
 ] as const;
 export type RuleKind = (typeof RULE_KINDS)[number];
+export const RULE_APPLIES_TO = ['all', 'organic', 'ad'] as const;
+export type RuleAppliesTo = (typeof RULE_APPLIES_TO)[number];
 
 /** A rule row as loaded from Postgres; `conditions` is unvalidated JSON until compiled. */
 export interface RuleRecord {
@@ -32,6 +34,7 @@ export interface RuleRecord {
   mode: RuleMode;
   priority: number;
   enabled: boolean;
+  readonly appliesTo: RuleAppliesTo;
   createdAt: Date;
 }
 
@@ -40,6 +43,14 @@ export interface CommentFacts {
   platform: Platform | null;
   authorExternalId: string | null;
   authorName: string | null;
+  readonly origin: 'organic' | 'ad';
+}
+
+export function ruleApplies(
+  rule: Pick<RuleRecord, 'appliesTo'>,
+  facts: Pick<CommentFacts, 'origin'>,
+): boolean {
+  return rule.appliesTo === 'all' || rule.appliesTo === facts.origin;
 }
 
 export interface BrandContext {

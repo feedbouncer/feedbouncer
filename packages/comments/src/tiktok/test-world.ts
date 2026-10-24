@@ -60,15 +60,22 @@ const unlimitedBudget = () =>
 
 type Tamper = (endpoint: string, data: Record<string, unknown>) => Record<string, unknown>;
 
-export async function tiktokWorld(label: string) {
+export async function tiktokWorld(label: string, o: { wrap?: (c: Connector) => Connector } = {}) {
   const db = await migratedDb();
   const pool = createPool(db.db.url, { applicationName: `tiktok-${label}`, onIdleError: () => {} });
   let t = NOW_MS;
   const clock: Clock = { now: () => t };
   const fake = new FakeTikTok({ ...APP, now: () => new Date(t) });
   let tamper: Tamper | null = null;
+  const requestIds: { path: string; requestId: string }[] = [];
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const res = await fake.fetch(input, init);
+    const path = new URL(String(input)).pathname;
+    const body = (await res
+      .clone()
+      .json()
+      .catch(() => null)) as { request_id?: string } | null;
+    if (body?.request_id) requestIds.push({ path, requestId: body.request_id });
     if (!tamper) return res;
     const json = (await res.json()) as { data: Record<string, unknown> };
     return Response.json(
@@ -80,8 +87,8 @@ export async function tiktokWorld(label: string) {
   const organic = createTikTokConnector(APP, { clock });
   const ads = createTikTokAdsConnector(APP, { clock });
   const registry = new ConnectorRegistry();
-  registry.register(organic);
-  registry.register(ads);
+  registry.register(o.wrap ? o.wrap(organic) : organic);
+  registry.register(o.wrap ? o.wrap(ads) : ads);
   const creds = new CredentialStore(pool, testKeyring(['k1']));
   const directory = new PgConnectionDirectory(pool);
   const vault = new PgCredentialVault(creds, pool, log);
@@ -247,6 +254,9 @@ export async function tiktokWorld(label: string) {
     advance: (ms: number) => void (t += ms),
     reset: () => void (t = NOW_MS),
     setTamper: (fn: Tamper | null) => void (tamper = fn),
+    /** Request ids of the fake's answers on paths ending with `suffix`, oldest first. */
+    requestIds: (suffix: string) =>
+      requestIds.filter((r) => r.path.endsWith(suffix)).map((r) => r.requestId),
     tenant,
     connectTikTok,
     connectAds,

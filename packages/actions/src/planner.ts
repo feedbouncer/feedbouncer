@@ -60,7 +60,8 @@ export class StepPlanner {
       const previewText =
         'template' in step && comment && conn ? this.render(step, comment, brand, conn) : null;
       const o = await this.precheck(scope, step.type, comment, conn, views);
-      out.push({ type: step.type, ...(o ?? this.#predict(step, comment!, conn!)), previewText });
+      const { status, reason } = o ?? this.#predict(step, comment!, conn!);
+      out.push({ type: step.type, status, reason, previewText });
     }
     return out;
   }
@@ -112,7 +113,12 @@ export class StepPlanner {
     if (!conn) return { status: 'failed', reason: 'connection_inactive' };
     const support = stepSupport(type, conn);
     if (!support.supported) return { status: 'not_supported', reason: 'unsupported' };
-    if (support.missingScopes.length > 0) return { status: 'failed', reason: 'missing_permission' };
+    if (support.missingScopes.length > 0)
+      return {
+        status: 'failed',
+        reason: 'missing_permission',
+        missingScopes: support.missingScopes,
+      };
     if (o.approved) {
       const ownBanKey = o.suggestionId ? `suggestion:${o.suggestionId}:ban_author` : null;
       if (type === 'ban' && (await this.d.runs.hasActiveBan(scope, comment.id, db, ownBanKey)))

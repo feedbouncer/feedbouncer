@@ -3,7 +3,13 @@ import { CommentView } from '../view.js';
 import { compileKeywordRule, compileKeywords } from './keywords.js';
 
 const v = (body: string) =>
-  new CommentView({ body, platform: 'facebook', authorExternalId: null, authorName: null });
+  new CommentView({
+    body,
+    platform: 'facebook',
+    authorExternalId: null,
+    authorName: null,
+    origin: 'organic',
+  });
 
 describe('keywords whole_word (default)', () => {
   const m = compileKeywords(['Free money', 'scam', 'café', '無料', '$$$'], 'whole_word');

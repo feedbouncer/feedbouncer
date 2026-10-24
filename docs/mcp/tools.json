@@ -216,7 +216,7 @@
             ]
           },
           "rule": {
-            "description": "create only: the new rule.",
+            "description": "create only: the new rule (name, conditions, actions, mode, enabled, appliesTo: all, organic or ad).",
             "type": "object",
             "propertyNames": {
               "type": "string"
@@ -277,7 +277,8 @@
                     "conditions",
                     "actions",
                     "mode",
-                    "enabled"
+                    "enabled",
+                    "appliesTo"
                   ]
                 },
                 "before": {},
@@ -401,6 +402,9 @@
                       },
                       "enabled": {
                         "type": "boolean"
+                      },
+                      "appliesTo": {
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -410,7 +414,8 @@
                       "actions",
                       "mode",
                       "priority",
-                      "enabled"
+                      "enabled",
+                      "appliesTo"
                     ],
                     "additionalProperties": false
                   }
