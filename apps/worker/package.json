@@ -25,6 +25,8 @@
     "@feedbouncer/connector-facebook": "workspace:*",
     "@feedbouncer/connector-instagram": "workspace:*",
     "@feedbouncer/connector-meta-ads": "workspace:*",
+    "@feedbouncer/connector-tiktok": "workspace:*",
+    "@feedbouncer/connector-tiktok-ads": "workspace:*",
     "@feedbouncer/connectors": "workspace:*",
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/evaluation": "workspace:*",

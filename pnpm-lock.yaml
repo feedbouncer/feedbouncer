@@ -489,6 +489,12 @@ importers:
       '@feedbouncer/connector-meta-ads':
         specifier: workspace:*
         version: link:../../packages/connector-meta-ads
+      '@feedbouncer/connector-tiktok':
+        specifier: workspace:*
+        version: link:../../packages/connector-tiktok
+      '@feedbouncer/connector-tiktok-ads':
+        specifier: workspace:*
+        version: link:../../packages/connector-tiktok-ads
       '@feedbouncer/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors

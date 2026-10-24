@@ -24,3 +24,4 @@ export * from './tiktok/polling.js';
 export type { TikTokPollDeps, TikTokPollSettings } from './tiktok/ingest.js';
 export * from './tiktok/poll-organic.js';
 export * from './tiktok/poll-ads.js';
+export * from './tiktok/scheduler.js';

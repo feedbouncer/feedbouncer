@@ -15,10 +15,18 @@ export interface TikTokAdsConfig {
   readonly appSecret: string;
 }
 
+/** Settings that may be supplied as <NAME>_FILE. Apps add these to their own *_FILE_VARS. */
+export const TIKTOK_ADS_FILE_VARS = ['TIKTOK_ADS_APP_SECRET'] as const;
+
 const APP_ID = /^\d{1,32}$|^[A-Za-z0-9]{1,64}$/;
 
-/** Null unless TIKTOK_ADS_CONNECTOR_ENABLED=true. EnvError names the variable, never its value. */
-export function parseTikTokAdsEnv(env: Env): TikTokAdsConfig | null {
+/** Null unless TIKTOK_ADS_CONNECTOR_ENABLED=true. Credentials default to the organic app's. EnvError names the variable, never its value. */
+export function parseTikTokAdsEnv(raw: Env): TikTokAdsConfig | null {
+  const env: Env = {
+    ...raw,
+    TIKTOK_ADS_APP_ID: raw.TIKTOK_ADS_APP_ID || raw.TIKTOK_APP_ID,
+    TIKTOK_ADS_APP_SECRET: raw.TIKTOK_ADS_APP_SECRET || raw.TIKTOK_APP_SECRET,
+  };
   const flag = env.TIKTOK_ADS_CONNECTOR_ENABLED;
   if (flag === undefined || flag === '' || flag === 'false') return null;
   if (flag !== 'true') {

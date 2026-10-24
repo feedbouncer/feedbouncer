@@ -34,6 +34,21 @@ describe('parseTikTokAdsEnv', () => {
       appSecret: full.TIKTOK_ADS_APP_SECRET,
     });
   });
+  it('falls back to the organic app credentials', () => {
+    const shared = {
+      TIKTOK_ADS_CONNECTOR_ENABLED: 'true',
+      TIKTOK_APP_ID: '7300000000000001',
+      TIKTOK_APP_SECRET: 'shared-s3cr3t-'.repeat(2),
+    };
+    expect(parseTikTokAdsEnv(shared)).toEqual({
+      appId: shared.TIKTOK_APP_ID,
+      appSecret: shared.TIKTOK_APP_SECRET,
+    });
+    expect(parseTikTokAdsEnv({ ...shared, ...full })).toEqual({
+      appId: full.TIKTOK_ADS_APP_ID,
+      appSecret: full.TIKTOK_ADS_APP_SECRET,
+    });
+  });
   it.each(['TIKTOK_ADS_APP_ID', 'TIKTOK_ADS_APP_SECRET'])(
     'names %s but never its value when it is missing or malformed',
     (name) => {

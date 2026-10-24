@@ -43,6 +43,16 @@ x-facebook-env: &facebook-env
   META_ADS_CONNECTOR_ENABLED: ${META_ADS_CONNECTOR_ENABLED:-}
   META_ADS_ACTIVE_STATUSES: ${META_ADS_ACTIVE_STATUSES:-}
 
+# TikTok connectors. No defaults: with the *_CONNECTOR_ENABLED flag unset the connector is off.
+# The ads credentials fall back to the TIKTOK_APP_ID / TIKTOK_APP_SECRET pair when empty.
+x-tiktok-env: &tiktok-env
+  TIKTOK_CONNECTOR_ENABLED: ${TIKTOK_CONNECTOR_ENABLED:-}
+  TIKTOK_APP_ID: ${TIKTOK_APP_ID:-}
+  TIKTOK_APP_SECRET: ${TIKTOK_APP_SECRET:-}
+  TIKTOK_ADS_CONNECTOR_ENABLED: ${TIKTOK_ADS_CONNECTOR_ENABLED:-}
+  TIKTOK_ADS_APP_ID: ${TIKTOK_ADS_APP_ID:-}
+  TIKTOK_ADS_APP_SECRET: ${TIKTOK_ADS_APP_SECRET:-}
+
 x-node-service: &node-service
   init: true
   restart: on-failure:3
@@ -172,6 +182,20 @@ services:
       CLASSIFIER_MODEL: ${CLASSIFIER_MODEL:-}
       # Subject exports are written by the worker; the api only serves downloads from here.
       PRIVACY_EXPORT_DIR: /var/lib/feedbouncer/privacy-exports
+      # TikTok comment polling; empty means the default (.env.example).
+      TIKTOK_POLL_INTERVAL_SEC: ${TIKTOK_POLL_INTERVAL_SEC:-}
+      TIKTOK_QUIET_VIDEO_POLL_INTERVAL_SEC: ${TIKTOK_QUIET_VIDEO_POLL_INTERVAL_SEC:-}
+      TIKTOK_ACTIVE_VIDEO_DAYS: ${TIKTOK_ACTIVE_VIDEO_DAYS:-}
+      TIKTOK_VIDEO_DISCOVERY_INTERVAL_SEC: ${TIKTOK_VIDEO_DISCOVERY_INTERVAL_SEC:-}
+      TIKTOK_DEEP_SCAN_INTERVAL_SEC: ${TIKTOK_DEEP_SCAN_INTERVAL_SEC:-}
+      TIKTOK_SOURCE_UNAVAILABLE_RETRY_SEC: ${TIKTOK_SOURCE_UNAVAILABLE_RETRY_SEC:-}
+      TIKTOK_MAX_SOURCES_PER_JOB: ${TIKTOK_MAX_SOURCES_PER_JOB:-}
+      TIKTOK_ADS_POLL_INTERVAL_SEC: ${TIKTOK_ADS_POLL_INTERVAL_SEC:-}
+      TIKTOK_ADS_POLL_OVERLAP_SEC: ${TIKTOK_ADS_POLL_OVERLAP_SEC:-}
+      TIKTOK_ADS_FULL_SCAN_INTERVAL_SEC: ${TIKTOK_ADS_FULL_SCAN_INTERVAL_SEC:-}
+      TIKTOK_MAX_PAGES_PER_JOB: ${TIKTOK_MAX_PAGES_PER_JOB:-}
+      TIKTOK_SCHEDULER_TICK_SEC: ${TIKTOK_SCHEDULER_TICK_SEC:-}
+      TIKTOK_SCHEDULER_MAX_CONNECTIONS_PER_TICK: ${TIKTOK_SCHEDULER_MAX_CONNECTIONS_PER_TICK:-}
       # Free ad-comment scan; empty means the default (docs/self-hosting/meta-app.md).
       SCAN_TOOL_ENABLED: ${SCAN_TOOL_ENABLED:-}
       SCAN_MAX_COMMENTS: ${SCAN_MAX_COMMENTS:-}
@@ -241,7 +265,7 @@ services:
       dockerfile: apps/worker/Dockerfile
       target: dev
     environment:
-      <<: [*backend-env, *secrets-env, *facebook-env, *alerts-env]
+      <<: [*backend-env, *secrets-env, *facebook-env, *tiktok-env, *alerts-env]
       CHOKIDAR_USEPOLLING: '1'
       # Reconnect notices go to the dev mail sink; links and the OAuth redirect
       # URI are built from PUBLIC_WEB_URL, which must match the api's.

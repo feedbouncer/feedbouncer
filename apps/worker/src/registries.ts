@@ -23,13 +23,20 @@ import {
 import { createFacebookConnector, type FacebookConfig } from '@feedbouncer/connector-facebook';
 import { createInstagramConnector, type InstagramConfig } from '@feedbouncer/connector-instagram';
 import { createMetaAdsConnector, type MetaAdsConfig } from '@feedbouncer/connector-meta-ads';
+import { createTikTokConnector, type TikTokConfig } from '@feedbouncer/connector-tiktok';
+import { createTikTokAdsConnector, type TikTokAdsConfig } from '@feedbouncer/connector-tiktok-ads';
 import {
   adDiscoveryJob,
   adPollJob,
   connectionBackfillJob,
   PgAdTracking,
   PgBackfillStore,
+  PgTikTokPolling,
   type PollSettings,
+  type TikTokPollPlatform,
+  type TikTokPollSettings,
+  tiktokAdsPollJob,
+  tiktokPollJob,
   CompositeActionOutcomeObserver,
   executeActionJob,
   ingestCommentJob,
@@ -94,6 +101,11 @@ export interface WorkerJobDeps {
   readonly capabilities: (p: Platform) => ConnectorCapabilities | undefined;
   /** Set when the Meta Ads connector is enabled: registers ad discovery and ad polling. */
   readonly ads?: { readonly poll: PollSettings };
+  /** Set when a TikTok connector is enabled: registers the poll job of each listed platform. */
+  readonly tiktok?: {
+    readonly settings: TikTokPollSettings;
+    readonly platforms: readonly TikTokPollPlatform[];
+  };
 }
 
 /** Platform connectors this deployment runs. Each registered platform gets its own queue. */
@@ -101,11 +113,15 @@ export function buildConnectorRegistry(cfg: {
   facebook: FacebookConfig | null;
   instagram: InstagramConfig | null;
   metaAds: MetaAdsConfig | null;
+  tiktok?: TikTokConfig | null;
+  tiktokAds?: TikTokAdsConfig | null;
 }): ConnectorRegistry {
   const registry = new ConnectorRegistry();
   if (cfg.facebook) registry.register(createFacebookConnector(cfg.facebook));
   if (cfg.instagram) registry.register(createInstagramConnector(cfg.instagram));
   if (cfg.metaAds) registry.register(createMetaAdsConnector(cfg.metaAds));
+  if (cfg.tiktok) registry.register(createTikTokConnector(cfg.tiktok));
+  if (cfg.tiktokAds) registry.register(createTikTokAdsConnector(cfg.tiktokAds));
   return registry;
 }
 
@@ -286,6 +302,18 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
         applied,
       }),
     );
+  }
+  if (deps.tiktok) {
+    const pollDeps = {
+      runtime: deps.runtime,
+      polling: new PgTikTokPolling(deps.pool),
+      store: deps.store,
+      clock: () => new Date(deps.clock.now()),
+      settings: deps.tiktok.settings,
+      applied,
+    };
+    if (deps.tiktok.platforms.includes('tiktok')) registry.register(tiktokPollJob(pollDeps));
+    if (deps.tiktok.platforms.includes('tiktok_ads')) registry.register(tiktokAdsPollJob(pollDeps));
   }
   return registry;
 }

@@ -18,6 +18,9 @@ export interface TikTokConfig {
   readonly appSecret: string;
 }
 
+/** Settings that may be supplied as <NAME>_FILE. Apps add these to their own *_FILE_VARS. */
+export const TIKTOK_FILE_VARS = ['TIKTOK_APP_SECRET'] as const;
+
 const APP_ID = /^\d{1,32}$|^[A-Za-z0-9]{1,64}$/;
 
 /** Null unless TIKTOK_CONNECTOR_ENABLED=true. EnvError names the variable, never its value. */

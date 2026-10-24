@@ -39,7 +39,18 @@ import {
 } from '@feedbouncer/connector-facebook';
 import { parseInstagramEnv, type InstagramConfig } from '@feedbouncer/connector-instagram';
 import { parseMetaAdsEnv, type MetaAdsConfig } from '@feedbouncer/connector-meta-ads';
-import type { PollSettings, SchedulerSettings } from '@feedbouncer/comments';
+import { TIKTOK_FILE_VARS, parseTikTokEnv, type TikTokConfig } from '@feedbouncer/connector-tiktok';
+import {
+  TIKTOK_ADS_FILE_VARS,
+  parseTikTokAdsEnv,
+  type TikTokAdsConfig,
+} from '@feedbouncer/connector-tiktok-ads';
+import type {
+  PollSettings,
+  SchedulerSettings,
+  TikTokPollPlatform,
+  TikTokPollSettings,
+} from '@feedbouncer/comments';
 import { loadJobsConfig, type JobsConfig } from '@feedbouncer/jobs';
 import {
   loadHealthPolicy,
@@ -61,6 +72,8 @@ export const WORKER_FILE_VARS = [
   'SMTP_URL',
   ...ENCRYPTION_FILE_VARS,
   ...FACEBOOK_FILE_VARS,
+  ...TIKTOK_FILE_VARS,
+  ...TIKTOK_ADS_FILE_VARS,
   ...CLASSIFIER_FILE_VARS,
   ...POLICY_FILE_VARS,
 ] as const;
@@ -97,9 +110,15 @@ export interface WorkerEnv {
   readonly metaAds: MetaAdsConfig | null;
   /** Cadence of ad discovery and ad comment polling; null exactly when `metaAds` is. */
   readonly adPolling: AdPollingConfig | null;
-  /** Null unless Facebook, email alerts or weekly reports are enabled: only they send mail. */
+  /** Null unless TIKTOK_CONNECTOR_ENABLED=true. Independent of the Facebook config. */
+  readonly tiktok: TikTokConfig | null;
+  /** Null unless TIKTOK_ADS_CONNECTOR_ENABLED=true. Independent of the Facebook config. */
+  readonly tiktokAds: TikTokAdsConfig | null;
+  /** Cadence of TikTok comment polling; null exactly when neither TikTok connector is enabled. */
+  readonly tiktokPolling: TikTokPollingConfig | null;
+  /** Null unless Facebook, TikTok, email alerts or weekly reports are enabled: only they send mail. */
   readonly mail: WorkerMailConfig | null;
-  /** Web origin for links and OAuth redirects; null unless Facebook, an alert channel or weekly reports are on. */
+  /** Web origin for links and OAuth redirects; null unless Facebook, TikTok, an alert channel or weekly reports are on. */
   readonly publicWebUrl: URL | null;
   /** Which alert channels this deployment offers; both false means the alert loops do not run. */
   readonly alerts: WorkerAlertsConfig;
@@ -134,6 +153,13 @@ export interface WorkerAlertsConfig {
 export interface AdPollingConfig {
   readonly poll: PollSettings;
   readonly scheduler: SchedulerSettings;
+}
+
+export interface TikTokPollingConfig {
+  /** The platforms whose connector is enabled: the ones that are polled and scheduled. */
+  readonly platforms: readonly TikTokPollPlatform[];
+  readonly poll: TikTokPollSettings;
+  readonly scheduler: { readonly tickSec: number; readonly maxConnectionsPerTick: number };
 }
 
 export interface WorkerMailConfig {
@@ -221,6 +247,52 @@ function readAdPollingConfig(env: Env): AdPollingConfig {
   };
 }
 
+function readTikTokPollingConfig(
+  env: Env,
+  on: { organic: boolean; ads: boolean },
+): TikTokPollingConfig {
+  const sec = (name: string, min: number, max: number, fallback: number) =>
+    readInt(env, name, { min, max, fallback });
+  // A connector that is off has its variables left unread.
+  const organic = on.organic
+    ? {
+        pollIntervalSec: sec('TIKTOK_POLL_INTERVAL_SEC', 60, 3600, 300),
+        quietVideoPollIntervalSec: sec('TIKTOK_QUIET_VIDEO_POLL_INTERVAL_SEC', 300, 86_400, 21_600),
+        activeVideoDays: sec('TIKTOK_ACTIVE_VIDEO_DAYS', 1, 365, 30),
+        videoDiscoveryIntervalSec: sec('TIKTOK_VIDEO_DISCOVERY_INTERVAL_SEC', 300, 86_400, 900),
+        deepScanIntervalSec: sec('TIKTOK_DEEP_SCAN_INTERVAL_SEC', 3600, 604_800, 86_400),
+        sourceUnavailableRetrySec: sec('TIKTOK_SOURCE_UNAVAILABLE_RETRY_SEC', 300, 604_800, 21_600),
+        maxSourcesPerJob: sec('TIKTOK_MAX_SOURCES_PER_JOB', 1, 200, 25),
+      }
+    : {
+        pollIntervalSec: 300,
+        quietVideoPollIntervalSec: 21_600,
+        activeVideoDays: 30,
+        videoDiscoveryIntervalSec: 900,
+        deepScanIntervalSec: 86_400,
+        sourceUnavailableRetrySec: 21_600,
+        maxSourcesPerJob: 25,
+      };
+  const ads = on.ads
+    ? {
+        adsPollIntervalSec: sec('TIKTOK_ADS_POLL_INTERVAL_SEC', 60, 3600, 300),
+        adsOverlapSec: sec('TIKTOK_ADS_POLL_OVERLAP_SEC', 0, 86_400, 900),
+        adsFullScanIntervalSec: sec('TIKTOK_ADS_FULL_SCAN_INTERVAL_SEC', 3600, 604_800, 86_400),
+      }
+    : { adsPollIntervalSec: 300, adsOverlapSec: 900, adsFullScanIntervalSec: 86_400 };
+  return {
+    platforms: [
+      ...(on.organic ? (['tiktok'] as const) : []),
+      ...(on.ads ? (['tiktok_ads'] as const) : []),
+    ],
+    poll: { ...organic, ...ads, maxPagesPerJob: sec('TIKTOK_MAX_PAGES_PER_JOB', 1, 200, 20) },
+    scheduler: {
+      tickSec: sec('TIKTOK_SCHEDULER_TICK_SEC', 5, 300, 30),
+      maxConnectionsPerTick: sec('TIKTOK_SCHEDULER_MAX_CONNECTIONS_PER_TICK', 1, 5000, 200),
+    },
+  };
+}
+
 /** The worker's single typed configuration layer. Call once, from main.ts. */
 export function loadWorkerEnv(
   rawEnv: Env,
@@ -234,12 +306,20 @@ export function loadWorkerEnv(
   const instagram = parseInstagramEnv(env, facebook);
   const metaAds = parseMetaAdsEnv(env, facebook);
   const adPolling = metaAds ? readAdPollingConfig(env) : null;
+  const tiktok = parseTikTokEnv(env);
+  const tiktokAds = parseTikTokAdsEnv(env);
+  const tiktokPolling =
+    tiktok || tiktokAds
+      ? readTikTokPollingConfig(env, { organic: !!tiktok, ads: !!tiktokAds })
+      : null;
   const alerts = { ...parseAlertChannels(env.ALERT_CHANNELS), ...readAlertLimits(env) };
   const weeklyReports = readEnum(env, 'WEEKLY_REPORTS', ['on', 'off'], 'off') === 'on';
   const publicWebUrl =
-    facebook || alerts.slack || alerts.email || weeklyReports ? readPublicWebUrl(env) : null;
+    facebook || tiktok || tiktokAds || alerts.slack || alerts.email || weeklyReports
+      ? readPublicWebUrl(env)
+      : null;
   const mail =
-    publicWebUrl && (facebook || alerts.email || weeklyReports)
+    publicWebUrl && (facebook || tiktok || tiktokAds || alerts.email || weeklyReports)
       ? readMailConfig(env, publicWebUrl)
       : null;
   checkNotPlaceholder(appEnv, 'DATABASE_URL', databaseUrl.href, opts.warn);
@@ -282,6 +362,9 @@ export function loadWorkerEnv(
     instagram,
     metaAds,
     adPolling,
+    tiktok,
+    tiktokAds,
+    tiktokPolling,
     mail,
     publicWebUrl,
     alerts,
@@ -306,6 +389,8 @@ export function loadWorkerEnv(
     facebookEnabled: config.facebook !== null,
     instagramEnabled: config.instagram !== null,
     metaAdsEnabled: config.metaAds !== null,
+    tiktokEnabled: config.tiktok !== null,
+    tiktokAdsEnabled: config.tiktokAds !== null,
     alertSlackEnabled: alerts.slack,
     alertEmailEnabled: alerts.email,
     weeklyReportsEnabled: weeklyReports,
