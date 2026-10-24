@@ -8,6 +8,7 @@
     { "path": "packages/connector-facebook" },
     { "path": "packages/connector-instagram" },
     { "path": "packages/connector-meta-ads" },
+    { "path": "packages/tiktok-business-api" },
     { "path": "packages/jobs" },
     { "path": "packages/comments" },
     { "path": "packages/rules" },
