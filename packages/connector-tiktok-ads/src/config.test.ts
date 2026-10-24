@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EnvError } from '@feedbouncer/service-runtime';
+import { EnvError, Secret } from '@feedbouncer/service-runtime';
 import {
   AD_COMMENT_HIDE_FIELD,
   TIKTOK_ADS_ACTIONS,
@@ -31,7 +31,7 @@ describe('parseTikTokAdsEnv', () => {
   it('reads the app id and secret', () => {
     expect(parseTikTokAdsEnv(full)).toEqual({
       appId: full.TIKTOK_ADS_APP_ID,
-      appSecret: full.TIKTOK_ADS_APP_SECRET,
+      appSecret: new Secret(full.TIKTOK_ADS_APP_SECRET),
     });
   });
   it('falls back to the organic app credentials', () => {
@@ -42,11 +42,11 @@ describe('parseTikTokAdsEnv', () => {
     };
     expect(parseTikTokAdsEnv(shared)).toEqual({
       appId: shared.TIKTOK_APP_ID,
-      appSecret: shared.TIKTOK_APP_SECRET,
+      appSecret: new Secret(shared.TIKTOK_APP_SECRET),
     });
     expect(parseTikTokAdsEnv({ ...shared, ...full })).toEqual({
       appId: full.TIKTOK_ADS_APP_ID,
-      appSecret: full.TIKTOK_ADS_APP_SECRET,
+      appSecret: new Secret(full.TIKTOK_ADS_APP_SECRET),
     });
   });
   it.each(['TIKTOK_ADS_APP_ID', 'TIKTOK_ADS_APP_SECRET'])(

@@ -12,7 +12,10 @@ type Log = (msg: string, fields: { code: string; count?: number }) => void;
 export async function world() {
   const fake = new FakeTikTok(APP);
   const log: Mock<Log> = vi.fn<Log>();
-  const connector = createTikTokConnector(APP, { log });
+  const connector = createTikTokConnector(
+    { ...APP, appSecret: new Secret(APP.appSecret) },
+    { log },
+  );
   let tamper: { path: string; fn: (data: Record<string, unknown>) => unknown } | null = null;
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const res = await fake.fetch(input, init);

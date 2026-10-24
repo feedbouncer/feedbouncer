@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EnvError } from '@feedbouncer/service-runtime';
+import { EnvError, Secret } from '@feedbouncer/service-runtime';
 import { parseTikTokEnv } from './config.js';
 
 const full = {
@@ -32,7 +32,7 @@ describe('parseTikTokEnv', () => {
   it.each(['7300000000000001', 'aw9abc123XYZ'])('accepts app id %s', (id) => {
     expect(parseTikTokEnv({ ...full, TIKTOK_APP_ID: id })).toEqual({
       appId: id,
-      appSecret: full.TIKTOK_APP_SECRET,
+      appSecret: new Secret(full.TIKTOK_APP_SECRET),
     });
   });
   it('rejects an unrecognised enabled flag', () => {

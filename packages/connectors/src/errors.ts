@@ -15,7 +15,7 @@ export type ConnectorErrorKind = (typeof CONNECTOR_ERROR_KINDS)[number];
 
 const MAX_RETRY_AFTER_MS = 86_400_000;
 
-const SCOPE_NAME = /^[a-z0-9_.]{1,64}$/;
+export const SCOPE_NAME = /^[a-z0-9_.]{1,64}$/;
 const MAX_MISSING_SCOPES = 20;
 
 export interface ConnectorErrorInfo {

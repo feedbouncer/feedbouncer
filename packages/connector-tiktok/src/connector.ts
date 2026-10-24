@@ -15,7 +15,7 @@ import type { SkipLog } from './call.js';
 import { TIKTOK_ACTIONS, TIKTOK_SCOPES, type TikTokConfig } from './config.js';
 import { buildAuthorizationUrl, exchangeCode, refreshTokens } from './oauth.js';
 
-/** Best effort (Decision 13): a failed revoke is logged by code and never blocks disconnecting. */
+/** Best effort: a failed revoke is logged by code and never blocks disconnecting. */
 async function revoke(cfg: TikTokConfig, ctx: CallContext, log: SkipLog): Promise<void> {
   try {
     await tiktokRequest(
@@ -25,7 +25,7 @@ async function revoke(cfg: TikTokConfig, ctx: CallContext, log: SkipLog): Promis
         method: 'POST',
         body: {
           client_id: cfg.appId,
-          client_secret: cfg.appSecret,
+          client_secret: cfg.appSecret.reveal(),
           token: ctx.accessToken.reveal(),
         },
         schema: z.unknown(),

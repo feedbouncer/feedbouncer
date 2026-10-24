@@ -91,7 +91,10 @@ async function ingest(
   if (created && origin === 'backfill') p.cap--;
 }
 
-/** Reads every reply of one comment; stops early once the backfill cap is reached. */
+/**
+ * Reads every reply of one comment; stops early once the backfill cap is reached. Reply pages
+ * count toward the job's page budget, so the job yields after the comment page being read.
+ */
 async function readReplies(
   d: TikTokPollDeps,
   p: Pass,
@@ -110,6 +113,7 @@ async function readReplies(
       },
       BG,
     );
+    p.pages--;
     if (page === null) return newest;
     for (const r of page.items) {
       if (origin === 'backfill' && p.cap <= 0) return newest;

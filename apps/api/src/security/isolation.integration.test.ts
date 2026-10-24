@@ -24,6 +24,8 @@ const FACEBOOK = {
 
 const TIKTOK = { appId: '7300000000000001', appSecret: 'tiktok-app-secret-0123456789' };
 
+const TIKTOK_CFG = { ...TIKTOK, appSecret: new Secret(TIKTOK.appSecret) };
+
 let api: TestApi;
 let f: IsolationFixture;
 /** Every TikTok request the app makes; no case may make one. */
@@ -33,8 +35,8 @@ beforeAll(async () => {
     {
       facebook: FACEBOOK,
       instagram: { meta: FACEBOOK },
-      tiktok: TIKTOK,
-      tiktokAds: TIKTOK,
+      tiktok: TIKTOK_CFG,
+      tiktokAds: TIKTOK_CFG,
       alerts: { slack: true, email: true, capPerHour: 30, emailPerMinute: 60 },
     },
     { fetch: tiktok.fetch },

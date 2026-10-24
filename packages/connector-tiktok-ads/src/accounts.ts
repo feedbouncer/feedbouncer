@@ -21,7 +21,7 @@ export async function listAccounts(
     {
       endpoint: 'adAdvertiserGet',
       method: 'GET',
-      query: { app_id: cfg.appId, secret: cfg.appSecret },
+      query: { app_id: cfg.appId, secret: cfg.appSecret.reveal() },
       schema: LIST_SCHEMA,
     },
   );

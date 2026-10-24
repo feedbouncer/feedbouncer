@@ -1007,6 +1007,7 @@ describe('secrets', () => {
 
 describe('tiktok connect flow', () => {
   const TIKTOK = { appId: '7300000000000001', appSecret: 'tiktok-app-secret-0123456789' };
+  const TIKTOK_CFG = { ...TIKTOK, appSecret: new Secret(TIKTOK.appSecret) };
   let tt: TestApi;
   let fake: FakeTikTok;
   let f: OrgFixture;
@@ -1019,7 +1020,7 @@ describe('tiktok connect flow', () => {
 
   beforeAll(async () => {
     fake = new FakeTikTok(TIKTOK);
-    tt = await startTestApi({ tiktok: TIKTOK, tiktokAds: TIKTOK }, { fetch: fake.fetch });
+    tt = await startTestApi({ tiktok: TIKTOK_CFG, tiktokAds: TIKTOK_CFG }, { fetch: fake.fetch });
     f = await orgWithRoles(tt, 'ttc');
   });
   afterAll(() => tt.close());

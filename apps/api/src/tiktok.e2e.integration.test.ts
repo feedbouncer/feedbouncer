@@ -1,3 +1,4 @@
+import { Secret } from '@feedbouncer/service-runtime';
 // TikTok organic and ad connections end to end. The API serves the connect flow,
 // rules, review mode, comments and disconnect; the worker side (scheduler, poll,
 // rule, run and execute jobs) is composed as apps/worker composes it and driven
@@ -107,7 +108,13 @@ beforeAll(async () => {
       requestIds.push({ path: new URL(String(input)).pathname, requestId: body.request_id });
     return res;
   };
-  api = await startTestApi({ tiktok: TIKTOK, tiktokAds: TIKTOK }, { fetch });
+  api = await startTestApi(
+    {
+      tiktok: { ...TIKTOK, appSecret: new Secret(TIKTOK.appSecret) },
+      tiktokAds: { ...TIKTOK, appSecret: new Secret(TIKTOK.appSecret) },
+    },
+    { fetch },
+  );
   f = await orgWithRoles(api, 'tte2e');
   worker = buildWorker(api);
 });

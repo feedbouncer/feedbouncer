@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { SCOPE_NAME } from '@feedbouncer/connectors';
 import { HEALTH_REASONS, type HealthStatus } from '@feedbouncer/observability';
 import type { AppDeps } from '../deps.js';
 import { notFound } from '../http/errors.js';
@@ -20,9 +21,6 @@ export interface ConnectionHealthView {
   /** Permissions a reconnect must approve, when the platform named them. */
   missingScopes: string[];
 }
-
-// A stored scope name is shown only in this shape; anything else is dropped.
-const SCOPE_NAME = /^[a-z0-9_.]{1,64}$/;
 
 // Anything outside the health vocabulary (a stored free-form reason) is not echoed.
 const KNOWN_REASONS: ReadonlySet<string> = new Set(HEALTH_REASONS);

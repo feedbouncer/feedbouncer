@@ -208,13 +208,14 @@ describe('connection health endpoint', () => {
 
 describe('tiktok connection health', () => {
   const TIKTOK = { appId: '7300000000000001', appSecret: 'tiktok-app-secret-0123456789' };
+  const TIKTOK_CFG = { ...TIKTOK, appSecret: new Secret(TIKTOK.appSecret) };
   let tt: TestApi;
   let fake: FakeTikTok;
   let org: OrgFixture;
 
   beforeAll(async () => {
     fake = new FakeTikTok(TIKTOK);
-    tt = await startTestApi({ tiktok: TIKTOK, tiktokAds: TIKTOK }, { fetch: fake.fetch });
+    tt = await startTestApi({ tiktok: TIKTOK_CFG, tiktokAds: TIKTOK_CFG }, { fetch: fake.fetch });
     org = await orgWithRoles(tt, 'tth');
   });
   afterAll(() => tt.close());

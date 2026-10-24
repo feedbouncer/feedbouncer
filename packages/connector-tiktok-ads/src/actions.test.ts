@@ -131,7 +131,7 @@ describe('product isolation', () => {
     const w = await withComment();
     const organic = createTikTokConnector({
       appId: '7300000000000002',
-      appSecret: 'tiktok-ads-SECRET-0123456789',
+      appSecret: new Secret('tiktok-ads-SECRET-0123456789'),
     });
     const http = createSafeHttp({ allowedHosts: [TIKTOK_API_HOST], fetch: w.fake.fetch });
     const oauth = { http, signal: w.signal, redirectUri: 'https://app.test/cb' };

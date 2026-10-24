@@ -67,7 +67,8 @@ export function tiktokAdsPollJob(d: TikTokPollDeps): JobDefinition<TikTokPollPay
       const full =
         st.lastFullScanAt === null ||
         start.getTime() - st.lastFullScanAt.getTime() >= s.adsFullScanIntervalSec * SEC;
-      const windowLower = new Date(start.getTime() - BACKFILL_DEFAULTS.windowDays * DAY_MS);
+      // The window is whole UTC dates, both ends inclusive: today plus the previous days.
+      const windowLower = new Date(start.getTime() - (BACKFILL_DEFAULTS.windowDays - 1) * DAY_MS);
       const lower = full ? windowLower : (st.highWaterAt ?? windowLower);
       const windows = adWindows(lower, start);
       const firstPass = st.lastFullScanAt === null;

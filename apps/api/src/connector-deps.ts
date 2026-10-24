@@ -69,9 +69,7 @@ export function buildConnectorDeps(d: {
   for (const c of connectors) registry.register(c);
   const appSecrets = new Map<Platform, Secret>([
     ...(Object.entries(meta?.appSecrets ?? {}) as [Platform, Secret][]),
-    ...Object.entries(tiktok?.appSecrets ?? {}).map(
-      ([p, s]) => [p as Platform, new Secret(s)] as const,
-    ),
+    ...(Object.entries(tiktok?.appSecrets ?? {}) as [Platform, Secret][]),
   ]);
 
   const redis = createProducerConnection(env.redisUrl.href);

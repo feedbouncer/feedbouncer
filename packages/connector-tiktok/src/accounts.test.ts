@@ -1,3 +1,4 @@
+import { Secret } from '@feedbouncer/service-runtime';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FakeTikTok } from '@feedbouncer/tiktok-business-api/testing';
 import { createMemoryStack } from '@feedbouncer/connectors/testing';
@@ -10,11 +11,14 @@ let fake: FakeTikTok;
 let stack: Stack;
 
 async function grant(authCode: string, fetch: typeof globalThis.fetch = fake.fetch) {
-  stack = await createMemoryStack(createTikTokConnector(APP), {
-    webhookSecret: null,
-    redirectUri: REDIRECT,
-    fetch,
-  });
+  stack = await createMemoryStack(
+    createTikTokConnector({ ...APP, appSecret: new Secret(APP.appSecret) }),
+    {
+      webhookSecret: null,
+      redirectUri: REDIRECT,
+      fetch,
+    },
+  );
   const { authorizationUrl } = await stack.oauth.start(stack.actor, 'tiktok');
   const state = new URL(authorizationUrl).searchParams.get('state')!;
   const done = await stack.oauth.complete(stack.actor, 'tiktok', { auth_code: authCode, state });
@@ -55,7 +59,7 @@ describe('listAccounts', () => {
 });
 
 describe('businessGet permission', () => {
-  it('permission_denied is scope_missing with video.list', async () => {
+  it('permission_denied is scope_missing with user.info.basic', async () => {
     const { world } = await import('./test-world.js');
     const w = await world();
     w.fake.revokeScope(w.businessId, 'businessGet');
@@ -69,7 +73,7 @@ describe('businessGet permission', () => {
       kind: 'auth_expired',
       code: 'scope_missing',
       reauthorize: true,
-      missingScopes: ['video.list'],
+      missingScopes: ['user.info.basic'],
     });
   });
 });

@@ -1,4 +1,4 @@
-import { EnvError, readSecret, readString, type Env } from '@feedbouncer/service-runtime';
+import { EnvError, readSecret, Secret, readString, type Env } from '@feedbouncer/service-runtime';
 import type { ModerationAction, ResponseKind } from '@feedbouncer/connectors';
 
 /** V15: drop 'delete' if the Marketing API does not allow it. */
@@ -12,7 +12,7 @@ export const AD_COMMENT_HIDE_FIELD = 'operation';
 
 export interface TikTokAdsConfig {
   readonly appId: string;
-  readonly appSecret: string;
+  readonly appSecret: Secret;
 }
 
 /** Settings that may be supplied as <NAME>_FILE. Apps add these to their own *_FILE_VARS. */
@@ -41,5 +41,5 @@ export function parseTikTokAdsEnv(raw: Env): TikTokAdsConfig | null {
   if (appSecret.length > 128) {
     throw new EnvError('TIKTOK_ADS_APP_SECRET must be at most 128 characters (value not shown).');
   }
-  return { appId, appSecret };
+  return { appId, appSecret: new Secret(appSecret) };
 }

@@ -1,9 +1,10 @@
+import { Secret } from '@feedbouncer/service-runtime';
 import { describe, expect, it } from 'vitest';
 import type { ApiEnv } from './env.js';
 import { buildTikTokDeps } from './tiktok-deps.js';
 
-const organic = { appId: '7300000000000001', appSecret: 'tiktok-secret-0123456789' };
-const ads = { appId: '7300000000000002', appSecret: 'tiktok-ads-secret-0123456789' };
+const organic = { appId: '7300000000000001', appSecret: new Secret('tiktok-secret-0123456789') };
+const ads = { appId: '7300000000000002', appSecret: new Secret('tiktok-ads-secret-0123456789') };
 const env = (o: Partial<Pick<ApiEnv, 'tiktok' | 'tiktokAds'>>) => ({
   tiktok: null,
   tiktokAds: null,

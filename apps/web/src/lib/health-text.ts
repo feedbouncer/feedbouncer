@@ -8,7 +8,8 @@ export interface HealthTextInput {
   missingScopes?: string[];
 }
 
-const SCOPE_NAME = /^[a-z0-9_.]{1,64}$/;
+/** A stored scope name is shown only in this shape; anything else is dropped. */
+export const SCOPE_NAME = /^[a-z0-9_.]{1,64}$/;
 const APPROVE = 'Reconnect and approve all requested permissions.';
 
 function missingPermissionText(scopes: string[] | undefined): string {

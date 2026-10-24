@@ -1,6 +1,6 @@
 import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
-import { EnvError } from '@feedbouncer/service-runtime';
+import { EnvError, Secret } from '@feedbouncer/service-runtime';
 import { randomKeyEntry } from '@feedbouncer/secrets/testing';
 import { loadWorkerEnv } from './env.js';
 
@@ -507,7 +507,7 @@ describe('tiktok connectors and polling settings', () => {
   it('works without any Facebook config', () => {
     const env = load({ ...base, ...organic });
     expect(env.facebook).toBeNull();
-    expect(env.tiktok).toEqual({ appId: organic.TIKTOK_APP_ID, appSecret: secret });
+    expect(env.tiktok).toEqual({ appId: organic.TIKTOK_APP_ID, appSecret: new Secret(secret) });
     expect(env.tiktokAds).toBeNull();
   });
   it('applies the documented defaults', () => {
@@ -536,7 +536,7 @@ describe('tiktok connectors and polling settings', () => {
   });
   it('lets the ads connector fall back to the organic app credentials', () => {
     const env = load({ ...base, ...organic, TIKTOK_ADS_CONNECTOR_ENABLED: 'true' });
-    expect(env.tiktokAds).toEqual({ appId: organic.TIKTOK_APP_ID, appSecret: secret });
+    expect(env.tiktokAds).toEqual({ appId: organic.TIKTOK_APP_ID, appSecret: new Secret(secret) });
   });
   it.each([
     ['TIKTOK_CONNECTOR_ENABLED', organic, 'TIKTOK_APP_ID'],
@@ -552,7 +552,7 @@ describe('tiktok connectors and polling settings', () => {
       { ...base, ...organic, TIKTOK_APP_SECRET: undefined, TIKTOK_APP_SECRET_FILE: '/run/s' },
       { warn: () => {}, fs },
     );
-    expect(env.tiktok?.appSecret).toBe(secret);
+    expect(env.tiktok?.appSecret.reveal()).toBe(secret);
   });
   it('needs the public web url and mail config for reconnect notices and oauth', () => {
     expect(messageOf(() => load({ ...without('PUBLIC_WEB_URL'), ...organic }))).toMatch(

@@ -26,7 +26,7 @@ export function createTikTokAdsConnector(
       accountSelection: 'multiple',
       accountIdPattern: NUMERIC_ID,
       oauthCodeParam: 'auth_code',
-      tokens: { refreshable: true, rotatesRefreshToken: true },
+      tokens: { refreshable: true, rotatesRefreshToken: false },
       rateLimit: {
         points: 60,
         durationSec: 60,

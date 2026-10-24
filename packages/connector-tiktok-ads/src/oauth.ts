@@ -57,7 +57,7 @@ export async function exchangeCode(
     {
       endpoint: 'adOauthToken',
       method: 'POST',
-      body: { app_id: cfg.appId, secret: cfg.appSecret, auth_code: input.code.reveal() },
+      body: { app_id: cfg.appId, secret: cfg.appSecret.reveal(), auth_code: input.code.reveal() },
       schema: AD_TOKEN_SCHEMA,
     },
   );
@@ -76,7 +76,11 @@ export async function refreshTokens(
       {
         endpoint: 'adOauthRefresh',
         method: 'POST',
-        body: { app_id: cfg.appId, secret: cfg.appSecret, refresh_token: refreshToken.reveal() },
+        body: {
+          app_id: cfg.appId,
+          secret: cfg.appSecret.reveal(),
+          refresh_token: refreshToken.reveal(),
+        },
         schema: AD_TOKEN_SCHEMA,
       },
     );

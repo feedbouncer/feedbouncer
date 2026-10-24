@@ -465,7 +465,6 @@ export class OAuthFlow {
     if (!accounts) return GRANT_PLATFORM_ERROR;
     const byId = new Map(accounts.map((a) => [a.externalAccountId, a]));
     const results: ConnectAccountResult[] = [];
-    const refreshToken = { claimed: false };
     for (const id of new Set(externalAccountIds)) {
       const a = byId.get(id);
       if (!a) {
@@ -487,7 +486,7 @@ export class OAuthFlow {
           continue;
         }
       }
-      results.push(await this.#connectOne(actor, platform, grant, a, opts, refreshToken));
+      results.push(await this.#connectOne(actor, platform, grant, a, opts));
     }
     this.d.log.info('oauth accounts connected', {
       platform,
@@ -505,7 +504,6 @@ export class OAuthFlow {
     grant: PendingGrant,
     a: GrantableAccount,
     opts: ActivateOptions,
-    refreshToken: { claimed: boolean },
   ): Promise<ConnectAccountResult> {
     const { grantedScopes } = grant;
     const id = a.externalAccountId;
@@ -538,10 +536,9 @@ export class OAuthFlow {
       const own =
         this.d.registry.require(platform).capabilities.tokens.refreshable &&
         a.accessToken.equals(grant.userToken);
-      // A refresh token may rotate, so it can belong to one connection only: accounts
-      // sharing the grant's token after the first keep the expiry and reconnect when it passes.
-      if (own && grant.refreshToken && !refreshToken.claimed) {
-        refreshToken.claimed = true;
+      // Every account sharing the grant's token keeps its expiry and refresh token,
+      // so each refreshes on its own.
+      if (own && grant.refreshToken) {
         await this.d.vault.writeRefreshToken(scope, {
           value: grant.refreshToken,
           expiresAt: grant.refreshTokenExpiresAt ?? null,

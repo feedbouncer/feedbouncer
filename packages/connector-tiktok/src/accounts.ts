@@ -32,7 +32,7 @@ export async function fetchBusinessAccount(
       schema: BUSINESS,
     },
   ).catch((e: unknown) => {
-    throw isPermissionDenied(e) ? scopeMissing('video.list') : e;
+    throw isPermissionDenied(e) ? scopeMissing('user.info.basic') : e;
   });
   const name = data.username ?? data.display_name;
   return {

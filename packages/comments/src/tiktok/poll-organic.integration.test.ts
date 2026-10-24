@@ -293,6 +293,16 @@ describe('tiktok_poll', () => {
     expect(await w.sourcePoll(scope, itemId)).toMatchObject({ resume_cursor: null });
   });
 
+  it('reply pages count toward maxPagesPerJob', async () => {
+    const { scope, businessId } = await account('reply-budget');
+    const { itemId } = w.fake.addVideo(businessId);
+    const [newest] = addComments(itemId, 40, { stepMs: 1000, offsetMs: 60_000 });
+    w.fake.addComment(itemId, { text: 'r', parentId: newest!, createdAtSec: secAgo(w, 1000) });
+    expect(await poll(scope, { ...SETTINGS, maxPagesPerJob: 3 })).toMatchObject({ resumed: 1 });
+    const listed = w.fake.calls('businessCommentList').filter((c) => c.query.video_id === itemId);
+    expect(listed).toHaveLength(1);
+  });
+
   it('a comment deleted on TikTok after ingest becomes deleted on the next pass via platformState, never resurrected', async () => {
     const { scope, businessId } = await account('deleted');
     const { itemId } = w.fake.addVideo(businessId);

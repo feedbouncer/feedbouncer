@@ -1,4 +1,4 @@
-import { EnvError, readSecret, readString, type Env } from '@feedbouncer/service-runtime';
+import { EnvError, readSecret, Secret, readString, type Env } from '@feedbouncer/service-runtime';
 import type { ModerationAction } from '@feedbouncer/connectors';
 
 /** V4 */
@@ -15,7 +15,7 @@ export const TIKTOK_AUTHORIZE_URL = 'https://www.tiktok.com/v2/auth/authorize/';
 
 export interface TikTokConfig {
   readonly appId: string;
-  readonly appSecret: string;
+  readonly appSecret: Secret;
 }
 
 /** Settings that may be supplied as <NAME>_FILE. Apps add these to their own *_FILE_VARS. */
@@ -33,5 +33,5 @@ export function parseTikTokEnv(env: Env): TikTokConfig | null {
   if (appSecret.length > 128) {
     throw new EnvError('TIKTOK_APP_SECRET must be at most 128 characters (value not shown).');
   }
-  return { appId, appSecret };
+  return { appId, appSecret: new Secret(appSecret) };
 }

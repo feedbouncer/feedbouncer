@@ -166,7 +166,7 @@ describe('account selection', () => {
     expect(page202.refresh).toBeNull();
   });
 
-  it('accounts sharing the grant token: only the first keeps the refresh token', async () => {
+  it('accounts sharing the grant token each keep its expiry and refresh token', async () => {
     const shared =
       (id: string) =>
       (token: Secret): GrantableAccount => ({
@@ -193,7 +193,7 @@ describe('account selection', () => {
     const a = await stack.vault.readTokens(scopeOf(stack, first!.connectionId!));
     const b = await stack.vault.readTokens(scopeOf(stack, second!.connectionId!));
     expect(a.refresh?.value.reveal()).toBe('REFRESH-TOKEN-SENTINEL');
-    expect(b.refresh).toBeNull();
+    expect(b.refresh?.value.reveal()).toBe('REFRESH-TOKEN-SENTINEL');
     expect(b.access?.expiresAt).toEqual(EXPIRES);
   });
 

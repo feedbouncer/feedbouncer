@@ -1,10 +1,14 @@
+import { Secret } from '@feedbouncer/service-runtime';
 import { describe, expect, it } from 'vitest';
 import { validateConnector } from '@feedbouncer/connectors';
 import { TIKTOK_API_HOST } from '@feedbouncer/tiktok-business-api';
 import { TIKTOK_ACTIONS, TIKTOK_SCOPES } from './config.js';
 import { createTikTokConnector } from './connector.js';
 
-const c = createTikTokConnector({ appId: '7300000000000001', appSecret: 'x'.repeat(24) });
+const c = createTikTokConnector({
+  appId: '7300000000000001',
+  appSecret: new Secret('x'.repeat(24)),
+});
 
 describe('createTikTokConnector', () => {
   it('passes framework validation', () => expect(() => validateConnector(c)).not.toThrow());

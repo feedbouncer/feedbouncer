@@ -90,7 +90,7 @@ describe('buildConnectorRegistry', () => {
 });
 
 describe('tiktok', () => {
-  const tiktok = { appId: '7300000000000001', appSecret: 'tiktok-secret-0123456789' };
+  const tiktok = { appId: '7300000000000001', appSecret: new Secret('tiktok-secret-0123456789') };
   const settings = { pollIntervalSec: 300 } as comments.TikTokPollSettings;
 
   it('tiktok connectors and jobs register without Facebook config', () => {

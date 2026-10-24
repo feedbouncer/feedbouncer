@@ -18,7 +18,10 @@ let ctx: OAuthContext;
 beforeEach(() => {
   fake = new FakeTikTok({ ...APP, now: () => NOW });
   log = vi.fn<(msg: string, fields: { code: string }) => void>();
-  connector = createTikTokConnector(APP, { clock: { now: () => NOW.getTime() }, log });
+  connector = createTikTokConnector(
+    { ...APP, appSecret: new Secret(APP.appSecret) },
+    { clock: { now: () => NOW.getTime() }, log },
+  );
   ctx = {
     http: createSafeHttp({ allowedHosts: [TIKTOK_API_HOST], fetch: fake.fetch }),
     signal: AbortSignal.timeout(2000),

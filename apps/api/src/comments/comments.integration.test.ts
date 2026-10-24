@@ -84,8 +84,14 @@ const key = () => `rk-${randomUUID()}`;
 beforeAll(async () => {
   graph = new FakeGraph({ appSecret: SECRET, appId: APP_ID });
   const TIKTOK = { appId: '7300000000000001', appSecret: 'tiktok-app-secret-0123456789' };
+  const TIKTOK_CFG = { ...TIKTOK, appSecret: new Secret(TIKTOK.appSecret) };
   api = await startTestApi(
-    { facebook: FACEBOOK, instagram: { meta: FACEBOOK }, tiktok: TIKTOK, tiktokAds: TIKTOK },
+    {
+      facebook: FACEBOOK,
+      instagram: { meta: FACEBOOK },
+      tiktok: TIKTOK_CFG,
+      tiktokAds: TIKTOK_CFG,
+    },
     { fetch: graph.fetch },
   );
   org = await orgWithRoles(api, 'cmt');

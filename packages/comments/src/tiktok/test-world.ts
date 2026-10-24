@@ -84,8 +84,11 @@ export async function tiktokWorld(label: string, o: { wrap?: (c: Connector) => C
     );
   };
   const http = (c: Connector) => createSafeHttp({ allowedHosts: c.capabilities.apiHosts, fetch });
-  const organic = createTikTokConnector(APP, { clock });
-  const ads = createTikTokAdsConnector(APP, { clock });
+  const organic = createTikTokConnector(
+    { ...APP, appSecret: new Secret(APP.appSecret) },
+    { clock },
+  );
+  const ads = createTikTokAdsConnector({ ...APP, appSecret: new Secret(APP.appSecret) }, { clock });
   const registry = new ConnectorRegistry();
   registry.register(o.wrap ? o.wrap(organic) : organic);
   registry.register(o.wrap ? o.wrap(ads) : ads);

@@ -1,5 +1,6 @@
 import type { ActionStep } from '@feedbouncer/actions/shared';
 import { STEP_LABEL } from './actions';
+import { SCOPE_NAME } from './health-text';
 import type { ClassifierEvidence } from './classifier';
 import type { PolicyEvidence } from './policies';
 
@@ -296,7 +297,6 @@ const UNSUPPORTED_SUBJECT: Record<string, string> = {
   tiktok: "TikTok doesn't",
   tiktok_ads: "TikTok ads don't",
 };
-const SCOPE_NAME = /^[a-z0-9_.]{1,64}$/;
 // The token describeFallback puts last, right before its closing sentence; the rule name
 // comes first, so an earlier look-alike in the name is never read.
 const REVIEW_REASON =

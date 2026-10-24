@@ -1,10 +1,11 @@
+import { Secret } from '@feedbouncer/service-runtime';
 import { describe, expect, it } from 'vitest';
 import { validateConnector } from '@feedbouncer/connectors';
 import { TIKTOK_API_HOST } from '@feedbouncer/tiktok-business-api';
 import { createTikTokAdsConnector } from './connector.js';
 import { APP } from './test-world.js';
 
-const c = createTikTokAdsConnector(APP);
+const c = createTikTokAdsConnector({ ...APP, appSecret: new Secret(APP.appSecret) });
 
 describe('createTikTokAdsConnector', () => {
   it('passes framework validation', () => expect(() => validateConnector(c)).not.toThrow());
@@ -18,7 +19,7 @@ describe('createTikTokAdsConnector', () => {
       connectionComments: true,
       actions: ['hide', 'unhide', 'delete'],
       responses: ['public_reply'],
-      tokens: { refreshable: true, rotatesRefreshToken: true },
+      tokens: { refreshable: true, rotatesRefreshToken: false },
       rateLimit: {
         points: 60,
         durationSec: 60,

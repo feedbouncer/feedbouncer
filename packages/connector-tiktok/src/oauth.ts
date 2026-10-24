@@ -56,7 +56,7 @@ export async function exchangeCode(
       method: 'POST',
       body: {
         client_id: cfg.appId,
-        client_secret: cfg.appSecret,
+        client_secret: cfg.appSecret.reveal(),
         grant_type: 'authorization_code',
         auth_code: input.code.reveal(),
         redirect_uri: ctx.redirectUri,
@@ -84,7 +84,7 @@ export async function refreshTokens(
         method: 'POST',
         body: {
           client_id: cfg.appId,
-          client_secret: cfg.appSecret,
+          client_secret: cfg.appSecret.reveal(),
           grant_type: 'refresh_token',
           refresh_token: refreshToken.reveal(),
         },

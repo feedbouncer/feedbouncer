@@ -14,7 +14,10 @@ export async function world(setup: (fake: FakeTikTok) => void = () => {}) {
   const fake = new FakeTikTok({ ...APP, now: () => NOW });
   setup(fake);
   const log: Mock<Log> = vi.fn<Log>();
-  const connector = createTikTokAdsConnector(APP, { clock: { now: () => NOW.getTime() }, log });
+  const connector = createTikTokAdsConnector(
+    { ...APP, appSecret: new Secret(APP.appSecret) },
+    { clock: { now: () => NOW.getTime() }, log },
+  );
   let tamper: { path: string; fn: (data: Record<string, unknown>) => unknown } | null = null;
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const res = await fake.fetch(input, init);

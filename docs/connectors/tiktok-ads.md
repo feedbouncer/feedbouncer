@@ -184,7 +184,8 @@ advertiser, which is unverified (V16); the default budget stays well below it.
 - **Token expiry.** TikTok may issue advertiser tokens that do not expire, or
   tokens that last 24 hours with a refresh token (V12). Both are handled: a
   token without an expiry is never refreshed, and one with an expiry is
-  refreshed automatically. When TikTok rejects the token or the refresh, the
+  refreshed automatically. Advertisers connected from one authorization each
+  keep their own copy of the token and refresh it independently. When TikTok rejects the token or the refresh, the
   connection shows **Reconnect** and the organization's owners get an email.
 - **Missing permission.** When TikTok refuses the comment list or an action
   for lack of permission, the connection is marked as needing reconnection and
