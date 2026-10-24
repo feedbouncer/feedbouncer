@@ -11,7 +11,10 @@ function multiConnector(opts: {
   accounts: (userToken: Secret) => GrantableAccount[];
   accountIdPattern?: RegExp;
   refreshable?: boolean;
+  /** The token response carries an expiry and refresh token (default: when refreshable). */
+  expiring?: boolean;
 }): Connector {
+  const expiring = opts.expiring ?? opts.refreshable ?? false;
   return {
     platform: 'facebook',
     capabilities: {
@@ -19,7 +22,7 @@ function multiConnector(opts: {
       listSources: false,
       recentSources: false,
       ingestion: 'polling',
-      tokens: { refreshable: false, rotatesRefreshToken: false },
+      tokens: { refreshable: opts.refreshable ?? false, rotatesRefreshToken: false },
       rateLimit: {
         points: 100,
         durationSec: 60,
@@ -38,9 +41,9 @@ function multiConnector(opts: {
     exchangeCode: async () => ({
       tokens: {
         accessToken: new Secret('USER-TOKEN-SENTINEL'),
-        accessTokenExpiresAt: opts.refreshable ? EXPIRES : null,
-        refreshToken: opts.refreshable ? new Secret('REFRESH-TOKEN-SENTINEL') : null,
-        refreshTokenExpiresAt: opts.refreshable ? REFRESH_EXPIRES : null,
+        accessTokenExpiresAt: expiring ? EXPIRES : null,
+        refreshToken: expiring ? new Secret('REFRESH-TOKEN-SENTINEL') : null,
+        refreshTokenExpiresAt: expiring ? REFRESH_EXPIRES : null,
         scopes: opts.granted,
       },
       account: { externalAccountId: 'user-1', displayName: 'U' },
@@ -161,6 +164,32 @@ describe('account selection', () => {
     const page202 = await stack.vault.readTokens(scopeOf(stack, other!.connectionId!));
     expect(page202.access).toMatchObject({ expiresAt: null });
     expect(page202.refresh).toBeNull();
+  });
+
+  it('a non-refreshable connector stores the user token as before: no expiry, no refresh token', async () => {
+    const stack = await createMemoryStack(
+      multiConnector({
+        granted: SCOPES,
+        accounts: (token) => [{ ...page('301'), accessToken: token }],
+        expiring: true,
+      }),
+      { webhookSecret: null, redirectUri: 'https://app.test/cb', clock },
+    );
+    const { authorizationUrl } = await stack.oauth.start(stack.actor, 'facebook');
+    const state = authorizationUrl.searchParams.get('state')!;
+    const r = await stack.oauth.complete(stack.actor, 'facebook', { state, code: 'c' });
+    const done = await stack.oauth.connectAccounts(
+      stack.actor,
+      'facebook',
+      (r as { grantId: string }).grantId,
+      ['301'],
+    );
+    const tokens = await stack.vault.readTokens(
+      scopeOf(stack, done.ok ? done.results[0]!.connectionId! : ''),
+    );
+    expect(tokens.access).toMatchObject({ expiresAt: null });
+    expect(tokens.access?.value.reveal()).toBe('USER-TOKEN-SENTINEL');
+    expect(tokens.refresh).toBeNull();
   });
 
   it('stores a grant, lists accounts without tokens, connects only eligible ones', async () => {

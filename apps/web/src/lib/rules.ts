@@ -297,8 +297,10 @@ const UNSUPPORTED_SUBJECT: Record<string, string> = {
   tiktok_ads: "TikTok ads don't",
 };
 const SCOPE_NAME = /^[a-z0-9_.]{1,64}$/;
+// The token describeFallback puts last, right before its closing sentence; the rule name
+// comes first, so an earlier look-alike in the name is never read.
 const REVIEW_REASON =
-  /\((action_not_supported:([a-z_]+):([a-z_]+)|missing_permission:([^)]{1,1000}))\)/;
+  /\((action_not_supported:([a-z_]+):([a-z_]+)|missing_permission:([^()]{1,1000}))\)\. Flagged for review instead\.$/;
 
 /**
  * Why a rule step went to review, from the reason token its decision carries:

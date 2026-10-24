@@ -74,32 +74,47 @@ describe('DecisionBadge', () => {
           'Rule "Scams" wanted to delete this comment, but TikTok ads does not allow it (action_not_supported:tiktok_ads:delete). Flagged for review instead.',
         ),
       ).toContain('Flagged for review: TikTok ads don&#x27;t support delete; review manually.');
-      expect(flagged('x (action_not_supported:tiktok:auto_reply). y')).toContain(
-        'TikTok doesn&#x27;t support auto-reply; review manually.',
-      );
+      expect(
+        flagged('x (action_not_supported:tiktok:auto_reply). Flagged for review instead.'),
+      ).toContain('TikTok doesn&#x27;t support auto-reply; review manually.');
     });
 
     it('names a missing permission', () => {
-      expect(flagged('x (missing_permission:comment.list.manage). y')).toContain(
-        'Flagged for review: Missing permission comment.list.manage.',
-      );
+      expect(
+        flagged('x (missing_permission:comment.list.manage). Flagged for review instead.'),
+      ).toContain('Flagged for review: Missing permission comment.list.manage.');
     });
 
     it('a reason containing <script> renders literally', () => {
-      const reason = 'Rule "x" (missing_permission:<script>alert(1)</script>). Flagged.';
+      const reason =
+        'Rule "x" (missing_permission:<script>alert(1)</script>). Flagged for review instead.';
       const html = flagged(reason);
       expect(html).not.toContain('<script');
       expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
       expect(html).not.toContain('Missing permission');
-      const named = flagged('Rule "<script>x</script>" (action_not_supported:tiktok:delete).');
+      const named = flagged(
+        'Rule "<script>x</script>" (action_not_supported:tiktok:delete). Flagged for review instead.',
+      );
       expect(named).not.toContain('<script');
       expect(named).toContain('TikTok doesn&#x27;t support delete; review manually.');
     });
 
+    it('reads the reason token, not a look-alike in the rule name', () => {
+      const html = flagged(
+        'Rule "Spam (missing_permission:x)" wanted to delete this comment, but TikTok does not allow it (action_not_supported:tiktok:delete). Flagged for review instead.',
+      );
+      expect(html).toContain('TikTok doesn&#x27;t support delete; review manually.');
+      expect(html).not.toContain('Missing permission x');
+    });
+
     it('an unknown platform or step falls back to the reason text', () => {
-      const html = flagged('Rule "x" (action_not_supported:myspace:delete). Flagged.');
+      const html = flagged(
+        'Rule "x" (action_not_supported:myspace:delete). Flagged for review instead.',
+      );
       expect(html).toContain('action_not_supported:myspace:delete');
-      expect(flagged('(action_not_supported:tiktok:explode)')).toContain('tiktok:explode');
+      expect(
+        flagged('(action_not_supported:tiktok:explode). Flagged for review instead.'),
+      ).toContain('tiktok:explode');
     });
   });
 

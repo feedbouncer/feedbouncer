@@ -531,8 +531,11 @@ export class OAuthFlow {
     const freshlyLive = created || prior === null;
     let activation: ActivateResult | null = null;
     try {
-      // The account is the user's own (TikTok): its token expires and refreshes like one.
-      const own = a.accessToken.reveal() === grant.userToken.reveal();
+      // A refreshable connector's account held by the user token itself (TikTok) keeps
+      // that token's expiry and refresh token; anything else is stored as before.
+      const own =
+        this.d.registry.require(platform).capabilities.tokens.refreshable &&
+        a.accessToken.equals(grant.userToken);
       if (own && grant.refreshToken)
         await this.d.vault.writeRefreshToken(scope, {
           value: grant.refreshToken,

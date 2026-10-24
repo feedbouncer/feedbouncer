@@ -820,6 +820,16 @@ describe('meta ads connect flow', () => {
       [org.brandId, [first, second]],
     );
     expect(rows.rows).toEqual([{ platform: 'meta_ads' }, { platform: 'meta_ads' }]);
+    // As before: the ad account keeps the user token with no expiry and no refresh token.
+    const secrets = await api.pool.query(
+      `SELECT kind, expires_at FROM connection_secret
+        WHERE connection_id = ANY($1::uuid[]) ORDER BY connection_id, kind`,
+      [results.map((r) => r.connectionId)],
+    );
+    expect(secrets.rows).toEqual([
+      { kind: 'access_token', expires_at: null },
+      { kind: 'access_token', expires_at: null },
+    ]);
   });
 
   it('declining ads_read creates nothing and reports the missing scope', async () => {
