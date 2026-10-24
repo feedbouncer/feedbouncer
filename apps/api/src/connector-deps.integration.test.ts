@@ -25,7 +25,7 @@ beforeAll(async () => {
 });
 afterAll(() => api.close());
 
-describe('buildMetaDeps job registry', () => {
+describe('buildConnectorDeps job registry', () => {
   // First: the platform queue must still be untouched when this job is enqueued.
   it('can enqueue connection_backfill for facebook and instagram only', async () => {
     const producer = api.deps.producer!;

@@ -52,3 +52,37 @@ describe('healthText', () => {
   it('falls back for an unknown reason', () =>
     expect(h({ reason: 'connection_error' })).toBe('This connection needs attention.'));
 });
+
+describe('missing permissions', () => {
+  const missing = (missingScopes: string[] | undefined) =>
+    h({
+      status: 'needs_reconnection',
+      reason: 'oauth_scope_missing',
+      ...(missingScopes && { missingScopes }),
+    });
+
+  it('names the scopes to approve', () => {
+    expect(missing(['comment.list'])).toBe(
+      'Missing permission: comment.list. Reconnect and approve all requested permissions.',
+    );
+    expect(missing(['comment.list', 'video.list'])).toBe(
+      'Missing permission: comment.list, video.list. Reconnect and approve all requested permissions.',
+    );
+  });
+
+  it('shows only well-formed scope names', () => {
+    expect(missing(['<script>alert(1)</script>', 'x'.repeat(65), 'Comment.List'])).toBe(
+      'A permission is missing. Reconnect and approve all requested permissions.',
+    );
+    expect(missing(undefined)).toBe(
+      'A permission is missing. Reconnect and approve all requested permissions.',
+    );
+  });
+});
+
+it('names TikTok when TikTok throttles', () =>
+  expect(
+    h({ platform: 'tiktok_ads', reason: 'recent_failures', lastErrorCode: 'rate_limited' }),
+  ).toBe(
+    'Processing delayed: TikTok asked FeedBouncer to slow down. New comments are queued and will be checked; none are dropped.',
+  ));

@@ -26,3 +26,15 @@ describe('viewOnUrl (facebook)', () => {
     expect(viewOnUrl('facebook', u)).toBeNull();
   });
 });
+
+describe('viewOnUrl (tiktok)', () => {
+  it('links only to tiktok.com', () => {
+    const u = 'https://www.tiktok.com/@shop/video/7300000000000000301';
+    expect(viewOnUrl('tiktok', u)).toBe(u);
+    expect(viewOnUrl('tiktok_ads', 'https://www.tiktok.com/@/video/1')).toBe(
+      'https://www.tiktok.com/@/video/1',
+    );
+    expect(viewOnUrl('tiktok', 'https://tiktok.com.evil.example/x')).toBeNull();
+    expect(viewOnUrl('tiktok', 'https://www.facebook.com/x')).toBeNull();
+  });
+});

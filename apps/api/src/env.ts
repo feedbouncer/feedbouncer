@@ -29,6 +29,12 @@ import {
 } from '@feedbouncer/connector-facebook';
 import { parseMetaAdsEnv, type MetaAdsConfig } from '@feedbouncer/connector-meta-ads';
 import { parseInstagramEnv, type InstagramConfig } from '@feedbouncer/connector-instagram';
+import { TIKTOK_FILE_VARS, parseTikTokEnv, type TikTokConfig } from '@feedbouncer/connector-tiktok';
+import {
+  TIKTOK_ADS_FILE_VARS,
+  parseTikTokAdsEnv,
+  type TikTokAdsConfig,
+} from '@feedbouncer/connector-tiktok-ads';
 import { describeClassifierProvider } from '@feedbouncer/classifier';
 import { loadPolicyLimits } from '@feedbouncer/policies';
 import { readAllowedPrivateCidrs } from '@feedbouncer/webhooks';
@@ -52,6 +58,8 @@ export const API_FILE_VARS = [
   'SMTP_URL',
   ...ENCRYPTION_FILE_VARS,
   ...FACEBOOK_FILE_VARS,
+  ...TIKTOK_FILE_VARS,
+  ...TIKTOK_ADS_FILE_VARS,
 ] as const;
 
 export interface ApiEnv {
@@ -83,6 +91,10 @@ export interface ApiEnv {
   readonly instagram: InstagramConfig | null;
   /** Null unless META_ADS_CONNECTOR_ENABLED=true; also requires the Facebook config. */
   readonly metaAds: MetaAdsConfig | null;
+  /** Null unless TIKTOK_CONNECTOR_ENABLED=true. Independent of the Facebook config. */
+  readonly tiktok: TikTokConfig | null;
+  /** Null unless TIKTOK_ADS_CONNECTOR_ENABLED=true. Independent of the Facebook config. */
+  readonly tiktokAds: TikTokAdsConfig | null;
   /** Queue prefix and dedup window, shared with the worker so both sides use the same queues. */
   readonly jobs: JobsConfig;
   /** The classifier's provider and model, for display only: the API holds no key. */
@@ -180,6 +192,8 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     facebook,
     instagram: parseInstagramEnv(env, facebook),
     metaAds: parseMetaAdsEnv(env, facebook),
+    tiktok: parseTikTokEnv(env),
+    tiktokAds: parseTikTokAdsEnv(env),
     jobs: loadJobsConfig(env),
     classifier,
     policy: loadPolicyLimits(env),
@@ -221,6 +235,8 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     facebookEnabled: config.facebook !== null,
     instagramEnabled: config.instagram !== null,
     metaAdsEnabled: config.metaAds !== null,
+    tiktokEnabled: config.tiktok !== null,
+    tiktokAdsEnabled: config.tiktokAds !== null,
     scanToolEnabled: config.scan.enabled,
     alertSlackEnabled: config.alerts.slack,
     alertEmailEnabled: config.alerts.email,

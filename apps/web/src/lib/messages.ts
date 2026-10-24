@@ -160,6 +160,7 @@ const STATUS_REASONS: Record<string, string> = {
   setup_not_queued:
     'The connection was saved but setup could not be started. Reconnect to finish connecting.',
   page_role_lost: 'You no longer have a moderator role on this Page.',
+  oauth_scope_missing: 'FeedBouncer is missing a permission it needs for this account.',
 };
 
 const ACTION_KINDS: Record<string, string> = {

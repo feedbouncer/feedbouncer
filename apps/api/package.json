@@ -33,6 +33,8 @@
     "@feedbouncer/connector-facebook": "workspace:*",
     "@feedbouncer/connector-instagram": "workspace:*",
     "@feedbouncer/connector-meta-ads": "workspace:*",
+    "@feedbouncer/connector-tiktok": "workspace:*",
+    "@feedbouncer/connector-tiktok-ads": "workspace:*",
     "@feedbouncer/connectors": "workspace:*",
     "@feedbouncer/db": "workspace:*",
     "@feedbouncer/jobs": "workspace:*",
@@ -66,6 +68,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@feedbouncer/tiktok-business-api": "workspace:*",
     "@opentelemetry/sdk-trace-base": "2.12.0",
     "@seriousme/openapi-schema-validator": "2.11.0",
     "@types/node": "24.13.6",

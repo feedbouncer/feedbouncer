@@ -1,10 +1,18 @@
 import type { ActionStep } from '@feedbouncer/actions/shared';
+import { STEP_LABEL } from './actions';
 import type { ClassifierEvidence } from './classifier';
 import type { PolicyEvidence } from './policies';
 
 export const RULE_ACTIONS = ['approve', 'flag', 'hide', 'remove'] as const;
 export type RuleAction = (typeof RULE_ACTIONS)[number];
 export type RuleMode = 'enforce' | 'suggest';
+export const RULE_APPLIES_TO = ['all', 'organic', 'ad'] as const;
+export type RuleAppliesTo = (typeof RULE_APPLIES_TO)[number];
+export const APPLIES_TO_LABEL: Record<RuleAppliesTo, string> = {
+  all: 'All comments',
+  organic: 'Organic only',
+  ad: 'Ads only',
+};
 export const RULE_KINDS = [
   'keyword',
   'regex',
@@ -68,6 +76,7 @@ export interface RuleView {
   action: RuleAction;
   actions: ActionStep[];
   mode: RuleMode;
+  appliesTo: RuleAppliesTo;
   enabled: boolean;
   position: number;
   warnings: {
@@ -168,6 +177,24 @@ const authorLine = (e: AuthorEntry): string =>
     .filter((p) => p !== null)
     .join(' ');
 
+/** The body the editor POSTs or PATCHes. */
+export function ruleRequestBody(r: {
+  name: string;
+  kind: RuleKind;
+  form: RuleFormState;
+  actions: ActionStep[];
+  dryRun: boolean;
+  appliesTo: RuleAppliesTo;
+}) {
+  return {
+    name: r.name,
+    conditions: conditionsFromForm(r.kind, r.form),
+    actions: r.actions,
+    mode: r.dryRun ? 'suggest' : 'enforce',
+    appliesTo: r.appliesTo,
+  };
+}
+
 export function conditionsFromForm(kind: RuleKind, f: RuleFormState): unknown {
   switch (kind) {
     case 'keyword':
@@ -259,4 +286,35 @@ export function formFromConditions(c: unknown): RuleFormState {
 export interface RuleIssue {
   path: string;
   message: string;
+}
+
+// What a platform cannot do, as the subject of "... support X; review manually."
+const UNSUPPORTED_SUBJECT: Record<string, string> = {
+  facebook: "Facebook doesn't",
+  instagram: "Instagram doesn't",
+  meta_ads: "Meta ads don't",
+  tiktok: "TikTok doesn't",
+  tiktok_ads: "TikTok ads don't",
+};
+const SCOPE_NAME = /^[a-z0-9_.]{1,64}$/;
+const REVIEW_REASON =
+  /\((action_not_supported:([a-z_]+):([a-z_]+)|missing_permission:([^)]{1,1000}))\)/;
+
+/**
+ * Why a rule step went to review, from the reason token its decision carries:
+ * `action_not_supported:<platform>:<step>` or `missing_permission:<scopes>`. Null for any
+ * other reason, or a token naming an unknown platform, step or malformed scope.
+ */
+export function reviewReasonText(reason: string): string | null {
+  const m = REVIEW_REASON.exec(reason);
+  if (!m) return null;
+  const [, , platform, step, scopes] = m;
+  if (scopes !== undefined) {
+    const list = scopes.split(',');
+    return list.every((s) => SCOPE_NAME.test(s)) ? `Missing permission ${list.join(', ')}.` : null;
+  }
+  if (!Object.hasOwn(UNSUPPORTED_SUBJECT, platform!) || !Object.hasOwn(STEP_LABEL, step!))
+    return null;
+  const action = STEP_LABEL[step as keyof typeof STEP_LABEL].toLowerCase();
+  return `${UNSUPPORTED_SUBJECT[platform!]} support ${action}; review manually.`;
 }

@@ -17,7 +17,12 @@ export interface ConnectionHealthView {
   stalenessSeconds: number | null;
   ingestLagSeconds: number;
   failedImports: number;
+  /** Permissions a reconnect must approve, when the platform named them. */
+  missingScopes: string[];
 }
+
+// A stored scope name is shown only in this shape; anything else is dropped.
+const SCOPE_NAME = /^[a-z0-9_.]{1,64}$/;
 
 // Anything outside the health vocabulary (a stored free-form reason) is not echoed.
 const KNOWN_REASONS: ReadonlySet<string> = new Set(HEALTH_REASONS);
@@ -41,7 +46,17 @@ export class ConnectionHealthService {
       [org.organizationId, brandId],
     );
     if (brand.rowCount === 0) throw notFound();
-    const rows = await this.deps.health.forBrand(org.organizationId, brandId);
+    const [rows, scopes] = await Promise.all([
+      this.deps.health.forBrand(org.organizationId, brandId),
+      this.deps.pool.query<{ id: string; missing_scopes: string[] }>(
+        `SELECT id, missing_scopes FROM connection
+          WHERE organization_id = $1 AND brand_id = $2 AND cardinality(missing_scopes) > 0`,
+        [org.organizationId, brandId],
+      ),
+    ]);
+    const missing = new Map(
+      scopes.rows.map((r) => [r.id, r.missing_scopes.filter((s) => SCOPE_NAME.test(s))]),
+    );
     return rows.map((h) => ({
       connectionId: h.connectionId,
       platform: h.platform,
@@ -54,6 +69,7 @@ export class ConnectionHealthService {
       stalenessSeconds: h.stalenessMs === null ? null : Math.floor(h.stalenessMs / 1000),
       ingestLagSeconds: Math.floor(h.ingestLagMs / 1000),
       failedImports: h.failedImports,
+      missingScopes: missing.get(h.connectionId) ?? [],
     }));
   }
 }

@@ -24,7 +24,7 @@ import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { buildApp } from '../app.factory.js';
 import type { AppDeps } from '../deps.js';
 import type { ApiEnv } from '../env.js';
-import { buildMetaDeps, type MetaDeps } from '../meta-deps.js';
+import { buildConnectorDeps, type ConnectorDeps } from '../connector-deps.js';
 
 export const WEB = 'http://localhost:3000';
 
@@ -85,10 +85,11 @@ export interface TestApi {
 
 /**
  * `deps` replaces individual AppDeps built by the harness (e.g. a failing
- * producer). Meta-backed deps (Facebook, plus Instagram and Meta Ads when `overrides.instagram`
- * or `overrides.metaAds` is set) exist only when `overrides.facebook` is set;
- * `fetch` (e.g. FakeGraph's) then replaces the network behind their SafeHttp
- * and the free scan's Graph client.
+ * producer). Connector-backed deps exist only when a connector is configured:
+ * `overrides.facebook` (plus Instagram and Meta Ads when `overrides.instagram` or
+ * `overrides.metaAds` is set), `overrides.tiktok` or `overrides.tiktokAds`.
+ * `fetch` (e.g. FakeGraph's or FakeTikTok's) then replaces the network behind
+ * their SafeHttp and the free scan's Graph client.
  */
 export async function startTestApi(
   overrides: Partial<ApiEnv> = {},
@@ -123,6 +124,8 @@ export async function startTestApi(
     facebook: null,
     instagram: null,
     metaAds: null,
+    tiktok: null,
+    tiktokAds: null,
     classifier: { id: 'none', model: '', enabled: false },
     policy: { monthlyCallsPerBrand: 20_000, evaluatorConfigured: true },
     publicApiRateLimitPerMinute: 60,
@@ -144,7 +147,7 @@ export async function startTestApi(
   const redisKeyPrefix = `fbtest:${randomUUID()}:`;
   const mailer = new MemoryMailer();
   const metrics = createMetrics('api');
-  const meta: MetaDeps | null = buildMetaDeps({
+  const platforms: ConnectorDeps | null = buildConnectorDeps({
     env,
     pool,
     log,
@@ -160,9 +163,9 @@ export async function startTestApi(
     redisKeyPrefix,
     metrics,
     health: new PgHealthReader(pool, env.health),
-    connectors: meta?.connectors ?? null,
-    producer: meta?.producer ?? null,
-    comments: meta?.comments ?? null,
+    connectors: platforms?.connectors ?? null,
+    producer: platforms?.producer ?? null,
+    comments: platforms?.comments ?? null,
     ...(graphFetch && { scanFetch: graphFetch }),
     ...appDepsOverrides,
   };
@@ -170,7 +173,7 @@ export async function startTestApi(
   try {
     app = await buildApp(deps);
   } catch (err) {
-    await meta?.close();
+    await platforms?.close();
     redis.disconnect();
     await pool.end();
     await db.close();
@@ -236,7 +239,7 @@ export async function startTestApi(
     seedConnection,
     async close() {
       await app.close();
-      await meta?.close();
+      await platforms?.close();
       if (redis.status === 'ready') {
         const keys = [
           ...(await redis.keys(`${env.jobs.prefix}:*`)),

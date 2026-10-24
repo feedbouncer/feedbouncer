@@ -13,6 +13,7 @@ const rule = (over: Partial<RuleView>): RuleView => ({
   action: 'hide',
   actions: [{ type: 'hide' }],
   mode: 'enforce',
+  appliesTo: 'all',
   enabled: true,
   position: 1,
   warnings: { shadowedBy: null, neverMatches: false, invalid: false },

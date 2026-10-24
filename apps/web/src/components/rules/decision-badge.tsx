@@ -1,11 +1,19 @@
 import { classifierEvidence } from '../../lib/classifier';
 import { actorTypeText, outcomeText } from '../../lib/messages';
 import { policyDecisionText } from '../../lib/policies';
-import { ACTION_LABEL, OUTCOME_DONE, OUTCOME_VERB, type DecisionView } from '../../lib/rules';
+import {
+  ACTION_LABEL,
+  OUTCOME_DONE,
+  OUTCOME_VERB,
+  reviewReasonText,
+  type DecisionView,
+} from '../../lib/rules';
 
 const ATTEMPT: Record<string, string> = { hide: 'hide', delete: 'delete' };
 
 export function decisionText(d: DecisionView): string {
+  const review = d.fallback ? reviewReasonText(d.reason) : null;
+  if (review) return `Flagged for review: ${review}`;
   if (d.actorType === 'classifier' && d.classifier) {
     if (d.fallback) {
       const code = d.action?.outcomeCode;

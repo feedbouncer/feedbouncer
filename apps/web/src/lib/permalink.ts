@@ -1,6 +1,8 @@
 const HOSTS: Record<string, string> = {
   facebook: 'facebook.com',
   instagram: 'instagram.com',
+  tiktok: 'tiktok.com',
+  tiktok_ads: 'tiktok.com',
 };
 
 /**

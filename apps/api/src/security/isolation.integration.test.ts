@@ -5,8 +5,15 @@ import { extractFirstUrl } from '@feedbouncer/mailer/testing';
 import { Secret } from '@feedbouncer/service-runtime';
 import { PgAlertChannels } from '@feedbouncer/alerts';
 import { PgApiKeys } from '@feedbouncer/public-api';
+import { FakeTikTok } from '@feedbouncer/tiktok-business-api/testing';
 import { orgWithRoles, startTestApi, type TestApi } from '../testing/harness.js';
-import { CASES, TOKEN_CASES, type IsolationFixture } from './isolation-cases.js';
+import {
+  CASES,
+  PICKER_PLATFORMS,
+  TOKEN_CASES,
+  type IsolationFixture,
+  type PickerPlatform,
+} from './isolation-cases.js';
 
 const FACEBOOK = {
   appId: '1112223334',
@@ -15,14 +22,23 @@ const FACEBOOK = {
   webhookVerifyToken: new Secret('verify-token-0123456789'),
 };
 
+const TIKTOK = { appId: '7300000000000001', appSecret: 'tiktok-app-secret-0123456789' };
+
 let api: TestApi;
 let f: IsolationFixture;
+/** Every TikTok request the app makes; no case may make one. */
+const tiktok = new FakeTikTok(TIKTOK);
 beforeAll(async () => {
-  api = await startTestApi({
-    facebook: FACEBOOK,
-    instagram: { meta: FACEBOOK },
-    alerts: { slack: true, email: true, capPerHour: 30, emailPerMinute: 60 },
-  });
+  api = await startTestApi(
+    {
+      facebook: FACEBOOK,
+      instagram: { meta: FACEBOOK },
+      tiktok: TIKTOK,
+      tiktokAds: TIKTOK,
+      alerts: { slack: true, email: true, capPerHour: 30, emailPerMinute: 60 },
+    },
+    { fetch: tiktok.fetch },
+  );
   const A = await orgWithRoles(api, 'isoA');
   const B = await orgWithRoles(api, 'isoB');
   // Each org has a connection with sync state, so the snapshots prove read routes
@@ -206,9 +222,33 @@ beforeAll(async () => {
        FROM brand WHERE id = $2 RETURNING id`,
     [B.orgId, B.brandId, bRule.rows[0].id, bApiKey.key.id],
   );
+  // B's TikTok account and ad account, each with a stored token, and a comment on the account.
+  const bTikTokAccountId = `tt-${B.orgId.slice(0, 8)}`;
+  const tiktokConnections: Record<'tiktok' | 'tiktok_ads', string> = { tiktok: '', tiktok_ads: '' };
+  for (const [platform, ext] of [
+    ['tiktok', bTikTokAccountId],
+    ['tiktok_ads', `73${B.orgId.replace(/\D/g, '').slice(0, 14)}`],
+  ] as const) {
+    const { scope } = await api.seedConnection(B, { platform, externalAccountId: ext });
+    await api.deps.connectors!.stack.store.put(scope, 'access_token', new Secret('tt'), null);
+    tiktokConnections[platform] = scope.connectionId;
+  }
+  const ttVideo = await api.pool.query(
+    `INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id)
+     VALUES ($1, $2, $3, 'video', '7300000000000099') RETURNING id`,
+    [B.orgId, B.brandId, tiktokConnections.tiktok],
+  );
+  const ttComment = await api.pool.query(
+    `INSERT INTO comment (organization_id, brand_id, connection_id, source_id, external_id, body, posted_at)
+     VALUES ($1, $2, $3, $4, '7300000000000100', 'tt hi', now()) RETURNING id`,
+    [B.orgId, B.brandId, tiktokConnections.tiktok, ttVideo.rows[0].id],
+  );
   const grants = new PgOAuthGrantStore(api.pool, api.deps.env.encryption);
-  const bGrantIds = { facebook: randomUUID(), instagram: randomUUID() };
-  for (const platform of ['facebook', 'instagram'] as const) {
+  const bGrantIds = Object.fromEntries(PICKER_PLATFORMS.map((p) => [p, randomUUID()])) as Record<
+    PickerPlatform,
+    string
+  >;
+  for (const platform of PICKER_PLATFORMS) {
     await grants.save({
       id: bGrantIds[platform],
       organizationId: B.orgId,
@@ -247,9 +287,15 @@ beforeAll(async () => {
     bSuggestionId: bSuggestion.rows[0].id,
     bPolicyId: bPolicy.rows[0].id,
     bPreviewId: bPreview.rows[0].id,
-    bConnectionIds: { facebook: bConnectionId, instagram: igConnection.rows[0].id },
+    bConnectionIds: {
+      facebook: bConnectionId,
+      instagram: igConnection.rows[0].id,
+      ...tiktokConnections,
+    },
     bTagId: bTag.rows[0].id,
     bGrantIds,
+    bTikTokAccountId,
+    bTikTokCommentId: ttComment.rows[0].id,
     bAlertChannelId: bChannel.channel.id,
     bApiKeyId: bApiKey.key.id,
     bProposalId: bProposal.rows[0].id,
@@ -355,7 +401,7 @@ describe('A owner cannot reach B', () => {
       const beforeA = await snapshot(f.A.orgId);
       expect(beforeB.invitations.length).toBeGreaterThan(0);
       expect(beforeB.audit.length).toBeGreaterThan(0);
-      expect(beforeB.grants).toHaveLength(2);
+      expect(beforeB.grants).toHaveLength(PICKER_PLATFORMS.length);
       expect(beforeB.tags).toHaveLength(1);
       expect(beforeB.alertChannels).toHaveLength(1);
       expect(beforeB.alertRoutes).toHaveLength(1);
@@ -365,6 +411,7 @@ describe('A owner cannot reach B', () => {
       expect(r.body).toEqual({ error: { code: 'not_found', message: 'Not found.' } });
       expect(await snapshot(f.B.orgId)).toEqual(beforeB);
       expect(await snapshot(f.A.orgId)).toEqual(beforeA);
+      expect(tiktok.calls()).toEqual([]);
     });
   }
 });

@@ -12,12 +12,15 @@ const KEYS = [
 ] as const;
 
 describe('isConnectable', () => {
-  it.each(['facebook', 'instagram', 'meta_ads'])('accepts %s', (p) => {
+  it.each(['facebook', 'instagram', 'meta_ads', 'tiktok', 'tiktok_ads'])('accepts %s', (p) => {
     expect(isConnectable(p)).toBe(true);
   });
-  it.each(['../x', 'tiktok', '', 'Instagram', 'constructor', '__proto__'])('rejects %s', (p) => {
-    expect(isConnectable(p)).toBe(false);
-  });
+  it.each(['../x', 'youtube', '', 'Instagram', 'TikTok', 'constructor', '__proto__'])(
+    'rejects %s',
+    (p) => {
+      expect(isConnectable(p)).toBe(false);
+    },
+  );
 });
 
 describe('PLATFORM_COPY', () => {
@@ -31,6 +34,18 @@ describe('PLATFORM_COPY', () => {
     expect(PLATFORM_COPY.facebook.deleteConfirm).toBe(
       'Delete this comment on Facebook? This cannot be undone.',
     );
+  });
+
+  it('has the TikTok copy', () => {
+    expect(PLATFORM_COPY.tiktok).toMatchObject({
+      label: 'TikTok account',
+      connectLabel: 'Connect TikTok account',
+      viewOn: 'View on TikTok',
+    });
+    expect(PLATFORM_COPY.tiktok_ads).toMatchObject({
+      label: 'TikTok ad account',
+      connectLabel: 'Connect TikTok ads',
+    });
   });
 
   it('has the Instagram copy', () => {

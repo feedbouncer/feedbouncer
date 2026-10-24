@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
-import { ACTION_KINDS } from '@feedbouncer/comments';
+import { ACTION_KINDS, PgTikTokPolling } from '@feedbouncer/comments';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret } from '@feedbouncer/service-runtime';
 import { upsertStored } from '@feedbouncer/comments/testing';
@@ -83,8 +83,9 @@ const key = () => `rk-${randomUUID()}`;
 
 beforeAll(async () => {
   graph = new FakeGraph({ appSecret: SECRET, appId: APP_ID });
+  const TIKTOK = { appId: '7300000000000001', appSecret: 'tiktok-app-secret-0123456789' };
   api = await startTestApi(
-    { facebook: FACEBOOK, instagram: { meta: FACEBOOK } },
+    { facebook: FACEBOOK, instagram: { meta: FACEBOOK }, tiktok: TIKTOK, tiktokAds: TIKTOK },
     { fetch: graph.fetch },
   );
   org = await orgWithRoles(api, 'cmt');
@@ -709,6 +710,82 @@ describe('ad origin', () => {
     expect(organicIds).toContain(organic.id);
     expect(organicIds).not.toContain(onAd.id);
     expect((await get('&origin=x')).status).toBe(400);
+  });
+});
+
+describe('tiktok comments', () => {
+  it('tiktok comments list with origin and source link; origin=ad filter returns only tiktok_ads comments', async () => {
+    const polling = new PgTikTokPolling(api.pool);
+    const at = async (platform: 'tiktok' | 'tiktok_ads', account: string) =>
+      (await api.seedConnection(org, { platform, externalAccountId: account })).scope;
+    const organic = await at('tiktok', `tt-${randomUUID().slice(0, 8)}`);
+    const ads = await at('tiktok_ads', `73${Date.now()}`);
+    const video = {
+      id: '7300000000000000301',
+      link: 'https://www.tiktok.com/@shop/video/7300000000000000301',
+    };
+    const ad = {
+      id: '1800000000000000001',
+      link: 'https://www.tiktok.com/@/video/7300000000000000302',
+    };
+    await polling.upsertSources(organic, [
+      { externalId: video.id, kind: 'video', permalink: video.link, active: true },
+    ]);
+    await polling.upsertSources(ads, [
+      { externalId: ad.id, kind: 'ad_post', permalink: ad.link, active: true },
+    ]);
+    const store = api.deps.comments!.store;
+    const stored = async (scope: ConnectionScope, sourceExternalId: string, body: string) =>
+      (
+        await upsertStored(
+          store,
+          scope,
+          {
+            externalId: `73${Math.floor(Math.random() * 1e15)}`,
+            sourceExternalId,
+            parentExternalId: null,
+            author: { externalId: 'u1', displayName: 'Viewer', profileUrl: null },
+            body,
+            postedAt: new Date(),
+            platformState: 'visible',
+            permalink: null,
+          },
+          { ownAccountExternalId: 'own', syncedAt: new Date() },
+        )
+      ).commentId;
+    const onVideo = await stored(organic, video.id, 'on the video');
+    const onAd = await stored(ads, ad.id, 'on the ad');
+
+    const get = (q: string) =>
+      api.req('GET', `${base()}/comments?limit=100${q}`, { cookie: org.owner.cookie });
+    const all = (await get('')).body.comments as {
+      id: string;
+      platform: string;
+      origin: string;
+      mediaExternalId: string;
+      permalink: string | null;
+      sourcePermalink: string | null;
+    }[];
+    expect(all.find((c) => c.id === onVideo)).toMatchObject({
+      platform: 'tiktok',
+      origin: 'organic',
+      mediaExternalId: video.id,
+      permalink: null,
+      sourcePermalink: video.link,
+    });
+    expect(all.find((c) => c.id === onAd)).toMatchObject({
+      platform: 'tiktok_ads',
+      origin: 'ad',
+      mediaExternalId: ad.id,
+      permalink: null,
+      sourcePermalink: ad.link,
+    });
+    const adOnly = (await get('&origin=ad')).body.comments as { id: string; platform: string }[];
+    expect(adOnly.map((c) => c.id)).toContain(onAd);
+    expect(adOnly.map((c) => c.id)).not.toContain(onVideo);
+    expect(adOnly.filter((c) => c.platform.startsWith('tiktok')).map((c) => c.platform)).toEqual([
+      'tiktok_ads',
+    ]);
   });
 });
 
