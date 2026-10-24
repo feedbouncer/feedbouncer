@@ -53,3 +53,23 @@ describe('listAccounts', () => {
     expect(stack.lines.join('\n')).toContain('invalid_connector_output');
   });
 });
+
+describe('businessGet permission', () => {
+  it('permission_denied is scope_missing with video.list', async () => {
+    const { world } = await import('./test-world.js');
+    const w = await world();
+    w.fake.revokeScope(w.businessId, 'businessGet');
+    await expect(
+      w.connector.listAccounts!(w.ctx.accessToken, {
+        http: w.ctx.http,
+        signal: w.ctx.signal,
+        redirectUri: 'https://app.test/cb',
+      }),
+    ).rejects.toMatchObject({
+      kind: 'auth_expired',
+      code: 'scope_missing',
+      reauthorize: true,
+      missingScopes: ['video.list'],
+    });
+  });
+});

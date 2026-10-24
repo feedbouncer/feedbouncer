@@ -6,6 +6,7 @@ import {
 import type { Secret } from '@feedbouncer/service-runtime';
 import { sanitizeText, tiktokRequest } from '@feedbouncer/tiktok-business-api';
 import * as z from 'zod';
+import { isPermissionDenied, scopeMissing } from './call.js';
 
 const BUSINESS = z.object({
   business_id: z.string(),
@@ -30,7 +31,9 @@ export async function fetchBusinessAccount(
       },
       schema: BUSINESS,
     },
-  );
+  ).catch((e: unknown) => {
+    throw isPermissionDenied(e) ? scopeMissing('video.list') : e;
+  });
   const name = data.username ?? data.display_name;
   return {
     externalAccountId: data.business_id,
