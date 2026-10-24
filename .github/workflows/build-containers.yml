@@ -1,0 +1,188 @@
+# Publishes the api, worker and web images to GHCR on every merge to main, tagged with the full
+# commit SHA and `latest`. Each architecture (amd64, arm64) builds on a native runner and the two
+# are joined into one multi-arch manifest. Apps publish independently, so pin all three images to
+# the same SHA tag for a matched set. Runs queue rather than cancel: a commit that is superseded
+# while its run is queued gets no image of its own. There are no path filters because every image
+# depends on shared packages. After the first publish, a maintainer sets each package to Public
+# in its package settings.
+name: Build containers
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-containers-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.app }} (${{ matrix.platform.arch }})
+    if: ${{ github.repository == 'feedbouncer/feedbouncer' && github.ref == 'refs/heads/main' }}
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [api, worker, web]
+        platform:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      IMAGE: ghcr.io/feedbouncer/feedbouncer-${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: node
+        name: Read Node version from .nvmrc
+        run: |
+          version="$(tr -d '[:space:]' < .nvmrc)"
+          if ! [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+            echo "::error file=.nvmrc::expected a numeric Node version, got '$version'"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: build
+        name: Build and push by digest
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          platforms: linux/${{ matrix.platform.arch }}
+          build-args: NODE_VERSION=${{ steps.node.outputs.version }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.title=feedbouncer-${{ matrix.app }}
+          cache-from: type=gha,scope=build-containers-${{ matrix.app }}-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=build-containers-${{ matrix.app }}-${{ matrix.platform.arch }}
+      - name: Record image digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          ARCH: ${{ matrix.platform.arch }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::build produced no valid image digest: '$DIGEST'"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/digests"
+          printf '%s' "$DIGEST" > "$RUNNER_TEMP/digests/$ARCH"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digest-${{ matrix.app }}-${{ matrix.platform.arch }}
+          path: ${{ runner.temp }}/digests/${{ matrix.platform.arch }}
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: error
+
+  publish:
+    name: Publish ${{ matrix.app }}
+    needs: build
+    if: ${{ !cancelled() && github.repository == 'feedbouncer/feedbouncer' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: api
+            description: FeedBouncer API server
+          - app: worker
+            description: FeedBouncer background worker
+          - app: web
+            description: FeedBouncer web app
+    env:
+      IMAGE: ghcr.io/feedbouncer/feedbouncer-${{ matrix.app }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: digest-${{ matrix.app }}-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/digests
+      - name: Check both digests are present
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            digest="$(cat "$RUNNER_TEMP/digests/$arch" 2>/dev/null || true)"
+            if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::no valid $arch image digest; nothing was published for this app"
+              exit 1
+            fi
+          done
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: create
+        name: Create multi-arch manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+          DESCRIPTION: ${{ matrix.description }}
+        run: |
+          set -euo pipefail
+          head="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          tags=(-t "$IMAGE:$GITHUB_SHA")
+          if [ "$head" = "$GITHUB_SHA" ]; then
+            tags+=(-t "$IMAGE:latest")
+            echo "latest=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::main is at $head; leaving latest unchanged"; fi
+          docker buildx imagetools create "${tags[@]}" \
+            --annotation "index:org.opencontainers.image.source=$SOURCE_URL" \
+            --annotation "index:org.opencontainers.image.revision=$GITHUB_SHA" \
+            --annotation "index:org.opencontainers.image.licenses=AGPL-3.0-only" \
+            --annotation "index:org.opencontainers.image.description=$DESCRIPTION" \
+            "$IMAGE@$(cat "$RUNNER_TEMP/digests/amd64")" "$IMAGE@$(cat "$RUNNER_TEMP/digests/arm64")"
+      - name: Verify the published index
+        env:
+          LATEST_WRITTEN: ${{ steps.create.outputs.latest }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect --raw "$IMAGE:$GITHUB_SHA" > "$RUNNER_TEMP/index.json"
+          platforms="$(node -e '
+            const idx = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            console.log(idx.manifests.map((m) => m.platform.os + "/" + m.platform.architecture).sort().join(","));
+          ' "$RUNNER_TEMP/index.json")"
+          if [ "$platforms" != "linux/amd64,linux/arm64" ]; then
+            echo "::error::unexpected platforms in $IMAGE:$GITHUB_SHA: $platforms (want linux/amd64,linux/arm64)"
+            exit 1
+          fi
+          {
+            echo "### $IMAGE"
+            echo "- \`$IMAGE:$GITHUB_SHA\` (linux/amd64, linux/arm64)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$LATEST_WRITTEN" = "true" ]; then
+            docker buildx imagetools inspect --raw "$IMAGE:latest" > "$RUNNER_TEMP/latest.json"
+            if [ "$(sha256sum < "$RUNNER_TEMP/latest.json")" != "$(sha256sum < "$RUNNER_TEMP/index.json")" ]; then
+              echo "::error::$IMAGE:latest does not match $IMAGE:$GITHUB_SHA"
+              exit 1
+            fi
+            echo "- \`$IMAGE:latest\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
