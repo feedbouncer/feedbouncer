@@ -218,6 +218,47 @@ describe('tiktok_poll', () => {
     expect(await w.sourcePoll(scope, itemId)).toMatchObject({ resume_cursor: null });
   });
 
+  it('a newly listed video keeps comments older than the local end of the backfill', async () => {
+    const { scope, businessId } = await account('newvideo');
+    const { itemId: first } = w.fake.addVideo(businessId);
+    addComments(first, 1, { stepMs: 1000, offsetMs: 60_000 });
+    await poll(scope);
+    expect((await w.connectionPoll(scope))!.high_water_at).toBeNull();
+
+    w.advance(SETTINGS.videoDiscoveryIntervalSec * 1000);
+    const { itemId: later } = w.fake.addVideo(businessId);
+    const [early] = addComments(later, 1, { stepMs: 1000, offsetMs: 3_600_000 });
+    await poll(scope);
+    expect((await w.comments(scope)).find((r) => r.external_id === early)).toMatchObject({
+      source_external_id: later,
+      ingest_origin: 'live',
+    });
+  });
+
+  it('an empty first pass records the scan but no high-water mark', async () => {
+    const { scope, businessId } = await account('empty');
+    const { itemId } = w.fake.addVideo(businessId);
+    await poll(scope);
+    expect(await w.sourcePoll(scope, itemId)).toMatchObject({ high_water_at: null });
+    const scanned = await w.pool.query<{ last_full_scan_at: Date | null }>(
+      `SELECT sp.last_full_scan_at FROM source_poll sp JOIN source s ON s.id = sp.source_id
+        WHERE sp.organization_id = $1 AND sp.brand_id = $2 AND sp.connection_id = $3 AND s.external_id = $4`,
+      [scope.organizationId, scope.brandId, scope.connectionId, itemId],
+    );
+    expect(scanned.rows[0]!.last_full_scan_at).toEqual(w.now());
+
+    // A video without comments polls at the quiet interval.
+    w.advance(SETTINGS.quietVideoPollIntervalSec * 1000);
+    const [c] = addComments(itemId, 1, { stepMs: 1000, offsetMs: 0 });
+    await poll(scope);
+    expect((await w.comments(scope)).find((r) => r.external_id === c)).toMatchObject({
+      ingest_origin: 'live',
+    });
+    expect((await w.sourcePoll(scope, itemId))!.high_water_at).toEqual(
+      new Date(Math.floor(w.clock.now() / 1000) * 1000),
+    );
+  });
+
   it('a pass longer than maxPagesPerJob continues in the next job', async () => {
     const { scope, businessId } = await account('pages');
     const { itemId } = w.fake.addVideo(businessId);

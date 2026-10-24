@@ -19,7 +19,7 @@ const PAGE_SIZE = 100;
 const MAX_WINDOW_MS = 30 * DAY_MS;
 
 /** `[lower, until]` as windows of at most 30 days, newest first. */
-export function adWindows(lower: Date, until: Date): { since: Date; until: Date }[] {
+function adWindows(lower: Date, until: Date): { since: Date; until: Date }[] {
   const out: { since: Date; until: Date }[] = [];
   let end = until.getTime();
   do {
@@ -69,7 +69,7 @@ export function tiktokAdsPollJob(d: TikTokPollDeps): JobDefinition<TikTokPollPay
       const windowLower = new Date(start.getTime() - BACKFILL_DEFAULTS.windowDays * DAY_MS);
       const lower = full ? windowLower : (st.highWaterAt ?? windowLower);
       const windows = adWindows(lower, start);
-      const firstPass = st.highWaterAt === null;
+      const firstPass = st.lastFullScanAt === null;
       let cap = firstPass
         ? BACKFILL_DEFAULTS.maxComments - (await d.polling.backfilledCount(ctx.scope))
         : Infinity;
@@ -130,10 +130,13 @@ export function tiktokAdsPollJob(d: TikTokPollDeps): JobDefinition<TikTokPollPay
         });
       }
 
-      const candidate = new Date((newest ?? start).getTime() - s.adsOverlapSec * SEC);
+      // Only TikTok's own timestamps move the mark; a pass that saw nothing keeps it.
+      const candidate = newest === null ? null : new Date(newest.getTime() - s.adsOverlapSec * SEC);
       await d.polling.saveConnectionState(ctx.scope, {
         highWaterAt:
-          st.highWaterAt !== null && st.highWaterAt > candidate ? st.highWaterAt : candidate,
+          candidate === null || (st.highWaterAt !== null && st.highWaterAt > candidate)
+            ? st.highWaterAt
+            : candidate,
         passStartedAt: null,
         passNewestAt: null,
         resumePage: null,

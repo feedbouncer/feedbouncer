@@ -126,23 +126,13 @@ async function pollVideo(d: TikTokPollDeps, p: Pass, v: ClaimedVideo): Promise<'
   const { scope } = p.ctx;
   const s = v.poll;
   const now = p.now;
-  const firstPass = s.highWaterAt === null;
-  const backfillDoneAt = p.state.highWaterAt;
+  const firstPass = s.lastFullScanAt === null;
+  const backfillDoneAt = p.state.lastFullScanAt;
   const deep =
-    s.lastFullScanAt === null ||
-    now.getTime() - s.lastFullScanAt.getTime() >= d.settings.deepScanIntervalSec * SEC;
-  const boundary =
-    s.resumeCursor !== null
-      ? s.resumeBoundary
-      : firstPass
-        ? backfillDoneAt
-        : deep
-          ? null
-          : s.highWaterAt;
+    firstPass ||
+    now.getTime() - s.lastFullScanAt!.getTime() >= d.settings.deepScanIntervalSec * SEC;
+  const boundary = s.resumeCursor !== null ? s.resumeBoundary : deep ? null : s.highWaterAt;
   const window = new Date(now.getTime() - BACKFILL_DEFAULTS.windowDays * DAY_MS);
-  // A first pass that ends after the backfill does (or is resumed then) skips what predates it.
-  const floor =
-    firstPass && backfillDoneAt !== null && backfillDoneAt > window ? backfillDoneAt : window;
   const origin: IngestOrigin = p.backfilling && firstPass ? 'backfill' : 'live';
   let cursor = s.resumeCursor;
   let newest = s.resumeNewestAt;
@@ -161,9 +151,9 @@ async function pollVideo(d: TikTokPollDeps, p: Pass, v: ClaimedVideo): Promise<'
         break;
       }
       const top = c.parentExternalId === null;
-      if (top && (c.postedAt < floor || (boundary !== null && c.postedAt <= boundary)))
+      if (top && (c.postedAt < window || (boundary !== null && c.postedAt <= boundary)))
         ended = true;
-      if (top && c.postedAt < floor) continue;
+      if (top && c.postedAt < window) continue;
       await ingest(d, p, c, origin, syncedAt);
       if (top) newest = max(newest, c.postedAt);
       lastComment = max(lastComment, c.postedAt);
@@ -177,13 +167,13 @@ async function pollVideo(d: TikTokPollDeps, p: Pass, v: ClaimedVideo): Promise<'
           v.discoveredAt > backfillDoneAt &&
           now.getTime() - v.discoveredAt.getTime() <= d.settings.activeVideoDays * DAY_MS);
       await d.polling.saveSourcePoll(scope, v.sourceId, {
-        highWaterAt: max(s.highWaterAt, newest ?? (firstPass ? now : null)),
+        highWaterAt: max(s.highWaterAt, newest),
         resumeCursor: null,
         resumeBoundary: null,
         resumeNewestAt: null,
         lastCommentAt: lastComment,
         lastPolledAt: now,
-        lastFullScanAt: boundary === null || firstPass ? now : s.lastFullScanAt,
+        lastFullScanAt: boundary === null ? now : s.lastFullScanAt,
         nextPollAt: later(
           now,
           (active ? d.settings.pollIntervalSec : d.settings.quietVideoPollIntervalSec) * SEC,
@@ -228,7 +218,7 @@ export function tiktokPollJob(d: TikTokPollDeps): JobDefinition<TikTokPollPayloa
       const client = await d.runtime.connect(ctx.scope);
       const now = d.clock();
       const state = await d.polling.connectionState(ctx.scope, 'tiktok_videos');
-      const backfilling = state.highWaterAt === null;
+      const backfilling = state.lastFullScanAt === null;
       const p: Pass = {
         client,
         ctx,
@@ -298,9 +288,10 @@ export function tiktokPollJob(d: TikTokPollDeps): JobDefinition<TikTokPollPayloa
           throw err;
         }
       }
-      // The connection's first pass ends when every listed video had its first pass, or at the cap.
+      // The connection's first pass ends when every listed video had its first pass, or at the
+      // cap. Recorded as a local time, never as a high-water mark.
       if (backfilling && (complete || p.cap <= 0))
-        await d.polling.saveConnectionState(ctx.scope, { highWaterAt: now });
+        await d.polling.saveConnectionState(ctx.scope, { lastFullScanAt: now });
       if ('error' in failure) throw failure.error;
       return counts;
     },

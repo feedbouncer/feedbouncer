@@ -156,6 +156,29 @@ describe('tiktok_ads_poll', () => {
     expect((await w.connectionPoll(scope))!.high_water_at).not.toBeNull();
   });
 
+  it('a pass that sees no comments never sets the high-water mark from the local clock', async () => {
+    const { scope, advertiserId } = await advertiser('empty');
+    await pollAds(scope);
+    expect(await w.connectionPoll(scope)).toMatchObject({
+      high_water_at: null,
+      pass_started_at: null,
+    });
+
+    w.advance(SETTINGS.adsPollIntervalSec * 1000);
+    const [only] = addAdComments(advertiserId, newAd(), 1, { stepMs: 1000, offsetMs: 60_000 });
+    await pollAds(scope);
+    const hw = (await w.connectionPoll(scope))!.high_water_at;
+    expect(hw).toEqual(new Date(w.clock.now() - 60_000 - SETTINGS.adsOverlapSec * 1000));
+    expect((await w.comments(scope)).find((r) => r.external_id === only)).toMatchObject({
+      ingest_origin: 'live',
+    });
+
+    w.fake.deleteComment(only!);
+    w.advance(SETTINGS.adsPollIntervalSec * 1000);
+    await pollAds(scope);
+    expect((await w.connectionPoll(scope))!.high_water_at).toEqual(hw);
+  });
+
   it('thirty comments arriving mid-pass are not skipped', async () => {
     const { scope, advertiserId } = await advertiser('midpass');
     const ad = newAd();
