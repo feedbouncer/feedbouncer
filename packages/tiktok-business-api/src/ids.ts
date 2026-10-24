@@ -1,8 +1,8 @@
 import { ConnectorError } from '@feedbouncer/connectors';
 
 export const NUMERIC_ID = /^\d{1,32}$/;
-export const OPAQUE_ID = /^[A-Za-z0-9_.:=-]{1,128}$/;
-export const USERNAME = /^[A-Za-z0-9_.]{1,64}$/;
+export const OPAQUE_ID = /^[A-Za-z0-9_.:=+-]{1,128}$/;
+export const USERNAME = /^[A-Za-z0-9_.]{1,24}$/;
 
 const invalidId = () => new ConnectorError('permanent', 'invalid_tiktok_id');
 const invalidResponse = () => new ConnectorError('permanent', 'invalid_tiktok_response');

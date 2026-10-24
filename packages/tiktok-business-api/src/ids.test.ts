@@ -21,6 +21,7 @@ describe('ids', () => {
 
   it('opaqueId accepts open_id-style values and rejects path/control characters', () => {
     expect(opaqueId('-000AbC_d.e:f=')).toBe('-000AbC_d.e:f=');
+    expect(opaqueId('ab+cd')).toBe('ab+cd');
     for (const bad of ['a/../b', 'a b', 'a\u0000', 'a?b', 'x'.repeat(129)])
       expect(() => opaqueId(bad)).toThrow(expect.objectContaining({ code: 'invalid_tiktok_id' }));
   });
@@ -28,6 +29,8 @@ describe('ids', () => {
   it('username returns a valid handle or null', () => {
     expect(username('brand_x.1')).toBe('brand_x.1');
     expect(username('a b')).toBeNull();
+    expect(username('a'.repeat(24))).toBe('a'.repeat(24));
+    expect(username('a'.repeat(25))).toBeNull();
     expect(username(5)).toBeNull();
   });
 
