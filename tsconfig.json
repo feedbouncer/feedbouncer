@@ -9,6 +9,7 @@
     { "path": "packages/connector-instagram" },
     { "path": "packages/connector-meta-ads" },
     { "path": "packages/tiktok-business-api" },
+    { "path": "packages/connector-tiktok" },
     { "path": "packages/jobs" },
     { "path": "packages/comments" },
     { "path": "packages/rules" },

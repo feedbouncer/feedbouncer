@@ -831,6 +831,25 @@ importers:
         specifier: 24.13.6
         version: 24.13.6
 
+  packages/connector-tiktok:
+    dependencies:
+      '@feedbouncer/connectors':
+        specifier: workspace:*
+        version: link:../connectors
+      '@feedbouncer/service-runtime':
+        specifier: workspace:*
+        version: link:../service-runtime
+      '@feedbouncer/tiktok-business-api':
+        specifier: workspace:*
+        version: link:../tiktok-business-api
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+
   packages/connectors:
     dependencies:
       '@feedbouncer/authz':
