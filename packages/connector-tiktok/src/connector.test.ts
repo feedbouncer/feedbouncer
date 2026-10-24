@@ -29,6 +29,17 @@ describe('createTikTokConnector', () => {
     });
     expect(c.capabilities.accountIdPattern?.test('7300000000000001')).toBe(true);
     expect(c.capabilities.accountIdPattern?.test('a/b')).toBe(false);
+    expect(c.capabilities).toMatchObject({
+      listSources: true,
+      actions: TIKTOK_ACTIONS,
+      responses: ['public_reply'],
+      actionScopes: {
+        hide: ['comment.list.manage'],
+        unhide: ['comment.list.manage'],
+        delete: ['comment.list.manage'],
+        public_reply: ['comment.list.manage'],
+      },
+    });
     expect(TIKTOK_ACTIONS).toEqual(['hide', 'unhide', 'delete']);
   });
 });

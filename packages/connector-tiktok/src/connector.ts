@@ -7,18 +7,16 @@ import {
 } from '@feedbouncer/connectors';
 import { OPAQUE_ID, TIKTOK_API_HOST, tiktokRequest } from '@feedbouncer/tiktok-business-api';
 import * as z from 'zod';
+import { act, respond } from './actions.js';
 import { listAccounts } from './accounts.js';
-import { TIKTOK_SCOPES, type TikTokConfig } from './config.js';
+import { getComment, listComments, listReplies } from './comments.js';
+import { listSources } from './videos.js';
+import type { SkipLog } from './call.js';
+import { TIKTOK_ACTIONS, TIKTOK_SCOPES, type TikTokConfig } from './config.js';
 import { buildAuthorizationUrl, exchangeCode, refreshTokens } from './oauth.js';
 
-const unsupported = () => Promise.reject(new ConnectorError('unsupported', 'not_implemented'));
-
 /** Best effort (Decision 13): a failed revoke is logged by code and never blocks disconnecting. */
-async function revoke(
-  cfg: TikTokConfig,
-  ctx: CallContext,
-  log: (msg: string, fields: { code: string }) => void,
-): Promise<void> {
+async function revoke(cfg: TikTokConfig, ctx: CallContext, log: SkipLog): Promise<void> {
   try {
     await tiktokRequest(
       { http: ctx.http, signal: ctx.signal, accessToken: ctx.accessToken.reveal() },
@@ -42,17 +40,22 @@ async function revoke(
 
 export function createTikTokConnector(
   cfg: TikTokConfig,
-  opts: { clock?: Clock; log?: (msg: string, fields: { code: string }) => void } = {},
+  opts: { clock?: Clock; log?: SkipLog } = {},
 ): Connector {
   const now = () => (opts.clock ?? systemClock).now();
   const log = opts.log ?? (() => {});
   return {
     platform: 'tiktok',
     capabilities: {
-      // Task 6 enables listSources, actions, responses and actionScopes together with the methods behind them.
-      actions: [],
-      responses: [],
-      listSources: false,
+      actions: TIKTOK_ACTIONS,
+      responses: ['public_reply'],
+      actionScopes: {
+        hide: ['comment.list.manage'],
+        unhide: ['comment.list.manage'],
+        delete: ['comment.list.manage'],
+        public_reply: ['comment.list.manage'],
+      },
+      listSources: true,
       recentSources: false,
       ingestion: 'polling',
       accountSelection: 'multiple',
@@ -75,9 +78,12 @@ export function createTikTokConnector(
     exchangeCode: (input, ctx) => exchangeCode(cfg, now, input, ctx),
     refreshTokens: (token, ctx) => refreshTokens(cfg, now, token, ctx),
     listAccounts,
-    listComments: unsupported,
-    getComment: unsupported,
-    act: unsupported,
+    listSources: (ctx, req) => listSources(log, ctx, req),
+    listComments: (ctx, req) => listComments(log, ctx, req),
+    listReplies: (ctx, req) => listReplies(log, ctx, req),
+    getComment: (ctx, ref) => getComment(log, ctx, ref),
+    act,
+    respond,
     lifecycle: {
       onConnected: async () => {},
       onDisconnected: (ctx) => revoke(cfg, ctx, log),
