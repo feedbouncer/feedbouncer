@@ -173,6 +173,11 @@ describe('ad source', () => {
       },
     };
     expect(sourceSchema.safeParse(ok).success).toBe(true);
+    expect(sourceSchema.safeParse({ ...ok, postedAt: new Date(1_730_000_000_000) }).success).toBe(
+      true,
+    );
+    expect(sourceSchema.safeParse({ ...ok, postedAt: new Date(Number.NaN) }).success).toBe(false);
+    expect(sourceSchema.safeParse({ ...ok, postedAt: '2026-10-24' }).success).toBe(false);
     for (const patch of [
       { adAccountExternalId: 'act_1001' },
       { effectiveStatus: 'active; drop' },

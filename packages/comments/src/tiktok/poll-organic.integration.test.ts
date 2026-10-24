@@ -259,6 +259,26 @@ describe('tiktok_poll', () => {
     );
   });
 
+  it('a recently posted video without comments polls at the active interval, an old one at the quiet interval', async () => {
+    const { scope, businessId } = await account('posted');
+    const { itemId: fresh } = w.fake.addVideo(businessId, { createdAtSec: secAgo(w, DAY_MS) });
+    const { itemId: old } = w.fake.addVideo(businessId, { createdAtSec: secAgo(w, 60 * DAY_MS) });
+    await poll(scope);
+    const at = (s: number) => new Date(w.clock.now() + s * 1000);
+    expect((await w.sourcePoll(scope, fresh))!.next_poll_at).toEqual(at(SETTINGS.pollIntervalSec));
+    expect((await w.sourcePoll(scope, old))!.next_poll_at).toEqual(
+      at(SETTINGS.quietVideoPollIntervalSec),
+    );
+
+    // A comment on the fresh video arrives one poll interval later, as a live comment.
+    const [c] = addComments(fresh, 1, { stepMs: 1000, offsetMs: 0 });
+    w.advance(SETTINGS.pollIntervalSec * 1000);
+    await poll(scope);
+    expect((await w.comments(scope)).find((r) => r.external_id === c)).toMatchObject({
+      ingest_origin: 'live',
+    });
+  });
+
   it('a pass longer than maxPagesPerJob continues in the next job', async () => {
     const { scope, businessId } = await account('pages');
     const { itemId } = w.fake.addVideo(businessId);

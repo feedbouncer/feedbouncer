@@ -16,6 +16,25 @@ describe('listSources', () => {
     expect(p1.items[0]!.permalink).toMatch(/^https:\/\/www\.tiktok\.com\/@shop\/video\/\d+$/);
   });
 
+  it('carries the video create_time as postedAt', async () => {
+    const { fake, connector, ctx, businessId } = await world();
+    const { itemId } = fake.addVideo(businessId, { createdAtSec: 1_730_000_000 });
+    const page = await connector.listSources!(ctx, { cursor: null });
+    const video = page.items.find((v) => v.externalId === itemId);
+    expect(video!.postedAt).toEqual(new Date(1_730_000_000_000));
+  });
+
+  it('a malformed create_time leaves postedAt unset and keeps the video', async () => {
+    const { connector, ctx, tamper } = await world();
+    tamper('business/video/list', (d) => ({
+      ...d,
+      videos: [{ item_id: '7300000000000000123', create_time: 'soon', share_url: null }],
+    }));
+    const page = await connector.listSources!(ctx, { cursor: null });
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]!.postedAt).toBeUndefined();
+  });
+
   it('off-host share_url becomes null permalink', async () => {
     const { fake, connector, ctx, businessId } = await world();
     fake.addVideo(businessId, { shareUrl: 'https://evil.example/x', createdAtSec: 2_000_000_000 });

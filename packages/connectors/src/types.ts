@@ -96,6 +96,8 @@ export interface NormalizedSource {
   readonly kind: SourceKind;
   readonly permalink: string | null;
   readonly active: boolean;
+  /** When the platform says the source was published, if it says so. */
+  readonly postedAt?: Date | undefined;
   /** Set by ad connectors: the ad this source stands for. */
   readonly ad?: AdSourceInfo | undefined;
 }

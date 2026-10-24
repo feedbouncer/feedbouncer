@@ -1,5 +1,10 @@
 import type { CallContext, NormalizedSource, Page } from '@feedbouncer/connectors';
-import { NUMERIC_ID, safeShareUrl, tiktokRequest } from '@feedbouncer/tiktok-business-api';
+import {
+  NUMERIC_ID,
+  safeShareUrl,
+  tiktokRequest,
+  tiktokTime,
+} from '@feedbouncer/tiktok-business-api';
 import * as z from 'zod';
 import {
   callOf,
@@ -11,7 +16,20 @@ import {
   type SkipLog,
 } from './call.js';
 
-const VIDEO_SCHEMA = z.object({ item_id: z.string().regex(NUMERIC_ID), share_url: z.unknown() });
+const VIDEO_SCHEMA = z.object({
+  item_id: z.string().regex(NUMERIC_ID),
+  create_time: z.unknown(),
+  share_url: z.unknown(),
+});
+
+/** A video with an unreadable create_time is still listed, without a post time. */
+function postedAt(v: unknown): Date | undefined {
+  try {
+    return tiktokTime(v);
+  } catch {
+    return undefined;
+  }
+}
 const PAGE_SCHEMA = pageSchema('videos');
 const PAGE_SIZE = 20;
 
@@ -45,6 +63,7 @@ export async function listSources(
         kind: 'video',
         permalink: safeShareUrl(v.data.share_url),
         active: true,
+        postedAt: postedAt(v.data.create_time),
       });
     }
   }

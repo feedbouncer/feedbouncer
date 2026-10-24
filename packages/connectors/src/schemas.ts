@@ -87,6 +87,10 @@ export const sourceSchema = z.strictObject({
   kind: z.enum(['organic_post', 'ad_post', 'video', 'thread']),
   permalink: httpsUrl.nullable(),
   active: z.boolean(),
+  postedAt: z
+    .date()
+    .refine((d) => !Number.isNaN(d.getTime()))
+    .optional(),
   ad: adInfoSchema.optional(),
 });
 

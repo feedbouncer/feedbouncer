@@ -163,6 +163,8 @@ async function pollVideo(d: TikTokPollDeps, p: Pass, v: ClaimedVideo): Promise<'
     if (ended) {
       const active =
         (lastComment !== null && now.getTime() - lastComment.getTime() <= RECENT_COMMENT_MS) ||
+        (v.postedAt !== null &&
+          now.getTime() - v.postedAt.getTime() <= d.settings.activeVideoDays * DAY_MS) ||
         (backfillDoneAt !== null &&
           v.discoveredAt > backfillDoneAt &&
           now.getTime() - v.discoveredAt.getTime() <= d.settings.activeVideoDays * DAY_MS);

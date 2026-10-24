@@ -42,6 +42,8 @@ export interface ClaimedVideo {
   externalId: string;
   /** When the video was first listed. */
   discoveredAt: Date;
+  /** When TikTok says the video was posted; null when it did not say. */
+  postedAt: Date | null;
   poll: SourcePollState;
 }
 
@@ -193,6 +195,12 @@ export class PgTikTokPolling {
         const id = await upsertListedSource(tx, scope, s.externalId, s.kind, s.permalink);
         out.set(s.externalId, id);
         if (s.kind !== 'video') continue;
+        if (s.postedAt !== undefined)
+          await tx.query(
+            `UPDATE source SET metadata = metadata || jsonb_build_object('postedAt', $5::text)
+              WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND id = $4`,
+            [...ids(scope), id, s.postedAt.toISOString()],
+          );
         await tx.query(
           `INSERT INTO source_poll (source_id, organization_id, brand_id, connection_id, next_poll_at)
            VALUES ($4, $1, $2, $3, to_timestamp(0)) ON CONFLICT (source_id) DO NOTHING`,
@@ -211,7 +219,8 @@ export class PgTikTokPolling {
   async claimDueVideos(scope: ConnectionScope, now: Date, limit: number): Promise<ClaimedVideo[]> {
     const r = await this.pool.query(
       `WITH due AS (
-         SELECT sp.source_id, s.external_id, s.created_at AS discovered_at, ${select(SOURCE_COLUMNS, 'sp')}
+         SELECT sp.source_id, s.external_id, s.created_at AS discovered_at,
+                (s.metadata->>'postedAt')::timestamptz AS posted_at, ${select(SOURCE_COLUMNS, 'sp')}
            FROM source_poll sp
            JOIN source s ON s.id = sp.source_id AND s.organization_id = sp.organization_id
                         AND s.brand_id = sp.brand_id AND s.connection_id = sp.connection_id
@@ -240,6 +249,7 @@ export class PgTikTokPolling {
         sourceId: x.source_id as string,
         externalId: x.external_id as string,
         discoveredAt: x.discovered_at as Date,
+        postedAt: (x.posted_at as Date | null) ?? null,
         poll: fromRow<SourcePollState>(SOURCE_COLUMNS, x),
       }));
   }
