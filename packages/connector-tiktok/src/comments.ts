@@ -63,7 +63,8 @@ function toComment(raw: unknown, sourceExternalId: string, parentFallback: strin
     },
     body: sanitizeText(c.text, 10_000),
     postedAt,
-    platformState: c.status === 'HIDDEN' ? 'hidden' : 'visible',
+    platformState:
+      c.status === 'DELETED' ? 'deleted' : c.status === 'HIDDEN' ? 'hidden' : 'visible',
     permalink: null,
     ...(c.reply_count !== undefined && { replyCount: c.reply_count }),
   };

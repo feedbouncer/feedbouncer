@@ -26,6 +26,21 @@ describe('listComments', () => {
     expect(page.nextCursor).toBeNull();
   });
 
+  it('a comment listed with status DELETED is deleted', async () => {
+    const { fake, connector, ctx, itemId, tamper } = await world();
+    fake.addComment(itemId, { text: 'gone', createdAtSec: 1_790_000_000 });
+    tamper('business/comment/list', (d) => ({
+      ...d,
+      comments: (d.comments as Record<string, unknown>[]).map((c) => ({ ...c, status: 'DELETED' })),
+    }));
+    const page = await connector.listComments(ctx, {
+      sourceExternalId: itemId,
+      cursor: null,
+      limit: 30,
+    });
+    expect(page.items.map((c) => c.platformState)).toEqual(['deleted']);
+  });
+
   it('pages with a numeric cursor and clamps the limit to 30', async () => {
     const { fake, connector, ctx, itemId } = await world();
     for (let i = 0; i < 35; i++)
