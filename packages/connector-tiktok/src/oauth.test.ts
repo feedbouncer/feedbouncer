@@ -63,6 +63,24 @@ describe('exchangeCode', () => {
     expect(body).toMatchObject({ grant_type: 'authorization_code', redirect_uri: REDIRECT });
   });
 
+  it('a malformed open_id fails with invalid_tiktok_id', async () => {
+    const { authCode } = fake.addBusinessAccount();
+    const tampered: typeof globalThis.fetch = async (input, init) => {
+      const res = await fake.fetch(input, init);
+      if (!String(input).includes('/tt_user/oauth2/token/')) return res;
+      const json = (await res.json()) as { data: Record<string, unknown> };
+      return Response.json({ ...json, data: { ...json.data, open_id: 'bad/id' } });
+    };
+    const bad = {
+      ...ctx,
+      http: createSafeHttp({ allowedHosts: [TIKTOK_API_HOST], fetch: tampered }),
+    };
+    await expect(
+      connector.exchangeCode({ code: new Secret(authCode), codeVerifier: new Secret('v') }, bad),
+    ).rejects.toMatchObject({ kind: 'permanent', code: 'invalid_tiktok_id' });
+    expect(fake.calls('businessGet')).toHaveLength(0);
+  });
+
   it('an unknown code is an error carrying a code only', async () => {
     await expect(exchange('nope')).rejects.toMatchObject({ kind: 'permanent' });
   });

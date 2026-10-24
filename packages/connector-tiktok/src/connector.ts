@@ -5,7 +5,7 @@ import {
   type Clock,
   type Connector,
 } from '@feedbouncer/connectors';
-import { OPAQUE_ID, tiktokRequest } from '@feedbouncer/tiktok-business-api';
+import { OPAQUE_ID, TIKTOK_API_HOST, tiktokRequest } from '@feedbouncer/tiktok-business-api';
 import * as z from 'zod';
 import { listAccounts } from './accounts.js';
 import { TIKTOK_SCOPES, type TikTokConfig } from './config.js';
@@ -65,7 +65,7 @@ export function createTikTokConnector(
         urgentReservePoints: 10,
         defaultRetryAfterMs: 60_000,
       },
-      apiHosts: ['business-api.tiktok.com'],
+      apiHosts: [TIKTOK_API_HOST],
       authorizationHosts: ['www.tiktok.com'],
       defaultScopes: [...TIKTOK_SCOPES],
       requiredScopes: [...TIKTOK_SCOPES],
