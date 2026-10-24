@@ -1,6 +1,7 @@
 // Guards the container publishing workflow: who may publish, what gets tagged,
 // and that both architectures are present before anything is made public.
-// If a change here is intentional, update the Global Constraints it encodes.
+// If a change here is intentional (e.g. renaming a job), update the docs in
+// docs/self-hosting/container-images.md and any branch protection in the same PR.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
