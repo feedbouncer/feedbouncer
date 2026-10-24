@@ -15,6 +15,9 @@ export type ConnectorErrorKind = (typeof CONNECTOR_ERROR_KINDS)[number];
 
 const MAX_RETRY_AFTER_MS = 86_400_000;
 
+const SCOPE_NAME = /^[a-z0-9_.]{1,64}$/;
+const MAX_MISSING_SCOPES = 20;
+
 export interface ConnectorErrorInfo {
   readonly kind: ConnectorErrorKind;
   readonly code: string;
@@ -40,11 +43,12 @@ export class ConnectorError extends Error {
   readonly code: string;
   readonly retryAfterMs: number | null;
   readonly reauthorize: boolean;
+  readonly missingScopes: readonly string[] | undefined;
 
   constructor(
     readonly kind: ConnectorErrorKind,
     code: string,
-    opts: { retryAfterMs?: number; reauthorize?: boolean } = {},
+    opts: { retryAfterMs?: number; reauthorize?: boolean; missingScopes?: readonly string[] } = {},
   ) {
     const safe = ERROR_CODE.test(code) ? code : 'unspecified';
     super(`${kind}: ${safe}`);
@@ -55,6 +59,10 @@ export class ConnectorError extends Error {
         ? null
         : Math.min(Math.max(Math.ceil(r), 0), MAX_RETRY_AFTER_MS);
     this.reauthorize = opts.reauthorize ?? false;
+    const scopes = (opts.missingScopes ?? [])
+      .filter((s) => SCOPE_NAME.test(s))
+      .slice(0, MAX_MISSING_SCOPES);
+    this.missingScopes = scopes.length > 0 ? scopes : undefined;
   }
 
   get retryable(): boolean {

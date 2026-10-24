@@ -90,6 +90,14 @@ export interface WebhookSpec {
   parse(rawBody: Buffer): readonly InboundEvent[];
 }
 
+export interface ConnectionCommentsPage {
+  /** `sourceExternalId` is set on each item. */
+  readonly items: readonly NormalizedComment[];
+  /** Every source referenced by `items`, deduplicated. */
+  readonly sources: readonly NormalizedSource[];
+  readonly hasMore: boolean;
+}
+
 export interface Connector {
   readonly platform: Platform;
   readonly capabilities: ConnectorCapabilities;
@@ -130,6 +138,12 @@ export interface Connector {
     ctx: CallContext,
     req: { since: Date; cursor: string | null; limit: number },
   ): Promise<Page<RecentSource>>;
+
+  /** Comments across the whole connection within `[since, until]`, paged by number. */
+  listConnectionComments?(
+    ctx: CallContext,
+    req: { since: Date; until: Date; page: number; pageSize: number },
+  ): Promise<ConnectionCommentsPage>;
 
   /** A comment deleted between pages must not fail the listing; return what still exists. */
   listComments(

@@ -143,7 +143,7 @@ describe('job definitions', () => {
     for (const type of [INGEST_JOB.type, EXECUTE_JOB.type]) {
       expect(r.supports(type, 'facebook')).toBe(true);
       expect(r.supports(type, 'instagram')).toBe(true);
-      expect(r.supports(type, 'tiktok')).toBe(false);
+      expect(r.supports(type, 'youtube')).toBe(false);
     }
   });
 

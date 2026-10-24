@@ -16,8 +16,12 @@ export const REAUTH_REASONS = [
   'oauth_access_rejected',
   'oauth_not_refreshable',
   'setup_not_queued',
+  'oauth_scope_missing',
 ] as const;
 export type ReauthReason = (typeof REAUTH_REASONS)[number];
+export interface ReauthDetail {
+  readonly missingScopes?: readonly string[];
+}
 export interface ActivateOptions {
   readonly reviewMode?: 'on' | 'opted_out';
 }
@@ -32,7 +36,11 @@ export interface ActivateResult {
 }
 export interface ConnectionDirectory {
   load(scope: ConnectionScope): Promise<ConnectionRecord | null>;
-  markReauthRequired(scope: ConnectionScope, reason: ReauthReason): Promise<boolean>;
+  markReauthRequired(
+    scope: ConnectionScope,
+    reason: ReauthReason,
+    detail?: ReauthDetail,
+  ): Promise<boolean>;
   upsertPending(input: {
     organizationId: string;
     brandId: string;

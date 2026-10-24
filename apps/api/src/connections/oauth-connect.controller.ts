@@ -23,9 +23,8 @@ import { ConnectablePlatformPipe } from './connectable-platform.pipe.js';
 import { OAuthConnectService } from './oauth-connect.service.js';
 
 const AuthorizeBody = z.strictObject({ reconnectConnectionId: zUuid.optional() });
-// Every account-selection platform so far is a Meta one, whose ids are Graph ids.
 const ConnectBody = z.strictObject({
-  accountIds: z.array(z.string().regex(GRAPH_ID)).min(1).max(50),
+  accountIds: z.array(z.string().max(255)).min(1).max(50),
   reviewMode: z.enum(['on', 'off']).optional(),
   acknowledgeRisk: z.literal(true).optional(),
 });
@@ -80,6 +79,9 @@ export class OAuthConnectController {
   ) {
     const id = parseUuidOr404(grantId);
     const { accountIds, reviewMode, acknowledgeRisk } = parseBody(ConnectBody, body);
+    const idPattern = this.svc.accountIdPattern(platform) ?? GRAPH_ID;
+    if (!accountIds.every((a) => idPattern.test(a)))
+      throw new ApiError(400, 'invalid_request', 'Invalid or missing fields: accountIds.');
     // Opting out is a risk only an informed manager may take, so the server insists on it.
     if (reviewMode === 'off' && !acknowledgeRisk) throw new ApiError(422, 'risk_not_acknowledged');
     const opts = { reviewMode: reviewMode === 'off' ? ('opted_out' as const) : ('on' as const) };

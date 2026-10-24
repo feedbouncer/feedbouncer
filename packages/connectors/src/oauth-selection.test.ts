@@ -7,6 +7,7 @@ const SCOPES = ['read', 'manage'];
 function multiConnector(opts: {
   granted: string[];
   accounts: () => GrantableAccount[];
+  accountIdPattern?: RegExp;
 }): Connector {
   return {
     platform: 'facebook',
@@ -27,6 +28,7 @@ function multiConnector(opts: {
       defaultScopes: SCOPES,
       requiredScopes: SCOPES,
       accountSelection: 'multiple',
+      ...(opts.accountIdPattern ? { accountIdPattern: opts.accountIdPattern } : {}),
       maxPageSize: 50,
     },
     buildAuthorizationUrl: ({ state }) => new URL(`https://auth.example.test/a?state=${state}`),
@@ -89,6 +91,41 @@ describe('required scopes', () => {
     expect(upsert).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
     expect(stack.lines.join('\n')).not.toContain('USER-TOKEN-SENTINEL');
+  });
+});
+
+describe('accountIdPattern', () => {
+  const pattern = /^[A-Za-z0-9_-]{1,64}$/;
+  const setupWith = async (ids: string[]) => {
+    const stack = await createMemoryStack(
+      multiConnector({
+        granted: SCOPES,
+        accounts: () => ids.map((i) => page(i)),
+        accountIdPattern: pattern,
+      }),
+      { webhookSecret: null, redirectUri: 'https://app.test/cb', clock },
+    );
+    const { authorizationUrl } = await stack.oauth.start(stack.actor, 'facebook');
+    const state = authorizationUrl.searchParams.get('state')!;
+    const r = await stack.oauth.complete(stack.actor, 'facebook', { state, code: 'c' });
+    return { stack, grantId: (r as { grantId: string }).grantId };
+  };
+
+  it('listAccounts ids are validated with accountIdPattern', async () => {
+    const ok = await setupWith(['-000abc']);
+    expect(
+      await ok.stack.oauth.listGrantAccounts(ok.stack.actor, 'facebook', ok.grantId),
+    ).toMatchObject({
+      ok: true,
+      accounts: [{ externalAccountId: '-000abc' }],
+    });
+    const bad = await setupWith(['a/b']);
+    expect(
+      await bad.stack.oauth.listGrantAccounts(bad.stack.actor, 'facebook', bad.grantId),
+    ).toEqual({
+      ok: false,
+      reason: 'platform_error',
+    });
   });
 });
 

@@ -116,7 +116,8 @@ export type GrantFailure = { readonly ok: false; readonly reason: 'rejected' | '
 
 const MAX_CONNECT_IDS = 50;
 const MAX_GRANTABLE_ACCOUNTS = 500;
-const grantableAccountsSchema = z.array(grantableAccountSchema).max(MAX_GRANTABLE_ACCOUNTS);
+const grantableAccountsSchema = (idPattern?: RegExp) =>
+  z.array(grantableAccountSchema(idPattern)).max(MAX_GRANTABLE_ACCOUNTS);
 
 export interface OAuthFlowDeps {
   registry: ConnectorRegistry;
@@ -153,7 +154,7 @@ const result = (
   reviewMode,
 });
 
-/** Meta marks a cancelled consent screen with error_reason=user_denied; other providers do not. */
+/** Meta marks a cancelled consent screen with error_reason=user_denied; error=access_denied (RFC 6749) is a denial everywhere. */
 const META_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>(['facebook', 'instagram']);
 
 export class OAuthFlow {
@@ -224,8 +225,9 @@ export class OAuthFlow {
     if (!(await this.#canManage(actor))) return REJECTED;
     const state = query.state;
     if (typeof state !== 'string' || !STATE_PATTERN.test(state)) return REJECTED;
-    const code =
-      typeof query.code === 'string' && CODE_PATTERN.test(query.code) ? query.code : null;
+    const codeParam = this.d.registry.get(platform)?.capabilities.oauthCodeParam ?? 'code';
+    const rawCode = query[codeParam];
+    const code = typeof rawCode === 'string' && CODE_PATTERN.test(rawCode) ? rawCode : null;
     // Checked before consume, so a malformed code cannot burn the pending state.
     if (query.error === undefined && code === null) return REJECTED;
     const pending = await this.d.states.consume(hashState(state), {
@@ -238,7 +240,11 @@ export class OAuthFlow {
     const ids = { organizationId: actor.organizationId, brandId: actor.brandId, platform };
     // code is null here only when the provider reported an error
     if (query.error !== undefined || code === null) {
-      if (!META_PLATFORMS.has(platform) || query.error_reason === 'user_denied') {
+      if (
+        !META_PLATFORMS.has(platform) ||
+        query.error_reason === 'user_denied' ||
+        query.error === 'access_denied'
+      ) {
         this.d.log.info('oauth authorization denied by user', ids);
         return { ok: false, reason: 'denied' };
       }
@@ -380,7 +386,9 @@ export class OAuthFlow {
         signal: AbortSignal.timeout(this.d.exchangeTimeoutMs ?? 15_000),
         redirectUri: this.d.redirectUri(platform),
       });
-      const parsed = grantableAccountsSchema.safeParse(raw);
+      const parsed = grantableAccountsSchema(connector.capabilities.accountIdPattern).safeParse(
+        raw,
+      );
       if (!parsed.success) throw new ConnectorError('permanent', 'invalid_connector_output');
       return parsed.data;
     } catch (err) {

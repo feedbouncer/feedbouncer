@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
 import { INGEST_JOB } from '@feedbouncer/comments';
-import type { Platform } from '@feedbouncer/connectors';
+import type { Connector, Platform } from '@feedbouncer/connectors';
 import { Secret } from '@feedbouncer/service-runtime';
 import {
   WEB,
@@ -391,6 +391,56 @@ describe('facebook connect flow', () => {
     await bad(`${base(org)}/facebook/grants/nope/connect`, { accountIds: ['1'] }, 404);
   });
 
+  it('connect accepts non-graph account ids when the connector declares accountIdPattern', async () => {
+    const stub: Connector = {
+      platform: 'tiktok_ads',
+      capabilities: {
+        actions: [],
+        listSources: false,
+        recentSources: false,
+        ingestion: 'polling',
+        tokens: { refreshable: false, rotatesRefreshToken: false },
+        rateLimit: {
+          points: 10,
+          durationSec: 60,
+          urgentReservePoints: 1,
+          defaultRetryAfterMs: 5000,
+        },
+        apiHosts: ['api.example.test'],
+        authorizationHosts: ['auth.example.test'],
+        defaultScopes: ['read'],
+        accountSelection: 'multiple',
+        accountIdPattern: /^[A-Za-z0-9_-]{1,64}$/,
+        maxPageSize: 10,
+      },
+      buildAuthorizationUrl: () => new URL('https://auth.example.test/a'),
+      exchangeCode: async () => {
+        throw new Error('unused');
+      },
+      refreshTokens: async () => {
+        throw new Error('unused');
+      },
+      listAccounts: async () => [],
+      listComments: async () => ({ items: [], nextCursor: null }),
+      getComment: async () => null,
+      act: async () => ({ status: 'not_found' }),
+    };
+    api.deps.connectors!.registry.register(stub);
+    const url = `${base(org)}/tiktok_ads/grants/00000000-0000-4000-8000-000000000000/connect`;
+    const status = async (accountIds: string[]) =>
+      (await call('POST', url, org.owner, { accountIds })).status;
+    expect(await status(['-000abc'])).toBe(404);
+    expect(await status(['a/b'])).toBe(400);
+  });
+
+  it('connect still rejects non-graph ids for meta connectors', async () => {
+    for (const platform of ['facebook', 'instagram', 'meta_ads']) {
+      const url = `${base(org)}/${platform}/grants/00000000-0000-4000-8000-000000000000/connect`;
+      const r = await call('POST', url, org.owner, { accountIds: ['-000abc'] });
+      expect(r.status, platform).toBe(400);
+    }
+  });
+
   it('callback state completed by another signed-in user -> /orgs?error=oauth_rejected and state still usable by the owner', async () => {
     const url = await authorize(org, org.owner);
     const consent = graph.consent(url, fbUserId);
@@ -683,7 +733,7 @@ describe('instagram connect flow', () => {
       error: { code: 'platform_not_configured', message: expect.any(String) },
     };
     const grant = '00000000-0000-4000-8000-000000000000';
-    for (const platform of ['tiktok', 'nope', 'FACEBOOK']) {
+    for (const platform of ['youtube', 'nope', 'FACEBOOK']) {
       const p = encodeURIComponent(platform);
       const a = await call('POST', `${base(org)}/${p}/authorize`, org.owner, {});
       expect(a.status, platform).toBe(404);

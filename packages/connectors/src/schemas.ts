@@ -3,6 +3,7 @@
 // of control characters, URLs are https only, bodies are bounded. Errors carry
 // no input (zod issues are not attached), only the code invalid_connector_output.
 import * as z from 'zod';
+import type { ConnectionCommentsPage } from './connector.js';
 import { ConnectorError } from './errors.js';
 import { Secret } from '@feedbouncer/service-runtime';
 import {
@@ -40,6 +41,7 @@ export const commentSchema = z
     postedAt: z.date(),
     platformState: z.enum(['visible', 'hidden', 'deleted']),
     permalink: httpsUrl.nullable(),
+    replyCount: z.number().int().min(0).max(1_000_000).optional(),
   })
   .refine((c) => c.parentExternalId !== c.externalId);
 
@@ -120,14 +122,15 @@ export const respondRequestSchema = z.strictObject({
 });
 
 const SNAKE = /^[a-z][a-z0-9_]{0,62}$/;
-export const grantableAccountSchema = z.strictObject({
-  externalAccountId: externalIdSchema,
-  displayName: z.string().max(500).nullable(),
-  eligible: z.boolean(),
-  ineligibleReason: z.string().regex(SNAKE).nullable(),
-  limitations: z.array(z.string().regex(SNAKE)).max(20),
-  accessToken: z.instanceof(Secret),
-});
+export const grantableAccountSchema = (idPattern?: RegExp) =>
+  z.strictObject({
+    externalAccountId: idPattern ? externalIdSchema.regex(idPattern) : externalIdSchema,
+    displayName: z.string().max(500).nullable(),
+    eligible: z.boolean(),
+    ineligibleReason: z.string().regex(SNAKE).nullable(),
+    limitations: z.array(z.string().regex(SNAKE)).max(20),
+    accessToken: z.instanceof(Secret),
+  });
 
 export const inboundEventsSchema = z
   .array(
@@ -151,6 +154,22 @@ export function parseWith<T>(schema: z.ZodType<T>, raw: unknown): T {
 export const parseAdLookup = (raw: unknown): AdLookup => parseWith(adLookupSchema, raw);
 
 export const parseComment = (raw: unknown): NormalizedComment => parseWith(commentSchema, raw);
+
+export function parseConnectionComments(raw: unknown): ConnectionCommentsPage {
+  const page = parseWith(
+    z.strictObject({
+      items: z.array(z.unknown()).max(500),
+      sources: z.array(z.unknown()).max(500),
+      hasMore: z.boolean(),
+    }),
+    raw,
+  );
+  const sources = parsePage(sourceSchema, { items: page.sources, nextCursor: null }).items;
+  const known = new Set(sources.map((s) => s.externalId));
+  const items = parsePage(commentSchema, { items: page.items, nextCursor: null }).items;
+  if (items.some((c) => !known.has(c.sourceExternalId))) throw invalid();
+  return { items, sources, hasMore: page.hasMore };
+}
 
 export function parsePage<T extends { externalId: string }>(
   item: z.ZodType<T>,

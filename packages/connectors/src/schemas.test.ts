@@ -75,6 +75,15 @@ describe('comment boundary schema', () => {
   });
 });
 
+describe('replyCount', () => {
+  it.each([0, 7, 1_000_000])('accepts %s', (replyCount) => {
+    expect(parseComment({ ...good, replyCount }).replyCount).toBe(replyCount);
+  });
+  it.each([-1, 1.5, 1_000_001, '3', Number.NaN])('rejects %s', (replyCount) => {
+    expect(invalid({ ...good, replyCount })).toEqual(INVALID);
+  });
+});
+
 describe('parsePage', () => {
   it('drops duplicate external ids within a page', () => {
     const page = parsePage(commentSchema, { items: [good, good], nextCursor: 'n1' });
