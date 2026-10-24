@@ -20,7 +20,7 @@ import {
 } from '@feedbouncer/service-runtime';
 import { buildApp } from './app.factory.js';
 import { loadApiEnv, type ApiEnv } from './env.js';
-import { buildMetaDeps } from './meta-deps.js';
+import { buildConnectorDeps } from './connector-deps.js';
 
 let env: ApiEnv;
 const configWarnings: string[] = [];
@@ -47,11 +47,11 @@ const redis = new Redis(env.redisUrl.href, { maxRetriesPerRequest: 1, enableOffl
 redis.on('error', (err) => log.warn('redis connection error', errorFields(err)));
 const mailer = createSmtpMailer(env.smtpUrl, env.mailFrom);
 
-const meta = buildMetaDeps({ env, pool, log, metrics });
+const platforms = buildConnectorDeps({ env, pool, log, metrics });
 
 async function closeResources(): Promise<void> {
   mailer.close();
-  await Promise.allSettled([meta?.close(), pool.end(), redis.quit()]);
+  await Promise.allSettled([platforms?.close(), pool.end(), redis.quit()]);
 }
 
 try {
@@ -64,9 +64,9 @@ try {
     redisKeyPrefix: 'fb:',
     metrics,
     health: new PgHealthReader(pool, env.health),
-    connectors: meta?.connectors ?? null,
-    producer: meta?.producer ?? null,
-    comments: meta?.comments ?? null,
+    connectors: platforms?.connectors ?? null,
+    producer: platforms?.producer ?? null,
+    comments: platforms?.comments ?? null,
   });
   await app.listen({ host: '0.0.0.0', port: env.port });
   log.info('api listening', { port: env.port });

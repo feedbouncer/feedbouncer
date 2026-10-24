@@ -14,7 +14,8 @@
 // is gone, a reply was refused, a permanent error), the comment is re-read by
 // enqueueing an ingest job: owners can hide or delete in the platform's own app
 // without any webhook. That enqueue is best-effort and never changes the
-// recorded outcome.
+// recorded outcome. It is skipped where the single-comment lookup cannot tell a
+// deleted comment from one it did not reach (TikTok): polling re-reads those.
 import { createHash } from 'node:crypto';
 import type pg from 'pg';
 import { withTransaction } from '@feedbouncer/db';
@@ -254,7 +255,8 @@ async function findOwnReply(
  * Reads the comment before unhiding it: our copy may say hidden when someone already
  * unhid or deleted it on the platform. Returns the outcome when that settles it, or null
  * to go ahead with the unhide. Throttling, transient and auth errors are handled as they
- * would be for the unhide itself; any other read error leaves the decision to the unhide.
+ * would be for the unhide itself; any other read error (an unsupported lookup included),
+ * or a partial lookup that did not find it, leaves the decision to the unhide.
  */
 async function checkBeforeUnhide(
   client: ConnectionClient,
@@ -263,7 +265,8 @@ async function checkBeforeUnhide(
 ): Promise<FailureOutcome | null> {
   try {
     const c = await client.getComment(ref);
-    if (c === null || c.platformState === 'deleted') return { final: gone() };
+    if (c === null) return client.capabilities.partialCommentLookup ? null : { final: gone() };
+    if (c.platformState === 'deleted') return { final: gone() };
     if (c.platformState === 'visible')
       return { final: { ...done('noop', 'already_visible'), commentState: 'visible' } };
     return null;
@@ -453,7 +456,8 @@ export function executeActionJob(d: {
       });
       if (recorded)
         await notify(d, ctx.scope, ctx.platform, a, outcome.final.status, outcome.final.code);
-      if (recorded && outcome.final.resync) await enqueueResync(d, ctx.scope, ctx.platform, a);
+      if (recorded && outcome.final.resync && !client.capabilities.partialCommentLookup)
+        await enqueueResync(d, ctx.scope, ctx.platform, a);
       if (outcome.rethrow) throw outcome.rethrow;
       return result;
     },

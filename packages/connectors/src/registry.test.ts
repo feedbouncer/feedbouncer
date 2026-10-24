@@ -146,6 +146,29 @@ describe('validateConnector', () => {
       }),
       /rateLimit/,
     ],
+    [
+      'connectionComments without listConnectionComments',
+      withCaps({ connectionComments: true }),
+      /connectionComments/,
+    ],
+    [
+      'listConnectionComments without connectionComments',
+      {
+        ...base(),
+        listConnectionComments: async () => ({ items: [], sources: [], hasMore: false }),
+      },
+      /connectionComments/,
+    ],
+    [
+      'accountIdPattern that is not a RegExp',
+      withCaps({ accountIdPattern: '^a$' as never }),
+      /accountIdPattern/,
+    ],
+    [
+      'oauthCodeParam outside the allowed set',
+      withCaps({ oauthCodeParam: 'token' as never }),
+      /oauthCodeParam/,
+    ],
     ['listReplies is not a function', { ...withCaps({}), listReplies: 1 as never }, /listReplies/],
   ])('rejects %s', (_n, c, msg) => {
     expect(() => validateConnector(c)).toThrow(msg);
@@ -163,9 +186,9 @@ describe('ConnectorRegistry', () => {
 
   it('require() throws a typed unsupported error for unknown platforms', () => {
     const r = new ConnectorRegistry();
-    expect(() => r.require('tiktok')).toThrow(ConnectorError);
+    expect(() => r.require('youtube')).toThrow(ConnectorError);
     try {
-      r.require('tiktok');
+      r.require('youtube');
     } catch (e) {
       expect((e as ConnectorError).kind).toBe('unsupported');
     }

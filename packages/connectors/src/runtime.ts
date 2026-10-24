@@ -17,7 +17,7 @@ import {
 } from '@feedbouncer/service-runtime';
 import type { RateBudget } from './budget.js';
 import type { Clock } from './clock.js';
-import type { CallContext, Connector } from './connector.js';
+import type { CallContext, Connector, ConnectionCommentsPage } from './connector.js';
 import {
   ConnectorError,
   errorClassFor,
@@ -42,6 +42,7 @@ import {
   externalIdSchema,
   parseAdLookup,
   parseComment,
+  parseConnectionComments,
   parsePage,
   recentSourceSchema,
   respondRequestSchema,
@@ -70,6 +71,7 @@ import {
 export type ConnectorOperation =
   | 'list_sources'
   | 'list_recent_sources'
+  | 'list_connection_comments'
   | 'lookup_ad'
   | 'list_comments'
   | 'list_replies'
@@ -194,6 +196,7 @@ export class ConnectorRuntime {
 
 const SNAKE_CODE = /^[a-z][a-z0-9_]{0,62}$/;
 const AD_ID = /^\d{1,32}$/;
+const validDate = (d: unknown): d is Date => d instanceof Date && !Number.isNaN(d.getTime());
 const invalidRequest = () => new ConnectorError('permanent', 'invalid_request');
 const errorName = (err: unknown) => (err instanceof Error ? err.name : 'NonError');
 
@@ -261,11 +264,7 @@ export class ConnectionClient {
   ): Promise<Page<RecentSource>> {
     const op = this.connector.listRecentSources?.bind(this.connector);
     if (!op) throw new ConnectorError('unsupported', 'list_recent_sources');
-    if (
-      !(req.since instanceof Date) ||
-      Number.isNaN(req.since.getTime()) ||
-      !cursorSchema.safeParse(req.cursor).success
-    )
+    if (!validDate(req.since) || !cursorSchema.safeParse(req.cursor).success)
       throw invalidRequest();
     const max = this.capabilities.maxPageSize;
     const limit = Math.min(Math.max(Math.trunc(req.limit ?? max), 1), max);
@@ -273,6 +272,28 @@ export class ConnectionClient {
       op(ctx, { since: req.since, cursor: req.cursor, limit }),
     );
     return parsePage(recentSourceSchema, raw);
+  }
+
+  async listConnectionComments(
+    req: { since: Date; until: Date; page: number; pageSize: number },
+    opts?: ListOptions,
+  ): Promise<ConnectionCommentsPage> {
+    const op = this.connector.listConnectionComments?.bind(this.connector);
+    if (!op) throw new ConnectorError('unsupported', 'list_connection_comments');
+    if (
+      !validDate(req.since) ||
+      !validDate(req.until) ||
+      !Number.isSafeInteger(req.page) ||
+      req.page < 1 ||
+      !Number.isSafeInteger(req.pageSize) ||
+      req.pageSize < 1
+    )
+      throw invalidRequest();
+    const pageSize = Math.min(req.pageSize, this.capabilities.maxPageSize);
+    const raw = await this.#call(opts?.priority ?? 'bulk', 'list_connection_comments', (ctx) =>
+      op(ctx, { since: req.since, until: req.until, page: req.page, pageSize }),
+    );
+    return parseConnectionComments(raw);
   }
 
   async listComments(
@@ -601,6 +622,17 @@ export class ConnectionClient {
             this.d.budget.applyPlatformHint(this.platform, key, policy, { retryAfterMs }),
           );
           throw new ConnectorError('rate_limited', ce.code, { retryAfterMs });
+        }
+        if (ce.kind === 'auth_expired' && ce.missingScopes) {
+          await this.#port(() =>
+            this.d.directory.markReauthRequired(this.scope, 'oauth_scope_missing', {
+              missingScopes: ce.missingScopes!,
+            }),
+          );
+          throw new ConnectorError('auth_expired', ce.code, {
+            reauthorize: true,
+            missingScopes: ce.missingScopes!,
+          });
         }
         if (ce.kind === 'auth_expired' && !ce.reauthorize) {
           if (attempt === 0) {

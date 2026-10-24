@@ -75,6 +75,15 @@ describe('comment boundary schema', () => {
   });
 });
 
+describe('replyCount', () => {
+  it.each([0, 7, 1_000_000])('accepts %s', (replyCount) => {
+    expect(parseComment({ ...good, replyCount }).replyCount).toBe(replyCount);
+  });
+  it.each([-1, 1.5, 1_000_001, '3', Number.NaN])('rejects %s', (replyCount) => {
+    expect(invalid({ ...good, replyCount })).toEqual(INVALID);
+  });
+});
+
 describe('parsePage', () => {
   it('drops duplicate external ids within a page', () => {
     const page = parsePage(commentSchema, { items: [good, good], nextCursor: 'n1' });
@@ -164,6 +173,11 @@ describe('ad source', () => {
       },
     };
     expect(sourceSchema.safeParse(ok).success).toBe(true);
+    expect(sourceSchema.safeParse({ ...ok, postedAt: new Date(1_730_000_000_000) }).success).toBe(
+      true,
+    );
+    expect(sourceSchema.safeParse({ ...ok, postedAt: new Date(Number.NaN) }).success).toBe(false);
+    expect(sourceSchema.safeParse({ ...ok, postedAt: '2026-10-24' }).success).toBe(false);
     for (const patch of [
       { adAccountExternalId: 'act_1001' },
       { effectiveStatus: 'active; drop' },

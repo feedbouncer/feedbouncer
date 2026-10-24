@@ -119,6 +119,7 @@ export const RulesSchema = z.object({
           mode: z.string(),
           priority: z.int(),
           enabled: z.boolean(),
+          appliesTo: z.string(),
         }),
       ),
       changes: z.array(
@@ -143,7 +144,7 @@ export const ProposalSchema = z.object({
   status: proposalStatus,
   diff: z.array(
     z.object({
-      field: z.enum(['name', 'conditions', 'actions', 'mode', 'enabled']),
+      field: z.enum(['name', 'conditions', 'actions', 'mode', 'enabled', 'appliesTo']),
       before: z.unknown(),
       after: z.unknown(),
     }),

@@ -4,7 +4,13 @@ import { CommentView } from '../view.js';
 import { compileEmojiRule } from './emoji.js';
 
 const v = (body: string) =>
-  new CommentView({ body, platform: 'instagram', authorExternalId: null, authorName: null });
+  new CommentView({
+    body,
+    platform: 'instagram',
+    authorExternalId: null,
+    authorName: null,
+    origin: 'organic',
+  });
 const b = { now: () => 0, startedAt: 0, limitMs: 50 };
 
 it('matches a listed emoji regardless of skin tone', () => {

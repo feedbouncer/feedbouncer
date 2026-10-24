@@ -107,7 +107,7 @@ export async function seedTenant(
     const src = (ext: string) =>
       one(
         c,
-        "INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id) VALUES ($1, $2, $3, 'ad_post', $4) RETURNING id",
+        "INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id) VALUES ($1, $2, $3, 'organic_post', $4) RETURNING id",
         [organizationId, brandId, connectionId, ext],
       );
     t.sourceId = await src(`post-${label}-1`);

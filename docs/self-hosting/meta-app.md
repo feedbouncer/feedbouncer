@@ -32,7 +32,7 @@ Nothing in this guide has been verified against a live Meta dashboard yet. Scree
 
 Written against: Graph API v26.0 (text only; see [Status of this guide](#status-of-this-guide))
 
-This guide covers Facebook Pages, and Instagram professional accounts as an optional extra. It does not cover YouTube, X or TikTok. For Meta Ads, see [meta-ads.md](../connectors/meta-ads.md).
+This guide covers Facebook Pages, and Instagram professional accounts as an optional extra. It does not cover YouTube, X or TikTok. For Meta Ads, see [meta-ads.md](../connectors/meta-ads.md). For TikTok, see [tiktok.md](../connectors/tiktok.md) and [tiktok-ads.md](../connectors/tiktok-ads.md).
 
 Labels and menu paths come from FeedBouncer's connector docs and Meta's documentation. Meta changes its dashboard often, so some labels may differ from what you see. Each section that depends on Meta starts with a dated note saying what has not been checked yet. If the dashboard uses another language, labels will differ from the English ones used here.
 

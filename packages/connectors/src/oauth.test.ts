@@ -235,6 +235,42 @@ describe('OAuthFlow.complete', () => {
     expect(states.size()).toBe(0);
   });
 
+  it('error=access_denied is a user denial', async () => {
+    const { authorizationUrl } = await flow.start(alice, 'facebook');
+    expect(
+      await flow.complete(alice, 'facebook', {
+        state: stateOf(authorizationUrl),
+        error: 'access_denied',
+      }),
+    ).toEqual({ ok: false, reason: 'denied' });
+  });
+
+  it('complete reads auth_code when the connector declares oauthCodeParam auth_code', async () => {
+    const registry = new ConnectorRegistry();
+    const c = stubConnector();
+    registry.register({ ...c, capabilities: { ...c.capabilities, oauthCodeParam: 'auth_code' } });
+    const f = makeFlow(registry);
+    const { authorizationUrl } = await f.start(alice, 'youtube');
+    const r = await f.complete(alice, 'youtube', {
+      state: stateOf(authorizationUrl),
+      auth_code: 'X',
+    });
+    expect(r.ok).toBe(true);
+    expect(exchange).toHaveBeenCalledWith(
+      expect.objectContaining({ code: expect.objectContaining({}) }),
+      expect.anything(),
+    );
+    expect(exchange.mock.calls[0]![0].code.reveal()).toBe('X');
+  });
+
+  it('a default connector rejects an auth_code callback', async () => {
+    const { authorizationUrl } = await flow.start(alice, 'youtube');
+    expect(
+      await flow.complete(alice, 'youtube', { state: stateOf(authorizationUrl), auth_code: 'X' }),
+    ).toEqual({ ok: false, reason: 'rejected' });
+    expect(exchange).not.toHaveBeenCalled();
+  });
+
   it('maps exchange failures to platform_error without leaking', async () => {
     exchange.mockRejectedValueOnce(new Error('invalid code auth-code-SENTINEL'));
     const { authorizationUrl } = await flow.start(alice, 'youtube');
@@ -501,7 +537,7 @@ describe('OAuthFlow.complete', () => {
     expect(
       await flow.complete(alice, 'facebook', {
         state,
-        error: 'access_denied',
+        error: 'server_error',
         error_reason: 'other',
       }),
     ).toEqual({ ok: false, reason: 'provider_error' });
@@ -510,7 +546,7 @@ describe('OAuthFlow.complete', () => {
   it('a Facebook error without error_reason -> provider_error', async () => {
     const { authorizationUrl } = await flow.start(alice, 'facebook');
     const state = stateOf(authorizationUrl);
-    expect(await flow.complete(alice, 'facebook', { state, error: 'access_denied' })).toEqual({
+    expect(await flow.complete(alice, 'facebook', { state, error: 'server_error' })).toEqual({
       ok: false,
       reason: 'provider_error',
     });
@@ -529,7 +565,7 @@ describe('OAuthFlow.complete', () => {
     const { authorizationUrl } = await flow.start(alice, 'facebook');
     await flow.complete(alice, 'facebook', {
       state: stateOf(authorizationUrl),
-      error: 'access_denied',
+      error: 'server_error',
       error_description: 'DESCRIPTION-SENTINEL',
     });
     expect(lines.join('\n')).not.toContain('DESCRIPTION-SENTINEL');

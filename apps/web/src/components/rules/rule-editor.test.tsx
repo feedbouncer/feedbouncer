@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { ActionCapabilitiesDto } from '../../lib/actions';
-import type { RuleView } from '../../lib/rules';
+import { emptyForm, ruleRequestBody, type RuleView } from '../../lib/rules';
 import { RuleEditor, SaveWarnings } from './rule-editor';
 
 vi.mock('next/navigation', () => ({
@@ -38,6 +38,7 @@ const existing = (over: Partial<RuleView>): RuleView => ({
   action: 'hide',
   actions: [{ type: 'hide' }],
   mode: 'enforce',
+  appliesTo: 'all',
   enabled: true,
   position: 1,
   warnings: { shadowedBy: null, neverMatches: false, invalid: false },
@@ -122,6 +123,45 @@ describe('RuleEditor', () => {
     );
     expect(html).toContain('Unclosed group');
     expect(html.indexOf('Unclosed group')).toBeGreaterThan(html.indexOf('name="patterns"'));
+  });
+});
+
+describe('applies to', () => {
+  /** The opening tag of the selected option of a select. */
+  const selected = (html: string, name: string) => {
+    const start = html.indexOf(`name="${name}"`);
+    const select = html.slice(start, html.indexOf('</select>', start));
+    return /<option value="([a-z]+)" selected="">/.exec(select)?.[1];
+  };
+
+  it('offers all comments, organic only and ads only; a new rule applies to all', () => {
+    const html = editor();
+    expect(html).toContain('Applies to');
+    expect(html).toContain('<option value="all" selected="">All comments</option>');
+    expect(html).toContain('<option value="organic">Organic only</option>');
+    expect(html).toContain('<option value="ad">Ads only</option>');
+  });
+
+  it("shows a saved rule's scope", () => {
+    expect(selected(editor({ rule: existing({ appliesTo: 'ad' }) }), 'appliesTo')).toBe('ad');
+  });
+
+  it('the rules editor submits appliesTo', () => {
+    const body = ruleRequestBody({
+      name: 'Ad spam',
+      kind: 'keyword',
+      form: { ...emptyForm(), keywordTerms: 'spam' },
+      actions: [{ type: 'hide' }],
+      dryRun: false,
+      appliesTo: 'ad',
+    });
+    expect(body).toEqual({
+      name: 'Ad spam',
+      conditions: { type: 'keyword', terms: ['spam'], match: 'whole_word' },
+      actions: [{ type: 'hide' }],
+      mode: 'enforce',
+      appliesTo: 'ad',
+    });
   });
 });
 

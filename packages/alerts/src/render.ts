@@ -22,6 +22,7 @@ const PLATFORM_LABELS: Record<Platform, string> = {
   x: 'X',
   bluesky: 'Bluesky',
   meta_ads: 'Meta ads',
+  tiktok_ads: 'TikTok ad account',
 };
 
 const TEST_MESSAGE = 'FeedBouncer test alert: this channel is connected.';

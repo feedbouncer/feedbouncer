@@ -42,6 +42,7 @@ const toRuleResource = (r: StoredRule) => ({
   mode: r.mode,
   priority: r.priority,
   enabled: r.enabled,
+  appliesTo: r.appliesTo,
 });
 
 const toChangeSummary = (p: ProposalRow) => ({

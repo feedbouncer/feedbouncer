@@ -43,7 +43,8 @@ const MARKER_RE =
   /^> \[SCREENSHOT: ([a-z0-9][a-z0-9 ,/'-]{3,59})\] Must show: .{15,}\. Redact: .{3,}\.$/gm;
 const UI_STRINGS = [
   'FeedBouncer lacks the permission for this action',
-  'Meta asked FeedBouncer to slow down',
+  // The web names the platform that throttled (Meta or TikTok); the guide quotes the Meta case.
+  'asked FeedBouncer to slow down',
   'Needs reconnect',
 ];
 const ALLOWED_HOSTS = [
@@ -370,9 +371,9 @@ test('verification doc lists every slot and every noted section', () => {
 });
 
 test('webhook and OAuth callback paths in the guide match the code', () => {
-  const metaDeps = read('apps/api/src/meta-deps.ts');
+  const connectorDeps = read('apps/api/src/connector-deps.ts');
   assert.ok(
-    metaDeps.includes('/api/v1/oauth/${p}/callback'),
+    connectorDeps.includes('/api/v1/oauth/${p}/callback'),
     'code changed the OAuth callback path',
   );
   const plugin = read('apps/api/src/webhooks/meta-webhooks.plugin.ts');

@@ -4457,6 +4457,15 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "appliesTo": {
+            "type": "string",
+            "enum": [
+              "all",
+              "organic",
+              "ad"
+            ],
+            "description": "Which comments the rule evaluates: all, organic only or ads only."
           }
         },
         "required": [
@@ -4466,7 +4475,8 @@
           "actions",
           "mode",
           "priority",
-          "enabled"
+          "enabled",
+          "appliesTo"
         ],
         "additionalProperties": false
       },
@@ -4562,7 +4572,7 @@
                   "type": "string"
                 },
                 "additionalProperties": {},
-                "description": "`name`, `conditions`, `actions`, `mode` (default `suggest`) and `enabled` (default true), as in the rules of `listRules`."
+                "description": "`name`, `conditions`, `actions`, `mode` (default `suggest`), `enabled` (default true) and `appliesTo` (`all`, `organic` or `ad`; default `all`), as in the rules of `listRules`."
               }
             },
             "required": [
@@ -4698,7 +4708,8 @@
                     "conditions",
                     "actions",
                     "mode",
-                    "enabled"
+                    "enabled",
+                    "appliesTo"
                   ]
                 },
                 "before": {},

@@ -1,6 +1,6 @@
 import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
-import { EnvError } from '@feedbouncer/service-runtime';
+import { EnvError, Secret } from '@feedbouncer/service-runtime';
 import { randomKeyEntry } from '@feedbouncer/secrets/testing';
 import { loadWorkerEnv } from './env.js';
 
@@ -482,6 +482,133 @@ describe('ad polling settings', () => {
   });
   it('requires the Facebook Meta app config', () => {
     expect(() => load({ ...base, META_ADS_CONNECTOR_ENABLED: 'true' })).toThrow(EnvError);
+  });
+});
+
+describe('tiktok connectors and polling settings', () => {
+  const secret = 'tiktok-sentinel-secret-0123456789';
+  const organic = {
+    TIKTOK_CONNECTOR_ENABLED: 'true',
+    TIKTOK_APP_ID: '7300000000000001',
+    TIKTOK_APP_SECRET: secret,
+  };
+  const adsOnly = {
+    TIKTOK_ADS_CONNECTOR_ENABLED: 'true',
+    TIKTOK_ADS_APP_ID: '7300000000000002',
+    TIKTOK_ADS_APP_SECRET: secret,
+  };
+
+  it('is off, with no polling settings read, by default', () => {
+    const env = load({ ...base, TIKTOK_POLL_INTERVAL_SEC: '1', TIKTOK_MAX_PAGES_PER_JOB: '0' });
+    expect(env.tiktok).toBeNull();
+    expect(env.tiktokAds).toBeNull();
+    expect(env.tiktokPolling).toBeNull();
+  });
+  it('works without any Facebook config', () => {
+    const env = load({ ...base, ...organic });
+    expect(env.facebook).toBeNull();
+    expect(env.tiktok).toEqual({ appId: organic.TIKTOK_APP_ID, appSecret: new Secret(secret) });
+    expect(env.tiktokAds).toBeNull();
+  });
+  it('applies the documented defaults', () => {
+    const env = load({ ...base, ...organic, ...adsOnly });
+    expect(env.tiktokPolling).toEqual({
+      platforms: ['tiktok', 'tiktok_ads'],
+      poll: {
+        pollIntervalSec: 300,
+        quietVideoPollIntervalSec: 21_600,
+        activeVideoDays: 30,
+        videoDiscoveryIntervalSec: 900,
+        deepScanIntervalSec: 86_400,
+        sourceUnavailableRetrySec: 21_600,
+        maxSourcesPerJob: 25,
+        adsPollIntervalSec: 300,
+        adsOverlapSec: 900,
+        adsFullScanIntervalSec: 86_400,
+        maxPagesPerJob: 20,
+      },
+      scheduler: { tickSec: 30, maxConnectionsPerTick: 200 },
+    });
+  });
+  it('schedules only the enabled platforms', () => {
+    expect(load({ ...base, ...adsOnly }).tiktokPolling?.platforms).toEqual(['tiktok_ads']);
+    expect(load({ ...base, ...organic }).tiktokPolling?.platforms).toEqual(['tiktok']);
+  });
+  it('lets the ads connector fall back to the organic app credentials', () => {
+    const env = load({ ...base, ...organic, TIKTOK_ADS_CONNECTOR_ENABLED: 'true' });
+    expect(env.tiktokAds).toEqual({ appId: organic.TIKTOK_APP_ID, appSecret: new Secret(secret) });
+  });
+  it.each([
+    ['TIKTOK_CONNECTOR_ENABLED', organic, 'TIKTOK_APP_ID'],
+    ['TIKTOK_ADS_CONNECTOR_ENABLED', adsOnly, 'TIKTOK_ADS_APP_ID'],
+  ])('%s=true without app credentials fails startup', (flag, full, idName) => {
+    const noCreds = { [flag]: 'true' };
+    expect(messageOf(() => load({ ...base, ...noCreds }))).toMatch(idName);
+    expect(() => load({ ...base, ...full })).not.toThrow();
+  });
+  it('reads the app secret from TIKTOK_APP_SECRET_FILE', () => {
+    const fs = { size: () => secret.length + 1, read: () => `${secret}\n` };
+    const env = loadWorkerEnv(
+      { ...base, ...organic, TIKTOK_APP_SECRET: undefined, TIKTOK_APP_SECRET_FILE: '/run/s' },
+      { warn: () => {}, fs },
+    );
+    expect(env.tiktok?.appSecret.reveal()).toBe(secret);
+  });
+  it('needs the public web url and mail config for reconnect notices and oauth', () => {
+    expect(messageOf(() => load({ ...without('PUBLIC_WEB_URL'), ...organic }))).toMatch(
+      /PUBLIC_WEB_URL/,
+    );
+    expect(load({ ...base, ...organic }).mail?.smtpUrl.href).toBe('smtp://mailpit:1025');
+  });
+  it('reads configured values', () => {
+    const env = load({
+      ...base,
+      ...organic,
+      ...adsOnly,
+      TIKTOK_POLL_INTERVAL_SEC: '60',
+      TIKTOK_MAX_PAGES_PER_JOB: '200',
+      TIKTOK_ADS_POLL_OVERLAP_SEC: '0',
+      TIKTOK_SCHEDULER_TICK_SEC: '5',
+      TIKTOK_SCHEDULER_MAX_CONNECTIONS_PER_TICK: '5000',
+    });
+    expect(env.tiktokPolling?.poll).toMatchObject({
+      pollIntervalSec: 60,
+      maxPagesPerJob: 200,
+      adsOverlapSec: 0,
+    });
+    expect(env.tiktokPolling?.scheduler).toEqual({ tickSec: 5, maxConnectionsPerTick: 5000 });
+  });
+  it.each([
+    ['TIKTOK_POLL_INTERVAL_SEC', '59'],
+    ['TIKTOK_POLL_INTERVAL_SEC', '3601'],
+    ['TIKTOK_QUIET_VIDEO_POLL_INTERVAL_SEC', '299'],
+    ['TIKTOK_ACTIVE_VIDEO_DAYS', '366'],
+    ['TIKTOK_VIDEO_DISCOVERY_INTERVAL_SEC', '86401'],
+    ['TIKTOK_DEEP_SCAN_INTERVAL_SEC', '3599'],
+    ['TIKTOK_SOURCE_UNAVAILABLE_RETRY_SEC', '604801'],
+    ['TIKTOK_MAX_SOURCES_PER_JOB', '201'],
+    ['TIKTOK_ADS_POLL_INTERVAL_SEC', '3601'],
+    ['TIKTOK_ADS_POLL_OVERLAP_SEC', '86401'],
+    ['TIKTOK_ADS_FULL_SCAN_INTERVAL_SEC', '3599'],
+    ['TIKTOK_MAX_PAGES_PER_JOB', '0'],
+    ['TIKTOK_SCHEDULER_TICK_SEC', '4'],
+    ['TIKTOK_SCHEDULER_MAX_CONNECTIONS_PER_TICK', '5001'],
+  ])('rejects %s=%s', (name, value) => {
+    expect(() => load({ ...base, ...organic, ...adsOnly, [name]: value })).toThrow(EnvError);
+  });
+  it('does not read the settings of a connector that is off', () => {
+    expect(() =>
+      load({
+        ...base,
+        ...organic,
+        TIKTOK_ADS_POLL_INTERVAL_SEC: '1',
+        TIKTOK_ADS_POLL_OVERLAP_SEC: 'x',
+      }),
+    ).not.toThrow();
+    expect(() => load({ ...base, ...adsOnly, TIKTOK_POLL_INTERVAL_SEC: '1' })).not.toThrow();
+  });
+  it('never serializes the app secrets', () => {
+    expect(JSON.stringify(load({ ...base, ...organic, ...adsOnly }))).not.toContain(secret);
   });
 });
 

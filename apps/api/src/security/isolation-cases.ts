@@ -1,5 +1,8 @@
 import type { OrgFixture } from '../testing/harness.js';
 
+export const PICKER_PLATFORMS = ['facebook', 'instagram', 'tiktok', 'tiktok_ads'] as const;
+export type PickerPlatform = (typeof PICKER_PLATFORMS)[number];
+
 export interface IsolationFixture {
   A: OrgFixture;
   B: OrgFixture;
@@ -30,10 +33,13 @@ export interface IsolationFixture {
   bPolicyId: string;
   bPreviewId: string;
   /** B's live connection and B owner's pending grant, per account-selection platform. */
-  bConnectionIds: Record<'facebook' | 'instagram', string>;
+  bConnectionIds: Record<PickerPlatform, string>;
   /** B's workspace tag. */
   bTagId: string;
-  bGrantIds: Record<'facebook' | 'instagram', string>;
+  bGrantIds: Record<PickerPlatform, string>;
+  /** B's TikTok account id and a comment on B's TikTok connection. */
+  bTikTokAccountId: string;
+  bTikTokCommentId: string;
   /** B's Slack alert channel; B's brand also has alert settings and a route to it. */
   bAlertChannelId: string;
   /** B's active API key. */
@@ -116,8 +122,37 @@ export const CASES: IsolationCase[] = [
     name: "connection health of another tenant's brand",
     url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/connections/health`,
   },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/connections/health',
+    name: "tiktok: B's connection health from A",
+    url: (f) => `/api/v1/orgs/${f.B.orgId}/brands/${f.B.brandId}/connections/health`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/comments/:commentId/actions',
+    name: "tiktok: B's comment under A brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/comments/${f.bTikTokCommentId}/actions`,
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/comments/:commentId/replies',
+    name: "tiktok: B's comment replies under A path",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/comments/${f.bTikTokCommentId}/replies`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/comments/:commentId/actions',
+    name: "tiktok: hide B's comment under A brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/comments/${f.bTikTokCommentId}/actions`,
+    body: () => ({ kind: 'hide', requestKey: 'iso-tt-1' }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/comments/:commentId/replies',
+    name: "tiktok: reply to B's comment under A path",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/comments/${f.bTikTokCommentId}/replies`,
+    body: () => ({ text: 'hi', requestKey: 'iso-tt-2' }),
+  },
   // The connect flow, once per account-selection platform.
-  ...(['facebook', 'instagram'] as const).flatMap((p): IsolationCase[] => [
+  ...PICKER_PLATFORMS.flatMap((p): IsolationCase[] => [
     {
       route: 'POST /api/v1/orgs/:orgId/brands/:brandId/connections/:platform/authorize',
       name: `${p}: authorize B brand under A path`,
@@ -148,7 +183,7 @@ export const CASES: IsolationCase[] = [
       name: `${p}: connect with B's grant`,
       url: (f) =>
         `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections/${p}/grants/${f.bGrantIds[p]}/connect`,
-      body: () => ({ accountIds: ['1'] }),
+      body: (f) => ({ accountIds: [p === 'tiktok' ? f.bTikTokAccountId : '1'] }),
     },
   ]),
   {

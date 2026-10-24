@@ -312,7 +312,7 @@ export async function recheckConnections(
     }
     const r = await db.query(
       `WITH restored AS (
-         UPDATE connection SET status = $3, status_reason = NULL
+         UPDATE connection SET status = $3, status_reason = NULL, missing_scopes = '{}'
           WHERE id = $1 AND organization_id = $2 AND status = 'reconnect_required' AND status_reason LIKE 'credential\\_%'
          RETURNING id, organization_id, brand_id)
        INSERT INTO audit_event (organization_id, brand_id, actor_type, action, subject_type, subject_id, details)

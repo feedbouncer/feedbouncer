@@ -173,6 +173,12 @@ importers:
       '@feedbouncer/connector-meta-ads':
         specifier: workspace:*
         version: link:../../packages/connector-meta-ads
+      '@feedbouncer/connector-tiktok':
+        specifier: workspace:*
+        version: link:../../packages/connector-tiktok
+      '@feedbouncer/connector-tiktok-ads':
+        specifier: workspace:*
+        version: link:../../packages/connector-tiktok-ads
       '@feedbouncer/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
@@ -267,6 +273,9 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
+      '@feedbouncer/tiktok-business-api':
+        specifier: workspace:*
+        version: link:../../packages/tiktok-business-api
       '@opentelemetry/sdk-trace-base':
         specifier: 2.12.0
         version: 2.12.0(@opentelemetry/api@1.9.1)
@@ -489,6 +498,12 @@ importers:
       '@feedbouncer/connector-meta-ads':
         specifier: workspace:*
         version: link:../../packages/connector-meta-ads
+      '@feedbouncer/connector-tiktok':
+        specifier: workspace:*
+        version: link:../../packages/connector-tiktok
+      '@feedbouncer/connector-tiktok-ads':
+        specifier: workspace:*
+        version: link:../../packages/connector-tiktok-ads
       '@feedbouncer/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
@@ -770,6 +785,15 @@ importers:
       '@feedbouncer/connector-meta-ads':
         specifier: workspace:*
         version: link:../connector-meta-ads
+      '@feedbouncer/connector-tiktok':
+        specifier: workspace:*
+        version: link:../connector-tiktok
+      '@feedbouncer/connector-tiktok-ads':
+        specifier: workspace:*
+        version: link:../connector-tiktok-ads
+      '@feedbouncer/tiktok-business-api':
+        specifier: workspace:*
+        version: link:../tiktok-business-api
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
@@ -827,6 +851,47 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+
+  packages/connector-tiktok:
+    dependencies:
+      '@feedbouncer/connectors':
+        specifier: workspace:*
+        version: link:../connectors
+      '@feedbouncer/service-runtime':
+        specifier: workspace:*
+        version: link:../service-runtime
+      '@feedbouncer/tiktok-business-api':
+        specifier: workspace:*
+        version: link:../tiktok-business-api
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+
+  packages/connector-tiktok-ads:
+    dependencies:
+      '@feedbouncer/connectors':
+        specifier: workspace:*
+        version: link:../connectors
+      '@feedbouncer/service-runtime':
+        specifier: workspace:*
+        version: link:../service-runtime
+      '@feedbouncer/tiktok-business-api':
+        specifier: workspace:*
+        version: link:../tiktok-business-api
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@feedbouncer/connector-tiktok':
+        specifier: workspace:*
+        version: link:../connector-tiktok
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
@@ -1365,6 +1430,19 @@ importers:
       '@opentelemetry/sdk-trace-base':
         specifier: 2.12.0
         version: 2.12.0(@opentelemetry/api@1.9.1)
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+
+  packages/tiktok-business-api:
+    dependencies:
+      '@feedbouncer/connectors':
+        specifier: workspace:*
+        version: link:../connectors
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6

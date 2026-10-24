@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { SCOPE_NAME } from '@feedbouncer/connectors';
 import { HEALTH_REASONS, type HealthStatus } from '@feedbouncer/observability';
 import type { AppDeps } from '../deps.js';
 import { notFound } from '../http/errors.js';
@@ -17,6 +18,8 @@ export interface ConnectionHealthView {
   stalenessSeconds: number | null;
   ingestLagSeconds: number;
   failedImports: number;
+  /** Permissions a reconnect must approve, when the platform named them. */
+  missingScopes: string[];
 }
 
 // Anything outside the health vocabulary (a stored free-form reason) is not echoed.
@@ -41,7 +44,17 @@ export class ConnectionHealthService {
       [org.organizationId, brandId],
     );
     if (brand.rowCount === 0) throw notFound();
-    const rows = await this.deps.health.forBrand(org.organizationId, brandId);
+    const [rows, scopes] = await Promise.all([
+      this.deps.health.forBrand(org.organizationId, brandId),
+      this.deps.pool.query<{ id: string; missing_scopes: string[] }>(
+        `SELECT id, missing_scopes FROM connection
+          WHERE organization_id = $1 AND brand_id = $2 AND cardinality(missing_scopes) > 0`,
+        [org.organizationId, brandId],
+      ),
+    ]);
+    const missing = new Map(
+      scopes.rows.map((r) => [r.id, r.missing_scopes.filter((s) => SCOPE_NAME.test(s))]),
+    );
     return rows.map((h) => ({
       connectionId: h.connectionId,
       platform: h.platform,
@@ -54,6 +67,7 @@ export class ConnectionHealthService {
       stalenessSeconds: h.stalenessMs === null ? null : Math.floor(h.stalenessMs / 1000),
       ingestLagSeconds: Math.floor(h.ingestLagMs / 1000),
       failedImports: h.failedImports,
+      missingScopes: missing.get(h.connectionId) ?? [],
     }));
   }
 }

@@ -172,7 +172,7 @@ describe('WebhookGate', () => {
       }),
     ],
     ['unknown platform', tamper(signed(body), { platform: 'myspace' })],
-    ['platform without webhooks', tamper(signed(body), { platform: 'tiktok' })],
+    ['platform without webhooks', tamper(signed(body), { platform: 'youtube' })],
     ['oversized body', tamper(signed(body), { rawBody: Buffer.alloc(1_048_577) })],
     ['empty body', tamper(signed(body), { rawBody: Buffer.alloc(0) })],
   ])('rejects %s with the same opaque outcome', async (_n, req) => {

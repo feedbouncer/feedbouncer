@@ -1,6 +1,6 @@
 import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
-import { EnvError } from '@feedbouncer/service-runtime';
+import { EnvError, Secret } from '@feedbouncer/service-runtime';
 import { randomKeyEntry } from '@feedbouncer/secrets/testing';
 import { loadApiEnv } from './env.js';
 
@@ -368,6 +368,51 @@ describe('loadApiEnv', () => {
         expect(out).not.toContain(facebook.FACEBOOK_APP_SECRET);
         expect(out).not.toContain(facebook.FACEBOOK_WEBHOOK_VERIFY_TOKEN);
       }
+    });
+  });
+
+  describe('tiktok connectors', () => {
+    const secret = 'sentinel-tiktok-secret-0123456789';
+    const organic = {
+      TIKTOK_CONNECTOR_ENABLED: 'true',
+      TIKTOK_APP_ID: '7300000000000001',
+      TIKTOK_APP_SECRET: secret,
+    };
+    it('are off by default', () => {
+      const env = load(base);
+      expect(env.tiktok).toBeNull();
+      expect(env.tiktokAds).toBeNull();
+    });
+    it('work without any Facebook config; ads credentials fall back to the organic app', () => {
+      const env = load({ ...base, ...organic, TIKTOK_ADS_CONNECTOR_ENABLED: 'true' });
+      expect(env.facebook).toBeNull();
+      expect(env.tiktok).toEqual({ appId: organic.TIKTOK_APP_ID, appSecret: new Secret(secret) });
+      expect(env.tiktokAds).toEqual({
+        appId: organic.TIKTOK_APP_ID,
+        appSecret: new Secret(secret),
+      });
+      expect(JSON.parse(JSON.stringify(env))).toMatchObject({
+        tiktokEnabled: true,
+        tiktokAdsEnabled: true,
+      });
+      for (const out of [JSON.stringify(env), inspect(env, { depth: 10, showHidden: true })])
+        expect(out).not.toContain(secret);
+    });
+    it('either flag enabled without credentials fails startup', () => {
+      for (const flag of ['TIKTOK_CONNECTOR_ENABLED', 'TIKTOK_ADS_CONNECTOR_ENABLED'])
+        expect(() => load({ ...base, [flag]: 'true' }), flag).toThrow(EnvError);
+      expect(() =>
+        load({ ...base, TIKTOK_CONNECTOR_ENABLED: 'true', TIKTOK_APP_ID: '7300000000000001' }),
+      ).toThrow(/TIKTOK_APP_SECRET/);
+      expect(() => load({ ...base, TIKTOK_ADS_CONNECTOR_ENABLED: 'yes' })).toThrow(EnvError);
+    });
+    it('honours TIKTOK_APP_SECRET_FILE', () => {
+      const fs = { size: () => 30, read: () => 'file-tiktok-secret-0123456789\n' };
+      const env = loadApiEnv(
+        { ...base, ...organic, TIKTOK_APP_SECRET: undefined, TIKTOK_APP_SECRET_FILE: '/run/t' },
+        { warn: () => {}, fs },
+      );
+      expect(env.tiktok?.appSecret.reveal()).toBe('file-tiktok-secret-0123456789');
     });
   });
 

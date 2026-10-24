@@ -47,3 +47,25 @@ describe('instagram scopes', () => {
     (u) => expect(safeAuthorizationUrl(u)).toBeNull(),
   );
 });
+
+describe('tiktok', () => {
+  it('accepts the TikTok and TikTok for Business consent pages', () => {
+    for (const u of [
+      'https://www.tiktok.com/v2/auth/authorize/?state=x',
+      'https://business-api.tiktok.com/portal/auth?state=x',
+    ])
+      expect(safeAuthorizationUrl(u)?.href).toBe(u);
+    for (const u of [
+      'http://www.tiktok.com/v2/auth/authorize/',
+      'https://www.tiktok.com.evil.example/',
+      'https://ads.tiktok.com/',
+    ])
+      expect(safeAuthorizationUrl(u)).toBeNull();
+  });
+  it('describes the TikTok permissions', () => {
+    expect(missingPermissionText('comment.list,comment.list.manage')).toEqual([
+      'Read comments on your videos (comment.list)',
+      'Hide, delete and reply to comments (comment.list.manage)',
+    ]);
+  });
+});

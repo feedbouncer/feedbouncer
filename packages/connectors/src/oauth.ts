@@ -27,6 +27,7 @@ import {
   type MembershipReader,
   type OAuthGrantStore,
   type OAuthStateStore,
+  type PendingGrant,
   type StateBinding,
 } from './ports.js';
 import type { ConnectorRegistry } from './registry.js';
@@ -116,7 +117,8 @@ export type GrantFailure = { readonly ok: false; readonly reason: 'rejected' | '
 
 const MAX_CONNECT_IDS = 50;
 const MAX_GRANTABLE_ACCOUNTS = 500;
-const grantableAccountsSchema = z.array(grantableAccountSchema).max(MAX_GRANTABLE_ACCOUNTS);
+const grantableAccountsSchema = (idPattern?: RegExp) =>
+  z.array(grantableAccountSchema(idPattern)).max(MAX_GRANTABLE_ACCOUNTS);
 
 export interface OAuthFlowDeps {
   registry: ConnectorRegistry;
@@ -153,7 +155,7 @@ const result = (
   reviewMode,
 });
 
-/** Meta marks a cancelled consent screen with error_reason=user_denied; other providers do not. */
+/** Meta marks a cancelled consent screen with error_reason=user_denied; error=access_denied (RFC 6749) is a denial everywhere. */
 const META_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>(['facebook', 'instagram']);
 
 export class OAuthFlow {
@@ -224,8 +226,9 @@ export class OAuthFlow {
     if (!(await this.#canManage(actor))) return REJECTED;
     const state = query.state;
     if (typeof state !== 'string' || !STATE_PATTERN.test(state)) return REJECTED;
-    const code =
-      typeof query.code === 'string' && CODE_PATTERN.test(query.code) ? query.code : null;
+    const codeParam = this.d.registry.get(platform)?.capabilities.oauthCodeParam ?? 'code';
+    const rawCode = query[codeParam];
+    const code = typeof rawCode === 'string' && CODE_PATTERN.test(rawCode) ? rawCode : null;
     // Checked before consume, so a malformed code cannot burn the pending state.
     if (query.error === undefined && code === null) return REJECTED;
     const pending = await this.d.states.consume(hashState(state), {
@@ -238,7 +241,11 @@ export class OAuthFlow {
     const ids = { organizationId: actor.organizationId, brandId: actor.brandId, platform };
     // code is null here only when the provider reported an error
     if (query.error !== undefined || code === null) {
-      if (!META_PLATFORMS.has(platform) || query.error_reason === 'user_denied') {
+      if (
+        !META_PLATFORMS.has(platform) ||
+        query.error_reason === 'user_denied' ||
+        query.error === 'access_denied'
+      ) {
         this.d.log.info('oauth authorization denied by user', ids);
         return { ok: false, reason: 'denied' };
       }
@@ -248,7 +255,7 @@ export class OAuthFlow {
 
     const connector = this.d.registry.require(platform);
     let tokens: TokenSet;
-    let authorized: AuthorizedAccount;
+    let authorized: AuthorizedAccount | undefined;
     try {
       const result = await connector.exchangeCode(
         { code: new Secret(code), codeVerifier: pending.codeVerifier },
@@ -287,6 +294,9 @@ export class OAuthFlow {
         initiatedByUserId: actor.userId,
         reconnectConnectionId: pending.reconnectConnectionId,
         userToken: tokens.accessToken,
+        userTokenExpiresAt: tokens.accessTokenExpiresAt,
+        refreshToken: tokens.refreshToken,
+        refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
         grantedScopes: tokens.scopes,
         expiresAt: new Date(this.d.clock.now() + (this.d.grantTtlMs ?? 1_800_000)),
       });
@@ -380,7 +390,9 @@ export class OAuthFlow {
         signal: AbortSignal.timeout(this.d.exchangeTimeoutMs ?? 15_000),
         redirectUri: this.d.redirectUri(platform),
       });
-      const parsed = grantableAccountsSchema.safeParse(raw);
+      const parsed = grantableAccountsSchema(connector.capabilities.accountIdPattern).safeParse(
+        raw,
+      );
       if (!parsed.success) throw new ConnectorError('permanent', 'invalid_connector_output');
       return parsed.data;
     } catch (err) {
@@ -474,7 +486,7 @@ export class OAuthFlow {
           continue;
         }
       }
-      results.push(await this.#connectOne(actor, platform, grant.grantedScopes, a, opts));
+      results.push(await this.#connectOne(actor, platform, grant, a, opts));
     }
     this.d.log.info('oauth accounts connected', {
       platform,
@@ -489,10 +501,11 @@ export class OAuthFlow {
   async #connectOne(
     actor: OAuthActor,
     platform: Platform,
-    grantedScopes: readonly string[],
+    grant: PendingGrant,
     a: GrantableAccount,
     opts: ActivateOptions,
   ): Promise<ConnectAccountResult> {
+    const { grantedScopes } = grant;
     const id = a.externalAccountId;
     // Whether a live row existed before: if not, the row upsertPending leaves
     // live (new, or revived from a user disconnect) is ours to undo on failure.
@@ -518,7 +531,23 @@ export class OAuthFlow {
     const freshlyLive = created || prior === null;
     let activation: ActivateResult | null = null;
     try {
-      await this.d.vault.writeAccessToken(scope, { value: a.accessToken, expiresAt: null });
+      // A refreshable connector's account held by the user token itself (TikTok) keeps
+      // that token's expiry and refresh token; anything else is stored as before.
+      const own =
+        this.d.registry.require(platform).capabilities.tokens.refreshable &&
+        a.accessToken.equals(grant.userToken);
+      // Every account sharing the grant's token keeps its expiry and refresh token,
+      // so each refreshes on its own.
+      if (own && grant.refreshToken) {
+        await this.d.vault.writeRefreshToken(scope, {
+          value: grant.refreshToken,
+          expiresAt: grant.refreshTokenExpiresAt ?? null,
+        });
+      }
+      await this.d.vault.writeAccessToken(scope, {
+        value: a.accessToken,
+        expiresAt: own ? (grant.userTokenExpiresAt ?? null) : null,
+      });
       activation = await this.d.directory.activate(scope, actor.userId, opts);
     } finally {
       // A pending row that never became active must not keep holding the

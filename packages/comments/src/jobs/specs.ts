@@ -43,7 +43,7 @@ export const EXECUTE_JOB = {
   payload: executePayload,
   externalRef: (p: ExecutePayload): string => `action:${p.actionId}`,
   policy: { maxAttempts: 8 } satisfies Partial<RetryPolicy>,
-  platforms: ['facebook', 'instagram'] as readonly Platform[] | 'all',
+  platforms: ['facebook', 'instagram', 'tiktok', 'tiktok_ads'] as readonly Platform[] | 'all',
 };
 
 // `${connectionId}:${audit sequence}` of the connection.authorized (setup) or
@@ -88,6 +88,27 @@ export const POLL_JOB = {
   externalRef: (p: PollPayload): string => `ad_poll:${p.bucket}`,
   timeoutMs: 120_000,
   platforms: ['facebook', 'instagram'] as readonly Platform[] | 'all',
+};
+
+export const tiktokPollPayload = z.strictObject({ connectionId: z.uuid() });
+export type TikTokPollPayload = z.infer<typeof tiktokPollPayload>;
+
+// One run polls one TikTok connection. The scheduler passes `<type>:<interval slot>`
+// as the idempotency key, so each slot is its own ledger entry.
+export const TIKTOK_POLL_JOB = {
+  type: 'tiktok_poll' as const,
+  payload: tiktokPollPayload,
+  externalRef: (p: TikTokPollPayload): string => `tiktok_poll:${p.connectionId}`,
+  timeoutMs: 300_000,
+  platforms: ['tiktok'] as readonly Platform[] | 'all',
+};
+
+export const TIKTOK_ADS_POLL_JOB = {
+  type: 'tiktok_ads_poll' as const,
+  payload: tiktokPollPayload,
+  externalRef: (p: TikTokPollPayload): string => `tiktok_ads_poll:${p.connectionId}`,
+  timeoutMs: 300_000,
+  platforms: ['tiktok_ads'] as readonly Platform[] | 'all',
 };
 
 /** For processes that enqueue but never run jobs (the API): same type, payload and key; no handler. */

@@ -19,9 +19,9 @@ export interface AppDeps {
   readonly health: HealthReader;
   /** Prepended to every Redis key the API writes, so tests can isolate and clean up. */
   readonly redisKeyPrefix: string;
-  /** The Meta connectors (Facebook, plus Instagram when enabled). Null when Facebook is not configured. */
+  /** The configured platform connectors (Meta and TikTok). Null when none is configured. */
   readonly connectors: { registry: ConnectorRegistry; stack: PgConnectorStack } | null;
-  /** Enqueue-only job producer (the worker runs the jobs). Null when Facebook is not configured. */
+  /** Enqueue-only job producer (the worker runs the jobs). Null when no connector is configured. */
   readonly producer: JobProducer | null;
   /** Replaces the network behind the Slack webhook client; tests only. */
   readonly alertsFetch?: typeof fetch;

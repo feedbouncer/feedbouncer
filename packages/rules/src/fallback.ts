@@ -1,10 +1,32 @@
+import type { ActionStepObserver, StepType as ActionStepType } from '@feedbouncer/actions';
 import type { ActionOutcomeObserver } from '@feedbouncer/comments';
+import type { Platform } from '@feedbouncer/connectors';
 import type { Logger } from '@feedbouncer/service-runtime';
 import type { PgEvaluationStore } from './evaluations.js';
 import { describeFallback } from './reason.js';
 
 const REQUEST_KEY_PREFIX = 'rule-eval:';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type UnsupportedReviewReason =
+  | `action_not_supported:${Platform}:${ActionStepType}`
+  | `missing_permission:${string}`;
+
+/**
+ * Why a rule step that cannot run here goes to review; null for any other outcome. A
+ * permission the platform refused without naming the scope is plain `missing_permission`.
+ */
+export function unsupportedReviewReason(
+  platform: Platform,
+  e: Pick<
+    Parameters<ActionStepObserver['onStepSettled']>[0],
+    'type' | 'status' | 'reason' | 'missingScopes'
+  >,
+): UnsupportedReviewReason | 'missing_permission' | null {
+  if (e.status === 'not_supported') return `action_not_supported:${platform}:${e.type}`;
+  if (e.status !== 'failed' || e.reason !== 'missing_permission') return null;
+  return e.missingScopes?.length ? `missing_permission:${e.missingScopes.join(',')}` : e.reason;
+}
 
 /**
  * Flags a comment for review when a rule's queued platform action fails or is
@@ -42,11 +64,15 @@ export class RuleActionFallback implements ActionOutcomeObserver {
       return;
     }
     const code = e.code ?? 'failed';
+    const reason =
+      code === 'unsupported'
+        ? `action_not_supported:${e.platform}:${e.kind === 'delete' ? 'delete' : 'hide'}`
+        : code;
     const recorded = await this.#evaluations.recordFallback(
       brand,
       evaluationId,
       code,
-      describeFallback(info.ruleName, info.outcome, code, e.platform),
+      describeFallback(info.ruleName, info.outcome, reason, e.platform),
     );
     if (recorded)
       this.#log.info('rule_action_fallback', { evaluationId, commentId: e.commentId, code });

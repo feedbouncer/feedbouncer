@@ -8,7 +8,14 @@ const view = (
   id: string | null,
   name: string | null,
   platform: 'facebook' | 'instagram' = 'instagram',
-) => new CommentView({ body: 'x', platform, authorExternalId: id, authorName: name });
+) =>
+  new CommentView({
+    body: 'x',
+    platform,
+    authorExternalId: id,
+    authorName: name,
+    origin: 'organic',
+  });
 const m = compileAuthorRule(
   authorConditions.parse({
     type: 'author',
@@ -89,6 +96,7 @@ it('never matches facts without a platform', () => {
     platform: null,
     authorExternalId: '123',
     authorName: null,
+    origin: 'organic',
   });
   expect(fb(v, b)).toBeNull();
 });

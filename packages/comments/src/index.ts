@@ -20,3 +20,8 @@ export * from './backfill/settings.js';
 export * from './backfill/store.js';
 export { PgReviewModeReader } from './review-mode.js';
 export * from './reply-state.js';
+export * from './tiktok/polling.js';
+export type { TikTokPollDeps, TikTokPollSettings } from './tiktok/ingest.js';
+export * from './tiktok/poll-organic.js';
+export * from './tiktok/poll-ads.js';
+export * from './tiktok/scheduler.js';

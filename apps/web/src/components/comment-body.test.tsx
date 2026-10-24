@@ -82,6 +82,41 @@ describe('CommentLinks', () => {
   it('uses the platform copy for Facebook', () => {
     expect(links('https://www.facebook.com/1_2', 'facebook')).toContain('View on Facebook');
   });
+
+  const tiktok = (platform: string, sourcePermalink: string | null, id: string) =>
+    renderToStaticMarkup(
+      <CommentLinks
+        platform={platform}
+        permalink={null}
+        mediaExternalId={id}
+        sourcePermalink={sourcePermalink}
+      />,
+    );
+
+  it('links a TikTok comment to its video', () => {
+    const v = 'https://www.tiktok.com/@shop/video/7300000000000000301';
+    const html = tiktok('tiktok', v, '7300000000000000301');
+    expect(html).toContain('<span>On video 7300000000000000301</span>');
+    expect(html).toContain(
+      `<a href="${v}" rel="noopener noreferrer" target="_blank">View on TikTok</a>`,
+    );
+  });
+
+  it('names the ad and links its video; without a usable link only the ad id shows', () => {
+    const v = 'https://www.tiktok.com/@/video/7300000000000000302';
+    const html = tiktok('tiktok_ads', v, '1800000000000000001');
+    expect(html).toContain('<span>Ad 1800000000000000001</span>');
+    expect(html).toContain(
+      `<a href="${v}" rel="noopener noreferrer" target="_blank">Video 7300000000000000302</a>`,
+    );
+    for (const bad of [null, 'https://evil.example/@/video/7300000000000000302']) {
+      const plain = tiktok('tiktok_ads', bad, '1800000000000000001');
+      expect(plain).not.toContain('<a');
+      expect(plain).toContain('Ad 1800000000000000001');
+    }
+    const named = tiktok('tiktok_ads', 'https://www.tiktok.com/@shop/video/1', '18');
+    expect(named).toContain('>Video 1</a>');
+  });
 });
 
 describe('viewOnUrl', () => {
@@ -98,7 +133,7 @@ describe('viewOnUrl', () => {
     ['instagram', 'https://www.instagram.com.evil.example/'],
     ['instagram', 'https://www.facebook.com/1_2'],
     ['facebook', 'https://www.instagram.com/p/abc/'],
-    ['tiktok', 'https://www.tiktok.com/x'],
+    ['youtube', 'https://www.youtube.com/x'],
   ])('rejects %s %s', (platform, url) => {
     expect(viewOnUrl(platform, url)).toBeNull();
   });

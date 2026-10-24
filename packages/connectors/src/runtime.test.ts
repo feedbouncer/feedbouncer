@@ -29,6 +29,8 @@ const bareScope = { organizationId: 'o1', brandId: 'b1', connectionId: 'c2' };
 let refreshTokens: Mock<Connector['refreshTokens']>;
 let directory: MemoryConnectionDirectory;
 let runtime: ConnectorRuntime;
+let baseConnector: Connector;
+let runtimeDeps: ConstructorParameters<typeof ConnectorRuntime>[0];
 let lines: string[];
 let budget: ReturnType<typeof memoryBudget>;
 let vault: MemoryCredentialVault;
@@ -47,7 +49,7 @@ beforeEach(async () => {
     refreshTokenExpiresAt: null,
     scopes: [],
   }));
-  const connector: Connector = {
+  baseConnector = {
     platform: 'youtube',
     capabilities: {
       actions: ['hide', 'unhide', 'delete'],
@@ -72,8 +74,8 @@ beforeEach(async () => {
     act,
   };
   const registry = new ConnectorRegistry();
-  registry.register(connector);
-  const withoutReplies: Connector = { ...connector };
+  registry.register(baseConnector);
+  const withoutReplies: Connector = { ...baseConnector };
   delete withoutReplies.listReplies;
   registry.register({ ...withoutReplies, platform: 'tiktok' });
   directory = new MemoryConnectionDirectory();
@@ -110,7 +112,7 @@ beforeEach(async () => {
       redirectUri: 'https://app.test/cb',
     }),
   });
-  runtime = new ConnectorRuntime({
+  runtimeDeps = {
     registry,
     directory,
     tokens,
@@ -118,7 +120,8 @@ beforeEach(async () => {
     clock,
     log,
     http,
-  });
+  };
+  runtime = new ConnectorRuntime(runtimeDeps);
 });
 
 describe('rate budget key', () => {
@@ -493,5 +496,87 @@ describe('list options', () => {
 
   it('meta_ads is a platform', () => {
     expect(isPlatform('meta_ads')).toBe(true);
+  });
+
+  it('tiktok_ads is a platform', () => {
+    expect(isPlatform('tiktok_ads')).toBe(true);
+  });
+});
+
+describe('missing scopes', () => {
+  it('auth_expired with missingScopes marks oauth_scope_missing without refreshing', async () => {
+    const mark = vi.spyOn(directory, 'markReauthRequired');
+    act.mockRejectedValue(
+      new ConnectorError('auth_expired', 'scope_missing', { missingScopes: ['comment.list'] }),
+    );
+    const c = await runtime.connect(scope);
+    expect(await c.act({ action: 'hide', target: ref })).toMatchObject({
+      status: 'failed',
+      error: { kind: 'auth_expired' },
+    });
+    expect(refreshTokens).not.toHaveBeenCalled();
+    expect(act).toHaveBeenCalledTimes(1);
+    expect(mark).toHaveBeenCalledWith(scope, 'oauth_scope_missing', {
+      missingScopes: ['comment.list'],
+    });
+  });
+});
+
+describe('ConnectionClient.listConnectionComments', () => {
+  const req = {
+    since: new Date('2026-10-01T00:00:00Z'),
+    until: new Date('2026-10-02T00:00:00Z'),
+    page: 1,
+    pageSize: 20,
+  };
+  const source = { externalId: 's1', kind: 'video' as const, permalink: null, active: true };
+  let listConnectionComments: Mock<NonNullable<Connector['listConnectionComments']>>;
+  let connRuntime: ConnectorRuntime;
+
+  beforeEach(async () => {
+    listConnectionComments = vi.fn(async () => ({
+      items: [comment],
+      sources: [source],
+      hasMore: false,
+    }));
+    const registry = new ConnectorRegistry();
+    registry.register({
+      ...baseConnector,
+      capabilities: { ...baseConnector.capabilities, connectionComments: true },
+      listConnectionComments,
+    });
+    connRuntime = new ConnectorRuntime({ ...runtimeDeps, registry });
+  });
+
+  it('runs at the requested priority and returns the page', async () => {
+    const acquire = vi.spyOn(budget, 'acquire').mockResolvedValue({ granted: true });
+    const c = await connRuntime.connect(scope);
+    expect(await c.listConnectionComments(req, { priority: 'background' })).toEqual({
+      items: [comment],
+      sources: [source],
+      hasMore: false,
+    });
+    expect(acquire.mock.calls.at(-1)?.[3]).toBe('background');
+    expect(listConnectionComments.mock.calls.at(-1)?.[1]).toEqual(req);
+  });
+
+  it('rejects items whose source is not in sources', async () => {
+    listConnectionComments.mockResolvedValueOnce({
+      items: [{ ...comment, sourceExternalId: 'other' }],
+      sources: [source],
+      hasMore: false,
+    });
+    const c = await connRuntime.connect(scope);
+    await expect(c.listConnectionComments(req)).rejects.toMatchObject({
+      code: 'invalid_connector_output',
+    });
+  });
+
+  it('is unsupported when the connector does not declare it', async () => {
+    const c = await runtime.connect(scope);
+    await expect(c.listConnectionComments(req)).rejects.toMatchObject({
+      kind: 'unsupported',
+      code: 'list_connection_comments',
+    });
   });
 });

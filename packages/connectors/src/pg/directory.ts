@@ -8,6 +8,7 @@ import {
   type ConnectionDirectory,
   type ConnectionRecord,
   type ConnectionStatus,
+  type ReauthDetail,
   type ReauthReason,
 } from '../ports.js';
 import { reviewModeState } from '../review-mode.js';
@@ -69,8 +70,13 @@ export class PgConnectionDirectory implements ConnectionDirectory {
       : null;
   }
 
-  markReauthRequired(scope: ConnectionScope, reason: ReauthReason): Promise<boolean> {
-    return flagReconnectRequired(this.pool, scope, reason, { reason });
+  markReauthRequired(
+    scope: ConnectionScope,
+    reason: ReauthReason,
+    detail?: ReauthDetail,
+  ): Promise<boolean> {
+    const missing = reason === 'oauth_scope_missing' ? (detail?.missingScopes ?? []) : [];
+    return flagReconnectRequired(this.pool, scope, reason, { reason }, missing);
   }
 
   async upsertPending(i: {
@@ -91,6 +97,8 @@ export class PgConnectionDirectory implements ConnectionDirectory {
                               THEN 'reconnect_required' ELSE connection.status END,
                 status_reason = CASE WHEN connection.status = 'revoked' AND connection.status_reason = 'user_disconnected'
                                      THEN 'oauth_pending' ELSE connection.status_reason END,
+                missing_scopes = CASE WHEN connection.status = 'revoked' AND connection.status_reason = 'user_disconnected'
+                                      THEN '{}' ELSE connection.missing_scopes END,
                 display_name = CASE WHEN connection.status = 'paused'
                                       OR (connection.status = 'revoked' AND connection.status_reason IS DISTINCT FROM 'user_disconnected')
                                     THEN connection.display_name ELSE EXCLUDED.display_name END,
@@ -143,7 +151,7 @@ export class PgConnectionDirectory implements ConnectionDirectory {
               AND status IN ('active', 'reconnect_required', 'error')
               FOR UPDATE)
          UPDATE connection cn
-            SET status = 'active', status_reason = NULL,
+            SET status = 'active', status_reason = NULL, missing_scopes = '{}',
                 review_mode = CASE WHEN prev.first AND $4 THEN 'opted_out' ELSE cn.review_mode END,
                 review_mode_started_at = CASE WHEN prev.first AND NOT $4 THEN now()
                                               ELSE cn.review_mode_started_at END,
@@ -250,7 +258,7 @@ export class PgConnectionDirectory implements ConnectionDirectory {
   async disconnect(scope: ConnectionScope, actorUserId: string | null): Promise<boolean> {
     return withTransaction(this.pool, async (c) => {
       const r = await c.query<{ platform: string }>(
-        `UPDATE connection SET status = 'revoked', status_reason = 'user_disconnected'
+        `UPDATE connection SET status = 'revoked', status_reason = 'user_disconnected', missing_scopes = '{}'
           WHERE id = $3 AND organization_id = $1 AND brand_id = $2
             AND (status <> 'revoked' OR status_reason IS DISTINCT FROM 'user_disconnected')
         RETURNING platform`,

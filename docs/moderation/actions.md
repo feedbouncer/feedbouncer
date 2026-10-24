@@ -276,22 +276,45 @@ evaluation, a classifier or a policy) is left alone and the step is skipped as
 
 ## Platform support
 
-| Step          | Facebook                              | Instagram                                                                           |
-| ------------- | ------------------------------------- | ----------------------------------------------------------------------------------- |
-| Hide          | yes                                   | yes                                                                                 |
-| Delete        | yes                                   | yes                                                                                 |
-| Ban           | yes                                   | no                                                                                  |
-| Auto-reply    | yes (8000 characters)                 | yes (2200 characters, not on hidden comments)                                       |
-| Private reply | yes (7 days, once, `pages_messaging`) | yes (7 days, top-level comments only, 1000 characters, `instagram_manage_messages`) |
-| Flag          | yes                                   | yes                                                                                 |
+| Step          | Facebook                              | Instagram                                                                           | TikTok | TikTok ads |
+| ------------- | ------------------------------------- | ----------------------------------------------------------------------------------- | ------ | ---------- |
+| Hide          | yes                                   | yes                                                                                 | yes\*  | yes\*      |
+| Delete        | yes                                   | yes                                                                                 | yes\*  | yes\*      |
+| Ban           | yes                                   | no                                                                                  | no     | no         |
+| Auto-reply    | yes (8000 characters)                 | yes (2200 characters, not on hidden comments)                                       | yes\*  | yes\*      |
+| Private reply | yes (7 days, once, `pages_messaging`) | yes (7 days, top-level comments only, 1000 characters, `instagram_manage_messages`) | no     | no         |
+| Flag          | yes                                   | yes                                                                                 | yes    | yes        |
+
+\* Unverified against live TikTok. The TikTok connectors implement TikTok's
+documented or expected endpoints, which have not been checked with a real app;
+see [tiktok.md](../connectors/tiktok.md#supported-actions) and
+[tiktok-ads.md](../connectors/tiktok-ads.md#supported-actions).
 
 Meta ads comments follow the Facebook or Instagram connection that owns the
-post: see [meta-ads.md](../connectors/meta-ads.md).
+post: see [meta-ads.md](../connectors/meta-ads.md). TikTok ad comments have
+their own connection, one per advertiser.
 
 A private reply goes out once per comment, within 7 days of the comment being
 posted. See [facebook.md](../connectors/facebook.md) and
 [instagram.md](../connectors/instagram.md) for the permissions each platform
 asks for.
+
+### Steps the platform cannot run
+
+On every platform, a rule step that comes out **not supported** for the
+comment's connection, or that fails with `missing_permission`, flags the
+comment for review. Nothing else is done in its place: FeedBouncer never hides
+a comment because it could not delete it. The decision carries the reason,
+and the review queue explains it:
+
+| Reason                                    | Shown as                                                   |
+| ----------------------------------------- | ---------------------------------------------------------- |
+| `action_not_supported:<platform>:<step>`  | e.g. "TikTok doesn't support ban author; review manually." |
+| `missing_permission:<scope>[,<scope>...]` | e.g. "Missing permission comment.list.manage."             |
+
+A rule can be scoped to organic or ad comments only (**Applies to**), so a step
+an ad connection cannot run need not reach its comments at all; see
+[rules.md](rules.md#applies-to).
 
 ## Permissions
 

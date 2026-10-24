@@ -45,6 +45,8 @@ export interface CommentView {
   isOwnAccount: boolean;
   /** The media or post the comment is on (the platform's id). */
   mediaExternalId: string;
+  /** Link to that post, video or ad, when its connector gave one. */
+  sourcePermalink: string | null;
   /** What a person may do with this comment now, computed here with the same rules POST actions applies. */
   availability: Record<ActionKind, ActionAvailability>;
   /** Where the comment was found: on an ad post or an organic post. */
@@ -113,6 +115,7 @@ const toView = (
   permalink: c.permalink,
   isOwnAccount: c.isOwnAccount,
   mediaExternalId: c.sourceExternalId,
+  sourcePermalink: c.sourcePermalink,
   origin: c.origin,
   ads: c.ads.map((a) => ({ adId: a.adId, adAccountId: a.adAccountId })),
   availability: availability(c, caps, now, mayReply),

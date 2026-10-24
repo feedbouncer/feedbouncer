@@ -23,7 +23,13 @@ vi.mock('./normalize.js', async (orig) => {
 });
 
 const facts = (body: string) =>
-  ({ body, platform: 'facebook', authorExternalId: null, authorName: null }) as const;
+  ({
+    body,
+    platform: 'facebook',
+    authorExternalId: null,
+    authorName: null,
+    origin: 'organic',
+  }) as const;
 
 beforeEach(() => vi.clearAllMocks());
 

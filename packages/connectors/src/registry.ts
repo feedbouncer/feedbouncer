@@ -45,6 +45,16 @@ export function validateConnector(c: Connector): void {
   if (k.recentSources !== (typeof c.listRecentSources === 'function'))
     fail('capabilities.recentSources');
   if ((k.adLookup ?? false) !== (typeof c.lookupAd === 'function')) fail('capabilities.adLookup');
+  if ((k.connectionComments ?? false) !== (typeof c.listConnectionComments === 'function'))
+    fail('capabilities.connectionComments');
+  if (k.accountIdPattern !== undefined && !(k.accountIdPattern instanceof RegExp))
+    fail('capabilities.accountIdPattern');
+  if (
+    k.oauthCodeParam !== undefined &&
+    k.oauthCodeParam !== 'code' &&
+    k.oauthCodeParam !== 'auth_code'
+  )
+    fail('capabilities.oauthCodeParam');
   const wantsWebhook = k.ingestion !== 'polling';
   if (wantsWebhook !== (c.webhook !== undefined)) fail('webhook');
   if (k.requiredScopes !== undefined && !k.requiredScopes.every((s) => k.defaultScopes.includes(s)))

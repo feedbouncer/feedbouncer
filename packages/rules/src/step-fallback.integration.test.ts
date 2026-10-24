@@ -183,15 +183,42 @@ describe('RuleStepFallback', () => {
     expect(await decisions(s.commentId)).toHaveLength(1);
   });
 
-  it('ignores steps that went well, other step types and other statuses', async () => {
+  it('ignores steps that went well, other failures of other step types and other statuses', async () => {
     const s = await seed();
     await fallback.onStepSettled(settled(s, { status: 'succeeded' }));
     await fallback.onStepSettled(settled(s, { status: 'skipped', reason: 'already_hidden' }));
     await fallback.onStepSettled(settled(s, { type: 'ban', status: 'failed' }));
-    await fallback.onStepSettled(settled(s, { type: 'auto_reply', status: 'not_supported' }));
+    await fallback.onStepSettled(settled(s, { type: 'auto_reply', reason: 'rate_limited' }));
     await fallback.onStepSettled(settled(s, { type: 'flag_for_review', status: 'failed' }));
     expect((await fellBack(s.evaluationId)).fell_back).toBe(false);
     expect(await decisions(s.commentId)).toHaveLength(1);
+  });
+
+  it('an unsupported reply step flags the comment for review instead of being skipped', async () => {
+    const s = await seed();
+    await fallback.onStepSettled(
+      settled(s, { type: 'auto_reply', status: 'not_supported', reason: 'unsupported' }),
+    );
+    expect((await fellBack(s.evaluationId)).fallback_code).toBe('unsupported');
+    const ds = await decisions(s.commentId);
+    expect(ds.map((d) => d.outcome)).toEqual(['hide', 'flag']);
+    expect(ds[1]!.reason).toContain('(action_not_supported:facebook:auto_reply)');
+    expect(await reviewItems(s.commentId)).toEqual([{ source: 'rule', status: 'open' }]);
+  });
+
+  it('a step missing a permission names the scope in the review reason', async () => {
+    const s = await seed();
+    await fallback.onStepSettled(
+      settled(s, {
+        type: 'private_reply',
+        reason: 'missing_permission',
+        missingScopes: ['pages_messaging'],
+      }),
+    );
+    expect((await fellBack(s.evaluationId)).fallback_code).toBe('missing_permission');
+    expect((await decisions(s.commentId))[1]!.reason).toContain(
+      '(missing_permission:pages_messaging)',
+    );
   });
 
   it('does not act on an evaluation of another brand', async () => {

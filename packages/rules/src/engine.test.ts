@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compileRuleSet, evaluate } from './engine.js';
 import type { ActionStep } from '@feedbouncer/actions';
-import type { RuleAction, RuleRecord } from './types.js';
+import { ruleApplies, type CommentFacts, type RuleAction, type RuleRecord } from './types.js';
 
 const STEPS: Record<RuleAction, ActionStep[]> = {
   approve: [],
@@ -20,14 +20,16 @@ const rec = (conditions: unknown, over: Partial<RuleRecord> = {}): RuleRecord =>
   mode: 'enforce',
   priority: n * 10,
   enabled: true,
+  appliesTo: 'all',
   createdAt: new Date(0),
   ...over,
 });
-const facts = (body: string, over = {}) => ({
+const facts = (body: string, over: Partial<CommentFacts> = {}): CommentFacts => ({
   body,
-  platform: 'instagram' as const,
+  platform: 'instagram',
   authorExternalId: '42',
   authorName: 'someone',
+  origin: 'organic',
   ...over,
 });
 const ctx = { ownDomains: ['example.com'] };
@@ -157,5 +159,44 @@ describe('evaluate', () => {
     const x = rec({ type: 'keyword', terms: ['a'] }, { priority: 5, createdAt: new Date(2) });
     const y = rec({ type: 'keyword', terms: ['a'] }, { priority: 5, createdAt: new Date(1) });
     expect(evaluate(compileRuleSet([x, y], ctx, 'v'), facts('a')).decided?.ruleId).toBe(y.id);
+  });
+
+  it('a rule scoped to ad does not match an organic comment and vice versa; all matches both', () => {
+    const ad = rec({ type: 'keyword', terms: ['spam'] }, { appliesTo: 'ad' });
+    const organic = rec({ type: 'keyword', terms: ['spam'] }, { appliesTo: 'organic' });
+    const all = rec({ type: 'keyword', terms: ['spam'] }, { appliesTo: 'all' });
+    const decided = (r: RuleRecord, origin: CommentFacts['origin']) =>
+      evaluate(compileRuleSet([r], ctx, 'v'), facts('spam', { origin })).decided?.ruleId ?? null;
+    expect(decided(ad, 'organic')).toBeNull();
+    expect(decided(ad, 'ad')).toBe(ad.id);
+    expect(decided(organic, 'ad')).toBeNull();
+    expect(decided(organic, 'organic')).toBe(organic.id);
+    expect(decided(all, 'ad')).toBe(all.id);
+    expect(decided(all, 'organic')).toBe(all.id);
+    const v = evaluate(compileRuleSet([ad, all], ctx, 'v'), facts('spam'));
+    expect(v.decided?.ruleId).toBe(all.id);
+    expect(v.trace.map((t) => t.ruleId)).toEqual([all.id]);
+    expect(ruleApplies({ appliesTo: 'ad' }, { origin: 'ad' })).toBe(true);
+    expect(ruleApplies({ appliesTo: 'organic' }, { origin: 'ad' })).toBe(false);
+  });
+  it('emoji and non-latin comments flow through rules', () => {
+    const keywordRule = (term: string) => rec({ type: 'keyword', terms: [term] });
+    const emojiRule = (emoji: string[]) => rec({ type: 'emoji', emoji, maxCount: null });
+    const factsFor = (o: Pick<CommentFacts, 'body' | 'origin'> & Partial<CommentFacts>) =>
+      facts(o.body, o);
+    const run = (rules: RuleRecord[], f: CommentFacts) => {
+      const v = evaluate(compileRuleSet(rules, ctx, 'v'), f);
+      return { ...v, matched: v.decided !== null };
+    };
+    for (const body of ['🔥🔥🔥', '👨‍👩‍👧', 'مرحبا بكم', '你好世界', 'éé']) {
+      const f = factsFor({ body, platform: 'tiktok', origin: 'organic' });
+      expect(() => run([keywordRule('scam'), emojiRule(['🔥'])], f)).not.toThrow();
+    }
+    expect(
+      run([keywordRule('scam')], factsFor({ body: '🔥🔥🔥', origin: 'organic' })).matched,
+    ).toBe(false);
+    expect(run([emojiRule(['🔥'])], factsFor({ body: '🔥🔥🔥', origin: 'organic' })).matched).toBe(
+      true,
+    );
   });
 });

@@ -1,7 +1,7 @@
 import type { ConnectorErrorInfo } from './errors.js';
 
 // Mirrors connection_platform_check (migration 20261011000100_tenancy; meta_ads added by
-// 20261015000100_meta_ads).
+// 20261015000100_meta_ads; tiktok_ads by 20261024000100_tiktok).
 export const PLATFORMS = [
   'facebook',
   'instagram',
@@ -12,6 +12,7 @@ export const PLATFORMS = [
   'x',
   'bluesky',
   'meta_ads',
+  'tiktok_ads',
 ] as const;
 export type Platform = (typeof PLATFORMS)[number];
 export const isPlatform = (v: unknown): v is Platform =>
@@ -56,6 +57,8 @@ export interface NormalizedComment {
   readonly postedAt: Date;
   readonly platformState: PlatformState;
   readonly permalink: string | null;
+  /** Direct replies on this comment, when the platform reports it. */
+  readonly replyCount?: number | undefined;
 }
 export type AdPlacementPlatform = 'facebook' | 'instagram';
 export type AdUnresolvedReason =
@@ -93,6 +96,8 @@ export interface NormalizedSource {
   readonly kind: SourceKind;
   readonly permalink: string | null;
   readonly active: boolean;
+  /** When the platform says the source was published, if it says so. */
+  readonly postedAt?: Date | undefined;
   /** Set by ad connectors: the ad this source stands for. */
   readonly ad?: AdSourceInfo | undefined;
 }
@@ -210,6 +215,14 @@ export interface ConnectorCapabilities {
   readonly actionScopes?: Readonly<
     Partial<Record<ModerationAction | ResponseKind, readonly string[]>>
   >;
+  /** Pattern for account ids from `listAccounts` and in connect requests. Default: Graph ids. */
+  readonly accountIdPattern?: RegExp;
+  /** Query parameter carrying the authorization code on the callback. Default `code`. */
+  readonly oauthCodeParam?: 'code' | 'auth_code';
+  /** Implements listConnectionComments (every comment of the connection, not per source). Default false. */
+  readonly connectionComments?: boolean;
+  /** getComment only searches recent comments, so its null does not mean deleted. Default false. */
+  readonly partialCommentLookup?: boolean;
   /** 1..500 */
   readonly maxPageSize: number;
 }

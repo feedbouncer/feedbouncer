@@ -8,6 +8,7 @@ import type {
   ConnectionDirectory,
   ConnectionRecord,
   Platform,
+  ReauthDetail,
   ReauthReason,
 } from '@feedbouncer/connectors';
 import { renderReconnectRequired, type Mailer } from '@feedbouncer/mailer';
@@ -28,6 +29,7 @@ const PLATFORM_LABELS: Record<Platform, string> = {
   x: 'X account',
   bluesky: 'Bluesky account',
   meta_ads: 'Meta ad account',
+  tiktok_ads: 'TikTok ad account',
 };
 
 export class EmailReconnectNotifier implements ReconnectNotifier {
@@ -80,8 +82,12 @@ export class NotifyingConnectionDirectory implements ConnectionDirectory {
     return this.inner.load(scope);
   }
 
-  async markReauthRequired(scope: ConnectionScope, reason: ReauthReason): Promise<boolean> {
-    const flagged = await this.inner.markReauthRequired(scope, reason);
+  async markReauthRequired(
+    scope: ConnectionScope,
+    reason: ReauthReason,
+    detail?: ReauthDetail,
+  ): Promise<boolean> {
+    const flagged = await this.inner.markReauthRequired(scope, reason, detail);
     if (flagged) {
       const failed = (err: unknown) =>
         this.log.warn('notification.reconnect_failed', {

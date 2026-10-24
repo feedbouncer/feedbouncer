@@ -77,3 +77,22 @@ describe('ConnectorError.errorClass', () => {
     expect(new ConnectorError(kind, 'x_code', { reauthorize }).errorClass).toBe(cls);
   });
 });
+
+describe('ConnectorError.missingScopes', () => {
+  it('keeps well-formed scope names, drops the rest and caps at 20', () => {
+    const many = Array.from({ length: 25 }, (_, i) => `scope.${i}`);
+    const e = new ConnectorError('auth_expired', 'x_code', {
+      missingScopes: ['comment.list', 'Bad Scope', 'a'.repeat(65), '', ...many],
+    });
+    expect(e.missingScopes).toHaveLength(20);
+    expect(e.missingScopes?.[0]).toBe('comment.list');
+    expect(e.missingScopes).not.toContain('Bad Scope');
+  });
+
+  it('is undefined when absent or when nothing valid remains', () => {
+    expect(new ConnectorError('auth_expired', 'x_code').missingScopes).toBeUndefined();
+    expect(
+      new ConnectorError('auth_expired', 'x_code', { missingScopes: ['No Good'] }).missingScopes,
+    ).toBeUndefined();
+  });
+});

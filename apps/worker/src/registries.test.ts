@@ -32,6 +32,8 @@ vi.mock('@feedbouncer/comments', async (importOriginal) => {
     executeActionJob: vi.fn(actual.executeActionJob),
     ingestCommentJob: vi.fn(actual.ingestCommentJob),
     adPollJob: vi.fn(actual.adPollJob),
+    tiktokPollJob: vi.fn(actual.tiktokPollJob),
+    tiktokAdsPollJob: vi.fn(actual.tiktokAdsPollJob),
   };
 });
 
@@ -84,6 +86,59 @@ describe('buildConnectorRegistry', () => {
         .slice()
         .sort(),
     ).toEqual(['facebook', 'instagram']);
+  });
+});
+
+describe('tiktok', () => {
+  const tiktok = { appId: '7300000000000001', appSecret: new Secret('tiktok-secret-0123456789') };
+  const settings = { pollIntervalSec: 300 } as comments.TikTokPollSettings;
+
+  it('tiktok connectors and jobs register without Facebook config', () => {
+    const connectors = buildConnectorRegistry({
+      facebook: null,
+      instagram: null,
+      metaAds: null,
+      tiktok,
+      tiktokAds: tiktok,
+    });
+    expect(connectors.platforms().sort()).toEqual(['tiktok', 'tiktok_ads']);
+    const jobs = buildJobRegistry({
+      ...fakeDeps,
+      tiktok: { settings, platforms: ['tiktok', 'tiktok_ads'] },
+    });
+    expect(jobs.supports('tiktok_poll', 'tiktok')).toBe(true);
+    expect(jobs.supports('tiktok_ads_poll', 'tiktok_ads')).toBe(true);
+    expect(jobs.supports('tiktok_poll', 'tiktok_ads')).toBe(false);
+  });
+  it('registers each poll job only for its enabled platform', () => {
+    const jobs = buildJobRegistry({ ...fakeDeps, tiktok: { settings, platforms: ['tiktok_ads'] } });
+    expect(jobs.supports('tiktok_ads_poll', 'tiktok_ads')).toBe(true);
+    expect(jobs.get('tiktok_poll')).toBeUndefined();
+    expect(
+      buildConnectorRegistry({
+        facebook: null,
+        instagram: null,
+        metaAds: null,
+        tiktokAds: tiktok,
+      }).platforms(),
+    ).toEqual(['tiktok_ads']);
+  });
+  it('no tiktok env → no tiktok jobs, Meta unchanged', () => {
+    const connectors = buildConnectorRegistry({ facebook: cfg, instagram: null, metaAds: null });
+    expect(connectors.platforms()).toEqual(['facebook']);
+    const jobs = buildJobRegistry(fakeDeps);
+    expect(jobs.get('tiktok_poll')).toBeUndefined();
+    expect(jobs.get('tiktok_ads_poll')).toBeUndefined();
+    expect(jobs.supports('comment_ingest', 'facebook')).toBe(true);
+  });
+  it('gives both poll jobs the same applied hook as ingest', () => {
+    const tiktokPoll = vi.mocked(comments.tiktokPollJob);
+    const tiktokAdsPoll = vi.mocked(comments.tiktokAdsPollJob);
+    buildJobRegistry({ ...fakeDeps, tiktok: { settings, platforms: ['tiktok', 'tiktok_ads'] } });
+    for (const spy of [tiktokPoll, tiktokAdsPoll]) {
+      expect(spy.mock.calls.at(-1)![0].applied).toBeInstanceOf(RuleTrigger);
+      expect(spy.mock.calls.at(-1)![0].settings).toBe(settings);
+    }
   });
 });
 
@@ -172,6 +227,16 @@ describe('action runs wiring', () => {
     const jobs = buildJobRegistry(fakeDeps);
     expect(jobs.supports('action_run_advance', 'facebook')).toBe(true);
     expect(jobs.supports('action_run_advance', 'instagram')).toBe(true);
+  });
+  it('registers suggestion_bulk_apply for tiktok and tiktok_ads, so bulk review works there', () => {
+    const jobs = buildJobRegistry(fakeDeps);
+    expect(jobs.supports('suggestion_bulk_apply', 'tiktok')).toBe(true);
+    expect(jobs.supports('suggestion_bulk_apply', 'tiktok_ads')).toBe(true);
+  });
+  it('registers action_run_advance for tiktok and tiktok_ads, so rule steps on their comments run', () => {
+    const jobs = buildJobRegistry(fakeDeps);
+    expect(jobs.supports('action_run_advance', 'tiktok')).toBe(true);
+    expect(jobs.supports('action_run_advance', 'tiktok_ads')).toBe(true);
   });
   it('wakes runs from platform action outcomes', async () => {
     vi.mocked(comments.executeActionJob).mockClear();

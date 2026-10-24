@@ -35,6 +35,7 @@ export function toRecords(ex: WorkedExampleData): RuleRecord[] {
       mode: rule.mode,
       priority: raw.priority,
       enabled: true,
+      appliesTo: rule.appliesTo,
       createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, i)),
     };
   });
@@ -46,5 +47,6 @@ export function toFacts(comment: WorkedExampleData['comment']): CommentFacts {
     platform: 'facebook',
     authorExternalId: comment.authorExternalId ?? null,
     authorName: comment.authorHandle ?? null,
+    origin: 'organic',
   };
 }

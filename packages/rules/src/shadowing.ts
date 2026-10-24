@@ -13,7 +13,7 @@ import { emojiKey } from './emoji.js';
 import { ruleOrder } from './engine.js';
 import { compileKeywords, type KeywordMatcher } from './matchers/keywords.js';
 import { hasUnspacedScript, normalizeText, words } from './normalize.js';
-import type { RuleMode } from './types.js';
+import { scopeCovers, type RuleAppliesTo, type RuleMode } from './types.js';
 
 export interface AnalyzableRule {
   id: string;
@@ -22,6 +22,7 @@ export interface AnalyzableRule {
   mode: RuleMode;
   enabled: boolean;
   priority: number;
+  appliesTo: RuleAppliesTo;
   createdAt: Date;
 }
 
@@ -197,6 +198,7 @@ export function analyzeRules(rules: readonly AnalyzableRule[]): Map<string, Rule
       for (let j = 0; j < i; j++) {
         const A = ordered[j]!;
         if (!A.conditions || !A.rule.enabled || A.rule.mode !== 'enforce') continue;
+        if (!scopeCovers(A.rule.appliesTo, B.rule.appliesTo)) continue;
         if (covers(A, B)) {
           shadowedBy = A.rule.id;
           break;

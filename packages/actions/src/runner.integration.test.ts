@@ -880,6 +880,9 @@ describe('action runner', () => {
     const run = await start([DM]);
     await queue.drain();
     expect(await outcome(run.id, 'private_reply')).toEqual(['failed', 'missing_permission']);
+    expect(settledEvents).toMatchObject([
+      { type: 'private_reply', status: 'failed', missingScopes: ['pages_messaging'] },
+    ]);
     expect(graph.calls().length).toBe(calls);
     expect(await actionsOf(seeded.id)).toEqual([]);
   });

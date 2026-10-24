@@ -66,6 +66,10 @@ export class OAuthConnectService {
     return this.deps.connectors!.registry.require(platform).capabilities;
   }
 
+  accountIdPattern(platform: Platform): RegExp | undefined {
+    return this.#capabilities(platform).accountIdPattern;
+  }
+
   async #actor(org: OrgContext, brandId: unknown): Promise<OAuthActor> {
     const brand = await requireBrand(this.deps.pool, org, brandId);
     return { ...brand, userId: org.actorUserId };

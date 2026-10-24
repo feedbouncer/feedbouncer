@@ -8,7 +8,7 @@ import {
   type RulePatch,
 } from './conditions.js';
 import { ruleOrder } from './engine.js';
-import type { RuleAction, RuleKind, RuleMode, RuleRecord } from './types.js';
+import type { RuleAction, RuleAppliesTo, RuleKind, RuleMode, RuleRecord } from './types.js';
 
 export type { BrandScope };
 
@@ -23,6 +23,7 @@ export interface StoredRule {
   mode: RuleMode;
   enabled: boolean;
   priority: number;
+  appliesTo: RuleAppliesTo;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -61,7 +62,7 @@ export class DomainLimitError extends Error {
   }
 }
 
-const COLS = `id, name, kind, conditions, action, actions, mode, enabled, priority, created_at, updated_at`;
+const COLS = `id, name, kind, conditions, action, actions, mode, enabled, priority, applies_to, created_at, updated_at`;
 const ORDER = `ORDER BY priority, created_at, id`;
 
 /** Per-brand revision counter, bumped by database triggers on every rule and own-domain write. */
@@ -98,6 +99,7 @@ interface RuleRow {
   mode: RuleMode;
   enabled: boolean;
   priority: number;
+  applies_to: RuleAppliesTo;
   created_at: Date;
   updated_at: Date;
 }
@@ -111,6 +113,7 @@ const toRule = (r: RuleRow): StoredRule => ({
   mode: r.mode,
   enabled: r.enabled,
   priority: r.priority,
+  appliesTo: r.applies_to,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -166,10 +169,11 @@ export class PgRuleStore {
     );
     if ((counted[0]?.n ?? 0) >= MAX_RULES_PER_BRAND) throw new RuleLimitError();
     const { rows } = await tx.query<RuleRow>(
-      `INSERT INTO rule (organization_id, brand_id, name, conditions, action, actions, mode, enabled, priority)
+      `INSERT INTO rule (organization_id, brand_id, name, conditions, action, actions, mode, enabled, priority, applies_to)
        SELECT $1, $2, $3, $4::jsonb, $5, $6::jsonb, $7, $8,
               COALESCE((SELECT max(priority) FROM rule
-                         WHERE organization_id = $1 AND brand_id = $2 AND archived_at IS NULL), 0) + 10
+                         WHERE organization_id = $1 AND brand_id = $2 AND archived_at IS NULL), 0) + 10,
+              $9
        RETURNING ${COLS}`,
       [
         scope.organizationId,
@@ -180,6 +184,7 @@ export class PgRuleStore {
         JSON.stringify(input.actions),
         input.mode,
         input.enabled,
+        input.appliesTo,
       ],
     );
     return toRule(rows[0]!);
@@ -207,6 +212,7 @@ export class PgRuleStore {
       actions: patch.actions ?? row.actions,
       mode: patch.mode ?? row.mode,
       enabled: patch.enabled ?? row.enabled,
+      appliesTo: patch.appliesTo ?? row.applies_to,
     };
     let conditions: unknown = row.conditions;
     if (patch.conditions !== undefined || patch.actions !== undefined) {
@@ -217,7 +223,8 @@ export class PgRuleStore {
       conditions = parsed.data;
     }
     const { rows } = await tx.query<RuleRow>(
-      `UPDATE rule SET name = $4, conditions = $5::jsonb, action = $6, actions = $7::jsonb, mode = $8, enabled = $9
+      `UPDATE rule SET name = $4, conditions = $5::jsonb, action = $6, actions = $7::jsonb, mode = $8, enabled = $9,
+                       applies_to = $10
         WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND archived_at IS NULL
         RETURNING ${COLS}`,
       [
@@ -230,6 +237,7 @@ export class PgRuleStore {
         JSON.stringify(merged.actions),
         merged.mode,
         merged.enabled,
+        merged.appliesTo,
       ],
     );
     return rows[0] ? toRule(rows[0]) : null;
@@ -398,6 +406,7 @@ export class PgRuleStore {
           mode: r.mode,
           priority: r.priority,
           enabled: r.enabled,
+          appliesTo: r.applies_to,
           createdAt: r.created_at,
         })),
         ownDomains: doms.rows.map((d) => d.domain),

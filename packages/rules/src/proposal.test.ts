@@ -16,6 +16,7 @@ const rec = (over: Partial<RuleRecord> = {}): RuleRecord => ({
   mode: 'enforce',
   priority: n * 10,
   enabled: true,
+  appliesTo: 'all',
   createdAt: new Date(0),
   ...over,
 });
@@ -27,7 +28,7 @@ describe('validateRuleProposal create', () => {
     expect(validateRuleProposal({ operation: 'create', rule: valid }, [])).toEqual({
       ok: true,
       before: null,
-      after: { ...valid, mode: 'suggest', enabled: true },
+      after: { ...valid, mode: 'suggest', enabled: true, appliesTo: 'all' },
       warnings: [],
     });
   });
@@ -81,6 +82,37 @@ describe('validateRuleProposal create', () => {
         ruleId: existing.id,
       },
     );
+  });
+  it('allows a twin rule whose scope does not overlap', () => {
+    const organic = rec({ appliesTo: 'organic' });
+    const adFlag = { ...valid, conditions: kw('crypto giveaway'), appliesTo: 'ad' };
+    expect(validateRuleProposal({ operation: 'create', rule: adFlag }, [organic])).toMatchObject({
+      ok: true,
+    });
+    const conflict = { ...adFlag, actions: [{ type: 'flag_for_review' }] };
+    expect(validateRuleProposal({ operation: 'create', rule: conflict }, [organic])).toMatchObject({
+      ok: true,
+    });
+  });
+  it('still rejects twins whose scopes overlap', () => {
+    const twin = { ...valid, conditions: kw('crypto giveaway') };
+    for (const [stored, proposed] of [
+      ['all', 'ad'],
+      ['ad', 'all'],
+      ['organic', 'organic'],
+    ] as const) {
+      const r = rec({ appliesTo: stored });
+      const dup = { ...twin, appliesTo: proposed };
+      expect(validateRuleProposal({ operation: 'create', rule: dup }, [r])).toMatchObject({
+        reason: 'duplicate_of_rule',
+        ruleId: r.id,
+      });
+      const conflict = { ...dup, actions: [{ type: 'flag_for_review' }] };
+      expect(validateRuleProposal({ operation: 'create', rule: conflict }, [r])).toMatchObject({
+        reason: 'conflicts_with_rule',
+        ruleId: r.id,
+      });
+    }
   });
   it('rejects when the brand is at the rule limit', () => {
     const all = Array.from({ length: MAX_RULES_PER_BRAND }, () => rec());
@@ -217,6 +249,7 @@ describe('ruleDiff', () => {
     actions: hide,
     mode: 'enforce',
     enabled: true,
+    appliesTo: 'all',
   };
   it('lists changed fields only', () => {
     expect(ruleDiff(before, { ...before, enabled: false })).toEqual([
@@ -230,7 +263,8 @@ describe('ruleDiff', () => {
       'actions',
       'mode',
       'enabled',
+      'appliesTo',
     ]);
-    expect(ruleDiff(before, null)).toHaveLength(5);
+    expect(ruleDiff(before, null)).toHaveLength(6);
   });
 });

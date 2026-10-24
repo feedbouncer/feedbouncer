@@ -43,6 +43,16 @@ x-facebook-env: &facebook-env
   META_ADS_CONNECTOR_ENABLED: ${META_ADS_CONNECTOR_ENABLED:-}
   META_ADS_ACTIVE_STATUSES: ${META_ADS_ACTIVE_STATUSES:-}
 
+# TikTok connectors. No defaults: with the *_CONNECTOR_ENABLED flag unset the connector is off.
+# The ads credentials fall back to the TIKTOK_APP_ID / TIKTOK_APP_SECRET pair when empty.
+x-tiktok-env: &tiktok-env
+  TIKTOK_CONNECTOR_ENABLED: ${TIKTOK_CONNECTOR_ENABLED:-}
+  TIKTOK_APP_ID: ${TIKTOK_APP_ID:-}
+  TIKTOK_APP_SECRET: ${TIKTOK_APP_SECRET:-}
+  TIKTOK_ADS_CONNECTOR_ENABLED: ${TIKTOK_ADS_CONNECTOR_ENABLED:-}
+  TIKTOK_ADS_APP_ID: ${TIKTOK_ADS_APP_ID:-}
+  TIKTOK_ADS_APP_SECRET: ${TIKTOK_ADS_APP_SECRET:-}
+
 x-node-service: &node-service
   init: true
   restart: on-failure:3
@@ -153,7 +163,7 @@ services:
       dockerfile: apps/api/Dockerfile
       target: dev
     environment:
-      <<: [*backend-env, *secrets-env, *facebook-env, *alerts-env]
+      <<: [*backend-env, *secrets-env, *facebook-env, *tiktok-env, *alerts-env]
       # tsx watch gets no file events through Docker Desktop bind mounts.
       CHOKIDAR_USEPOLLING: '1'
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is not set - copy .env.example to .env}
@@ -204,6 +214,9 @@ services:
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro
       - ./packages/connector-meta-ads/src:/repo/packages/connector-meta-ads/src:ro
+      - ./packages/connector-tiktok/src:/repo/packages/connector-tiktok/src:ro
+      - ./packages/connector-tiktok-ads/src:/repo/packages/connector-tiktok-ads/src:ro
+      - ./packages/tiktok-business-api/src:/repo/packages/tiktok-business-api/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
       - ./packages/observability/src:/repo/packages/observability/src:ro
@@ -241,7 +254,7 @@ services:
       dockerfile: apps/worker/Dockerfile
       target: dev
     environment:
-      <<: [*backend-env, *secrets-env, *facebook-env, *alerts-env]
+      <<: [*backend-env, *secrets-env, *facebook-env, *tiktok-env, *alerts-env]
       CHOKIDAR_USEPOLLING: '1'
       # Reconnect notices go to the dev mail sink; links and the OAuth redirect
       # URI are built from PUBLIC_WEB_URL, which must match the api's.
@@ -283,6 +296,20 @@ services:
       AD_IG_DEEP_SCAN_INTERVAL_SEC: ${AD_IG_DEEP_SCAN_INTERVAL_SEC:-}
       AD_SCHEDULER_TICK_SEC: ${AD_SCHEDULER_TICK_SEC:-}
       AD_SCHEDULER_MAX_CONNECTIONS_PER_TICK: ${AD_SCHEDULER_MAX_CONNECTIONS_PER_TICK:-}
+      # TikTok comment polling; empty means the default (.env.example).
+      TIKTOK_POLL_INTERVAL_SEC: ${TIKTOK_POLL_INTERVAL_SEC:-}
+      TIKTOK_QUIET_VIDEO_POLL_INTERVAL_SEC: ${TIKTOK_QUIET_VIDEO_POLL_INTERVAL_SEC:-}
+      TIKTOK_ACTIVE_VIDEO_DAYS: ${TIKTOK_ACTIVE_VIDEO_DAYS:-}
+      TIKTOK_VIDEO_DISCOVERY_INTERVAL_SEC: ${TIKTOK_VIDEO_DISCOVERY_INTERVAL_SEC:-}
+      TIKTOK_DEEP_SCAN_INTERVAL_SEC: ${TIKTOK_DEEP_SCAN_INTERVAL_SEC:-}
+      TIKTOK_SOURCE_UNAVAILABLE_RETRY_SEC: ${TIKTOK_SOURCE_UNAVAILABLE_RETRY_SEC:-}
+      TIKTOK_MAX_SOURCES_PER_JOB: ${TIKTOK_MAX_SOURCES_PER_JOB:-}
+      TIKTOK_ADS_POLL_INTERVAL_SEC: ${TIKTOK_ADS_POLL_INTERVAL_SEC:-}
+      TIKTOK_ADS_POLL_OVERLAP_SEC: ${TIKTOK_ADS_POLL_OVERLAP_SEC:-}
+      TIKTOK_ADS_FULL_SCAN_INTERVAL_SEC: ${TIKTOK_ADS_FULL_SCAN_INTERVAL_SEC:-}
+      TIKTOK_MAX_PAGES_PER_JOB: ${TIKTOK_MAX_PAGES_PER_JOB:-}
+      TIKTOK_SCHEDULER_TICK_SEC: ${TIKTOK_SCHEDULER_TICK_SEC:-}
+      TIKTOK_SCHEDULER_MAX_CONNECTIONS_PER_TICK: ${TIKTOK_SCHEDULER_MAX_CONNECTIONS_PER_TICK:-}
       # Free ad-comment scan; empty means the default (docs/self-hosting/meta-app.md).
       SCAN_TOOL_ENABLED: ${SCAN_TOOL_ENABLED:-}
       SCAN_MAX_COMMENTS: ${SCAN_MAX_COMMENTS:-}
@@ -322,6 +349,9 @@ services:
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro
       - ./packages/connector-meta-ads/src:/repo/packages/connector-meta-ads/src:ro
+      - ./packages/connector-tiktok/src:/repo/packages/connector-tiktok/src:ro
+      - ./packages/connector-tiktok-ads/src:/repo/packages/connector-tiktok-ads/src:ro
+      - ./packages/tiktok-business-api/src:/repo/packages/tiktok-business-api/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
       - ./packages/mailer/src:/repo/packages/mailer/src:ro

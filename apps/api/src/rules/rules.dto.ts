@@ -1,6 +1,6 @@
 import { domainToUnicode } from 'node:url';
 import type { ActionStep, StepWarning } from '@feedbouncer/actions';
-import type { RuleAction, RuleKind, RuleMode } from '@feedbouncer/rules';
+import type { RuleAction, RuleAppliesTo, RuleKind, RuleMode } from '@feedbouncer/rules';
 
 export interface RuleDto {
   id: string;
@@ -12,6 +12,8 @@ export interface RuleDto {
   actions: ActionStep[];
   mode: RuleMode;
   enabled: boolean;
+  /** Which comments the rule sees, by origin. */
+  appliesTo: RuleAppliesTo;
   /** 1-based place in evaluation order. */
   position: number;
   createdAt: string;

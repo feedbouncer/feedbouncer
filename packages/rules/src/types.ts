@@ -21,6 +21,8 @@ export const RULE_KINDS = [
   'competitor',
 ] as const;
 export type RuleKind = (typeof RULE_KINDS)[number];
+export const RULE_APPLIES_TO = ['all', 'organic', 'ad'] as const;
+export type RuleAppliesTo = (typeof RULE_APPLIES_TO)[number];
 
 /** A rule row as loaded from Postgres; `conditions` is unvalidated JSON until compiled. */
 export interface RuleRecord {
@@ -32,6 +34,7 @@ export interface RuleRecord {
   mode: RuleMode;
   priority: number;
   enabled: boolean;
+  readonly appliesTo: RuleAppliesTo;
   createdAt: Date;
 }
 
@@ -40,7 +43,21 @@ export interface CommentFacts {
   platform: Platform | null;
   authorExternalId: string | null;
   authorName: string | null;
+  readonly origin: 'organic' | 'ad';
 }
+
+export function ruleApplies(
+  rule: Pick<RuleRecord, 'appliesTo'>,
+  facts: Pick<CommentFacts, 'origin'>,
+): boolean {
+  return rule.appliesTo === 'all' || rule.appliesTo === facts.origin;
+}
+
+/** Every comment a rule scoped `b` sees is also seen by one scoped `a`. */
+export const scopeCovers = (a: RuleAppliesTo, b: RuleAppliesTo): boolean => a === 'all' || a === b;
+/** Some comment is seen by rules of both scopes ('organic' and 'ad' never meet). */
+export const scopesOverlap = (a: RuleAppliesTo, b: RuleAppliesTo): boolean =>
+  scopeCovers(a, b) || scopeCovers(b, a);
 
 export interface BrandContext {
   /** ASCII (punycode) lower-case registrable or full host names, e.g. "example.com". */

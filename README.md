@@ -4,7 +4,7 @@ FeedBouncer is an open-source comment firewall and inbox for brands that run soc
 
 ## Project status
 
-**Pre-alpha. Not for production use.** The foundations are in place: workspace and CI, data model and migrations, sign-up and organizations, encrypted token storage, the connector framework, the job queue and observability. **No social platform connector exists yet, so FeedBouncer cannot moderate real comments today.** Interfaces and the database schema will change without notice.
+**Pre-alpha. Not for production use.** The foundations are in place: workspace and CI, data model and migrations, sign-up and organizations, encrypted token storage, the connector framework, the job queue and observability. Connectors exist for Facebook Pages, Instagram, Meta ads, TikTok Business accounts and TikTok ads. None of them has been through the platform's app review yet, and the TikTok connectors have not been checked against the live TikTok API. Interfaces and the database schema will change without notice.
 
 FeedBouncer is not affiliated with or endorsed by Meta, TikTok, Google/YouTube or any other platform it integrates with. Platform names are trademarks of their owners.
 
@@ -43,6 +43,9 @@ pnpm test
 | `packages/connector-facebook`        | Facebook Pages connector: OAuth, comments, moderation actions                                                |
 | `packages/connector-instagram`       | Instagram connector (Facebook Login): comments, moderation actions, replies                                  |
 | `packages/connector-meta-ads`        | Meta Ads connector: ad accounts and active ads; comments are read through the Page and Instagram connections |
+| `packages/connector-tiktok`          | TikTok connector: a Business account's videos and their comments, moderation actions, replies                |
+| `packages/connector-tiktok-ads`      | TikTok ads connector: advertisers and the comments on their ads, moderation actions, replies                 |
+| `packages/tiktok-business-api`       | Shared TikTok API request layer, id validation and a test double of the TikTok API                           |
 | `packages/connectors`                | Contract and shared services for platform connectors                                                         |
 | `packages/db`                        | Postgres schema, migrations and the migration CLI                                                            |
 | `packages/jobs`                      | Job queue: per-platform queues, retries, dead-letter queue, idempotency                                      |
@@ -114,6 +117,10 @@ Sign-up, email confirmation, password reset and invitations send real emails. In
 ### Facebook Pages (optional)
 
 The connector is off until `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` and `FACEBOOK_WEBHOOK_VERIFY_TOKEN` are set in `.env` (commented examples are in `.env.example`). Meta needs a public HTTPS URL for the webhook and the OAuth redirect, so a purely local stack cannot complete a real connection without a tunnel. The worker also needs `SMTP_URL` and `PUBLIC_WEB_URL` (compose sets both). Step-by-step Meta app setup: [docs/self-hosting/meta-app.md](docs/self-hosting/meta-app.md). Permissions, App Review and known limitations: [docs/connectors/facebook.md](docs/connectors/facebook.md).
+
+### TikTok (optional)
+
+Two independent connectors: TikTok Business accounts (comments on your own videos) and TikTok ads (comments on an advertiser's ads). Each is off until its flag is set: `TIKTOK_CONNECTOR_ENABLED=true` with `TIKTOK_APP_ID` and `TIKTOK_APP_SECRET`, and `TIKTOK_ADS_CONNECTOR_ENABLED=true`, which reuses the same app unless `TIKTOK_ADS_APP_ID` and `TIKTOK_ADS_APP_SECRET` are set. They work without Facebook. Comments are polled, by default every 5 minutes. The worker also needs `SMTP_URL` and `PUBLIC_WEB_URL`. The TikTok connectors have not been checked against the live TikTok API yet. Setup, permissions, supported actions and limitations: [docs/connectors/tiktok.md](docs/connectors/tiktok.md) and [docs/connectors/tiktok-ads.md](docs/connectors/tiktok-ads.md).
 
 ### Stop, restart, reset
 

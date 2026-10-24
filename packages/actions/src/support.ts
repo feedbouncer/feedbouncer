@@ -120,7 +120,12 @@ export function checkStepsForBrand(
   return { errors, warnings };
 }
 
-export type StepOutcome = { status: Exclude<StepStatus, 'simulated'>; reason: string | null };
+export type StepOutcome = {
+  status: Exclude<StepStatus, 'simulated'>;
+  reason: string | null;
+  /** With reason `missing_permission`, when the scopes the connection lacks are known. */
+  missingScopes?: readonly string[];
+};
 
 const RATE_LIMIT_CODES: ReadonlySet<string> = new Set([
   'budget_exhausted',

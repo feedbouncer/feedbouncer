@@ -30,6 +30,7 @@ it('evaluates a 2000-char comment against 5000-term lists within a bounded multi
     mode: 'enforce' as const,
     priority: i,
     enabled: true,
+    appliesTo: 'all' as const,
     createdAt: new Date(0),
     conditions: c,
   }));
@@ -46,6 +47,7 @@ it('evaluates a 2000-char comment against 5000-term lists within a bounded multi
     platform: 'facebook' as const,
     authorExternalId: '1',
     authorName: 'nobody',
+    origin: 'organic' as const,
   };
   expect(evaluate(set, facts).decided).toBeNull();
   for (let i = 0; i < 30; i++) evaluate(set, facts); // warm-up

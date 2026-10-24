@@ -6,7 +6,9 @@ import {
   NotifyingConnectionDirectory,
   PgAdTracking,
   PgCommentStore,
+  PgTikTokPolling,
   PollScheduler,
+  TikTokPollScheduler,
 } from '@feedbouncer/comments';
 import {
   PgSyncRecorder,
@@ -161,18 +163,19 @@ try {
     client.on('error', (err) => log.warn(`${name} connection error`, errorFields(err)));
   }
 
-  const { facebook, mail } = env;
-  // Mail is only configured (and only needed) for Facebook, email alerts or weekly reports.
+  const { facebook, mail, tiktokPolling } = env;
+  // Mail is only configured (and only needed) for Facebook, TikTok, email alerts or weekly reports.
   const mailer = mail ? createSmtpMailer(mail.smtpUrl, mail.mailFrom) : null;
   let jobs = new JobRegistry();
   let scheduler: PollScheduler | null = null;
+  let tiktokScheduler: TikTokPollScheduler | null = null;
   let alertLoops: ReturnType<typeof startAlertLoops> = null;
   let reportLoops: ReturnType<typeof startReportLoops> = null;
   let idempotencyPurge: ReturnType<typeof startIdempotencyPurge> | null = null;
   let retentionLoop: ReturnType<typeof startRetentionLoop> | null = null;
   let scanMaintenance: ReturnType<typeof startScanMaintenanceLoop> | null = null;
   let webhookLoops: ReturnType<typeof startWebhookLoops> | null = null;
-  if (facebook && mail && mailer) {
+  if ((facebook || tiktokPolling) && mail && mailer) {
     const stack = buildPgConnectorStack({
       pool,
       lockPool,
@@ -180,12 +183,16 @@ try {
       redisPrefix: env.jobs.prefix,
       keys: env.encryption,
       registry: connectors,
-      // One Meta app signs both platforms' webhooks and owns both OAuth clients.
-      appSecrets: new Map([
-        ['facebook', facebook.appSecret],
-        ...(env.instagram ? ([['instagram', facebook.appSecret]] as const) : []),
-        ...(env.metaAds ? ([['meta_ads', facebook.appSecret]] as const) : []),
-      ]),
+      // The Meta app signs the webhooks of every Meta platform; TikTok connectors poll and have none.
+      appSecrets: new Map(
+        facebook
+          ? [
+              ['facebook', facebook.appSecret],
+              ...(env.instagram ? ([['instagram', facebook.appSecret]] as const) : []),
+              ...(env.metaAds ? ([['meta_ads', facebook.appSecret]] as const) : []),
+            ]
+          : [],
+      ),
       redirectUri: (p) => new URL(`/api/v1/oauth/${p}/callback`, mail.publicWebUrl).href,
       log,
       workerId,
@@ -215,6 +222,9 @@ try {
       producer: { enqueue: (input) => producer.enqueue(input) },
       capabilities: (p) => connectors.get(p)?.capabilities,
       ...(env.adPolling ? { ads: { poll: env.adPolling.poll } } : {}),
+      ...(tiktokPolling
+        ? { tiktok: { settings: tiktokPolling.poll, platforms: tiktokPolling.platforms } }
+        : {}),
     });
     if (env.adPolling) {
       scheduler = new PollScheduler({
@@ -224,6 +234,21 @@ try {
         clock: systemClock,
         log,
         settings: env.adPolling.scheduler,
+      });
+    }
+    if (tiktokPolling) {
+      tiktokScheduler = new TikTokPollScheduler({
+        polling: new PgTikTokPolling(pool),
+        producer: { enqueue: (input) => producer.enqueue(input) },
+        clock: () => new Date(),
+        platforms: tiktokPolling.platforms,
+        tickSec: tiktokPolling.scheduler.tickSec,
+        maxConnectionsPerTick: tiktokPolling.scheduler.maxConnectionsPerTick,
+        intervals: {
+          tiktok: tiktokPolling.poll.pollIntervalSec,
+          tiktok_ads: tiktokPolling.poll.adsPollIntervalSec,
+        },
+        log,
       });
     }
   }
@@ -370,6 +395,7 @@ try {
     await scanMaintenance?.stop();
     await webhookLoops?.stop();
     await scheduler?.stop();
+    await tiktokScheduler?.stop();
     await Promise.all([
       worker.close(),
       jobWorkers.close(),
@@ -405,6 +431,7 @@ try {
   await jobWorkers.start();
   log.info('job consumers ready', { platforms: jobWorkers.platforms().join(',') || 'none' });
   scheduler?.start();
+  tiktokScheduler?.start();
   const previewStore = new PgPolicyPreviewStore(pool);
   const previewPruner = setInterval(() => {
     previewStore

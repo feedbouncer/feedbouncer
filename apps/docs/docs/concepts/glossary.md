@@ -20,7 +20,7 @@ A link between a brand and one account on a platform, such as a Facebook Page.
 
 ### Platform
 
-A social network that FeedBouncer connects to. Facebook and Instagram are supported. The others are planned.
+A social network that FeedBouncer connects to. Facebook, Instagram, Meta ads, TikTok and TikTok ads can be connected. The others are planned.
 
 ### API key
 

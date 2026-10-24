@@ -90,6 +90,14 @@ export interface WebhookSpec {
   parse(rawBody: Buffer): readonly InboundEvent[];
 }
 
+export interface ConnectionCommentsPage {
+  /** `sourceExternalId` is set on each item. */
+  readonly items: readonly NormalizedComment[];
+  /** Every source referenced by `items`, deduplicated. */
+  readonly sources: readonly NormalizedSource[];
+  readonly hasMore: boolean;
+}
+
 export interface Connector {
   readonly platform: Platform;
   readonly capabilities: ConnectorCapabilities;
@@ -105,11 +113,12 @@ export interface Connector {
   /**
    * Throw `ConnectorError('auth_expired', …)` when the platform rejects the grant (e.g.
    * `invalid_grant`); `transient`/`rate_limited` for retryable failures.
+   * `account` is required unless the connector lets the user pick among several accounts.
    */
   exchangeCode(
     input: { code: Secret; codeVerifier: Secret },
     ctx: OAuthContext,
-  ): Promise<{ tokens: TokenSet; account: AuthorizedAccount }>;
+  ): Promise<{ tokens: TokenSet; account?: AuthorizedAccount }>;
 
   /**
    * Throw `ConnectorError('auth_expired', …)` when the platform rejects the grant (e.g.
@@ -130,6 +139,12 @@ export interface Connector {
     ctx: CallContext,
     req: { since: Date; cursor: string | null; limit: number },
   ): Promise<Page<RecentSource>>;
+
+  /** Comments across the whole connection within `[since, until]`, paged by number. */
+  listConnectionComments?(
+    ctx: CallContext,
+    req: { since: Date; until: Date; page: number; pageSize: number },
+  ): Promise<ConnectionCommentsPage>;
 
   /** A comment deleted between pages must not fail the listing; return what still exists. */
   listComments(

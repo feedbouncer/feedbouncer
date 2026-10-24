@@ -13,6 +13,7 @@ const r = (
   mode: 'enforce',
   enabled: true,
   priority,
+  appliesTo: 'all',
   createdAt: new Date(0),
   ...over,
 });
@@ -258,5 +259,24 @@ describe('who can shadow', () => {
     const A3 = r(kw(['spam']), 3);
     const B = r(kw(['spam']), 4);
     expect(analyzeRules([A1, A2, A3, B]).get(B.id)?.shadowedBy).toBe(A2.id);
+  });
+});
+
+describe('scope', () => {
+  it('an earlier rule shadows only rules whose scope it covers', () => {
+    const at = (appliesTo: AnalyzableRule['appliesTo'], priority: number) =>
+      r(kw(['spam']), priority, { appliesTo });
+    const shadows = (a: AnalyzableRule['appliesTo'], b: AnalyzableRule['appliesTo']) => {
+      const A = at(a, 1);
+      return shadow(A, at(b, 2)) === A.id;
+    };
+    expect(shadows('organic', 'ad')).toBe(false);
+    expect(shadows('ad', 'organic')).toBe(false);
+    expect(shadows('ad', 'all')).toBe(false);
+    expect(shadows('organic', 'all')).toBe(false);
+    expect(shadows('all', 'ad')).toBe(true);
+    expect(shadows('all', 'organic')).toBe(true);
+    expect(shadows('all', 'all')).toBe(true);
+    expect(shadows('ad', 'ad')).toBe(true);
   });
 });

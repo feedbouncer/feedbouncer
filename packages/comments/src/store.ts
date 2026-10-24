@@ -50,13 +50,18 @@ export interface CommentRow {
   readonly reviewMode: ReviewModeColumns;
   /** A private reply to this comment is pending or applied (the platform allows one). */
   readonly privateReplied: boolean;
-  /** 'ad' when its source is linked to an ad, or it was also seen through an ad's source. */
+  /** 'ad' when its source is an ad post or linked to an ad, or it was also seen through an ad's source. */
   readonly origin: CommentOrigin;
   /** Up to 5 linked ads, by ad id. */
   readonly ads: readonly { adId: string; adAccountId: string }[];
+  /** Link to the post, video or ad the comment is on, as its connector listed it; else null. */
+  readonly sourcePermalink: string | null;
 }
 
 export type CommentOrigin = 'ad' | 'organic';
+
+/** Source kinds a connector lists itself (an organic post is created by its first comment). */
+export type ListedSourceKind = 'ad_post' | 'video';
 
 /** Position in the newest-first listing: the last row of the previous page. */
 export interface CommentCursor {
@@ -70,11 +75,14 @@ const noNul = (s: string): string => s.replaceAll('\u0000', '�');
 export const storedCommentBody = noNul;
 const outOfScope = () => new Error('comment store: connection is not in the given scope');
 
-/** Over `comment c`: true when the comment came through an ad. */
+/** Over `comment c`: true when the comment came through an ad or sits under an ad post. */
 const IS_AD_SQL = `(c.ad_source_id IS NOT NULL OR EXISTS (
     SELECT 1 FROM meta_ad_source mas
      WHERE mas.organization_id = c.organization_id AND mas.brand_id = c.brand_id
-       AND mas.source_id = c.source_id))`;
+       AND mas.source_id = c.source_id) OR EXISTS (
+    SELECT 1 FROM source ads
+     WHERE ads.id = c.source_id AND ads.organization_id = c.organization_id
+       AND ads.brand_id = c.brand_id AND ads.kind = 'ad_post'))`;
 
 export const COMMENT_IS_AD_SQL = IS_AD_SQL;
 
@@ -92,7 +100,7 @@ const ROW_SQL = `
                     AND ma.kind = 'private_reply' AND ma.status IN ('pending', 'applied'))
            AS private_replied,
          CASE WHEN ${IS_AD_SQL} THEN 'ad' ELSE 'organic' END AS origin,
-         COALESCE(ads.ads, '[]'::jsonb) AS ads
+         COALESCE(ads.ads, '[]'::jsonb) AS ads, s.metadata->>'permalink' AS source_permalink
     FROM comment c
     JOIN source s ON s.id = c.source_id AND s.organization_id = c.organization_id AND s.brand_id = c.brand_id
     JOIN connection cn ON cn.id = c.connection_id AND cn.organization_id = c.organization_id AND cn.brand_id = c.brand_id
@@ -136,6 +144,7 @@ const toRow = (r: Record<string, unknown>): CommentRow => ({
   privateReplied: r.private_replied as boolean,
   origin: r.origin as CommentOrigin,
   ads: r.ads as { adId: string; adAccountId: string }[],
+  sourcePermalink: (r.source_permalink as string | null) ?? null,
 });
 
 const ids = (s: ConnectionScope) => [s.organizationId, s.brandId, s.connectionId];
@@ -214,19 +223,23 @@ async function upsertSource(
   return r.rows[0].id;
 }
 
-/** Upserts an ad's post as kind 'ad_post', promoting an organic one. */
-async function upsertAdSource(
+/** Upserts a listed source with its kind, promoting an organic one; an ad post is never demoted. */
+export async function upsertListedSource(
   tx: pg.Pool | pg.ClientBase,
   scope: ConnectionScope,
   externalId: string,
+  kind: ListedSourceKind,
+  permalink: string | null = null,
 ): Promise<string> {
   const r = await tx.query<{ id: string }>(
-    `INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id)
-     VALUES ($1, $2, $3, 'ad_post', $4)
-     ON CONFLICT (connection_id, external_id) DO UPDATE SET kind = 'ad_post', updated_at = now()
+    `INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id, metadata)
+     VALUES ($1, $2, $3, $5, $4, jsonb_strip_nulls(jsonb_build_object('permalink', $6::text)))
+     ON CONFLICT (connection_id, external_id) DO UPDATE SET
+       kind = CASE WHEN source.kind = 'ad_post' THEN 'ad_post' ELSE EXCLUDED.kind END,
+       metadata = source.metadata || EXCLUDED.metadata, updated_at = now()
        WHERE source.organization_id = $1 AND source.brand_id = $2
      RETURNING id`,
-    [...ids(scope), externalId],
+    [...ids(scope), externalId, kind, permalink],
   );
   if (!r.rows[0]) throw outOfScope();
   return r.rows[0].id;
@@ -446,7 +459,7 @@ export class PgCommentStore {
     sourceExternalId: string,
     tx?: pg.ClientBase,
   ): Promise<string> {
-    return upsertAdSource(tx ?? this.pool, scope, sourceExternalId);
+    return upsertListedSource(tx ?? this.pool, scope, sourceExternalId, 'ad_post');
   }
 
   /**

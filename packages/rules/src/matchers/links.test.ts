@@ -4,7 +4,13 @@ import { CommentView } from '../view.js';
 import { compileLinkRule } from './links.js';
 
 const v = (body: string) =>
-  new CommentView({ body, platform: 'facebook', authorExternalId: null, authorName: null });
+  new CommentView({
+    body,
+    platform: 'facebook',
+    authorExternalId: null,
+    authorName: null,
+    origin: 'organic',
+  });
 const budget = { now: () => 0, startedAt: 0, limitMs: 50 };
 const rule = (c: object, own: string[] = ['example.com']) =>
   compileLinkRule(linkDomainConditions.parse({ type: 'link_domain', ...c }), { ownDomains: own });

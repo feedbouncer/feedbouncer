@@ -136,6 +136,51 @@ describe('rules', () => {
     expect(unknown.status).toBe(404);
   });
 
+  it('appliesTo round-trips and defaults to all', async () => {
+    const plain = await call('POST', '/rules', rule('scope default', keyword('sd')));
+    expect(plain.body.appliesTo).toBe('all');
+    const ads = await call('POST', '/rules', rule('scope ads', keyword('sa'), { appliesTo: 'ad' }));
+    expect(ads.status).toBe(201);
+    expect(ads.body.appliesTo).toBe('ad');
+    const patched = await call('PATCH', `/rules/${ads.body.id}`, { appliesTo: 'organic' });
+    expect(patched.status).toBe(200);
+    expect(patched.body.appliesTo).toBe('organic');
+    expect((await call('GET', `/rules/${ads.body.id}`)).body.appliesTo).toBe('organic');
+    const listed = (await call('GET', '/rules')).body.rules as { id: string; appliesTo: string }[];
+    expect(listed.find((x) => x.id === plain.body.id)?.appliesTo).toBe('all');
+  });
+
+  it('invalid appliesTo is 400', async () => {
+    const created = await call(
+      'POST',
+      '/rules',
+      rule('scope bad', keyword('sb'), { appliesTo: 'x' }),
+    );
+    expect(created.status).toBe(400);
+    expect(created.body.error.code).toBe('invalid_rule');
+    const ok = await call('POST', '/rules', rule('scope ok', keyword('so')));
+    for (const appliesTo of ['paid', null, 1])
+      expect((await call('PATCH', `/rules/${ok.body.id}`, { appliesTo })).status).toBe(400);
+    expect((await call('GET', `/rules/${ok.body.id}`)).body.appliesTo).toBe('all');
+  });
+
+  it("org B cannot read or set appliesTo on org A's rule", async () => {
+    const a = await call(
+      'POST',
+      '/rules',
+      rule('scope tenant', keyword('st'), { appliesTo: 'ad' }),
+    );
+    const b = await orgWithRoles(api, 'rules-b');
+    const id = a.body.id as string;
+    const asB = (method: string, path: string, body?: unknown) =>
+      call(method, path, body, b.owner.cookie, b);
+    expect((await asB('GET', `/rules/${id}`)).status).toBe(404);
+    expect((await asB('PATCH', `/rules/${id}`, { appliesTo: 'organic' })).status).toBe(404);
+    const onA = await call('PATCH', `/rules/${id}`, { appliesTo: 'organic' }, b.owner.cookie);
+    expect(onA.status).toBe(404);
+    expect((await call('GET', `/rules/${id}`)).body.appliesTo).toBe('ad');
+  });
+
   it('rejects a patch that makes the action invalid for the conditions', async () => {
     const created = await call(
       'POST',
@@ -180,6 +225,28 @@ describe('rules', () => {
     const found = list.body.rules.find((x: { id: string }) => x.id === second.body.id);
     expect(found.warnings.shadowedBy.id).toBe(first.body.id);
     expect(first.body.warnings).toEqual({ shadowedBy: null, neverMatches: false, invalid: false });
+  });
+
+  it('an earlier rule shadows only rules inside its scope', async () => {
+    const org2 = await orgWithRoles(api, 'rules-scope');
+    const make = (name: string, terms: string[], appliesTo: string) =>
+      call(
+        'POST',
+        '/rules',
+        rule(name, keyword(...terms), { mode: 'enforce', appliesTo }),
+        org2.owner.cookie,
+        org2,
+      );
+    const organic = await make('organic broad', ['crypto'], 'organic');
+    const ad = await make('ad narrow', ['free crypto'], 'ad');
+    expect(ad.body.warnings.shadowedBy).toBeNull();
+    const all = await make('all narrow', ['cheap crypto'], 'all');
+    expect(all.body.warnings.shadowedBy).toBeNull();
+    const organicNarrow = await make('organic narrow', ['crypto deal'], 'organic');
+    expect(organicNarrow.body.warnings.shadowedBy).toEqual({
+      id: organic.body.id,
+      name: 'organic broad',
+    });
   });
 
   it('lets a member read but not write', async () => {

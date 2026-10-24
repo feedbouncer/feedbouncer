@@ -2,8 +2,9 @@
 // platform behind SafeHttp: authorize -> consent -> callback -> select -> connect.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FakeGraph } from '@feedbouncer/connector-facebook/testing';
+import { FakeTikTok } from '@feedbouncer/tiktok-business-api/testing';
 import { INGEST_JOB } from '@feedbouncer/comments';
-import type { Platform } from '@feedbouncer/connectors';
+import type { Connector, Platform } from '@feedbouncer/connectors';
 import { Secret } from '@feedbouncer/service-runtime';
 import {
   WEB,
@@ -245,7 +246,7 @@ describe('facebook connect flow', () => {
     const refused = await authorize(org, org.owner);
     const r = await call(
       'GET',
-      `/api/v1/oauth/facebook/callback?error=access_denied&state=${refused.searchParams.get('state')}`,
+      `/api/v1/oauth/facebook/callback?error=server_error&state=${refused.searchParams.get('state')}`,
       org.owner,
     );
     expect(r.headers.location).toBe(
@@ -389,6 +390,56 @@ describe('facebook connect flow', () => {
     await bad(grant, { accountIds: Array.from({ length: 51 }, (_, i) => String(i + 1)) }, 400);
     await bad(grant, { accountIds: ['1'] }, 404);
     await bad(`${base(org)}/facebook/grants/nope/connect`, { accountIds: ['1'] }, 404);
+  });
+
+  it('connect accepts non-graph account ids when the connector declares accountIdPattern', async () => {
+    const stub: Connector = {
+      platform: 'tiktok_ads',
+      capabilities: {
+        actions: [],
+        listSources: false,
+        recentSources: false,
+        ingestion: 'polling',
+        tokens: { refreshable: false, rotatesRefreshToken: false },
+        rateLimit: {
+          points: 10,
+          durationSec: 60,
+          urgentReservePoints: 1,
+          defaultRetryAfterMs: 5000,
+        },
+        apiHosts: ['api.example.test'],
+        authorizationHosts: ['auth.example.test'],
+        defaultScopes: ['read'],
+        accountSelection: 'multiple',
+        accountIdPattern: /^[A-Za-z0-9_-]{1,64}$/,
+        maxPageSize: 10,
+      },
+      buildAuthorizationUrl: () => new URL('https://auth.example.test/a'),
+      exchangeCode: async () => {
+        throw new Error('unused');
+      },
+      refreshTokens: async () => {
+        throw new Error('unused');
+      },
+      listAccounts: async () => [],
+      listComments: async () => ({ items: [], nextCursor: null }),
+      getComment: async () => null,
+      act: async () => ({ status: 'not_found' }),
+    };
+    api.deps.connectors!.registry.register(stub);
+    const url = `${base(org)}/tiktok_ads/grants/00000000-0000-4000-8000-000000000000/connect`;
+    const status = async (accountIds: string[]) =>
+      (await call('POST', url, org.owner, { accountIds })).status;
+    expect(await status(['-000abc'])).toBe(404);
+    expect(await status(['a/b'])).toBe(400);
+  });
+
+  it('connect still rejects non-graph ids for meta connectors', async () => {
+    for (const platform of ['facebook', 'instagram', 'meta_ads']) {
+      const url = `${base(org)}/${platform}/grants/00000000-0000-4000-8000-000000000000/connect`;
+      const r = await call('POST', url, org.owner, { accountIds: ['-000abc'] });
+      expect(r.status, platform).toBe(400);
+    }
   });
 
   it('callback state completed by another signed-in user -> /orgs?error=oauth_rejected and state still usable by the owner', async () => {
@@ -683,7 +734,7 @@ describe('instagram connect flow', () => {
       error: { code: 'platform_not_configured', message: expect.any(String) },
     };
     const grant = '00000000-0000-4000-8000-000000000000';
-    for (const platform of ['tiktok', 'nope', 'FACEBOOK']) {
+    for (const platform of ['youtube', 'nope', 'FACEBOOK']) {
       const p = encodeURIComponent(platform);
       const a = await call('POST', `${base(org)}/${p}/authorize`, org.owner, {});
       expect(a.status, platform).toBe(404);
@@ -769,6 +820,16 @@ describe('meta ads connect flow', () => {
       [org.brandId, [first, second]],
     );
     expect(rows.rows).toEqual([{ platform: 'meta_ads' }, { platform: 'meta_ads' }]);
+    // As before: the ad account keeps the user token with no expiry and no refresh token.
+    const secrets = await api.pool.query(
+      `SELECT kind, expires_at FROM connection_secret
+        WHERE connection_id = ANY($1::uuid[]) ORDER BY connection_id, kind`,
+      [results.map((r) => r.connectionId)],
+    );
+    expect(secrets.rows).toEqual([
+      { kind: 'access_token', expires_at: null },
+      { kind: 'access_token', expires_at: null },
+    ]);
   });
 
   it('declining ads_read creates nothing and reports the missing scope', async () => {
@@ -941,5 +1002,177 @@ describe('secrets', () => {
     }
     const grantTokens = api.logLines.filter((l) => /user[-_]?token/i.test(l));
     expect(grantTokens).toEqual([]);
+  });
+});
+
+describe('tiktok connect flow', () => {
+  const TIKTOK = { appId: '7300000000000001', appSecret: 'tiktok-app-secret-0123456789' };
+  const TIKTOK_CFG = { ...TIKTOK, appSecret: new Secret(TIKTOK.appSecret) };
+  let tt: TestApi;
+  let fake: FakeTikTok;
+  let f: OrgFixture;
+  const ttSeen: TestResponse[] = [];
+  const ttCall = async (method: string, url: string, user: TestUser, body?: unknown) => {
+    const r = await tt.req(method, url, { cookie: user.cookie, body });
+    ttSeen.push(r);
+    return r;
+  };
+
+  beforeAll(async () => {
+    fake = new FakeTikTok(TIKTOK);
+    tt = await startTestApi({ tiktok: TIKTOK_CFG, tiktokAds: TIKTOK_CFG }, { fetch: fake.fetch });
+    f = await orgWithRoles(tt, 'ttc');
+  });
+  afterAll(() => tt.close());
+
+  async function ttAuthorize(platform: 'tiktok' | 'tiktok_ads'): Promise<string> {
+    const r = await ttCall('POST', `${base(f)}/${platform}/authorize`, f.owner, {});
+    expect(r.status).toBe(200);
+    const url = new URL(r.body.authorizationUrl);
+    expect(url.hostname).toBe(platform === 'tiktok' ? 'www.tiktok.com' : 'business-api.tiktok.com');
+    expect(url.searchParams.get('redirect_uri')).toBe(`${WEB}/api/v1/oauth/${platform}/callback`);
+    return url.searchParams.get('state')!;
+  }
+
+  const ttCallback = (platform: 'tiktok' | 'tiktok_ads', query: string) =>
+    ttCall('GET', `/api/v1/oauth/${platform}/callback?${query}`, f.owner);
+
+  async function ttGrant(platform: 'tiktok' | 'tiktok_ads', authCode: string): Promise<string> {
+    const state = await ttAuthorize(platform);
+    const r = await ttCallback(platform, `auth_code=${authCode}&state=${state}`);
+    expect(r.status).toBe(302);
+    const m = new RegExp(
+      `^${WEB}/orgs/${f.orgId}/brands/${f.brandId}/connections/${platform}/select\\?grant=(${UUID_RE})$`,
+    ).exec(String(r.headers.location));
+    expect(m, String(r.headers.location)).not.toBeNull();
+    return m![1]!;
+  }
+
+  async function ttConnect(platform: 'tiktok' | 'tiktok_ads', grantId: string, ids: string[]) {
+    const r = await ttCall('POST', `${base(f)}/${platform}/grants/${grantId}/connect`, f.owner, {
+      accountIds: ids,
+    });
+    expect(r.status).toBe(200);
+    return r.body.results as { externalAccountId: string; status: string; connectionId: string }[];
+  }
+
+  const ttConnections = async () =>
+    (await ttCall('GET', base(f), f.owner)).body.connections as {
+      id: string;
+      platform: string;
+      externalAccountId: string;
+      displayName: string | null;
+      status: string;
+    }[];
+
+  it('connect a tiktok account through the picker', async () => {
+    const { businessId } = fake.addBusinessAccount({ username: 'shop.tt' });
+    const grantId = await ttGrant('tiktok', fake.authCodeFor(businessId));
+    const g = await ttCall('GET', `${base(f)}/tiktok/grants/${grantId}`, f.owner);
+    expect(g.status).toBe(200);
+    expect(g.body.accounts).toEqual([
+      expect.objectContaining({ externalAccountId: businessId, eligible: true, connection: null }),
+    ]);
+    const [res] = await ttConnect('tiktok', grantId, [businessId]);
+    expect(res).toMatchObject({ externalAccountId: businessId, status: 'connected' });
+    expect(await ttConnections()).toContainEqual(
+      expect.objectContaining({
+        id: res!.connectionId,
+        platform: 'tiktok',
+        externalAccountId: businessId,
+        status: 'connected',
+      }),
+    );
+    // The account token is the user token: it keeps its expiry and refresh token.
+    const secrets = await tt.pool.query<{ kind: string; expires: boolean }>(
+      `SELECT kind, expires_at IS NOT NULL AS expires FROM connection_secret
+        WHERE connection_id = $1 ORDER BY kind`,
+      [res!.connectionId],
+    );
+    expect(secrets.rows).toEqual([
+      { kind: 'access_token', expires: true },
+      { kind: 'refresh_token', expires: true },
+    ]);
+    const jobs = await tt.pool.query<{ job_type: string }>(
+      `SELECT job_type FROM job_ledger WHERE connection_id = $1`,
+      [res!.connectionId],
+    );
+    expect(jobs.rows.map((r) => r.job_type)).toContain('connection_lifecycle');
+  });
+
+  it('connect two advertisers to one brand', async () => {
+    const a = fake.addAdvertiser({ name: 'Spring ads' }).advertiserId;
+    const b = fake.addAdvertiser({ name: 'Summer ads' }).advertiserId;
+    const notPicked = fake.addAdvertiser({ name: 'Other brand ads' }).advertiserId;
+    const grantId = await ttGrant('tiktok_ads', fake.authCodeFor(a, b, notPicked));
+    const g = await ttCall('GET', `${base(f)}/tiktok_ads/grants/${grantId}`, f.owner);
+    expect(
+      (g.body.accounts as { externalAccountId: string }[]).map((x) => x.externalAccountId),
+    ).toEqual([a, b, notPicked]);
+    const results = await ttConnect('tiktok_ads', grantId, [a, b]);
+    expect(results.map((r) => r.status)).toEqual(['connected', 'connected']);
+    const rows = await tt.pool.query(
+      `SELECT external_account_id, display_name FROM connection
+        WHERE brand_id = $1 AND platform = 'tiktok_ads' ORDER BY external_account_id`,
+      [f.brandId],
+    );
+    expect(rows.rows).toEqual(
+      [
+        { external_account_id: a, display_name: 'Spring ads' },
+        { external_account_id: b, display_name: 'Summer ads' },
+      ].sort((x, y) => x.external_account_id.localeCompare(y.external_account_id)),
+    );
+  });
+
+  it('ads callback with auth_code completes', async () => {
+    const { advertiserId } = fake.addAdvertiser({ name: 'Callback ads' });
+    const state = await ttAuthorize('tiktok_ads');
+    const withCode = await ttCallback(
+      'tiktok_ads',
+      `code=${fake.authCodeFor(advertiserId)}&state=${state}`,
+    );
+    expect(withCode.headers.location).toBe(`${WEB}/orgs?error=oauth_rejected`);
+    const grantId = await ttGrant('tiktok_ads', fake.authCodeFor(advertiserId));
+    const [res] = await ttConnect('tiktok_ads', grantId, [advertiserId]);
+    expect(res).toMatchObject({ externalAccountId: advertiserId, status: 'connected' });
+  });
+
+  it('user denial (error=access_denied) shows the denied state', async () => {
+    const before = await tt.pool.query('SELECT id FROM connection ORDER BY id');
+    const tokenCalls = () => fake.calls('ttToken').length + fake.calls('adOauthToken').length;
+    const calls = tokenCalls();
+    for (const platform of ['tiktok', 'tiktok_ads'] as const) {
+      const state = await ttAuthorize(platform);
+      const r = await ttCallback(platform, `error=access_denied&state=${state}`);
+      expect(r.status).toBe(302);
+      expect(r.headers.location).toBe(
+        `${WEB}/orgs/${f.orgId}/brands/${f.brandId}/connections?error=denied`,
+      );
+    }
+    expect((await tt.pool.query('SELECT id FROM connection ORDER BY id')).rows).toEqual(
+      before.rows,
+    );
+    expect(tokenCalls()).toBe(calls);
+  });
+
+  it('tiktok works with facebook unconfigured', async () => {
+    expect(tt.deps.env.facebook).toBeNull();
+    const fb = await ttCall('POST', `${base(f)}/facebook/authorize`, f.owner, {});
+    expect(fb.status).toBe(404);
+    expect(fb.body.error.code).toBe('platform_not_configured');
+    const comments = await ttCall(
+      'GET',
+      `/api/v1/orgs/${f.orgId}/brands/${f.brandId}/comments`,
+      f.owner,
+    );
+    expect(comments.status).toBe(200);
+    expect(tt.deps.producer).not.toBeNull();
+    expect((await tt.raw('GET', '/api/v1/webhooks/facebook')).status).toBe(404);
+  });
+
+  it('no tiktok token, auth code or state appears in a response or log line', async () => {
+    const texts = [...ttSeen.map((r) => JSON.stringify([r.body, r.headers])), ...tt.logLines];
+    for (const t of texts) expect(t).not.toMatch(/(tt|ad)_(at|rt|code)_\d+/);
+    for (const t of texts) expect(t).not.toContain(TIKTOK.appSecret);
   });
 });

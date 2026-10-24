@@ -1,4 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PgSyncRecorder, buildPgConnectorStack } from '@feedbouncer/connectors';
+import { createPool } from '@feedbouncer/db';
+import { Secret } from '@feedbouncer/service-runtime';
+import { TIKTOK_API_HOST, TIKTOK_ENDPOINTS } from '@feedbouncer/tiktok-business-api';
+import { FakeTikTok } from '@feedbouncer/tiktok-business-api/testing';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
 
 type WithConnection = OrgFixture & { connectionId: string };
@@ -185,6 +190,7 @@ describe('connection health endpoint', () => {
         'lastErrorAt',
         'consecutiveFailures',
         'failedImports',
+        'missingScopes',
         'stalenessSeconds',
         'ingestLagSeconds',
       ].sort(),
@@ -197,5 +203,151 @@ describe('connection health endpoint', () => {
     const before = await q();
     await api.req('GET', healthUrl(A.orgId, A.brandId), { cookie: A.owner.cookie });
     expect(await q()).toEqual(before);
+  });
+});
+
+describe('tiktok connection health', () => {
+  const TIKTOK = { appId: '7300000000000001', appSecret: 'tiktok-app-secret-0123456789' };
+  const TIKTOK_CFG = { ...TIKTOK, appSecret: new Secret(TIKTOK.appSecret) };
+  let tt: TestApi;
+  let fake: FakeTikTok;
+  let org: OrgFixture;
+
+  beforeAll(async () => {
+    fake = new FakeTikTok(TIKTOK);
+    tt = await startTestApi({ tiktok: TIKTOK_CFG, tiktokAds: TIKTOK_CFG }, { fetch: fake.fetch });
+    org = await orgWithRoles(tt, 'tth');
+  });
+  afterAll(() => tt.close());
+
+  /** A token straight from FakeTikTok's token endpoint. */
+  async function token(endpoint: 'ttToken' | 'adOauthToken', authCode: string): Promise<string> {
+    const body =
+      endpoint === 'ttToken'
+        ? { client_id: TIKTOK.appId, client_secret: TIKTOK.appSecret, auth_code: authCode }
+        : { app_id: TIKTOK.appId, secret: TIKTOK.appSecret, auth_code: authCode };
+    const r = await fake.fetch(
+      `https://${TIKTOK_API_HOST}/open_api/v1.3/${TIKTOK_ENDPOINTS[endpoint]}`,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+    return ((await r.json()) as { data: { access_token: string } }).data.access_token;
+  }
+
+  async function connected(
+    platform: 'tiktok' | 'tiktok_ads',
+    externalAccountId: string,
+    t: string,
+  ) {
+    const { scope } = await tt.seedConnection(org, { platform, externalAccountId });
+    await tt.deps.connectors!.stack.store.put(scope, 'access_token', new Secret(t), null);
+    return scope;
+  }
+
+  it('a scope-missing tiktok connection reports needs_reconnection with the missing scope; a tiktok_ads outage leaves the tiktok connection healthy', async () => {
+    const revoked = fake.addBusinessAccount({ username: 'revoked' });
+    const healthy = fake.addBusinessAccount({ username: 'healthy' });
+    const adv = fake.addAdvertiser({ name: 'Ads' });
+    const revokedScope = await connected(
+      'tiktok',
+      revoked.businessId,
+      await token('ttToken', revoked.authCode),
+    );
+    const healthyScope = await connected(
+      'tiktok',
+      healthy.businessId,
+      await token('ttToken', healthy.authCode),
+    );
+    const adsScope = await connected(
+      'tiktok_ads',
+      adv.advertiserId,
+      await token('adOauthToken', adv.authCode),
+    );
+    // The worker's runtime: same registry, recording sync state as the poll jobs do.
+    const lockPool = createPool(tt.deps.env.databaseUrl, {
+      applicationName: 'tth',
+      max: 2,
+      onIdleError: () => {},
+    });
+    const { runtime } = buildPgConnectorStack({
+      pool: tt.pool,
+      lockPool,
+      redis: tt.deps.redis,
+      redisPrefix: tt.deps.redisKeyPrefix,
+      keys: tt.deps.env.encryption,
+      registry: tt.deps.connectors!.registry,
+      appSecrets: new Map(),
+      redirectUri: () => 'https://app.test/cb',
+      log: tt.deps.log,
+      workerId: 'tth',
+      sync: new PgSyncRecorder(tt.pool, { coalesceMs: 0 }),
+      fetch: fake.fetch,
+    });
+    try {
+      fake.revokeScope(revoked.businessId, 'businessVideoList');
+      const revokedClient = await runtime.connect(revokedScope);
+      await expect(revokedClient.listSources(null)).rejects.toMatchObject({
+        code: 'scope_missing',
+      });
+
+      fake.outage('marketing', true);
+      const ads = await runtime.connect(adsScope);
+      const window = {
+        since: new Date(Date.now() - 86_400_000),
+        until: new Date(),
+        page: 1,
+        pageSize: 50,
+      };
+      for (let i = 0; i < 3; i++)
+        await expect(ads.listConnectionComments(window)).rejects.toMatchObject({
+          kind: 'transient',
+        });
+      const organic = await runtime.connect(healthyScope);
+      await expect(organic.listSources(null)).resolves.toMatchObject({ items: [] });
+    } finally {
+      fake.outage('marketing', false);
+      await lockPool.end();
+    }
+
+    const r = await tt.req('GET', healthUrl(org.orgId, org.brandId), { cookie: org.owner.cookie });
+    expect(r.status).toBe(200);
+    const by = new Map(
+      (r.body.connections as { connectionId: string }[]).map((c) => [c.connectionId, c]),
+    );
+    expect(by.get(revokedScope.connectionId)).toMatchObject({
+      platform: 'tiktok',
+      status: 'needs_reconnection',
+      reason: 'oauth_scope_missing',
+      missingScopes: ['video.list'],
+    });
+    expect(by.get(adsScope.connectionId)).toMatchObject({
+      platform: 'tiktok_ads',
+      status: 'degraded',
+      reason: 'recent_failures',
+      missingScopes: [],
+    });
+    expect(by.get(healthyScope.connectionId)).toMatchObject({
+      platform: 'tiktok',
+      status: 'healthy',
+      reason: 'ok',
+      missingScopes: [],
+    });
+  });
+
+  it('only scope names of the allowed shape are returned', async () => {
+    const { scope } = await tt.seedConnection(org, {
+      platform: 'tiktok',
+      externalAccountId: 'odd-scopes',
+    });
+    await tt.pool.query(
+      `UPDATE connection SET status = 'reconnect_required', status_reason = 'oauth_scope_missing',
+              missing_scopes = ARRAY['comment.list', '<script>', 'UPPER', $2] WHERE id = $1`,
+      [scope.connectionId, 'x'.repeat(65)],
+    );
+    const r = await tt.req('GET', healthUrl(org.orgId, org.brandId), { cookie: org.owner.cookie });
+    const mine = (r.body.connections as { connectionId: string }[]).find(
+      (c) => c.connectionId === scope.connectionId,
+    );
+    expect(mine).toMatchObject({ missingScopes: ['comment.list'] });
+    expect(JSON.stringify(r.body)).not.toContain('<script>');
   });
 });

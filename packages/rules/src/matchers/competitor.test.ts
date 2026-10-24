@@ -5,7 +5,13 @@ import { compileCompetitorRule } from './competitor.js';
 
 const b = { now: () => 0, startedAt: 0, limitMs: 50 };
 const v = (body: string) =>
-  new CommentView({ body, platform: 'facebook', authorExternalId: null, authorName: null });
+  new CommentView({
+    body,
+    platform: 'facebook',
+    authorExternalId: null,
+    authorName: null,
+    origin: 'organic',
+  });
 const m = compileCompetitorRule(
   competitorConditions.parse({
     type: 'competitor',

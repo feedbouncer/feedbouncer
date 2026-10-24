@@ -556,6 +556,7 @@ describe('comment ingest job on instagram', () => {
       privateReplied: false,
       origin: 'organic',
       ads: [],
+      sourcePermalink: null,
     });
     // The parent arriving later links the stored reply to it.
     const parent = await runIg(igPayload(top, 'created'));

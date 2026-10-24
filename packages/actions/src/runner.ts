@@ -37,6 +37,7 @@ export interface ActionStepObserver {
     type: StepType;
     status: StepStatus;
     reason: string | null;
+    missingScopes?: readonly string[];
   }): Promise<void>;
 }
 
@@ -253,6 +254,7 @@ export class ActionRunner {
         type: step.type,
         status: o.status,
         reason: o.reason,
+        ...(o.missingScopes && { missingScopes: o.missingScopes }),
       });
     };
     const settleAction = async (step: StepRow, actionId: string) => {

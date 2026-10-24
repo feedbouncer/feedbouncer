@@ -30,6 +30,7 @@ interface Comment {
   permalink: string | null;
   isOwnAccount: boolean;
   mediaExternalId: string;
+  sourcePermalink: string | null;
   origin: 'ad' | 'organic';
   ads: { adId: string; adAccountId: string }[];
   /** Computed by the API with the same rules it applies to a request. */
@@ -133,6 +134,7 @@ export default async function CommentsPage({
               platform={c.platform}
               permalink={c.permalink}
               mediaExternalId={c.mediaExternalId}
+              sourcePermalink={c.sourcePermalink}
             />
             <DecisionHistory orgId={orgId} brandId={brandId} commentId={c.id} />
             <CommentActions

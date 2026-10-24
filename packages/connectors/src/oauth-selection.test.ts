@@ -4,10 +4,17 @@ import type { Connector, GrantableAccount } from './connector.js';
 import { createMemoryStack } from './testing/runtime.js';
 
 const SCOPES = ['read', 'manage'];
+const EXPIRES = new Date('2026-10-14T10:00:00Z');
+const REFRESH_EXPIRES = new Date('2027-10-13T10:00:00Z');
 function multiConnector(opts: {
   granted: string[];
-  accounts: () => GrantableAccount[];
+  accounts: (userToken: Secret) => GrantableAccount[];
+  accountIdPattern?: RegExp;
+  refreshable?: boolean;
+  /** The token response carries an expiry and refresh token (default: when refreshable). */
+  expiring?: boolean;
 }): Connector {
+  const expiring = opts.expiring ?? opts.refreshable ?? false;
   return {
     platform: 'facebook',
     capabilities: {
@@ -15,7 +22,7 @@ function multiConnector(opts: {
       listSources: false,
       recentSources: false,
       ingestion: 'polling',
-      tokens: { refreshable: false, rotatesRefreshToken: false },
+      tokens: { refreshable: opts.refreshable ?? false, rotatesRefreshToken: false },
       rateLimit: {
         points: 100,
         durationSec: 60,
@@ -27,15 +34,16 @@ function multiConnector(opts: {
       defaultScopes: SCOPES,
       requiredScopes: SCOPES,
       accountSelection: 'multiple',
+      ...(opts.accountIdPattern ? { accountIdPattern: opts.accountIdPattern } : {}),
       maxPageSize: 50,
     },
     buildAuthorizationUrl: ({ state }) => new URL(`https://auth.example.test/a?state=${state}`),
     exchangeCode: async () => ({
       tokens: {
         accessToken: new Secret('USER-TOKEN-SENTINEL'),
-        accessTokenExpiresAt: null,
-        refreshToken: null,
-        refreshTokenExpiresAt: null,
+        accessTokenExpiresAt: expiring ? EXPIRES : null,
+        refreshToken: expiring ? new Secret('REFRESH-TOKEN-SENTINEL') : null,
+        refreshTokenExpiresAt: expiring ? REFRESH_EXPIRES : null,
         scopes: opts.granted,
       },
       account: { externalAccountId: 'user-1', displayName: 'U' },
@@ -45,7 +53,7 @@ function multiConnector(opts: {
     },
     listAccounts: async (token) => {
       expect(token.reveal()).toBe('USER-TOKEN-SENTINEL');
-      return opts.accounts();
+      return opts.accounts(token);
     },
     listComments: async () => ({ items: [], nextCursor: null }),
     getComment: async () => null,
@@ -92,7 +100,129 @@ describe('required scopes', () => {
   });
 });
 
+describe('accountIdPattern', () => {
+  const pattern = /^[A-Za-z0-9_-]{1,64}$/;
+  const setupWith = async (ids: string[]) => {
+    const stack = await createMemoryStack(
+      multiConnector({
+        granted: SCOPES,
+        accounts: () => ids.map((i) => page(i)),
+        accountIdPattern: pattern,
+      }),
+      { webhookSecret: null, redirectUri: 'https://app.test/cb', clock },
+    );
+    const { authorizationUrl } = await stack.oauth.start(stack.actor, 'facebook');
+    const state = authorizationUrl.searchParams.get('state')!;
+    const r = await stack.oauth.complete(stack.actor, 'facebook', { state, code: 'c' });
+    return { stack, grantId: (r as { grantId: string }).grantId };
+  };
+
+  it('listAccounts ids are validated with accountIdPattern', async () => {
+    const ok = await setupWith(['-000abc']);
+    expect(
+      await ok.stack.oauth.listGrantAccounts(ok.stack.actor, 'facebook', ok.grantId),
+    ).toMatchObject({
+      ok: true,
+      accounts: [{ externalAccountId: '-000abc' }],
+    });
+    const bad = await setupWith(['a/b']);
+    expect(
+      await bad.stack.oauth.listGrantAccounts(bad.stack.actor, 'facebook', bad.grantId),
+    ).toEqual({
+      ok: false,
+      reason: 'platform_error',
+    });
+  });
+});
+
 describe('account selection', () => {
+  it("an account that uses the grant's own token keeps its expiry and refresh token", async () => {
+    const own = (token: Secret): GrantableAccount => ({ ...page('201'), accessToken: token });
+    const stack = await createMemoryStack(
+      multiConnector({
+        granted: SCOPES,
+        accounts: (token) => [own(token), page('202')],
+        refreshable: true,
+      }),
+      { webhookSecret: null, redirectUri: 'https://app.test/cb', clock },
+    );
+    const { authorizationUrl } = await stack.oauth.start(stack.actor, 'facebook');
+    const state = authorizationUrl.searchParams.get('state')!;
+    const r = await stack.oauth.complete(stack.actor, 'facebook', { state, code: 'c' });
+    const grantId = (r as { grantId: string }).grantId;
+    const done = await stack.oauth.connectAccounts(stack.actor, 'facebook', grantId, [
+      '201',
+      '202',
+    ]);
+    const [mine, other] = done.ok ? done.results : [];
+    const tokens = await stack.vault.readTokens(scopeOf(stack, mine!.connectionId!));
+    expect(tokens.access?.value.reveal()).toBe('USER-TOKEN-SENTINEL');
+    expect(tokens.access?.expiresAt).toEqual(EXPIRES);
+    expect(tokens.refresh?.value.reveal()).toBe('REFRESH-TOKEN-SENTINEL');
+    expect(tokens.refresh?.expiresAt).toEqual(REFRESH_EXPIRES);
+    // A Page token of its own is not the user's: it gets neither.
+    const page202 = await stack.vault.readTokens(scopeOf(stack, other!.connectionId!));
+    expect(page202.access).toMatchObject({ expiresAt: null });
+    expect(page202.refresh).toBeNull();
+  });
+
+  it('accounts sharing the grant token each keep its expiry and refresh token', async () => {
+    const shared =
+      (id: string) =>
+      (token: Secret): GrantableAccount => ({
+        ...page(id),
+        accessToken: token,
+      });
+    const stack = await createMemoryStack(
+      multiConnector({
+        granted: SCOPES,
+        accounts: (token) => [shared('301')(token), shared('302')(token)],
+        refreshable: true,
+      }),
+      { webhookSecret: null, redirectUri: 'https://app.test/cb', clock },
+    );
+    const { authorizationUrl } = await stack.oauth.start(stack.actor, 'facebook');
+    const state = authorizationUrl.searchParams.get('state')!;
+    const r = await stack.oauth.complete(stack.actor, 'facebook', { state, code: 'c' });
+    const grantId = (r as { grantId: string }).grantId;
+    const done = await stack.oauth.connectAccounts(stack.actor, 'facebook', grantId, [
+      '301',
+      '302',
+    ]);
+    const [first, second] = done.ok ? done.results : [];
+    const a = await stack.vault.readTokens(scopeOf(stack, first!.connectionId!));
+    const b = await stack.vault.readTokens(scopeOf(stack, second!.connectionId!));
+    expect(a.refresh?.value.reveal()).toBe('REFRESH-TOKEN-SENTINEL');
+    expect(b.refresh?.value.reveal()).toBe('REFRESH-TOKEN-SENTINEL');
+    expect(b.access?.expiresAt).toEqual(EXPIRES);
+  });
+
+  it('a non-refreshable connector stores the user token as before: no expiry, no refresh token', async () => {
+    const stack = await createMemoryStack(
+      multiConnector({
+        granted: SCOPES,
+        accounts: (token) => [{ ...page('301'), accessToken: token }],
+        expiring: true,
+      }),
+      { webhookSecret: null, redirectUri: 'https://app.test/cb', clock },
+    );
+    const { authorizationUrl } = await stack.oauth.start(stack.actor, 'facebook');
+    const state = authorizationUrl.searchParams.get('state')!;
+    const r = await stack.oauth.complete(stack.actor, 'facebook', { state, code: 'c' });
+    const done = await stack.oauth.connectAccounts(
+      stack.actor,
+      'facebook',
+      (r as { grantId: string }).grantId,
+      ['301'],
+    );
+    const tokens = await stack.vault.readTokens(
+      scopeOf(stack, done.ok ? done.results[0]!.connectionId! : ''),
+    );
+    expect(tokens.access).toMatchObject({ expiresAt: null });
+    expect(tokens.access?.value.reveal()).toBe('USER-TOKEN-SENTINEL');
+    expect(tokens.refresh).toBeNull();
+  });
+
   it('stores a grant, lists accounts without tokens, connects only eligible ones', async () => {
     const { stack, state } = await setup();
     const r = await stack.oauth.complete(stack.actor, 'facebook', { state, code: 'c' });

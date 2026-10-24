@@ -14,12 +14,15 @@ import { ApiRequestError, apiFetch } from '../../lib/api-client';
 import { messageFor } from '../../lib/messages';
 import { StepEditor } from '../actions/step-editor';
 import {
+  APPLIES_TO_LABEL,
   KIND_LABEL,
+  RULE_APPLIES_TO,
   RULE_KINDS,
   RULE_PLATFORMS,
-  conditionsFromForm,
   emptyForm,
   formFromConditions,
+  ruleRequestBody,
+  type RuleAppliesTo,
   type RuleFormState,
   type RuleIssue,
   type RuleKind,
@@ -111,6 +114,7 @@ export function RuleEditor(props: {
   );
   const [steps, setSteps] = useState<DraftStep[]>(rule?.actions ?? [{ type: 'flag_for_review' }]);
   const [dryRun, setDryRun] = useState(rule ? rule.mode === 'suggest' : true);
+  const [appliesTo, setAppliesTo] = useState<RuleAppliesTo>(rule?.appliesTo ?? 'all');
   const [issues, setIssues] = useState<RuleIssue[]>(props.initialIssues ?? []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -138,12 +142,7 @@ export function RuleEditor(props: {
     setBusy(true);
     setError(null);
     setIssues([]);
-    const body = {
-      name,
-      conditions: conditionsFromForm(kind, form),
-      actions,
-      mode: dryRun ? 'suggest' : 'enforce',
-    };
+    const body = ruleRequestBody({ name, kind, form, actions, dryRun, appliesTo });
     const base = `/api/v1/orgs/${props.orgId}/brands/${props.brandId}/rules` as const;
     type Saved = { id: string; actionWarnings?: StepWarningDto[] };
     try {
@@ -196,6 +195,19 @@ export function RuleEditor(props: {
           {RULE_KINDS.map((k) => (
             <option key={k} value={k}>
               {KIND_LABEL[k]}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Applies to" issues={[]}>
+        <select
+          name="appliesTo"
+          value={appliesTo}
+          onChange={(e) => setAppliesTo(e.target.value as RuleAppliesTo)}
+        >
+          {RULE_APPLIES_TO.map((a) => (
+            <option key={a} value={a}>
+              {APPLIES_TO_LABEL[a]}
             </option>
           ))}
         </select>
