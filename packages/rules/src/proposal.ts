@@ -9,7 +9,7 @@ import {
 import { checkOverbroad } from './overbroad.js';
 import { analyzeRules } from './shadowing.js';
 import { MAX_RULES_PER_BRAND } from './store.js';
-import type { RuleAppliesTo, RuleMode, RuleRecord } from './types.js';
+import { scopesOverlap, type RuleAppliesTo, type RuleMode, type RuleRecord } from './types.js';
 
 export type RuleProposalInput =
   | { operation: 'create'; rule: unknown }
@@ -176,7 +176,10 @@ export function validateRuleProposal(
     const conditions = canonical(after.conditions);
     const steps = canonical(after.actions);
     const same = current.filter(
-      (r) => r.id !== target?.id && canonical(snapshotOf(r).conditions) === conditions,
+      (r) =>
+        r.id !== target?.id &&
+        scopesOverlap(r.appliesTo, after.appliesTo) &&
+        canonical(snapshotOf(r).conditions) === conditions,
     );
     const dup = same.find((r) => canonical(r.actions) === steps);
     if (dup)

@@ -83,6 +83,37 @@ describe('validateRuleProposal create', () => {
       },
     );
   });
+  it('allows a twin rule whose scope does not overlap', () => {
+    const organic = rec({ appliesTo: 'organic' });
+    const adFlag = { ...valid, conditions: kw('crypto giveaway'), appliesTo: 'ad' };
+    expect(validateRuleProposal({ operation: 'create', rule: adFlag }, [organic])).toMatchObject({
+      ok: true,
+    });
+    const conflict = { ...adFlag, actions: [{ type: 'flag_for_review' }] };
+    expect(validateRuleProposal({ operation: 'create', rule: conflict }, [organic])).toMatchObject({
+      ok: true,
+    });
+  });
+  it('still rejects twins whose scopes overlap', () => {
+    const twin = { ...valid, conditions: kw('crypto giveaway') };
+    for (const [stored, proposed] of [
+      ['all', 'ad'],
+      ['ad', 'all'],
+      ['organic', 'organic'],
+    ] as const) {
+      const r = rec({ appliesTo: stored });
+      const dup = { ...twin, appliesTo: proposed };
+      expect(validateRuleProposal({ operation: 'create', rule: dup }, [r])).toMatchObject({
+        reason: 'duplicate_of_rule',
+        ruleId: r.id,
+      });
+      const conflict = { ...dup, actions: [{ type: 'flag_for_review' }] };
+      expect(validateRuleProposal({ operation: 'create', rule: conflict }, [r])).toMatchObject({
+        reason: 'conflicts_with_rule',
+        ruleId: r.id,
+      });
+    }
+  });
   it('rejects when the brand is at the rule limit', () => {
     const all = Array.from({ length: MAX_RULES_PER_BRAND }, () => rec());
     expect(validateRuleProposal({ operation: 'create', rule: valid }, all)).toMatchObject({

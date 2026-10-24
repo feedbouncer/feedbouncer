@@ -68,6 +68,19 @@ describe('describeDecision', () => {
       ),
     ).toBe('Rule "Scam links" (link domain): link to bit.ly is a URL shortener.');
   });
+  it('keeps the review reason whole however long the rule name is', () => {
+    const code = 'action_not_supported:tiktok:delete';
+    for (const len of [200, 5000]) {
+      const s = describeFallback('n'.repeat(len), 'remove', code, 'tiktok');
+      expect(s.length).toBeLessThanOrEqual(2000);
+      expect(s).toContain(`(${code})`);
+      expect(s).toMatch(
+        /TikTok does not allow it \(action_not_supported:tiktok:delete\)\. Flagged for review instead\.$/,
+      );
+    }
+    const scopes = 'missing_permission:comment.list.manage';
+    expect(describeFallback('n'.repeat(5000), 'hide', scopes, 'tiktok')).toContain(`(${scopes})`);
+  });
   it('is at most 2000 chars', () => {
     const out = describeDecision(
       hit(

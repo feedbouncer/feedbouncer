@@ -227,6 +227,28 @@ describe('rules', () => {
     expect(first.body.warnings).toEqual({ shadowedBy: null, neverMatches: false, invalid: false });
   });
 
+  it('an earlier rule shadows only rules inside its scope', async () => {
+    const org2 = await orgWithRoles(api, 'rules-scope');
+    const make = (name: string, terms: string[], appliesTo: string) =>
+      call(
+        'POST',
+        '/rules',
+        rule(name, keyword(...terms), { mode: 'enforce', appliesTo }),
+        org2.owner.cookie,
+        org2,
+      );
+    const organic = await make('organic broad', ['crypto'], 'organic');
+    const ad = await make('ad narrow', ['free crypto'], 'ad');
+    expect(ad.body.warnings.shadowedBy).toBeNull();
+    const all = await make('all narrow', ['cheap crypto'], 'all');
+    expect(all.body.warnings.shadowedBy).toBeNull();
+    const organicNarrow = await make('organic narrow', ['crypto deal'], 'organic');
+    expect(organicNarrow.body.warnings.shadowedBy).toEqual({
+      id: organic.body.id,
+      name: 'organic broad',
+    });
+  });
+
   it('lets a member read but not write', async () => {
     const m = org.member.cookie;
     expect((await call('GET', '/rules', undefined, m)).status).toBe(200);

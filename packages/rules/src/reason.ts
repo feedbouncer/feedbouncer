@@ -88,7 +88,8 @@ export function describeFallback(
     : String(platform);
   // Platform name leads only for the "does not allow it" reading.
   const reason = why === FALLBACK_TEXT.unsupported ? `${plat} ${why}` : why;
-  return clip(
-    `Rule "${ruleName}" wanted to ${VERB[action]}, but ${reason} (${code}). Flagged for review instead.`,
-  );
+  const tail = `" wanted to ${VERB[action]}, but ${reason} (${code}). Flagged for review instead.`;
+  // Only the rule name is shortened, so the reason in parentheses always survives.
+  const name = ruleName.slice(0, Math.max(0, MAX_REASON_CHARS - 'Rule "'.length - tail.length));
+  return clip(`Rule "${name}${tail}`);
 }

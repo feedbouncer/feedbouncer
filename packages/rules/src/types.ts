@@ -53,6 +53,12 @@ export function ruleApplies(
   return rule.appliesTo === 'all' || rule.appliesTo === facts.origin;
 }
 
+/** Every comment a rule scoped `b` sees is also seen by one scoped `a`. */
+export const scopeCovers = (a: RuleAppliesTo, b: RuleAppliesTo): boolean => a === 'all' || a === b;
+/** Some comment is seen by rules of both scopes ('organic' and 'ad' never meet). */
+export const scopesOverlap = (a: RuleAppliesTo, b: RuleAppliesTo): boolean =>
+  scopeCovers(a, b) || scopeCovers(b, a);
+
 export interface BrandContext {
   /** ASCII (punycode) lower-case registrable or full host names, e.g. "example.com". */
   ownDomains: readonly string[];
