@@ -765,6 +765,42 @@ describe('PgOAuthGrantStore', () => {
     expect(await grants.consume(g.id, binding)).toBeNull();
   });
 
+  it('round-trips the user token expiry and an encrypted refresh token; both optional', async () => {
+    const grants = new PgOAuthGrantStore(pool, keys);
+    const binding = bindingOf(a);
+    const base = {
+      ...binding,
+      reconnectConnectionId: null,
+      userToken: new Secret('tt-access'),
+      grantedScopes: ['comment.list'],
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+    const g = {
+      ...base,
+      id: randomUUID(),
+      userTokenExpiresAt: new Date('2026-10-25T10:00:00.000Z'),
+      refreshToken: new Secret('TT-REFRESH-SENTINEL'),
+      refreshTokenExpiresAt: new Date('2027-10-24T10:00:00.000Z'),
+    };
+    await grants.save(g);
+    const raw = await h.c.query(`SELECT encrypted_refresh_token FROM oauth_grant WHERE id = $1`, [
+      g.id,
+    ]);
+    expect(raw.rows[0].encrypted_refresh_token.toString('latin1')).not.toContain('SENTINEL');
+    const got = await grants.consume(g.id, binding);
+    expect(got?.refreshToken?.reveal()).toBe('TT-REFRESH-SENTINEL');
+    expect(got?.userTokenExpiresAt).toEqual(g.userTokenExpiresAt);
+    expect(got?.refreshTokenExpiresAt).toEqual(g.refreshTokenExpiresAt);
+
+    const plain = { ...base, id: randomUUID() };
+    await grants.save(plain);
+    expect(await grants.consume(plain.id, binding)).toMatchObject({
+      userTokenExpiresAt: null,
+      refreshToken: null,
+      refreshTokenExpiresAt: null,
+    });
+  });
+
   it('returns null for an expired grant and for a malformed id', async () => {
     const grants = new PgOAuthGrantStore(pool, keys);
     const binding = bindingOf(a);

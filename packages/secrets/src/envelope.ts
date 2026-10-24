@@ -24,6 +24,7 @@ export const ENVELOPE_KINDS = [
   ...CREDENTIAL_KINDS,
   'oauth_pkce_verifier',
   'oauth_grant_token',
+  'oauth_grant_refresh_token',
   'alert_slack_webhook',
   'alert_unsubscribe_token',
   'report_unsubscribe_token',

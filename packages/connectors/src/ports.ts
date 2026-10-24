@@ -143,6 +143,10 @@ export interface PendingGrant {
   readonly initiatedByUserId: string;
   readonly reconnectConnectionId: string | null;
   readonly userToken: Secret;
+  /** For an account that is connected with the user token itself (TikTok), not a token of its own. */
+  readonly userTokenExpiresAt?: Date | null;
+  readonly refreshToken?: Secret | null;
+  readonly refreshTokenExpiresAt?: Date | null;
   readonly grantedScopes: readonly string[];
   readonly expiresAt: Date;
 }

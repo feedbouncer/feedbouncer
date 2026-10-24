@@ -342,6 +342,10 @@ describe('migration round trip', () => {
 
       expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({
         status: 'rolled_back',
+        migration: '20261024000200_oauth_grant_refresh',
+      });
+      expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({
+        status: 'rolled_back',
         migration: '20261024000100_tiktok',
       });
       expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({

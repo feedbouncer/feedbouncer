@@ -27,6 +27,7 @@ import {
   type MembershipReader,
   type OAuthGrantStore,
   type OAuthStateStore,
+  type PendingGrant,
   type StateBinding,
 } from './ports.js';
 import type { ConnectorRegistry } from './registry.js';
@@ -293,6 +294,9 @@ export class OAuthFlow {
         initiatedByUserId: actor.userId,
         reconnectConnectionId: pending.reconnectConnectionId,
         userToken: tokens.accessToken,
+        userTokenExpiresAt: tokens.accessTokenExpiresAt,
+        refreshToken: tokens.refreshToken,
+        refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
         grantedScopes: tokens.scopes,
         expiresAt: new Date(this.d.clock.now() + (this.d.grantTtlMs ?? 1_800_000)),
       });
@@ -482,7 +486,7 @@ export class OAuthFlow {
           continue;
         }
       }
-      results.push(await this.#connectOne(actor, platform, grant.grantedScopes, a, opts));
+      results.push(await this.#connectOne(actor, platform, grant, a, opts));
     }
     this.d.log.info('oauth accounts connected', {
       platform,
@@ -497,10 +501,11 @@ export class OAuthFlow {
   async #connectOne(
     actor: OAuthActor,
     platform: Platform,
-    grantedScopes: readonly string[],
+    grant: PendingGrant,
     a: GrantableAccount,
     opts: ActivateOptions,
   ): Promise<ConnectAccountResult> {
+    const { grantedScopes } = grant;
     const id = a.externalAccountId;
     // Whether a live row existed before: if not, the row upsertPending leaves
     // live (new, or revived from a user disconnect) is ours to undo on failure.
@@ -526,7 +531,17 @@ export class OAuthFlow {
     const freshlyLive = created || prior === null;
     let activation: ActivateResult | null = null;
     try {
-      await this.d.vault.writeAccessToken(scope, { value: a.accessToken, expiresAt: null });
+      // The account is the user's own (TikTok): its token expires and refreshes like one.
+      const own = a.accessToken.reveal() === grant.userToken.reveal();
+      if (own && grant.refreshToken)
+        await this.d.vault.writeRefreshToken(scope, {
+          value: grant.refreshToken,
+          expiresAt: grant.refreshTokenExpiresAt ?? null,
+        });
+      await this.d.vault.writeAccessToken(scope, {
+        value: a.accessToken,
+        expiresAt: own ? (grant.userTokenExpiresAt ?? null) : null,
+      });
       activation = await this.d.directory.activate(scope, actor.userId, opts);
     } finally {
       // A pending row that never became active must not keep holding the
