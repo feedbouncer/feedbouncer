@@ -1,8 +1,7 @@
 import { ConnectorError, systemClock, type Clock, type Connector } from '@feedbouncer/connectors';
-import { NUMERIC_ID, TIKTOK_API_HOST } from '@feedbouncer/tiktok-business-api';
+import { NUMERIC_ID, TIKTOK_API_HOST, type SkipLog } from '@feedbouncer/tiktok-business-api';
 import { act, respond } from './actions.js';
 import { listAccounts } from './accounts.js';
-import type { SkipLog } from './call.js';
 import { getComment, listConnectionComments } from './comments.js';
 import { TIKTOK_ADS_ACTIONS, TIKTOK_ADS_RESPONSES, type TikTokAdsConfig } from './config.js';
 import { buildAuthorizationUrl, exchangeCode, refreshTokens } from './oauth.js';

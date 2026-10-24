@@ -113,11 +113,12 @@ export interface Connector {
   /**
    * Throw `ConnectorError('auth_expired', …)` when the platform rejects the grant (e.g.
    * `invalid_grant`); `transient`/`rate_limited` for retryable failures.
+   * `account` is required unless the connector lets the user pick among several accounts.
    */
   exchangeCode(
     input: { code: Secret; codeVerifier: Secret },
     ctx: OAuthContext,
-  ): Promise<{ tokens: TokenSet; account: AuthorizedAccount }>;
+  ): Promise<{ tokens: TokenSet; account?: AuthorizedAccount }>;
 
   /**
    * Throw `ConnectorError('auth_expired', …)` when the platform rejects the grant (e.g.

@@ -4,9 +4,13 @@ import {
   type OAuthContext,
 } from '@feedbouncer/connectors';
 import type { Secret } from '@feedbouncer/service-runtime';
-import { sanitizeText, tiktokRequest } from '@feedbouncer/tiktok-business-api';
+import {
+  isPermissionDenied,
+  sanitizeText,
+  scopeMissing,
+  tiktokRequest,
+} from '@feedbouncer/tiktok-business-api';
 import * as z from 'zod';
-import { isPermissionDenied, scopeMissing } from './call.js';
 
 const BUSINESS = z.object({
   business_id: z.string(),

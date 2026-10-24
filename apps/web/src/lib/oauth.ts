@@ -15,7 +15,8 @@ const SCOPE_TEXT: Record<string, string> = {
   'comment.list.manage': 'Hide, delete and reply to comments',
 };
 
-// Instagram is connected through Facebook Login, so its dialog is on www.facebook.com too.
+// Instagram is connected through Facebook Login, so its dialog is on www.facebook.com too;
+// TikTok has its own authorization hosts.
 const AUTHORIZATION_HOSTS: ReadonlySet<string> = new Set([
   'www.facebook.com',
   'www.tiktok.com',

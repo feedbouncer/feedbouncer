@@ -183,7 +183,7 @@ try {
       redisPrefix: env.jobs.prefix,
       keys: env.encryption,
       registry: connectors,
-      // One Meta app signs both platforms' webhooks and owns both OAuth clients.
+      // The Meta app signs the webhooks of every Meta platform; TikTok connectors poll and have none.
       appSecrets: new Map(
         facebook
           ? [

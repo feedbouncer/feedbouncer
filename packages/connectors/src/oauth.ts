@@ -255,7 +255,7 @@ export class OAuthFlow {
 
     const connector = this.d.registry.require(platform);
     let tokens: TokenSet;
-    let authorized: AuthorizedAccount;
+    let authorized: AuthorizedAccount | undefined;
     try {
       const result = await connector.exchangeCode(
         { code: new Secret(code), codeVerifier: pending.codeVerifier },

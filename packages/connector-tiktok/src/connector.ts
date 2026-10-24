@@ -5,13 +5,17 @@ import {
   type Clock,
   type Connector,
 } from '@feedbouncer/connectors';
-import { OPAQUE_ID, TIKTOK_API_HOST, tiktokRequest } from '@feedbouncer/tiktok-business-api';
+import {
+  OPAQUE_ID,
+  TIKTOK_API_HOST,
+  tiktokRequest,
+  type SkipLog,
+} from '@feedbouncer/tiktok-business-api';
 import * as z from 'zod';
 import { act, respond } from './actions.js';
 import { listAccounts } from './accounts.js';
 import { getComment, listComments, listReplies } from './comments.js';
 import { listSources } from './videos.js';
-import type { SkipLog } from './call.js';
 import { TIKTOK_ACTIONS, TIKTOK_SCOPES, type TikTokConfig } from './config.js';
 import { buildAuthorizationUrl, exchangeCode, refreshTokens } from './oauth.js';
 

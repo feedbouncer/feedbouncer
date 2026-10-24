@@ -1,6 +1,6 @@
 import type { ActionStep } from '@feedbouncer/actions/shared';
 import { STEP_LABEL } from './actions';
-import { SCOPE_NAME } from './health-text';
+import { SCOPE_NAME } from './scope-name';
 import type { ClassifierEvidence } from './classifier';
 import type { PolicyEvidence } from './policies';
 

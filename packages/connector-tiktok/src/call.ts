@@ -1,15 +1,5 @@
-import { ConnectorError, type CallContext } from '@feedbouncer/connectors';
-import type { TikTokCall } from '@feedbouncer/tiktok-business-api';
+import { ConnectorError } from '@feedbouncer/connectors';
 import * as z from 'zod';
-
-export type SkipLog = (msg: string, fields: { code: string; count?: number }) => void;
-
-export const callOf = (ctx: CallContext): TikTokCall => ({
-  http: ctx.http,
-  signal: ctx.signal,
-  accessToken: ctx.accessToken.reveal(),
-  reportQuota: ctx.reportQuota,
-});
 
 const CURSOR = /^\d{1,16}$/;
 /** A cursor is a numeric offset, 0..2^53. Anything else is refused before any request. */
@@ -39,23 +29,8 @@ export const pageSchema = <K extends string>(key: K) =>
     has_more: z.ZodOptional<z.ZodBoolean>;
   });
 
-export const isPermissionDenied = (e: unknown): boolean =>
-  e instanceof ConnectorError && e.code === 'permission_denied';
-
-export const scopeMissing = (...missingScopes: string[]) =>
-  new ConnectorError('auth_expired', 'scope_missing', { reauthorize: true, missingScopes });
-
 export function nextCursor(p: { cursor?: string | undefined; has_more?: boolean | undefined }) {
   if (!p.has_more) return null;
   if (p.cursor === undefined) throw new ConnectorError('permanent', 'invalid_tiktok_response');
   return p.cursor;
-}
-
-/** Runs `fn`, turning a permission_denied into the error the caller's context calls for. */
-export async function onPermissionDenied<T>(fn: () => Promise<T>, to: () => Error): Promise<T> {
-  try {
-    return await fn();
-  } catch (e) {
-    throw isPermissionDenied(e) ? to() : e;
-  }
 }

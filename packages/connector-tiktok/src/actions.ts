@@ -6,9 +6,15 @@ import {
   type RawRespondOutcome,
   type RespondRequest,
 } from '@feedbouncer/connectors';
-import { opaqueId, tiktokRequest } from '@feedbouncer/tiktok-business-api';
+import {
+  callOf,
+  gone,
+  onPermissionDenied,
+  opaqueId,
+  scopeMissing,
+  tiktokRequest,
+} from '@feedbouncer/tiktok-business-api';
 import * as z from 'zod';
-import { callOf, onPermissionDenied, scopeMissing } from './call.js';
 
 const REPLY_SCHEMA = z.object({ comment_id: z.unknown().optional() });
 const manage = () => scopeMissing('comment.list.manage');
@@ -19,16 +25,6 @@ function body(ctx: CallContext, target: ActionRequest['target']) {
     video_id: opaqueId(target.sourceExternalId),
     comment_id: opaqueId(target.externalId),
   };
-}
-
-/** `not_found` here means the comment is already gone on TikTok. */
-async function gone<T>(fn: () => Promise<T>): Promise<T | null> {
-  try {
-    return await fn();
-  } catch (e) {
-    if (e instanceof ConnectorError && e.kind === 'not_found') return null;
-    throw e;
-  }
 }
 
 export async function act(ctx: CallContext, req: ActionRequest): Promise<RawActionOutcome> {

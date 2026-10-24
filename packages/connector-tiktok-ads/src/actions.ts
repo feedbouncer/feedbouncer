@@ -6,23 +6,19 @@ import {
   type RawRespondOutcome,
   type RespondRequest,
 } from '@feedbouncer/connectors';
-import { opaqueId, tiktokRequest } from '@feedbouncer/tiktok-business-api';
+import {
+  callOf,
+  gone,
+  opaqueId,
+  tiktokRequest,
+  type SkipLog,
+} from '@feedbouncer/tiktok-business-api';
 import * as z from 'zod';
-import { callOf, scoped, type SkipLog } from './call.js';
+import { scoped } from './call.js';
 import { findComment } from './comments.js';
 import { AD_COMMENT_HIDE_FIELD } from './config.js';
 
 const REPLY_SCHEMA = z.object({ comment_id: z.unknown().optional() });
-
-/** `not_found` here means the comment is already gone on TikTok. */
-async function gone<T>(fn: () => Promise<T>): Promise<T | null> {
-  try {
-    return await fn();
-  } catch (e) {
-    if (e instanceof ConnectorError && e.kind === 'not_found') return null;
-    throw e;
-  }
-}
 
 export async function act(ctx: CallContext, req: ActionRequest): Promise<RawActionOutcome> {
   const { action } = req;

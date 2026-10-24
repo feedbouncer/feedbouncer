@@ -9,13 +9,15 @@ import {
 import {
   OPAQUE_ID,
   adVideoPermalink,
+  callOf,
   numericId,
   sanitizeText,
   tiktokRequest,
   tiktokTime,
+  type SkipLog,
 } from '@feedbouncer/tiktok-business-api';
 import * as z from 'zod';
-import { callOf, scoped, type SkipLog } from './call.js';
+import { scoped } from './call.js';
 
 const id = z.string().regex(OPAQUE_ID);
 /** One element of `comments`. V13 corrections land here. */

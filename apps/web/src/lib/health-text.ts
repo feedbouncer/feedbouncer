@@ -1,3 +1,5 @@
+import { SCOPE_NAME } from './scope-name';
+
 export interface HealthTextInput {
   platform?: string;
   status: string;
@@ -8,8 +10,6 @@ export interface HealthTextInput {
   missingScopes?: string[];
 }
 
-/** A stored scope name is shown only in this shape; anything else is dropped. */
-export const SCOPE_NAME = /^[a-z0-9_.]{1,64}$/;
 const APPROVE = 'Reconnect and approve all requested permissions.';
 
 function missingPermissionText(scopes: string[] | undefined): string {

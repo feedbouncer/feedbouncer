@@ -7,21 +7,17 @@ import {
 } from '@feedbouncer/connectors';
 import {
   OPAQUE_ID,
+  callOf,
+  onPermissionDenied,
   opaqueId,
   sanitizeText,
   tiktokRequest,
   tiktokTime,
   username,
+  type SkipLog,
 } from '@feedbouncer/tiktok-business-api';
 import * as z from 'zod';
-import {
-  callOf,
-  checkCursor,
-  nextCursor,
-  onPermissionDenied,
-  pageSchema,
-  type SkipLog,
-} from './call.js';
+import { checkCursor, nextCursor, pageSchema } from './call.js';
 
 const id = z.string().regex(OPAQUE_ID);
 /** One element of `comments` (list and reply list share the shape). V6/V7 corrections land here. */

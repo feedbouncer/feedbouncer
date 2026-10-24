@@ -1,20 +1,16 @@
 import type { CallContext, NormalizedSource, Page } from '@feedbouncer/connectors';
 import {
   NUMERIC_ID,
+  callOf,
+  onPermissionDenied,
   safeShareUrl,
+  scopeMissing,
   tiktokRequest,
   tiktokTime,
+  type SkipLog,
 } from '@feedbouncer/tiktok-business-api';
 import * as z from 'zod';
-import {
-  callOf,
-  checkCursor,
-  nextCursor,
-  onPermissionDenied,
-  pageSchema,
-  scopeMissing,
-  type SkipLog,
-} from './call.js';
+import { checkCursor, nextCursor, pageSchema } from './call.js';
 
 const VIDEO_SCHEMA = z.object({
   item_id: z.string().regex(NUMERIC_ID),

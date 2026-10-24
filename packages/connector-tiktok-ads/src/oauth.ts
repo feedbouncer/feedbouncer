@@ -1,11 +1,6 @@
 // Marketing API OAuth (V11, V12). Secrets travel only in request bodies/queries built here;
 // errors carry codes only.
-import {
-  ConnectorError,
-  type AuthorizedAccount,
-  type OAuthContext,
-  type TokenSet,
-} from '@feedbouncer/connectors';
+import { ConnectorError, type OAuthContext, type TokenSet } from '@feedbouncer/connectors';
 import { Secret } from '@feedbouncer/service-runtime';
 import { tiktokRequest } from '@feedbouncer/tiktok-business-api';
 import * as z from 'zod';
@@ -43,15 +38,12 @@ const toTokenSet = (nowMs: number, t: AdToken): TokenSet => ({
   scopes: [],
 });
 
-/** The real accounts come from `listAccounts`; this one only stands for the grant. */
-const GRANT_ACCOUNT: AuthorizedAccount = { externalAccountId: '0', displayName: null };
-
 export async function exchangeCode(
   cfg: TikTokAdsConfig,
   now: () => number,
   input: { code: Secret },
   ctx: OAuthContext,
-): Promise<{ tokens: TokenSet; account: AuthorizedAccount }> {
+): Promise<{ tokens: TokenSet }> {
   const { data } = await tiktokRequest(
     { http: ctx.http, signal: ctx.signal },
     {
@@ -61,7 +53,7 @@ export async function exchangeCode(
       schema: AD_TOKEN_SCHEMA,
     },
   );
-  return { tokens: toTokenSet(now(), data), account: GRANT_ACCOUNT };
+  return { tokens: toTokenSet(now(), data) };
 }
 
 export async function refreshTokens(
