@@ -147,6 +147,7 @@ export async function flagReconnectRequired(
   scope: ConnectionScope,
   statusReason: string,
   details: Readonly<Record<string, string | null>>,
+  missingScopes: readonly string[] = [],
 ): Promise<boolean> {
   if (!STATUS_REASON.test(statusReason)) throw new TypeError('Invalid status reason');
   const r = await db.query(
@@ -156,7 +157,7 @@ export async function flagReconnectRequired(
           AND status IN ('active', 'paused', 'error')
           FOR UPDATE),
      flagged AS (
-       UPDATE connection c SET status = 'reconnect_required', status_reason = $4
+       UPDATE connection c SET status = 'reconnect_required', status_reason = $4, missing_scopes = $6::text[]
          FROM prev
         WHERE c.id = prev.id AND c.status IN ('active', 'paused', 'error')
        RETURNING c.id, c.organization_id, c.brand_id, prev.status AS previous_status)
@@ -171,6 +172,7 @@ export async function flagReconnectRequired(
       scope.connectionId,
       statusReason,
       JSON.stringify(details),
+      missingScopes,
     ],
   );
   return (r.rowCount ?? 0) > 0;

@@ -97,6 +97,31 @@ describe('NotifyingConnectionDirectory + EmailReconnectNotifier', () => {
     expect(mailer.sent).toHaveLength(2);
   });
 
+  it('oauth_scope_missing stores missing_scopes and notifies owners once', async () => {
+    const dir = directoryWith(mailer);
+    const scopes = ['comment.list', 'comment.manage'];
+    expect(
+      await dir.markReauthRequired(scopeOf(t), 'oauth_scope_missing', { missingScopes: scopes }),
+    ).toBe(true);
+    await vi.waitFor(() => expect(mailer.sent).toHaveLength(2));
+    const row = () =>
+      ctx.c
+        .query('SELECT status_reason, missing_scopes FROM connection WHERE id = $1', [t.connectionId])
+        .then((r) => r.rows[0]);
+    expect(await row()).toEqual({ status_reason: 'oauth_scope_missing', missing_scopes: scopes });
+
+    expect(
+      await dir.markReauthRequired(scopeOf(t), 'oauth_scope_missing', { missingScopes: scopes }),
+    ).toBe(false);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(mailer.sent).toHaveLength(2);
+
+    await new PgConnectionDirectory(pool).activate(scopeOf(t), t.userId);
+    expect(await row()).toEqual({ status_reason: null, missing_scopes: [] });
+    await dir.markReauthRequired(scopeOf(t), 'oauth_access_rejected');
+    expect((await row()).missing_scopes).toEqual([]);
+  });
+
   it('escapes the Page name in HTML and keeps it out of the subject', async () => {
     await directoryWith(mailer).markReauthRequired(scopeOf(t), 'oauth_refresh_rejected');
     await vi.waitFor(() => expect(mailer.sent).toHaveLength(2));
