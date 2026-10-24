@@ -106,7 +106,9 @@ describe('NotifyingConnectionDirectory + EmailReconnectNotifier', () => {
     await vi.waitFor(() => expect(mailer.sent).toHaveLength(2));
     const row = () =>
       ctx.c
-        .query('SELECT status_reason, missing_scopes FROM connection WHERE id = $1', [t.connectionId])
+        .query('SELECT status_reason, missing_scopes FROM connection WHERE id = $1', [
+          t.connectionId,
+        ])
         .then((r) => r.rows[0]);
     expect(await row()).toEqual({ status_reason: 'oauth_scope_missing', missing_scopes: scopes });
 

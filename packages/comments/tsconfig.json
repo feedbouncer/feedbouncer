@@ -11,6 +11,9 @@
     { "path": "../mailer/tsconfig.build.json" },
     { "path": "../connector-facebook/tsconfig.build.json" },
     { "path": "../connector-instagram/tsconfig.build.json" },
-    { "path": "../connector-meta-ads/tsconfig.build.json" }
+    { "path": "../connector-meta-ads/tsconfig.build.json" },
+    { "path": "../tiktok-business-api/tsconfig.build.json" },
+    { "path": "../connector-tiktok/tsconfig.build.json" },
+    { "path": "../connector-tiktok-ads/tsconfig.build.json" }
   ]
 }

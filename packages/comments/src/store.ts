@@ -58,6 +58,9 @@ export interface CommentRow {
 
 export type CommentOrigin = 'ad' | 'organic';
 
+/** Source kinds a connector lists itself (an organic post is created by its first comment). */
+export type ListedSourceKind = 'ad_post' | 'video';
+
 /** Position in the newest-first listing: the last row of the previous page. */
 export interface CommentCursor {
   readonly postedAt: Date;
@@ -214,19 +217,21 @@ async function upsertSource(
   return r.rows[0].id;
 }
 
-/** Upserts an ad's post as kind 'ad_post', promoting an organic one. */
-async function upsertAdSource(
+/** Upserts a listed source with its kind, promoting an organic one; an ad post is never demoted. */
+export async function upsertListedSource(
   tx: pg.Pool | pg.ClientBase,
   scope: ConnectionScope,
   externalId: string,
+  kind: ListedSourceKind,
 ): Promise<string> {
   const r = await tx.query<{ id: string }>(
     `INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id)
-     VALUES ($1, $2, $3, 'ad_post', $4)
-     ON CONFLICT (connection_id, external_id) DO UPDATE SET kind = 'ad_post', updated_at = now()
+     VALUES ($1, $2, $3, $5, $4)
+     ON CONFLICT (connection_id, external_id) DO UPDATE SET
+       kind = CASE WHEN source.kind = 'ad_post' THEN 'ad_post' ELSE EXCLUDED.kind END, updated_at = now()
        WHERE source.organization_id = $1 AND source.brand_id = $2
      RETURNING id`,
-    [...ids(scope), externalId],
+    [...ids(scope), externalId, kind],
   );
   if (!r.rows[0]) throw outOfScope();
   return r.rows[0].id;
@@ -446,7 +451,7 @@ export class PgCommentStore {
     sourceExternalId: string,
     tx?: pg.ClientBase,
   ): Promise<string> {
-    return upsertAdSource(tx ?? this.pool, scope, sourceExternalId);
+    return upsertListedSource(tx ?? this.pool, scope, sourceExternalId, 'ad_post');
   }
 
   /**

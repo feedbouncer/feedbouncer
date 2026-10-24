@@ -6,6 +6,8 @@ import {
   INGEST_JOB,
   LIFECYCLE_JOB,
   POLL_JOB,
+  TIKTOK_ADS_POLL_JOB,
+  TIKTOK_POLL_JOB,
   enqueueOnly,
   type IngestPayload,
 } from './specs.js';
@@ -186,5 +188,38 @@ describe('POLL_JOB', () => {
     expect(POLL_JOB.externalRef({ bucket: 7 })).toBe('ad_poll:7');
     expect(POLL_JOB.platforms).toEqual(['facebook', 'instagram']);
     expect(POLL_JOB.payload.safeParse({ bucket: 1, extra: 1 }).success).toBe(false);
+  });
+});
+
+describe('TikTok poll jobs', () => {
+  const connectionId = '6f1c2a4e-8d2b-4c3a-9b1e-0a1b2c3d4e5f';
+
+  it('tiktok jobs are registered for their own platform only', () => {
+    expect(TIKTOK_POLL_JOB).toMatchObject({ type: 'tiktok_poll', platforms: ['tiktok'] });
+    expect(TIKTOK_ADS_POLL_JOB).toMatchObject({
+      type: 'tiktok_ads_poll',
+      platforms: ['tiktok_ads'],
+    });
+    const r = new JobRegistry();
+    r.register(enqueueOnly(TIKTOK_POLL_JOB));
+    r.register(enqueueOnly(TIKTOK_ADS_POLL_JOB));
+    expect(r.supports('tiktok_poll', 'tiktok')).toBe(true);
+    expect(r.supports('tiktok_poll', 'tiktok_ads')).toBe(false);
+    expect(r.supports('tiktok_ads_poll', 'tiktok_ads')).toBe(true);
+    expect(r.supports('tiktok_ads_poll', 'tiktok')).toBe(false);
+    expect(r.supports('tiktok_poll', 'facebook')).toBe(false);
+  });
+
+  it('accept only a connection id and key a run by it', () => {
+    for (const spec of [TIKTOK_POLL_JOB, TIKTOK_ADS_POLL_JOB]) {
+      expect(spec.payload.parse({ connectionId })).toEqual({ connectionId });
+      for (const bad of [{}, { connectionId: 'x' }, { connectionId, bucket: 1 }])
+        expect(spec.payload.safeParse(bad).success).toBe(false);
+      expect(EXTERNAL_REF.test(spec.externalRef({ connectionId }))).toBe(true);
+    }
+  });
+
+  it('EXECUTE_JOB includes both TikTok platforms', () => {
+    expect(EXECUTE_JOB.platforms).toEqual(['facebook', 'instagram', 'tiktok', 'tiktok_ads']);
   });
 });

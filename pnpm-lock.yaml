@@ -770,6 +770,15 @@ importers:
       '@feedbouncer/connector-meta-ads':
         specifier: workspace:*
         version: link:../connector-meta-ads
+      '@feedbouncer/connector-tiktok':
+        specifier: workspace:*
+        version: link:../connector-tiktok
+      '@feedbouncer/connector-tiktok-ads':
+        specifier: workspace:*
+        version: link:../connector-tiktok-ads
+      '@feedbouncer/tiktok-business-api':
+        specifier: workspace:*
+        version: link:../tiktok-business-api
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
