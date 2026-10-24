@@ -245,7 +245,7 @@ describe('facebook connect flow', () => {
     const refused = await authorize(org, org.owner);
     const r = await call(
       'GET',
-      `/api/v1/oauth/facebook/callback?error=access_denied&state=${refused.searchParams.get('state')}`,
+      `/api/v1/oauth/facebook/callback?error=server_error&state=${refused.searchParams.get('state')}`,
       org.owner,
     );
     expect(r.headers.location).toBe(
