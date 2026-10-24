@@ -228,6 +228,11 @@ describe('action runs wiring', () => {
     expect(jobs.supports('action_run_advance', 'facebook')).toBe(true);
     expect(jobs.supports('action_run_advance', 'instagram')).toBe(true);
   });
+  it('registers suggestion_bulk_apply for tiktok and tiktok_ads, so bulk review works there', () => {
+    const jobs = buildJobRegistry(fakeDeps);
+    expect(jobs.supports('suggestion_bulk_apply', 'tiktok')).toBe(true);
+    expect(jobs.supports('suggestion_bulk_apply', 'tiktok_ads')).toBe(true);
+  });
   it('registers action_run_advance for tiktok and tiktok_ads, so rule steps on their comments run', () => {
     const jobs = buildJobRegistry(fakeDeps);
     expect(jobs.supports('action_run_advance', 'tiktok')).toBe(true);

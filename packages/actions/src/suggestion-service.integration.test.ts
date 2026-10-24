@@ -93,7 +93,11 @@ const jobCtx = (s: ConnectionScope, platform: Platform, jobType: string): JobCon
 
 const SPECS: Record<
   string,
-  { payload: { parse(p: unknown): unknown }; externalRef(p: never): string }
+  {
+    payload: { parse(p: unknown): unknown };
+    externalRef(p: never): string;
+    platforms: readonly Platform[] | 'all';
+  }
 > = {
   [EXECUTE_JOB.type]: EXECUTE_JOB,
   [INGEST_JOB.type]: INGEST_JOB,
@@ -109,6 +113,9 @@ class FakeQueue {
   enqueue = async (req: EnqueueRequest): Promise<EnqueueResult> => {
     const spec = SPECS[req.type];
     if (!spec) throw new Error(`unknown job type ${req.type}`);
+    // As JobProducer: a job type only runs on the platforms its spec lists.
+    if (spec.platforms !== 'all' && !spec.platforms.includes(req.platform))
+      throw new Error(`job type ${req.type} does not serve ${req.platform}`);
     const payload = spec.payload.parse(req.payload);
     const key = JSON.stringify([
       req.scope.connectionId,
@@ -658,6 +665,35 @@ describe('bulk', () => {
       [t.brandId],
     );
     expect(pending.rows[0]!.n).toBe(stuck.length);
+  });
+
+  it('bulk by filter works on tiktok and tiktok_ads connections', async () => {
+    for (const platform of ['tiktok', 'tiktok_ads'] as const) {
+      await ctx.c.query('UPDATE connection SET platform = $2 WHERE id = $1', [
+        t.connectionId,
+        platform,
+      ]);
+      try {
+        await propose((await seedCommentRow(ctx.c, t, `spam on ${platform}`)).id);
+        nowMs = Date.now();
+        const res = await requestBulkByFilter(d, scope, {
+          action: 'dismiss',
+          filter: {},
+          ...user(),
+        });
+        expect(res).toEqual({ matched: 1 });
+        await queue.drain();
+        const pending = await pool.query<{ n: number }>(
+          "SELECT count(*)::int AS n FROM action_suggestion WHERE brand_id = $1 AND status = 'pending'",
+          [t.brandId],
+        );
+        expect(pending.rows[0]!.n).toBe(0);
+      } finally {
+        await ctx.c.query("UPDATE connection SET platform = 'facebook' WHERE id = $1", [
+          t.connectionId,
+        ]);
+      }
+    }
   });
 
   it('bulk by filter with nothing matching enqueues nothing', async () => {

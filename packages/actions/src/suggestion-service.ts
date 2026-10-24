@@ -262,7 +262,7 @@ export async function bulkDecide(
 
 export const SUGGESTION_BULK_JOB = {
   type: 'suggestion_bulk_apply' as const,
-  platforms: ['facebook', 'instagram'] as const,
+  platforms: ['facebook', 'instagram', 'tiktok', 'tiktok_ads'] as const,
   payload: z.strictObject({
     action: z.enum(['approve', 'dismiss']),
     filter: z.strictObject({
