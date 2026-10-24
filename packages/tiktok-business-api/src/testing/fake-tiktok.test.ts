@@ -40,6 +40,29 @@ function world(o: { now?: () => Date } = {}) {
 }
 
 describe('FakeTikTok', () => {
+  it('authCodeFor issues a fresh single-use code; one ads code may cover many advertisers', async () => {
+    const { fake, call } = world();
+    const a = fake.addAdvertiser({ name: 'A' }).advertiserId;
+    const b = fake.addAdvertiser({ name: 'B' }).advertiserId;
+    const code = fake.authCodeFor(a, b);
+    const t = await call('adOauthToken', undefined, {
+      body: { app_id: 'app', secret: 'sec', auth_code: code },
+    });
+    expect(t.advertiser_ids).toEqual([a, b]);
+    const list = await call('adAdvertiserGet', t.access_token, {
+      query: { app_id: 'app', secret: 'sec' },
+    });
+    expect(list.list.map((x: Obj) => x.advertiser_name)).toEqual(['A', 'B']);
+    await expect(
+      call('adOauthToken', undefined, { body: { app_id: 'app', secret: 'sec', auth_code: code } }),
+    ).rejects.toThrow();
+    const { businessId } = fake.addBusinessAccount();
+    const tt = await call('ttToken', undefined, {
+      body: { client_id: 'app', client_secret: 'sec', auth_code: fake.authCodeFor(businessId) },
+    });
+    expect(tt.open_id).toBe(businessId);
+  });
+
   it('organic comment list pages newest first with cursor and has_more', async () => {
     const { fake, call, ttLogin } = await Promise.resolve(world());
     const a = await ttLogin();

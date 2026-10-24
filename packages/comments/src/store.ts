@@ -54,6 +54,8 @@ export interface CommentRow {
   readonly origin: CommentOrigin;
   /** Up to 5 linked ads, by ad id. */
   readonly ads: readonly { adId: string; adAccountId: string }[];
+  /** Link to the post, video or ad the comment is on, as its connector listed it; else null. */
+  readonly sourcePermalink: string | null;
 }
 
 export type CommentOrigin = 'ad' | 'organic';
@@ -98,7 +100,7 @@ const ROW_SQL = `
                     AND ma.kind = 'private_reply' AND ma.status IN ('pending', 'applied'))
            AS private_replied,
          CASE WHEN ${IS_AD_SQL} THEN 'ad' ELSE 'organic' END AS origin,
-         COALESCE(ads.ads, '[]'::jsonb) AS ads
+         COALESCE(ads.ads, '[]'::jsonb) AS ads, s.metadata->>'permalink' AS source_permalink
     FROM comment c
     JOIN source s ON s.id = c.source_id AND s.organization_id = c.organization_id AND s.brand_id = c.brand_id
     JOIN connection cn ON cn.id = c.connection_id AND cn.organization_id = c.organization_id AND cn.brand_id = c.brand_id
@@ -142,6 +144,7 @@ const toRow = (r: Record<string, unknown>): CommentRow => ({
   privateReplied: r.private_replied as boolean,
   origin: r.origin as CommentOrigin,
   ads: r.ads as { adId: string; adAccountId: string }[],
+  sourcePermalink: (r.source_permalink as string | null) ?? null,
 });
 
 const ids = (s: ConnectionScope) => [s.organizationId, s.brandId, s.connectionId];
@@ -226,15 +229,17 @@ export async function upsertListedSource(
   scope: ConnectionScope,
   externalId: string,
   kind: ListedSourceKind,
+  permalink: string | null = null,
 ): Promise<string> {
   const r = await tx.query<{ id: string }>(
-    `INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id)
-     VALUES ($1, $2, $3, $5, $4)
+    `INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id, metadata)
+     VALUES ($1, $2, $3, $5, $4, jsonb_strip_nulls(jsonb_build_object('permalink', $6::text)))
      ON CONFLICT (connection_id, external_id) DO UPDATE SET
-       kind = CASE WHEN source.kind = 'ad_post' THEN 'ad_post' ELSE EXCLUDED.kind END, updated_at = now()
+       kind = CASE WHEN source.kind = 'ad_post' THEN 'ad_post' ELSE EXCLUDED.kind END,
+       metadata = source.metadata || EXCLUDED.metadata, updated_at = now()
        WHERE source.organization_id = $1 AND source.brand_id = $2
      RETURNING id`,
-    [...ids(scope), externalId, kind],
+    [...ids(scope), externalId, kind, permalink],
   );
   if (!r.rows[0]) throw outOfScope();
   return r.rows[0].id;

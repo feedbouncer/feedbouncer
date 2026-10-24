@@ -55,7 +55,7 @@ export class FakeTikTok {
   private beforeNextPage: (() => void) | undefined;
   private readonly accounts = new Map<string, { username: string; scopes: string[] }>();
   private readonly advertisers = new Map<string, string>();
-  private readonly authCodes = new Map<string, { kind: 'tt' | 'ad'; id: string }>();
+  private readonly authCodes = new Map<string, { kind: 'tt' | 'ad'; ids: string[] }>();
   private readonly videos = new Map<
     string,
     { businessId: string; createdAtSec: number; shareUrl: string }
@@ -93,7 +93,7 @@ export class FakeTikTok {
       username: o.username ?? `user${businessId.slice(-4)}`,
       scopes: o.scopes ?? ['user.info.basic', 'video.list', 'comment.list', 'comment.list.manage'],
     });
-    return { businessId, authCode: this.authCode('tt', businessId) };
+    return { businessId, authCode: this.authCode('tt', [businessId]) };
   }
   addVideo(businessId: string, o: { createdAtSec?: number; shareUrl?: string } = {}) {
     const itemId = this.id();
@@ -124,7 +124,7 @@ export class FakeTikTok {
   addAdvertiser(o: { name?: string } = {}) {
     const advertiserId = this.id();
     this.advertisers.set(advertiserId, o.name ?? `Advertiser ${advertiserId.slice(-4)}`);
-    return { advertiserId, authCode: this.authCode('ad', advertiserId) };
+    return { advertiserId, authCode: this.authCode('ad', [advertiserId]) };
   }
   addAdComment(
     advertiserId: string,
@@ -145,6 +145,10 @@ export class FakeTikTok {
       adId: o.adId,
     });
     return { commentId: id };
+  }
+  /** A fresh single-use auth code for one business account, or for any number of advertisers. */
+  authCodeFor(...ids: string[]) {
+    return this.authCode(ids.every((id) => this.advertisers.has(id)) ? 'ad' : 'tt', ids);
   }
   /** Ads tokens expire after 24h and come with a refresh token (V12 alternative). */
   withExpiringAdsTokens() {
@@ -198,9 +202,9 @@ export class FakeTikTok {
   private id() {
     return String(this.nextId++);
   }
-  private authCode(kind: 'tt' | 'ad', id: string) {
+  private authCode(kind: 'tt' | 'ad', ids: string[]) {
     const code = `${kind}_code_${this.id()}`;
-    this.authCodes.set(code, { kind, id });
+    this.authCodes.set(code, { kind, ids });
     return code;
   }
   private comment(
@@ -323,8 +327,8 @@ export class FakeTikTok {
         const code = this.authCodes.get(need(b.auth_code));
         if (code?.kind !== 'tt') throw new Fail(40002);
         this.authCodes.delete(need(b.auth_code));
-        const { access, refresh } = this.issue('tt', [code.id], 86400);
-        return this.ttTokens(access, refresh!, code.id);
+        const { access, refresh } = this.issue('tt', code.ids, 86400);
+        return this.ttTokens(access, refresh!, code.ids[0]!);
       }
       case 'ttRefresh': {
         this.checkApp(b.client_id, b.client_secret);
@@ -398,12 +402,12 @@ export class FakeTikTok {
         this.authCodes.delete(need(b.auth_code));
         const { access, refresh } = this.issue(
           'ad',
-          [code.id],
+          code.ids,
           this.expiringAds ? 86400 : undefined,
         );
         return {
           access_token: access,
-          advertiser_ids: [code.id],
+          advertiser_ids: code.ids,
           ...(refresh && {
             expires_in: 86400,
             refresh_token: refresh,

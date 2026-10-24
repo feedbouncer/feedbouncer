@@ -231,7 +231,31 @@ describe('PgCommentStore', () => {
       privateReplied: false,
       origin: 'organic',
       ads: [],
+      sourcePermalink: null,
     });
+  });
+
+  it('a listed source keeps its permalink; a later listing without one keeps it', async () => {
+    const r = await ctx.c.query<{ id: string }>(
+      `INSERT INTO connection (organization_id, brand_id, platform, external_account_id)
+       VALUES ($1, $2, 'tiktok', 'tt-link-1') RETURNING id`,
+      [t.organizationId, t.brandId],
+    );
+    const tiktok = { ...scope(), connectionId: r.rows[0]!.id };
+    const link = 'https://www.tiktok.com/@shop/video/7300000000000000201';
+    await upsertListedSource(pool, tiktok, '7300000000000000201', 'video', link);
+    const c = await upsertStored(
+      store,
+      tiktok,
+      comment({ sourceExternalId: '7300000000000000201' }),
+      own(1),
+    );
+    expect((await store.load(t, c.commentId))?.sourcePermalink).toBe(link);
+    await upsertListedSource(pool, tiktok, '7300000000000000201', 'video', null);
+    expect((await store.load(t, c.commentId))?.sourcePermalink).toBe(link);
+    const next = 'https://www.tiktok.com/@shop/video/7300000000000000201?x=1';
+    await upsertListedSource(pool, tiktok, '7300000000000000201', 'video', next);
+    expect((await store.load(t, c.commentId))?.sourcePermalink).toBe(next);
   });
 
   it('comments under an ad_post source report origin ad; tiktok video comments report organic', async () => {

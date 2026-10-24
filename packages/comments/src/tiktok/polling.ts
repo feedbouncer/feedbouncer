@@ -190,7 +190,7 @@ export class PgTikTokPolling {
     await withTransaction(this.pool, async (tx) => {
       for (const s of sources) {
         if (s.kind !== 'video' && s.kind !== 'ad_post') throw outOfScope();
-        const id = await upsertListedSource(tx, scope, s.externalId, s.kind);
+        const id = await upsertListedSource(tx, scope, s.externalId, s.kind, s.permalink);
         out.set(s.externalId, id);
         if (s.kind !== 'video') continue;
         await tx.query(
