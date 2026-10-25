@@ -485,6 +485,62 @@ describe('ad polling settings', () => {
   });
 });
 
+describe('threads connector and polling settings', () => {
+  const secret = 'threads-sentinel-secret-0123456789';
+  const threads = {
+    THREADS_CONNECTOR_ENABLED: 'true',
+    THREADS_APP_ID: '1234567890',
+    THREADS_APP_SECRET: secret,
+  };
+
+  it('is off, with no polling settings read, by default', () => {
+    expect(load({ ...base, THREADS_POLL_INTERVAL_SEC: '1' }).threads).toBeNull();
+  });
+  it('works without any Facebook config and applies the documented defaults', () => {
+    const env = load({ ...base, ...threads });
+    expect(env.facebook).toBeNull();
+    expect(env.threads).toMatchObject({
+      appId: threads.THREADS_APP_ID,
+      appSecret: new Secret(secret),
+      webhookVerifyToken: null,
+      pollIntervalSec: 600,
+      discoveryIntervalSec: 900,
+    });
+  });
+  it('reads and bounds the polling intervals', () => {
+    const env = load({
+      ...base,
+      ...threads,
+      THREADS_POLL_INTERVAL_SEC: '60',
+      THREADS_DISCOVERY_INTERVAL_SEC: '21600',
+    });
+    expect(env.threads).toMatchObject({ pollIntervalSec: 60, discoveryIntervalSec: 21_600 });
+    expect(() => load({ ...base, ...threads, THREADS_POLL_INTERVAL_SEC: '59' })).toThrow(
+      /THREADS_POLL_INTERVAL_SEC/,
+    );
+    expect(() => load({ ...base, ...threads, THREADS_DISCOVERY_INTERVAL_SEC: '299' })).toThrow(
+      /THREADS_DISCOVERY_INTERVAL_SEC/,
+    );
+  });
+  it('THREADS_CONNECTOR_ENABLED=true without the app secret fails startup', () => {
+    const noSecret = { ...threads, THREADS_APP_SECRET: undefined };
+    expect(messageOf(() => load({ ...base, ...noSecret }))).toMatch(/THREADS_APP_SECRET/);
+  });
+  it('reads the app secret from THREADS_APP_SECRET_FILE', () => {
+    const fs = { size: () => secret.length + 1, read: () => `${secret}\n` };
+    const env = loadWorkerEnv(
+      { ...base, ...threads, THREADS_APP_SECRET: undefined, THREADS_APP_SECRET_FILE: '/run/s' },
+      { warn: () => {}, fs },
+    );
+    expect(env.threads?.appSecret.reveal()).toBe(secret);
+  });
+  it('needs the public web url and mail config for reconnect notices and oauth', () => {
+    expect(messageOf(() => load({ ...without('PUBLIC_WEB_URL'), ...threads }))).toMatch(
+      /PUBLIC_WEB_URL/,
+    );
+  });
+});
+
 describe('tiktok connectors and polling settings', () => {
   const secret = 'tiktok-sentinel-secret-0123456789';
   const organic = {

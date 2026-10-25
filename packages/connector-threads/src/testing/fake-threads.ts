@@ -150,6 +150,14 @@ export class FakeThreads {
     return { userId: id, authCode };
   }
 
+  /** A fresh authorization code for an existing user, as after granting access again. */
+  newAuthCode(userId: string): string {
+    this.user(userId);
+    const authCode = `code${this.nextCode++}`;
+    this.authCodes.set(authCode, userId);
+    return authCode;
+  }
+
   addPost(userId: string, o: { at?: Date } = {}): { postId: string } {
     const user = this.user(userId);
     const id = this.id();

@@ -34,6 +34,7 @@ vi.mock('@feedbouncer/comments', async (importOriginal) => {
     adPollJob: vi.fn(actual.adPollJob),
     tiktokPollJob: vi.fn(actual.tiktokPollJob),
     tiktokAdsPollJob: vi.fn(actual.tiktokAdsPollJob),
+    threadsPollJob: vi.fn(actual.threadsPollJob),
     ModerationActions: vi.fn(actual.ModerationActions),
   };
 });
@@ -87,6 +88,45 @@ describe('buildConnectorRegistry', () => {
         .slice()
         .sort(),
     ).toEqual(['facebook', 'instagram']);
+  });
+});
+
+describe('threads', () => {
+  const threads = {
+    appId: '1234567890',
+    appSecret: new Secret('threads-secret-0123456789'),
+    webhookVerifyToken: null,
+    pollIntervalSec: 600,
+    discoveryIntervalSec: 900,
+  };
+  const settings = { pollIntervalSec: 600, discoveryIntervalSec: 900 };
+
+  it('the connector and the poll job register without Facebook config', () => {
+    const connectors = buildConnectorRegistry({
+      facebook: null,
+      instagram: null,
+      metaAds: null,
+      threads,
+    });
+    expect(connectors.platforms()).toEqual(['threads']);
+    const jobs = buildJobRegistry({ ...fakeDeps, threads: { settings } });
+    expect(jobs.supports('threads_poll', 'threads')).toBe(true);
+    expect(jobs.supports('threads_poll', 'facebook')).toBe(false);
+    for (const type of ['moderation_execute', 'action_run_advance', 'suggestion_bulk_apply']) {
+      expect(jobs.supports(type, 'threads')).toBe(true);
+    }
+  });
+  it('passes the worker settings and the rule trigger to the poll job', () => {
+    const poll = vi.mocked(comments.threadsPollJob);
+    buildJobRegistry({ ...fakeDeps, threads: { settings } });
+    expect(poll.mock.calls.at(-1)![0].settings).toBe(settings);
+    expect(poll.mock.calls.at(-1)![0].applied).toBeInstanceOf(RuleTrigger);
+  });
+  it('no threads env → no connector, no poll job', () => {
+    expect(
+      buildConnectorRegistry({ facebook: cfg, instagram: null, metaAds: null }).platforms(),
+    ).toEqual(['facebook']);
+    expect(buildJobRegistry(fakeDeps).get('threads_poll')).toBeUndefined();
   });
 });
 

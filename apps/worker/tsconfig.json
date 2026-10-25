@@ -11,6 +11,7 @@
     { "path": "../../packages/connectors/tsconfig.build.json" },
     { "path": "../../packages/connector-facebook/tsconfig.build.json" },
     { "path": "../../packages/connector-instagram/tsconfig.build.json" },
+    { "path": "../../packages/connector-threads/tsconfig.build.json" },
     { "path": "../../packages/connector-tiktok/tsconfig.build.json" },
     { "path": "../../packages/connector-tiktok-ads/tsconfig.build.json" },
     { "path": "../../packages/connector-youtube/tsconfig.build.json" },

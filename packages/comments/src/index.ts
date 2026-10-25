@@ -29,6 +29,7 @@ export { PgThreadsPolling } from './threads/polling.js';
 export type { ClaimedThread, DiscoveryState, ThreadsWake } from './threads/polling.js';
 export * from './threads/poll.js';
 export * from './threads/wake-sink.js';
+export * from './threads/scheduler.js';
 export * from './youtube/quota-day.js';
 export * from './youtube/budget.js';
 export * from './youtube/settings.js';

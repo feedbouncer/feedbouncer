@@ -23,6 +23,7 @@ import {
 import { createFacebookConnector, type FacebookConfig } from '@feedbouncer/connector-facebook';
 import { createInstagramConnector, type InstagramConfig } from '@feedbouncer/connector-instagram';
 import { createMetaAdsConnector, type MetaAdsConfig } from '@feedbouncer/connector-meta-ads';
+import { createThreadsConnector, type ThreadsConfig } from '@feedbouncer/connector-threads';
 import { createTikTokConnector, type TikTokConfig } from '@feedbouncer/connector-tiktok';
 import { createTikTokAdsConnector, type TikTokAdsConfig } from '@feedbouncer/connector-tiktok-ads';
 import { createYouTubeConnector, type YouTubeEnvConfig } from '@feedbouncer/connector-youtube';
@@ -32,6 +33,7 @@ import {
   connectionBackfillJob,
   PgAdTracking,
   PgBackfillStore,
+  PgThreadsPolling,
   PgTikTokPolling,
   PgYouTubeBacklog,
   PgYouTubeSettings,
@@ -44,6 +46,8 @@ import {
   type TikTokPollSettings,
   tiktokAdsPollJob,
   tiktokPollJob,
+  threadsPollJob,
+  type ThreadsPollSettings,
   CompositeActionOutcomeObserver,
   executeActionJob,
   ingestCommentJob,
@@ -114,6 +118,8 @@ export interface WorkerJobDeps {
     readonly settings: TikTokPollSettings;
     readonly platforms: readonly TikTokPollPlatform[];
   };
+  /** Set when the Threads connector is enabled: registers the poll job. */
+  readonly threads?: { readonly settings: ThreadsPollSettings };
   /** Set when the YouTube connector is enabled: registers the cycle job and budgeted dispatch. */
   readonly youtube?: {
     readonly ledger: PgYouTubeQuotaLedger;
@@ -131,6 +137,7 @@ export function buildConnectorRegistry(cfg: {
   metaAds: MetaAdsConfig | null;
   tiktok?: TikTokConfig | null;
   tiktokAds?: TikTokAdsConfig | null;
+  threads?: ThreadsConfig | null;
   youtube?: YouTubeEnvConfig | null;
 }): ConnectorRegistry {
   const registry = new ConnectorRegistry();
@@ -139,6 +146,7 @@ export function buildConnectorRegistry(cfg: {
   if (cfg.metaAds) registry.register(createMetaAdsConnector(cfg.metaAds));
   if (cfg.tiktok) registry.register(createTikTokConnector(cfg.tiktok));
   if (cfg.tiktokAds) registry.register(createTikTokAdsConnector(cfg.tiktokAds));
+  if (cfg.threads) registry.register(createThreadsConnector(cfg.threads));
   if (cfg.youtube) registry.register(createYouTubeConnector(cfg.youtube));
   return registry;
 }
@@ -344,6 +352,19 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
     };
     if (deps.tiktok.platforms.includes('tiktok')) registry.register(tiktokPollJob(pollDeps));
     if (deps.tiktok.platforms.includes('tiktok_ads')) registry.register(tiktokAdsPollJob(pollDeps));
+  }
+  if (deps.threads) {
+    registry.register(
+      threadsPollJob({
+        runtime: deps.runtime,
+        directory: deps.directory,
+        polling: new PgThreadsPolling(deps.pool),
+        store: deps.store,
+        clock: deps.clock,
+        settings: deps.threads.settings,
+        applied,
+      }),
+    );
   }
   if (deps.youtube && youtubeBacklog) {
     registry.register(

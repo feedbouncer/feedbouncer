@@ -239,4 +239,21 @@ describe('FakeThreads', () => {
       expect(await ids(endpoint, 'false')).toEqual([a, b, c]);
     }
   });
+
+  it('a new auth code signs the same user in again after a token was revoked', async () => {
+    const { fake, req, login } = world();
+    const u = await login();
+    fake.revokeToken(u.token);
+    await expect(req(u.token, 'me')).rejects.toBeInstanceOf(ConnectorError);
+    const short = await req(undefined, 'oauthToken', {
+      method: 'POST',
+      form: {
+        client_id: 'app1',
+        client_secret: 'shh',
+        code: fake.newAuthCode(u.userId),
+        grant_type: 'authorization_code',
+      },
+    });
+    expect(short.user_id).toBe(u.userId);
+  });
 });

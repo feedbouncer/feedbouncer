@@ -39,6 +39,11 @@ import {
 } from '@feedbouncer/connector-facebook';
 import { parseInstagramEnv, type InstagramConfig } from '@feedbouncer/connector-instagram';
 import { parseMetaAdsEnv, type MetaAdsConfig } from '@feedbouncer/connector-meta-ads';
+import {
+  THREADS_FILE_VARS,
+  parseThreadsEnv,
+  type ThreadsConfig,
+} from '@feedbouncer/connector-threads';
 import { TIKTOK_FILE_VARS, parseTikTokEnv, type TikTokConfig } from '@feedbouncer/connector-tiktok';
 import {
   TIKTOK_ADS_FILE_VARS,
@@ -77,6 +82,7 @@ export const WORKER_FILE_VARS = [
   'SMTP_URL',
   ...ENCRYPTION_FILE_VARS,
   ...FACEBOOK_FILE_VARS,
+  ...THREADS_FILE_VARS,
   ...TIKTOK_FILE_VARS,
   ...TIKTOK_ADS_FILE_VARS,
   ...YOUTUBE_FILE_VARS,
@@ -116,6 +122,8 @@ export interface WorkerEnv {
   readonly metaAds: MetaAdsConfig | null;
   /** Cadence of ad discovery and ad comment polling; null exactly when `metaAds` is. */
   readonly adPolling: AdPollingConfig | null;
+  /** Null unless THREADS_CONNECTOR_ENABLED=true. Independent of the Facebook config; carries the poll cadence. */
+  readonly threads: ThreadsConfig | null;
   /** Null unless TIKTOK_CONNECTOR_ENABLED=true. Independent of the Facebook config. */
   readonly tiktok: TikTokConfig | null;
   /** Null unless TIKTOK_ADS_CONNECTOR_ENABLED=true. Independent of the Facebook config. */
@@ -328,15 +336,24 @@ export function loadWorkerEnv(
     tiktok || tiktokAds
       ? readTikTokPollingConfig(env, { organic: !!tiktok, ads: !!tiktokAds })
       : null;
+  const threads = parseThreadsEnv(env);
   const youtube = parseYouTubeEnv(env);
   const alerts = { ...parseAlertChannels(env.ALERT_CHANNELS), ...readAlertLimits(env) };
   const weeklyReports = readEnum(env, 'WEEKLY_REPORTS', ['on', 'off'], 'off') === 'on';
   const publicWebUrl =
-    facebook || tiktok || tiktokAds || youtube || alerts.slack || alerts.email || weeklyReports
+    facebook ||
+    threads ||
+    tiktok ||
+    tiktokAds ||
+    youtube ||
+    alerts.slack ||
+    alerts.email ||
+    weeklyReports
       ? readPublicWebUrl(env)
       : null;
   const mail =
-    publicWebUrl && (facebook || tiktok || tiktokAds || youtube || alerts.email || weeklyReports)
+    publicWebUrl &&
+    (facebook || threads || tiktok || tiktokAds || youtube || alerts.email || weeklyReports)
       ? readMailConfig(env, publicWebUrl)
       : null;
   checkNotPlaceholder(appEnv, 'DATABASE_URL', databaseUrl.href, opts.warn);
@@ -382,6 +399,7 @@ export function loadWorkerEnv(
     tiktok,
     tiktokAds,
     tiktokPolling,
+    threads,
     youtube,
     mail,
     publicWebUrl,
@@ -409,6 +427,7 @@ export function loadWorkerEnv(
     metaAdsEnabled: config.metaAds !== null,
     tiktokEnabled: config.tiktok !== null,
     tiktokAdsEnabled: config.tiktokAds !== null,
+    threadsEnabled: config.threads !== null,
     youtubeEnabled: config.youtube !== null,
     alertSlackEnabled: alerts.slack,
     alertEmailEnabled: alerts.email,

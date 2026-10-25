@@ -53,6 +53,16 @@ x-tiktok-env: &tiktok-env
   TIKTOK_ADS_APP_ID: ${TIKTOK_ADS_APP_ID:-}
   TIKTOK_ADS_APP_SECRET: ${TIKTOK_ADS_APP_SECRET:-}
 
+# Threads connector. No defaults: with THREADS_CONNECTOR_ENABLED unset the connector is off.
+# The webhook verify token is optional; without it replies arrive within the poll interval.
+x-threads-env: &threads-env
+  THREADS_CONNECTOR_ENABLED: ${THREADS_CONNECTOR_ENABLED:-}
+  THREADS_APP_ID: ${THREADS_APP_ID:-}
+  THREADS_APP_SECRET: ${THREADS_APP_SECRET:-}
+  THREADS_WEBHOOK_VERIFY_TOKEN: ${THREADS_WEBHOOK_VERIFY_TOKEN:-}
+  THREADS_POLL_INTERVAL_SEC: ${THREADS_POLL_INTERVAL_SEC:-}
+  THREADS_DISCOVERY_INTERVAL_SEC: ${THREADS_DISCOVERY_INTERVAL_SEC:-}
+
 # YouTube connector. No defaults here: with YOUTUBE_CONNECTOR_ENABLED unset the connector is off,
 # and an empty tuning value means the default (.env.example).
 x-youtube-env: &youtube-env
@@ -174,7 +184,16 @@ services:
       dockerfile: apps/api/Dockerfile
       target: dev
     environment:
-      <<: [*backend-env, *secrets-env, *facebook-env, *tiktok-env, *youtube-env, *alerts-env]
+      <<:
+        [
+          *backend-env,
+          *secrets-env,
+          *facebook-env,
+          *tiktok-env,
+          *threads-env,
+          *youtube-env,
+          *alerts-env,
+        ]
       # tsx watch gets no file events through Docker Desktop bind mounts.
       CHOKIDAR_USEPOLLING: '1'
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is not set - copy .env.example to .env}
@@ -267,7 +286,16 @@ services:
       dockerfile: apps/worker/Dockerfile
       target: dev
     environment:
-      <<: [*backend-env, *secrets-env, *facebook-env, *tiktok-env, *youtube-env, *alerts-env]
+      <<:
+        [
+          *backend-env,
+          *secrets-env,
+          *facebook-env,
+          *tiktok-env,
+          *threads-env,
+          *youtube-env,
+          *alerts-env,
+        ]
       CHOKIDAR_USEPOLLING: '1'
       # Reconnect notices go to the dev mail sink; links and the OAuth redirect
       # URI are built from PUBLIC_WEB_URL, which must match the api's.
@@ -362,6 +390,7 @@ services:
       - ./packages/connector-facebook/src:/repo/packages/connector-facebook/src:ro
       - ./packages/connector-instagram/src:/repo/packages/connector-instagram/src:ro
       - ./packages/connector-meta-ads/src:/repo/packages/connector-meta-ads/src:ro
+      - ./packages/connector-threads/src:/repo/packages/connector-threads/src:ro
       - ./packages/connector-tiktok/src:/repo/packages/connector-tiktok/src:ro
       - ./packages/connector-tiktok-ads/src:/repo/packages/connector-tiktok-ads/src:ro
       - ./packages/connector-youtube/src:/repo/packages/connector-youtube/src:ro
