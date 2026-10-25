@@ -23,6 +23,7 @@ import type {
   CommentProbe,
   Connector,
   ConnectionCommentsPage,
+  NormalizedThread,
 } from './connector.js';
 import {
   ConnectorError,
@@ -54,6 +55,8 @@ import {
   parseConnectionComments,
   parsePage,
   parseProbes,
+  parseReplyCounts,
+  parseThreads,
   recentSourceSchema,
   respondRequestSchema,
   sourceSchema,
@@ -89,6 +92,8 @@ export type ConnectorOperation =
   | 'act'
   | 'act_batch'
   | 'probe_comments'
+  | 'list_threads'
+  | 'probe_thread_reply_counts'
   | 'respond'
   | 'lifecycle';
 export interface ConnectorCallEvent {
@@ -537,6 +542,36 @@ export class ConnectionClient {
       throw invalidRequest();
     const raw = await this.#call('urgent', 'probe_comments', (ctx) => op(ctx, refs));
     return parseProbes(raw, refs);
+  }
+
+  async listThreads(cursor: string | null, opts?: ListOptions): Promise<Page<NormalizedThread>> {
+    const op = this.connector.listThreads?.bind(this.connector);
+    if (!op) throw new ConnectorError('unsupported', 'list_threads');
+    if (!cursorSchema.safeParse(cursor).success) throw invalidRequest();
+    return parseThreads(
+      await this.#call(opts?.priority ?? 'bulk', 'list_threads', (ctx) => op(ctx, { cursor })),
+    );
+  }
+
+  /** At most `batchActions.maxTargets` (else `maxPageSize`) threads in one call. Throws ConnectorError. */
+  async probeThreadReplyCounts(
+    threadIds: readonly string[],
+    opts?: ListOptions,
+  ): Promise<Map<string, number>> {
+    const op = this.connector.probeThreadReplyCounts?.bind(this.connector);
+    if (!op) throw new ConnectorError('unsupported', 'probe_thread_reply_counts');
+    const max = this.capabilities.batchActions?.maxTargets ?? this.capabilities.maxPageSize;
+    if (
+      !Array.isArray(threadIds) ||
+      threadIds.length === 0 ||
+      threadIds.length > max ||
+      !threadIds.every((id) => externalIdSchema.safeParse(id).success)
+    )
+      throw invalidRequest();
+    const raw = await this.#call(opts?.priority ?? 'bulk', 'probe_thread_reply_counts', (ctx) =>
+      op(ctx, threadIds),
+    );
+    return parseReplyCounts(raw, threadIds);
   }
 
   /** Never throws for platform outcomes; they are encoded in the result. Runs at urgent priority. */

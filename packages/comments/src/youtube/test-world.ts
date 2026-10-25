@@ -21,15 +21,21 @@ import {
 } from '@feedbouncer/connectors';
 import { createYouTubeConnector } from '@feedbouncer/connector-youtube';
 import { FakeYouTube } from '@feedbouncer/connector-youtube/testing';
+import type { JobContext } from '@feedbouncer/jobs';
+import { MemoryMailer } from '@feedbouncer/mailer/testing';
 import { CredentialStore, type ConnectionScope } from '@feedbouncer/secrets';
 import { testKeyring } from '@feedbouncer/secrets/testing';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
-import type { ActionOutcomeObserver } from '../hooks.js';
+import type { ActionOutcomeObserver, CommentAppliedHook } from '../hooks.js';
+import { EmailReconnectNotifier, NotifyingConnectionDirectory } from '../reconnect-notifier.js';
+import { PgCommentStore } from '../store.js';
 import { PgYouTubeBacklog } from './backlog.js';
 import { PgYouTubeQuotaLedger } from './ledger.js';
 import { planCycle, type CyclePlan, type QueuedKind } from './planner.js';
 import { PgYouTubeSettings } from './settings.js';
 import { budgetView } from './budget.js';
+import { YouTubeNotices } from './notices.js';
+import { PgYouTubeState } from './state.js';
 
 const CLIENT = { clientId: 'yt-client-id', clientSecret: 'yt-client-SECRET-0123456789' };
 export const CHANNEL = 'UC' + 'w'.repeat(22);
@@ -81,7 +87,12 @@ export async function youtubeWorld(label: string, o: { wrap?: (c: Connector) => 
     log,
   });
   const creds = new CredentialStore(pool, testKeyring(['k1']));
-  const directory = new PgConnectionDirectory(pool);
+  const mailer = new MemoryMailer();
+  const directory = new NotifyingConnectionDirectory(
+    new PgConnectionDirectory(pool),
+    new EmailReconnectNotifier({ pool, mailer, publicWebUrl: new URL('https://app.test'), log }),
+    log,
+  );
   const vault = new PgCredentialVault(creds, pool, log);
   const oauth = (c: Connector): OAuthContext => ({
     http: http(c),
@@ -116,18 +127,47 @@ export async function youtubeWorld(label: string, o: { wrap?: (c: Connector) => 
   const producer = {
     enqueue: vi.fn(async () => ({ status: 'enqueued' as const, ledgerId: 'l', jobId: 'j' })),
   };
+  const store = new PgCommentStore(pool);
+  const state = new PgYouTubeState(pool);
+  const notices = new YouTubeNotices({
+    pool,
+    mailer,
+    publicWebUrl: new URL('https://app.test'),
+    log,
+    clock,
+  });
+  const applied: CommentAppliedHook & { onApplied: ReturnType<typeof vi.fn> } = {
+    onApplied: vi.fn(async () => {}),
+  };
+  const jobCtx = (scope: ConnectionScope): JobContext => ({
+    scope,
+    platform: 'youtube',
+    jobType: 'youtube_cycle',
+    ledgerId: randomUUID(),
+    attempt: 1,
+    isReplay: false,
+    signal: AbortSignal.timeout(60_000),
+    log,
+  });
 
   const ids = (s: ConnectionScope) => [s.organizationId, s.brandId, s.connectionId];
   const one = async (sql: string, v: unknown[]) =>
     (await pool.query<{ id: string }>(sql, v)).rows[0]!.id;
 
-  /** A new tenant with an active YouTube connection on the fake's channel and one video. */
-  const connect = async (name: string) => {
-    const tenant = await seedTenant(db.c, `yt-${label}-${name}`);
+  /** Fresh tokens from the fake, as a (re)connect stores them. */
+  const giveTokens = async (scope: ConnectionScope) => {
     const { tokens: tk } = await connector.exchangeCode(
       { code: new Secret(fake.authorize()), codeVerifier: new Secret('v') },
       oauth(connector),
     );
+    await creds.put(scope, 'access_token', tk.accessToken, tk.accessTokenExpiresAt);
+    if (tk.refreshToken)
+      await creds.put(scope, 'refresh_token', tk.refreshToken, tk.refreshTokenExpiresAt);
+  };
+
+  /** A new tenant with an active YouTube connection on the fake's channel and one video. */
+  const connect = async (name: string) => {
+    const tenant = await seedTenant(db.c, `yt-${label}-${name}`);
     const connectionId = await one(
       `INSERT INTO connection (organization_id, brand_id, platform, external_account_id)
        VALUES ($1, $2, 'youtube', $3) RETURNING id`,
@@ -138,9 +178,7 @@ export async function youtubeWorld(label: string, o: { wrap?: (c: Connector) => 
       brandId: tenant.brandId,
       connectionId,
     };
-    await creds.put(scope, 'access_token', tk.accessToken, tk.accessTokenExpiresAt);
-    if (tk.refreshToken)
-      await creds.put(scope, 'refresh_token', tk.refreshToken, tk.refreshTokenExpiresAt);
+    await giveTokens(scope);
     const videoId = fake.addVideo();
     const sourceId = await one(
       `INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id)
@@ -270,6 +308,25 @@ export async function youtubeWorld(label: string, o: { wrap?: (c: Connector) => 
         [scope.organizationId, scope.brandId],
       )
     ).rows.map((r) => r.details);
+  const comments = async (scope: ConnectionScope) =>
+    (
+      await pool.query<{
+        external_id: string;
+        parent_external_id: string | null;
+        platform_state: string;
+        body: string;
+        source_external_id: string;
+        source_kind: string;
+        source_active: boolean;
+      }>(
+        `SELECT c.external_id, c.parent_external_id, c.platform_state, c.body,
+                s.external_id AS source_external_id, s.kind AS source_kind, s.active AS source_active
+           FROM comment c JOIN source s ON s.id = c.source_id AND s.organization_id = c.organization_id
+          WHERE c.organization_id = $1 AND c.brand_id = $2 AND c.connection_id = $3
+          ORDER BY c.posted_at, c.external_id`,
+        ids(scope),
+      )
+    ).rows;
   /** Data API calls the fake answered since `from` (an index into fake.calls). */
   const callsSince = (from: number, method?: string) =>
     fake.calls
@@ -289,6 +346,13 @@ export async function youtubeWorld(label: string, o: { wrap?: (c: Connector) => 
     settings,
     backlog,
     producer,
+    store,
+    state,
+    notices,
+    mailer,
+    applied,
+    jobCtx,
+    comments,
     outcomes,
     observer,
     now: () => new Date(t),
@@ -298,11 +362,15 @@ export async function youtubeWorld(label: string, o: { wrap?: (c: Connector) => 
       lines.length = 0;
       outcomes.length = 0;
       producer.enqueue.mockClear();
+      applied.onApplied.mockClear();
+      mailer.clear();
       fake.clearFaults();
       fake.dailyLimit = 10_000_000;
     },
     /** The project-wide pause is per Pacific day and shared by every connection: clear it between tests. */
     clearPause: async () => void (await pool.query('DELETE FROM youtube_quota_pause')),
+    creds,
+    giveTokens,
     connect,
     queuedAction,
     plan,

@@ -32,7 +32,7 @@ export const INGEST_JOB = {
       ? `${p.commentExternalId}:updated:${p.platformEventSec}:${p.changeId}`
       : `${p.commentExternalId}:${p.event}`,
   policy: { maxAttempts: 8 } satisfies Partial<RetryPolicy>,
-  platforms: ['facebook', 'instagram'] as readonly Platform[] | 'all',
+  platforms: ['facebook', 'instagram', 'youtube'] as readonly Platform[] | 'all',
 };
 
 export const executePayload = z.strictObject({ actionId: z.uuid() });
@@ -109,6 +109,19 @@ export const TIKTOK_ADS_POLL_JOB = {
   externalRef: (p: TikTokPollPayload): string => `tiktok_ads_poll:${p.connectionId}`,
   timeoutMs: 300_000,
   platforms: ['tiktok_ads'] as readonly Platform[] | 'all',
+};
+
+export const youtubeCyclePayload = z.strictObject({ connectionId: z.uuid() });
+export type YouTubeCyclePayload = z.infer<typeof youtubeCyclePayload>;
+
+// One run is one poll-and-dispatch cycle of one YouTube connection. The scheduler passes
+// `youtube_cycle:<connection>:<minute slot>` as the idempotency key, so each slot is its own ledger entry.
+export const YOUTUBE_CYCLE_JOB = {
+  type: 'youtube_cycle' as const,
+  payload: youtubeCyclePayload,
+  externalRef: (p: YouTubeCyclePayload): string => `youtube_cycle:${p.connectionId}`,
+  timeoutMs: 300_000,
+  platforms: ['youtube'] as readonly Platform[] | 'all',
 };
 
 /** For processes that enqueue but never run jobs (the API): same type, payload and key; no handler. */

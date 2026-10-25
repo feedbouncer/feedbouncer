@@ -105,3 +105,43 @@ export function renderReconnectRequired(p: {
     html: page('Reconnect required', [intro], { label: 'Open connections', url: p.settingsUrl }),
   };
 }
+
+const pacific = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Los_Angeles',
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
+const actions = (n: number) => `${n} moderation action${n === 1 ? '' : 's'}`;
+
+const youtubeChannel = (name: string | null) =>
+  name ? `YouTube channel "${headerSafe(name)}"` : 'your YouTube channel';
+
+export function renderYouTubeQuotaPaused(p: {
+  channelName: string | null;
+  resumeAt: Date;
+  waiting: number;
+  settingsUrl: string;
+}): Body {
+  const channel = youtubeChannel(p.channelName);
+  const intro = `YouTube stopped accepting requests for the shared daily API quota, so FeedBouncer paused ${channel}. It resumes at ${pacific.format(p.resumeAt)} Pacific Time; ${actions(p.waiting)} will be sent then, most severe first.`;
+  return {
+    subject: 'FeedBouncer paused YouTube moderation until the quota resets',
+    text: `${intro}\n\n${p.settingsUrl}\n`,
+    html: page('YouTube quota reached', [intro], { label: 'Open connections', url: p.settingsUrl }),
+  };
+}
+
+export function renderYouTubeBacklogOverflow(p: {
+  channelName: string | null;
+  skipped: number;
+  settingsUrl: string;
+}): Body {
+  const channel = youtubeChannel(p.channelName);
+  const intro = `The moderation backlog for ${channel} is full, so ${actions(p.skipped)} could not be queued and were flagged for manual review instead. Raise the daily quota budget to let FeedBouncer keep up.`;
+  return {
+    subject: 'FeedBouncer could not queue every YouTube moderation action',
+    text: `${intro}\n\n${p.settingsUrl}\n`,
+    html: page('YouTube backlog full', [intro], { label: 'Open connections', url: p.settingsUrl }),
+  };
+}

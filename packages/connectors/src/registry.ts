@@ -72,6 +72,12 @@ export function validateConnector(c: Connector): void {
   if (responses.length > 0 !== (typeof c.respond === 'function')) fail('capabilities.responses');
   if (c.listReplies !== undefined && typeof c.listReplies !== 'function') fail('listReplies');
   if (c.probeComments !== undefined && typeof c.probeComments !== 'function') fail('probeComments');
+  if (c.listThreads !== undefined && typeof c.listThreads !== 'function') fail('listThreads');
+  if (
+    c.probeThreadReplyCounts !== undefined &&
+    typeof c.probeThreadReplyCounts !== 'function'
+  )
+    fail('probeThreadReplyCounts');
   const dispatch = k.actionDispatch ?? 'immediate';
   if (dispatch !== 'immediate' && dispatch !== 'budgeted') fail('capabilities.actionDispatch');
   if (

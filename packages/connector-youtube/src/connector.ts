@@ -21,7 +21,12 @@ import {
   refreshTokens,
   revoke,
 } from './oauth.js';
-import { getComment, listThreadReplies } from './threads.js';
+import {
+  getComment,
+  listChannelThreads,
+  listThreadReplies,
+  probeThreadReplyCounts,
+} from './threads.js';
 
 /** Codes and counts only: never a body, a URL or a token. */
 export type YouTubeLog = (msg: string, fields: { code: string; count?: number }) => void;
@@ -77,6 +82,13 @@ export function createYouTubeConnector(
       if (dropped > 0) log('youtube replies dropped', { code: 'invalid_reply', count: dropped });
       return { items, nextCursor };
     },
+    // Inline replies are only the few Google embeds; the rest come from `listComments`.
+    listThreads: async (ctx, req) => {
+      const { items, nextCursor, dropped } = await listChannelThreads(ctx, req);
+      if (dropped > 0) log('youtube threads dropped', { code: 'invalid_thread', count: dropped });
+      return { items, nextCursor };
+    },
+    probeThreadReplyCounts,
     getComment,
     act,
     actBatch,

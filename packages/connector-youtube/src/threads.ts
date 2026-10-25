@@ -6,6 +6,7 @@ import {
   type CallContext,
   type CommentRef,
   type NormalizedComment,
+  type NormalizedThread,
   type Page,
   type PlatformState,
 } from '@feedbouncer/connectors';
@@ -14,18 +15,6 @@ import { youtubeCall } from './api.js';
 import { MAX_BATCH } from './costs.js';
 import { assertId, isId } from './ids.js';
 import { cleanName, plainBody } from './text.js';
-
-export interface NormalizedThread {
-  /** Equals the top-level comment's id. */
-  readonly threadExternalId: string;
-  readonly videoExternalId: string;
-  readonly replyCount: number;
-  /** The newest publish or update time of the top-level comment and its inline replies. */
-  readonly lastActivityAt: Date;
-  readonly topLevel: NormalizedComment;
-  /** Inline replies only (Google returns a few); the rest come from `listComments`. */
-  readonly replies: readonly NormalizedComment[];
-}
 
 export type ThreadPage = Page<NormalizedThread> & {
   /** Threads skipped because an id, a date or the top-level comment failed validation. */
@@ -264,3 +253,4 @@ export async function getComment(
 }
 
 export { COMMENT, LIST };
+export type { NormalizedThread };

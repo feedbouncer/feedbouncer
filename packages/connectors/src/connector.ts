@@ -56,6 +56,18 @@ export interface BatchActionRequest {
 
 export type BatchActionOutcome = { readonly status: 'applied' } | { readonly status: 'not_found' };
 
+/** A top-level comment with its reply count and the replies the platform inlined. */
+export interface NormalizedThread {
+  /** Equals the top-level comment's external id. */
+  readonly threadExternalId: string;
+  readonly videoExternalId: string;
+  readonly replyCount: number;
+  /** The newest publish or update time of the top-level comment and its inline replies. */
+  readonly lastActivityAt: Date;
+  readonly topLevel: NormalizedComment;
+  readonly replies: readonly NormalizedComment[];
+}
+
 export interface CommentProbe {
   readonly externalId: string;
   /** `gone`: deleted or rejected, no longer discoverable. */
@@ -199,6 +211,15 @@ export interface Connector {
    * `not_found` when the platform refuses the call because a target no longer exists.
    */
   actBatch?(ctx: CallContext, req: BatchActionRequest): Promise<BatchActionOutcome>;
+
+  /** One page of the connected account's comment threads, newest first (polling platforms with a channel-wide feed). */
+  listThreads?(ctx: CallContext, req: { cursor: string | null }): Promise<Page<NormalizedThread>>;
+
+  /** Each thread's reply count in one call; threads the platform did not return are absent. */
+  probeThreadReplyCounts?(
+    ctx: CallContext,
+    threadIds: readonly string[],
+  ): Promise<ReadonlyMap<string, number>>;
 
   /** Current state of each comment in one call; a comment the platform did not return is `gone`. */
   probeComments?(ctx: CallContext, refs: readonly CommentRef[]): Promise<readonly CommentProbe[]>;

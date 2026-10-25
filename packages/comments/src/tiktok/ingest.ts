@@ -53,9 +53,9 @@ export async function activeAccount(
   return acct.status === 'active' ? acct.externalAccountId : null;
 }
 
-/** Stores one comment. Returns whether it was newly created; hook failures land in `failure`. */
+/** Stores one comment (also used by the YouTube poller). Returns whether it was newly created; hook failures land in `failure`. */
 export async function ingestComment(
-  d: TikTokPollDeps,
+  d: Pick<TikTokPollDeps, 'store' | 'applied' | 'clock'>,
   ctx: { scope: ConnectionScope; platform: Platform; log: Logger },
   c: NormalizedComment,
   o: { ownAccountExternalId: string; syncedAt: Date; origin: IngestOrigin },

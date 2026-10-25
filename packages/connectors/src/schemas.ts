@@ -3,7 +3,7 @@
 // of control characters, URLs are https only, bodies are bounded. Errors carry
 // no input (zod issues are not attached), only the code invalid_connector_output.
 import * as z from 'zod';
-import type { CommentProbe, ConnectionCommentsPage } from './connector.js';
+import type { CommentProbe, ConnectionCommentsPage, NormalizedThread } from './connector.js';
 import { ConnectorError } from './errors.js';
 import { Secret } from '@feedbouncer/service-runtime';
 import {
@@ -124,6 +124,15 @@ const commentProbeSchema = z.strictObject({
   authorExternalId: externalIdSchema.nullable(),
 });
 
+const threadSchema = z.strictObject({
+  threadExternalId: externalIdSchema,
+  videoExternalId: externalIdSchema,
+  replyCount: z.number().int().min(0).max(1_000_000_000),
+  lastActivityAt: z.date(),
+  topLevel: commentSchema,
+  replies: z.array(commentSchema).max(500),
+});
+
 const REPLY_FORBIDDEN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
 export const replyTextSchema = z
   .string()
@@ -205,6 +214,28 @@ export function parsePage<T extends { externalId: string }>(
     items.push(parsed);
   }
   return { items, nextCursor: page.nextCursor };
+}
+
+export function parseThreads(raw: unknown): Page<NormalizedThread> {
+  const page = parseWith(
+    z.strictObject({ items: z.array(threadSchema).max(500), nextCursor: cursorSchema }),
+    raw,
+  );
+  const items = page.items.filter(
+    (t, i) => page.items.findIndex((o) => o.threadExternalId === t.threadExternalId) === i,
+  );
+  return { items, nextCursor: page.nextCursor };
+}
+
+/** Counts for threads that were asked about; anything else is invalid. */
+export function parseReplyCounts(raw: unknown, asked: readonly string[]): Map<string, number> {
+  const entries = parseWith(
+    z.map(externalIdSchema, z.number().int().min(0).max(1_000_000_000)),
+    raw,
+  );
+  const wanted = new Set(asked);
+  if ([...entries.keys()].some((id) => !wanted.has(id))) throw invalid();
+  return new Map(entries);
 }
 
 /** One probe per requested comment at most; a probe for a comment not asked about is invalid. */

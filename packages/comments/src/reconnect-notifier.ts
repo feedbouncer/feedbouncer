@@ -32,6 +32,16 @@ const PLATFORM_LABELS: Record<Platform, string> = {
   tiktok_ads: 'TikTok ad account',
 };
 
+/** The email addresses of an organization's owners. */
+export async function organizationOwnerEmails(pool: pg.Pool, organizationId: string): Promise<string[]> {
+  const owners = await pool.query<{ email: string }>(
+    `SELECT u.email FROM membership m JOIN app_user u ON u.id = m.user_id
+      WHERE m.organization_id = $1 AND m.role = 'owner'`,
+    [organizationId],
+  );
+  return owners.rows.map((o) => o.email);
+}
+
 export class EmailReconnectNotifier implements ReconnectNotifier {
   constructor(
     private readonly d: { pool: pg.Pool; mailer: Mailer; publicWebUrl: URL; log: Logger },
@@ -51,11 +61,7 @@ export class EmailReconnectNotifier implements ReconnectNotifier {
     );
     const row = c.rows[0];
     if (!row) return;
-    const owners = await this.d.pool.query<{ email: string }>(
-      `SELECT u.email FROM membership m JOIN app_user u ON u.id = m.user_id
-        WHERE m.organization_id = $1 AND m.role = 'owner'`,
-      [org],
-    );
+    const owners = await organizationOwnerEmails(this.d.pool, org);
     const body = renderReconnectRequired({
       brandName: row.brand_name,
       accountName: row.display_name,
@@ -63,7 +69,7 @@ export class EmailReconnectNotifier implements ReconnectNotifier {
       settingsUrl: new URL(`/orgs/${org}/brands/${brand}/connections`, this.d.publicWebUrl).href,
     });
     const sent = await Promise.allSettled(
-      owners.rows.map((o) => this.d.mailer.send({ ...body, to: o.email })),
+      owners.map((to) => this.d.mailer.send({ ...body, to })),
     );
     const failed = sent.find((s) => s.status === 'rejected');
     if (failed) throw failed.reason;
