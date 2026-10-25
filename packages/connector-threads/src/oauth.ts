@@ -2,7 +2,8 @@
 // A long-lived token is its own refresh token (th_refresh_token), valid 60 days, so the access
 // expiry is set a lead period early to make TokenManager refresh before the token dies.
 // Errors come from `threadsRequest` and carry codes only; the app secret and the code travel in
-// the request and never reach an error or a log.
+// the request and never reach an error or a log. Tokens go in the bearer header; the only query
+// secrets are client_secret (th_exchange_token) and input_token (debug_token), as the API requires.
 import { ConnectorError, type TokenSet } from '@feedbouncer/connectors';
 import { Secret } from '@feedbouncer/service-runtime';
 import * as z from 'zod';
@@ -73,12 +74,15 @@ async function grantedScopes(
   log: ThreadsLog | undefined,
 ): Promise<readonly string[]> {
   try {
-    const { data } = await threadsRequest(call, {
-      endpoint: 'debugToken',
-      method: 'GET',
-      query: { input_token: longLived, access_token: longLived },
-      schema: DEBUG_TOKEN,
-    });
+    const { data } = await threadsRequest(
+      { ...call, accessToken: longLived },
+      {
+        endpoint: 'debugToken',
+        method: 'GET',
+        query: { input_token: longLived },
+        schema: DEBUG_TOKEN,
+      },
+    );
     const granted = new Set(data.data.scopes ?? []);
     return THREADS_SCOPES.filter((s) => granted.has(s));
   } catch (e) {
@@ -105,16 +109,15 @@ export async function exchangeCode(
     },
     schema: SHORT_LIVED,
   });
-  const long = await threadsRequest(call, {
-    endpoint: 'longLived',
-    method: 'GET',
-    query: {
-      grant_type: 'th_exchange_token',
-      client_secret: cfg.appSecret.reveal(),
-      access_token: short.data.access_token,
+  const long = await threadsRequest(
+    { ...call, accessToken: short.data.access_token },
+    {
+      endpoint: 'longLived',
+      method: 'GET',
+      query: { grant_type: 'th_exchange_token', client_secret: cfg.appSecret.reveal() },
+      schema: LONG_LIVED,
     },
-    schema: LONG_LIVED,
-  });
+  );
   const token = long.data.access_token;
   const scopes = await grantedScopes(call, token, o.log);
   const account = await fetchMe({ ...call, accessToken: token });
@@ -130,12 +133,15 @@ export async function refreshTokens(
   refreshToken: Secret,
   now: Date,
 ): Promise<TokenSet> {
-  const { data } = await threadsRequest(call, {
-    endpoint: 'refresh',
-    method: 'GET',
-    query: { grant_type: 'th_refresh_token', access_token: refreshToken.reveal() },
-    schema: LONG_LIVED,
-  });
+  const { data } = await threadsRequest(
+    { ...call, accessToken: refreshToken.reveal() },
+    {
+      endpoint: 'refresh',
+      method: 'GET',
+      query: { grant_type: 'th_refresh_token' },
+      schema: LONG_LIVED,
+    },
+  );
   return toTokenSet(data.access_token, data.expires_in, now, []);
 }
 

@@ -60,6 +60,7 @@ export interface FakeThreadsCall {
   id?: string;
   query: Record<string, string>;
   form: Record<string, string>;
+  bearer?: string;
 }
 
 const graphError = (httpStatus: number, code?: number, subcode?: number): Response =>
@@ -118,11 +119,13 @@ export class FakeThreads {
     const query = Object.fromEntries(url.searchParams);
     const route = this.route(url.pathname, method);
     if (!route) return graphError(404);
+    const bearer = headers.get('authorization')?.replace(/^Bearer /i, '');
     this.log.push({
       endpoint: route.endpoint,
       ...(route.id !== undefined && { id: route.id }),
       query,
       form,
+      ...(bearer !== undefined && { bearer }),
     });
 
     const queue = this.failures.get(route.endpoint);
@@ -131,7 +134,6 @@ export class FakeThreads {
       if (--failure.times <= 0) queue.shift();
       return graphError(failure.httpStatus ?? 400, failure.code, failure.subcode);
     }
-    const bearer = headers.get('authorization')?.replace(/^Bearer /i, '');
     return this.handle(route.endpoint, route.id, { query, form, bearer });
   };
 
@@ -358,7 +360,7 @@ export class FakeThreads {
         return this.oauthToken(r.form);
       case 'longLived':
       case 'refresh':
-        return this.exchange(endpoint, r.query);
+        return this.exchange(endpoint, r.query, r.bearer);
       default:
         break;
     }
@@ -489,11 +491,15 @@ export class FakeThreads {
     });
   }
 
-  private exchange(endpoint: 'longLived' | 'refresh', q: Record<string, string>): Response {
+  private exchange(
+    endpoint: 'longLived' | 'refresh',
+    q: Record<string, string>,
+    bearer: string | undefined,
+  ): Response {
     const expected = endpoint === 'longLived' ? 'th_exchange_token' : 'th_refresh_token';
     if (q.grant_type !== expected) return graphError(400, 100);
     if (endpoint === 'longLived' && q.client_secret !== this.appSecret) return graphError(400, 101);
-    const u = this.authenticate(q.access_token);
+    const u = this.authenticate(bearer ?? q.access_token);
     if (!u) return tokenInvalid();
     return Response.json({
       access_token: this.issue(u.id, LONG_LIVED_TTL_SEC),

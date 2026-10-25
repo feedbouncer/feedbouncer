@@ -87,6 +87,17 @@ describe('exchangeCode', () => {
     ]);
   });
 
+  it('sends tokens as a bearer header; only client_secret and input_token use the query', async () => {
+    const { authCode } = fake.addUser();
+    const { tokens } = await exchange(authCode);
+    const [, long, debug] = fake.calls();
+    const token = tokens.accessToken.reveal();
+    expect(long!.query).toEqual({ grant_type: 'th_exchange_token', client_secret: APP_SECRET });
+    expect(long!.bearer).toBeDefined();
+    expect(debug!.query).toEqual({ input_token: token });
+    expect(debug!.bearer).toBe(token);
+  });
+
   it('shortens the access expiry to half when the token lives less than two lead periods', async () => {
     const { authCode } = fake.addUser();
     const orig = fake.fetch;
@@ -175,10 +186,8 @@ describe('refreshTokens', () => {
     expect(next.refreshToken?.reveal()).toBe(next.accessToken.reveal());
     const last = fake.calls().at(-1)!;
     expect(last.endpoint).toBe('refresh');
-    expect(last.query).toEqual({
-      grant_type: 'th_refresh_token',
-      access_token: tokens.refreshToken!.reveal(),
-    });
+    expect(last.query).toEqual({ grant_type: 'th_refresh_token' });
+    expect(last.bearer).toBe(tokens.refreshToken!.reveal());
   });
 
   it('refresh of a revoked token → auth_expired', async () => {
