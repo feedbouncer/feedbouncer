@@ -6,6 +6,7 @@
 // `resumePageToken`; it only moves the high-water mark once it reaches known ground.
 // One unreadable video never fails the pass. Comment bodies are never logged.
 import type pg from 'pg';
+import { commentFingerprint } from '@feedbouncer/db';
 import {
   ConnectorError,
   isQuotaRefusal,
@@ -16,12 +17,12 @@ import {
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
 import type { CommentAppliedHook } from '../hooks.js';
+import { ingestComment } from '../ingest-comment.js';
 import { sourceFailure } from '../jobs/poll.js';
 import { upsertListedSource, type PgCommentStore } from '../store.js';
-import { ingestComment } from '../tiktok/ingest.js';
 
-export const MAX_FEED_PAGES = 5;
-export const MAX_REPLY_PAGES_PER_THREAD = 3;
+const MAX_FEED_PAGES = 5;
+const MAX_REPLY_PAGES_PER_THREAD = 3;
 const SWEEP_THREADS = 50;
 const DAY_MS = 86_400_000;
 /** The feed is ordered by publish time while activity also counts edits and replies: read a little past the mark. */
@@ -105,10 +106,12 @@ async function saveThread(r: Run, t: NormalizedThread): Promise<void> {
   // Replies we hold: all of them when Google inlined every one, else only the inlined ones,
   // so the sweep sees the difference. A thread already stored keeps its count until then.
   const complete = t.replyCount <= t.replies.length;
+  // A thread whose top-level comment was erased is not tracked again.
   await r.d.pool.query(
     `INSERT INTO youtube_thread AS y (organization_id, brand_id, connection_id, thread_external_id,
                                       video_external_id, reply_count, last_activity_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     SELECT $1::uuid, $2::uuid, $3::uuid, $4::text, $5::text, $6::int, $7::timestamptz
+      WHERE NOT EXISTS (SELECT 1 FROM erased_comment WHERE connection_id = $3 AND fingerprint = $9)
      ON CONFLICT (connection_id, thread_external_id) DO UPDATE SET
        reply_count = CASE WHEN $8 THEN EXCLUDED.reply_count ELSE y.reply_count END,
        last_activity_at = GREATEST(y.last_activity_at, EXCLUDED.last_activity_at)
@@ -122,6 +125,7 @@ async function saveThread(r: Run, t: NormalizedThread): Promise<void> {
       complete ? t.replyCount : t.replies.length,
       t.lastActivityAt,
       complete,
+      commentFingerprint(r.scope.connectionId, t.threadExternalId),
     ],
   );
 }
@@ -129,10 +133,7 @@ async function saveThread(r: Run, t: NormalizedThread): Promise<void> {
 /** Pages the feed from the saved place back to the high-water mark. */
 async function readFeed(r: Run): Promise<void> {
   const boundary = new Date(
-    Math.max(
-      (r.s.highWaterAt?.getTime() ?? 0) - OVERLAP_MS,
-      r.now.getTime() - 7 * DAY_MS,
-    ),
+    Math.max((r.s.highWaterAt?.getTime() ?? 0) - OVERLAP_MS, r.now.getTime() - 7 * DAY_MS),
   );
   const videos = new Set<string>();
   let cursor = r.s.resumePageToken;
@@ -181,10 +182,7 @@ async function readReplies(r: Run, threadId: string, count: number): Promise<voi
   for (let pages = 0; pages < MAX_REPLY_PAGES_PER_THREAD && hasRoom(r); pages++) {
     const syncedAt = r.d.clock();
     const page: Awaited<ReturnType<PollDeps['client']['listComments']>> = await read(r, () =>
-      r.d.client.listComments(
-        { sourceExternalId: threadId, cursor, limit: REPLY_PAGE_SIZE },
-        BG,
-      ),
+      r.d.client.listComments({ sourceExternalId: threadId, cursor, limit: REPLY_PAGE_SIZE }, BG),
     );
     for (const c of page.items) {
       await ingest(r, c, syncedAt);
@@ -212,7 +210,12 @@ async function sweepReplies(r: Run): Promise<void> {
       WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND last_activity_at > $4
       ORDER BY last_activity_at DESC, thread_external_id
       LIMIT ${SWEEP_THREADS}`,
-    [r.scope.organizationId, r.scope.brandId, r.scope.connectionId, new Date(r.now.getTime() - 7 * DAY_MS)],
+    [
+      r.scope.organizationId,
+      r.scope.brandId,
+      r.scope.connectionId,
+      new Date(r.now.getTime() - 7 * DAY_MS),
+    ],
   );
   if (rows.length === 0) return;
   const counts = await read(r, () =>

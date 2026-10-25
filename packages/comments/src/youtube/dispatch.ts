@@ -22,6 +22,7 @@ import {
   type ConnectionClient,
   type ConnectorErrorInfo,
 } from '@feedbouncer/connectors';
+import { BATCH_UNITS } from '@feedbouncer/connector-youtube';
 import type { JobProducer } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
@@ -36,15 +37,16 @@ import {
   type Final,
 } from '../jobs/settle.js';
 import type { PgYouTubeBacklog, QueuedTarget } from './backlog.js';
-import { BATCH_UNITS, budgetView } from './budget.js';
+import { budgetView } from './budget.js';
 import type { PgYouTubeQuotaLedger } from './ledger.js';
 import type { CyclePlan, PlannedBatch, SettleNow } from './planner.js';
 import { pacificDayKey } from './quota-day.js';
+import { SCOPED, scopeParams, type Queryable } from './sql.js';
 
 /** The cycle lease: a planned or sent batch older than this belongs to a run that died. */
 export const CYCLE_LEASE_MS = 600_000;
 /** Settled batches (opaque ids only) are kept this many Pacific days, then deleted. */
-export const WRITE_BATCH_RETENTION_DAYS = 2;
+const WRITE_BATCH_RETENTION_DAYS = 2;
 
 const WRITE_METHOD = 'comments.setModerationStatus';
 const PROBE_UNITS = 1;
@@ -73,8 +75,6 @@ export interface DispatchResult {
   stoppedBy: null | StopReason;
 }
 
-type Queryable = Pick<pg.ClientBase, 'query'>;
-
 interface Entry {
   readonly t: QueuedTarget;
   readonly f: Final;
@@ -85,9 +85,6 @@ interface Acc {
   batchesSent: number;
   unitsSpent: number;
 }
-
-const scopeParams = (s: ConnectionScope) => [s.organizationId, s.brandId, s.connectionId];
-const SCOPED = 'organization_id = $1 AND brand_id = $2 AND connection_id = $3';
 
 const final = (
   status: Final['status'],
@@ -592,7 +589,7 @@ export async function recoverInFlight(
 }
 
 /** Deletes this connection's settled batches older than the retention window. Returns how many. */
-export async function pruneWriteBatches(
+async function pruneWriteBatches(
   d: Pick<DispatchDeps, 'pool' | 'clock'>,
   scope: ConnectionScope,
 ): Promise<number> {

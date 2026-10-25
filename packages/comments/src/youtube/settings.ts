@@ -1,6 +1,6 @@
 // Owner settings for one YouTube connection. A missing row means the defaults.
-import type pg from 'pg';
 import type { ConnectionScope } from '@feedbouncer/secrets';
+import type { Queryable } from './sql.js';
 
 export const DEFAULT_DAILY_BUDGET_UNITS = 2000;
 
@@ -11,8 +11,6 @@ export interface YouTubeSettings {
 }
 
 export type YouTubeSettingsPatch = Partial<YouTubeSettings>;
-
-type Queryable = Pick<pg.ClientBase, 'query'>;
 
 interface Row {
   daily_budget_units: number;
@@ -26,7 +24,7 @@ const toSettings = (r: Row): YouTubeSettings => ({
   protectedAuthorIds: r.protected_author_ids,
 });
 
-export const defaultYouTubeSettings = (): YouTubeSettings => ({
+const defaultYouTubeSettings = (): YouTubeSettings => ({
   dailyBudgetUnits: DEFAULT_DAILY_BUDGET_UNITS,
   dryRun: false,
   protectedAuthorIds: [],

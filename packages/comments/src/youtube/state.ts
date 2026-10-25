@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { CYCLE_LEASE_MS } from './dispatch.js';
+import { scopeParams } from './sql.js';
 
 export interface YouTubeCycleState {
   nextReadAt: Date;
@@ -16,9 +17,7 @@ export interface YouTubeCycleState {
   lastReadUnits: number;
 }
 
-export type YouTubeStatePatch = Partial<
-  YouTubeCycleState & { lastErrorCode: string | null }
->;
+export type YouTubeStatePatch = Partial<YouTubeCycleState & { lastErrorCode: string | null }>;
 
 const COLUMNS = {
   nextReadAt: 'next_read_at',
@@ -28,8 +27,6 @@ const COLUMNS = {
   lastReadUnits: 'last_read_units',
   lastErrorCode: 'last_error_code',
 } as const satisfies Record<keyof YouTubeStatePatch, string>;
-
-const scopeParams = (s: ConnectionScope) => [s.organizationId, s.brandId, s.connectionId];
 
 interface Row {
   next_read_at: Date;

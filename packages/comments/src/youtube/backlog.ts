@@ -16,10 +16,11 @@ import type { ActionOutcomeObserver } from '../hooks.js';
 import { notifyOutcome, settleActionIn, type SettleTarget } from '../jobs/settle.js';
 import { TIER, type QueuedAction, type QueuedKind } from './planner.js';
 import { pacificDayKey } from './quota-day.js';
+import { scopedBy, scopeParams, type Queryable } from './sql.js';
 
 /** YOUTUBE_BACKLOG_CAP default. */
 export const DEFAULT_BACKLOG_CAP = 5000;
-export const LOAD_LIMIT = 2500;
+const LOAD_LIMIT = 2500;
 
 export interface YouTubeBacklogDeps {
   pool: pg.Pool;
@@ -37,15 +38,11 @@ export interface BacklogCounts {
   publish: number;
 }
 
-type Queryable = Pick<pg.ClientBase, 'query'>;
-
 /** A queued action as the dispatcher settles it. */
 export interface QueuedTarget extends SettleTarget {
   /** When our copy of the comment was last read from YouTube; a later edit there makes it stale. */
   readonly platformSyncedAt: Date | null;
 }
-
-const scopeParams = (s: ConnectionScope) => [s.organizationId, s.brandId, s.connectionId];
 
 const isQueuedKind = (k: string): k is QueuedKind => Object.hasOwn(TIER, k);
 
@@ -59,7 +56,7 @@ const QUEUE_JOIN = `
   JOIN source s ON s.id = c.source_id AND s.organization_id = q.organization_id
                AND s.brand_id = q.brand_id AND s.connection_id = q.connection_id`;
 
-const SCOPED = 'q.organization_id = $1 AND q.brand_id = $2 AND q.connection_id = $3';
+const SCOPED = scopedBy('q');
 
 export class PgYouTubeBacklog implements BudgetedDispatch {
   constructor(private readonly d: YouTubeBacklogDeps) {}

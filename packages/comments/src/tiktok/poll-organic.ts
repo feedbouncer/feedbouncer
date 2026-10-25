@@ -12,17 +12,11 @@ import {
 import type { JobContext, JobDefinition } from '@feedbouncer/jobs';
 import { BACKFILL_DEFAULTS } from '../backfill/settings.js';
 import { deliverPendingHooks } from '../jobs/pending-hooks.js';
+import { ingestComment, type IngestCounts } from '../ingest-comment.js';
 import { sourceFailure } from '../jobs/poll.js';
 import { TIKTOK_POLL_JOB, type TikTokPollPayload } from '../jobs/specs.js';
 import type { IngestOrigin } from '../store.js';
-import {
-  DAY_MS,
-  SEC,
-  activeAccount,
-  ingestComment,
-  type IngestCounts,
-  type TikTokPollDeps,
-} from './ingest.js';
+import { DAY_MS, SEC, activeAccount, type TikTokPollDeps } from './ingest.js';
 import type { ClaimedVideo, ConnectionPollState } from './polling.js';
 
 const BG = { priority: 'background' } as const;

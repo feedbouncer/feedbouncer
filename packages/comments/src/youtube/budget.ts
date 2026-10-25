@@ -1,11 +1,10 @@
 // Pure budget math for one YouTube connection's Pacific day. Every call must fit
 // both the connection's owner-set budget and the deployment's project cap; writes
 // may never consume the unspent read reserve.
+import { BATCH_UNITS } from '@feedbouncer/connector-youtube';
 
-/** One write batch: a 1-unit probe plus a 50-unit setModerationStatus. */
-export const BATCH_UNITS = 51;
-export const BASE_READ_INTERVAL_MS = 300_000;
-export const MAX_READ_INTERVAL_MS = 3_600_000;
+const BASE_READ_INTERVAL_MS = 300_000;
+const MAX_READ_INTERVAL_MS = 3_600_000;
 
 export interface BudgetInputs {
   budgetUnits: number;

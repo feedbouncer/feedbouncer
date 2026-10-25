@@ -16,6 +16,7 @@ import type { ConnectionScope } from '@feedbouncer/secrets';
 import { budgetView, type BudgetInputs } from './budget.js';
 import { nextPacificMidnight, pacificDayKey } from './quota-day.js';
 import type { PgYouTubeSettings } from './settings.js';
+import { scopeParams, type Queryable } from './sql.js';
 
 export interface QuotaLedgerLog {
   warn(msg: string, fields?: Record<string, unknown>): void;
@@ -42,8 +43,6 @@ export interface DailyTotal {
 
 const ERROR_CODE = /^[a-z0-9_]{1,64}$/;
 
-type Queryable = Pick<pg.ClientBase, 'query'>;
-
 interface Sums {
   project_spent: number;
   spent: number;
@@ -54,12 +53,6 @@ interface Snapshot {
   inputs: BudgetInputs;
   day: string;
 }
-
-const scopeParams = (scope: ConnectionScope | null) => [
-  scope?.organizationId ?? null,
-  scope?.brandId ?? null,
-  scope?.connectionId ?? null,
-];
 
 const errorName = (err: unknown) => (err instanceof Error ? err.name : 'unknown');
 

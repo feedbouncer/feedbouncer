@@ -13,6 +13,7 @@ import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
 import { organizationOwnerEmails } from '../reconnect-notifier.js';
 import { nextPacificMidnight, pacificDayKey } from './quota-day.js';
+import { scopeParams } from './sql.js';
 
 export type YouTubeNoticeKind = 'quota_paused' | 'backlog_overflow';
 
@@ -23,8 +24,6 @@ export interface YouTubeNoticeDeps {
   log: Logger;
   clock: Clock;
 }
-
-const scopeParams = (s: ConnectionScope) => [s.organizationId, s.brandId, s.connectionId];
 
 export class YouTubeNotices {
   constructor(private readonly d: YouTubeNoticeDeps) {}

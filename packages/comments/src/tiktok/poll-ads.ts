@@ -10,9 +10,10 @@
 import { ConnectorError, type ConnectionCommentsPage } from '@feedbouncer/connectors';
 import type { JobDefinition } from '@feedbouncer/jobs';
 import { BACKFILL_DEFAULTS } from '../backfill/settings.js';
+import { ingestComment } from '../ingest-comment.js';
 import { deliverPendingHooks } from '../jobs/pending-hooks.js';
 import { TIKTOK_ADS_POLL_JOB, type TikTokPollPayload } from '../jobs/specs.js';
-import { DAY_MS, SEC, activeAccount, ingestComment, type TikTokPollDeps } from './ingest.js';
+import { DAY_MS, SEC, activeAccount, type TikTokPollDeps } from './ingest.js';
 
 const BG = { priority: 'background' } as const;
 const PAGE_SIZE = 100;

@@ -3,10 +3,7 @@
 // is kept by keeping the first `affordableBatches` batches. Deterministic: the
 // input order never matters, and nothing is read from the clock or the network.
 import type { ModerationAction, PlatformState } from '@feedbouncer/connectors';
-import { BATCH_UNITS } from './budget.js';
-
-/** setModerationStatus accepts up to 50 ids per call. */
-export const MAX_BATCH = 50;
+import { BATCH_UNITS, MAX_BATCH } from '@feedbouncer/connector-youtube';
 
 export type QueuedKind = 'ban_author' | 'delete' | 'hide' | 'unhide';
 
