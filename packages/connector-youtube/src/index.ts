@@ -3,3 +3,7 @@ export * from './costs.js';
 export * from './ids.js';
 export * from './api.js';
 export * from './oauth.js';
+export * from './text.js';
+export * from './threads.js';
+export * from './moderation.js';
+export * from './connector.js';

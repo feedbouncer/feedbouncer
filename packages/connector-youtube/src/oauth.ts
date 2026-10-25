@@ -13,11 +13,11 @@ import * as z from 'zod';
 import { youtubeCall } from './api.js';
 import { YOUTUBE_SCOPE_SHORT, YOUTUBE_SCOPE_URL, type YouTubeConnectorConfig } from './config.js';
 import { isId } from './ids.js';
+import { cleanName } from './text.js';
 
 const AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
-const TITLE_MAX = 200;
 
 /** The connector's short scope names and the Google URLs they stand for. */
 const SCOPE_URLS: Readonly<Record<string, string>> = { [YOUTUBE_SCOPE_SHORT]: YOUTUBE_SCOPE_URL };
@@ -185,13 +185,6 @@ const CHANNELS = z.object({
     .optional(),
 });
 
-const CONTROL = /[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g;
-function title(raw: string | undefined): string | null {
-  if (raw === undefined) return null;
-  const clean = [...raw.replace(CONTROL, '').trim()].slice(0, TITLE_MAX).join('');
-  return clean === '' ? null : clean;
-}
-
 /**
  * The channel(s) the user token can act for (`channels.list?mine=true`), metered on the
  * project quota as a `connect` call. A channel whose id fails `CHANNEL_ID` is dropped:
@@ -224,7 +217,7 @@ export async function listAccounts(
       ? [
           {
             externalAccountId: c.id,
-            displayName: title(c.snippet?.title),
+            displayName: cleanName(c.snippet?.title),
             eligible: true,
             ineligibleReason: null,
             limitations: [],
