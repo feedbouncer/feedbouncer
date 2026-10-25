@@ -98,7 +98,9 @@ function settleRule(a: QueuedAction, o: PlanOptions): SettleNow | null {
       return { actionId: a.actionId, status: 'not_eligible', code: 'author_protected' };
   }
   if (a.kind === 'unhide') return a.commentState === 'visible' ? noop('already_published') : null;
-  return a.commentState !== 'visible' ? noop('already_moderated') : null;
+  // Only a hold is redundant on a held comment; rejecting or banning still needs the write.
+  const redundant = a.kind === 'hide' ? a.commentState !== 'visible' : a.commentState === 'deleted';
+  return redundant ? noop('already_moderated') : null;
 }
 
 const chunk = (kind: QueuedKind, xs: readonly QueuedAction[]): PlannedBatch[] => {

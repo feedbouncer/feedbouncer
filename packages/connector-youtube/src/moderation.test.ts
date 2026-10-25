@@ -140,6 +140,12 @@ describe('act', () => {
 });
 
 describe('probeComments', () => {
+  it('is metered as part of the write batch, not the read reserve', async () => {
+    const w = world();
+    await w.connector.probeComments!(w.ctx, seed(w, 1));
+    expect(w.quota.reserved).toEqual([{ method: 'comments.list', units: 1, purpose: 'write' }]);
+  });
+
   it('probe reports held, visible, and gone (rejected/deleted)', async () => {
     const w = world();
     const [visible, held, rejected, deleted] = seed(w, 4);

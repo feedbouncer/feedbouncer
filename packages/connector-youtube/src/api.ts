@@ -103,7 +103,7 @@ export async function youtubeCall<T>(
   m: YouTubeMethod,
   q: Readonly<Record<string, string>>,
   schema: z.ZodType<T>,
-  opts?: { method?: 'GET' | 'POST'; purpose: QuotaPurpose },
+  opts?: { purpose: QuotaPurpose },
 ): Promise<T | null> {
   if (!Object.hasOwn(ENDPOINTS, m)) throw new ConnectorError('permanent', 'invalid_request');
   const ep = ENDPOINTS[m];
@@ -124,7 +124,7 @@ export async function youtubeCall<T>(
     url.search = new URLSearchParams(q).toString();
     const res = await ctx.http.request(
       {
-        method: opts?.method ?? ep.method,
+        method: ep.method,
         url,
         headers: {
           authorization: `Bearer ${ctx.accessToken.reveal()}`,
@@ -133,7 +133,7 @@ export async function youtubeCall<T>(
       },
       ctx.signal,
     );
-    if (res.status >= 400 || (res.status >= 300 && res.status < 400)) {
+    if (res.status >= 300) {
       throw mapGoogleError(res.status, res.body, { retryAfter: res.headers.get('retry-after') });
     }
     if (res.status === 204) {

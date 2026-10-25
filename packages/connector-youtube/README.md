@@ -28,7 +28,7 @@ The fake implements the primary assumption for each row until it is checked agai
 | Y7  | `textOriginal` is returned to the channel owner for other users' comments (otherwise the plain-text `textDisplay` is stored)                                               | unverified | `threads.ts` normalisation                     |
 | Y8  | `rejected` replies are omitted from `comments.list?parentId=` and the thread feed                                                                                          | unverified | `FakeYouTube.replies`                          |
 
-Documentation conflicts to settle when checking (Context7, `/websites/developers_google_youtube_v3`, 2026-10-25):
+Documentation conflicts to settle when checking (Google's `comments` and `commentThreads` reference pages under https://developers.google.com/youtube/v3/docs, checked 2026-10-25):
 
 - Y3: the `comments` resource page says `moderationStatus` "isn't set if the API request used the `id` filter parameter". An item without it probes as `visible` (the conservative default: a redundant hold write is idempotent and costs units, never a wrong skip). Held detection by probe is therefore unverified; the dispatcher relies mainly on the stored comment state for "already held".
 - Y7: the same page says `textOriginal` "is only returned to the authenticated user if they are the comment's author". When it is absent the body is `textDisplay`, which every read requests with `textFormat=plainText`; any markup in it stays literal text.

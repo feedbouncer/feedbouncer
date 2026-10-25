@@ -82,6 +82,7 @@ export async function probeComments(
     'comments.list',
     { id: ids.join(','), part: 'snippet', textFormat: 'plainText' },
     LIST,
+    { purpose: 'write' },
   );
   const found = new Map<string, CommentProbe>();
   for (const item of res?.items ?? []) {

@@ -192,15 +192,21 @@ describe('planCycle', () => {
     expect(p.plannedUnits).toBe(0);
   });
 
-  it('already held comment is not re-processed', () => {
+  it('rejecting or banning a comment YouTube already holds still writes', () => {
+    const rej = q('delete', { commentState: 'hidden', authorExternalId: B });
+    const ban = q('ban_author', { commentState: 'hidden' });
+    const p = planCycle([rej, ban], opts(5));
+    expect(p.settleNow).toEqual([]);
+    expect(p.batches.map((b) => b.action)).toEqual(['ban_author', 'delete']);
+  });
+
+  it('only a hold, a deleted reject or a published unhide is skipped', () => {
     const hold = q('hide', { commentState: 'hidden' });
     const rej = q('delete', { commentState: 'deleted' });
-    const ban = q('ban_author', { commentState: 'hidden' });
     const pub = q('unhide', { commentState: 'visible' });
     const unhide = q('unhide', { commentState: 'hidden' });
-    const p = planCycle([hold, rej, ban, pub, unhide], opts(5));
+    const p = planCycle([hold, rej, pub, unhide], opts(5));
     expect(p.settleNow).toEqual([
-      { actionId: ban.actionId, status: 'noop', code: 'already_moderated' },
       { actionId: rej.actionId, status: 'noop', code: 'already_moderated' },
       { actionId: hold.actionId, status: 'noop', code: 'already_moderated' },
       { actionId: pub.actionId, status: 'noop', code: 'already_published' },

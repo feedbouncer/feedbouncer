@@ -44,9 +44,7 @@ export function nextPacificMidnight(ms: number): Date {
   const { y, m, d } = wallDate(ms);
   // Next local date at 00:00, read as if it were UTC.
   const wall = Date.UTC(y, m - 1, d) + DAY_MS;
-  let utc = wall - offsetMs(wall);
+  const guess = wall - offsetMs(wall);
   // The offset at the true instant differs when a DST change lies between the guess and it.
-  const actual = offsetMs(utc);
-  if (wall - actual !== utc) utc = wall - actual;
-  return new Date(utc);
+  return new Date(wall - offsetMs(guess));
 }

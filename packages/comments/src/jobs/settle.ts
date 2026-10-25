@@ -66,42 +66,40 @@ export async function settleActionIn(
   f: Final,
   audit: { quota?: AuditQuota } = {},
 ): Promise<{ result: JobResult; recorded: boolean }> {
-  {
-    const ids = [scope.organizationId, scope.brandId, scope.connectionId, a.id];
-    const u = await tx.query(
-      `UPDATE moderation_action
+  const ids = [scope.organizationId, scope.brandId, scope.connectionId, a.id];
+  const u = await tx.query(
+    `UPDATE moderation_action
           SET status = $5, outcome_code = $6, platform_ref = $7, undo_kind = $8, completed_at = now()
         WHERE id = $4 AND organization_id = $1 AND brand_id = $2 AND connection_id = $3
           AND status = 'pending'
         RETURNING id`,
-      [...ids, f.status, f.code, f.platformRef, f.undo],
-    );
-    if (u.rows.length === 0) {
-      // Another run recorded it first.
-      const cur = await tx.query<{ status: string }>(
-        `SELECT status FROM moderation_action
+    [...ids, f.status, f.code, f.platformRef, f.undo],
+  );
+  if (u.rows.length === 0) {
+    // Another run recorded it first.
+    const cur = await tx.query<{ status: string }>(
+      `SELECT status FROM moderation_action
           WHERE id = $4 AND organization_id = $1 AND brand_id = $2 AND connection_id = $3`,
-        ids,
-      );
-      return { result: { status: cur.rows[0]?.status ?? null }, recorded: false };
-    }
-    if (f.commentState !== null)
-      await setCommentPlatformState(tx, scope, a.commentId, f.commentState);
-    await recordActionAudit(tx, {
-      organizationId: scope.organizationId,
-      brandId: scope.brandId,
-      actionId: a.id,
-      commentId: a.commentId,
-      kind: a.kind,
-      actorType: a.actorType,
-      actorUserId: a.actorUserId,
-      actorApiKeyId: a.actorApiKeyId,
-      status: f.status,
-      outcomeCode: f.code,
-      ...(audit.quota ? { quota: audit.quota } : {}),
-    });
-    return { result: { status: f.status, outcomeCode: f.code, undo: f.undo }, recorded: true };
+      ids,
+    );
+    return { result: { status: cur.rows[0]?.status ?? null }, recorded: false };
   }
+  if (f.commentState !== null)
+    await setCommentPlatformState(tx, scope, a.commentId, f.commentState);
+  await recordActionAudit(tx, {
+    organizationId: scope.organizationId,
+    brandId: scope.brandId,
+    actionId: a.id,
+    commentId: a.commentId,
+    kind: a.kind,
+    actorType: a.actorType,
+    actorUserId: a.actorUserId,
+    actorApiKeyId: a.actorApiKeyId,
+    status: f.status,
+    outcomeCode: f.code,
+    ...(audit.quota ? { quota: audit.quota } : {}),
+  });
+  return { result: { status: f.status, outcomeCode: f.code, undo: f.undo }, recorded: true };
 }
 
 /** Re-reads the comment through the ingest job. Failures are logged, never thrown. */

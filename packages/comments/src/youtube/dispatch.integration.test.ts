@@ -391,7 +391,8 @@ describe('dispatchPlan (live)', () => {
       { action_id: reject.actionId, state: 'queued', batch_id: null },
       { action_id: hold.actionId, state: 'queued', batch_id: null },
     ]);
-    expect((await w.batches(c.scope)).map((b) => [b.state, b.outcome_code])).toEqual([
+    // The batches share one fake-clock instant, so their row order is arbitrary.
+    expect((await w.batches(c.scope)).map((b) => [b.state, b.outcome_code]).sort()).toEqual([
       ['confirmed', null],
       ['failed', 'quota_exceeded'],
     ]);

@@ -74,7 +74,6 @@ export interface DispatchResult {
 }
 
 type Queryable = Pick<pg.ClientBase, 'query'>;
-type Tx = pg.ClientBase;
 
 interface Entry {
   readonly t: QueuedTarget;
@@ -303,7 +302,7 @@ function classify(
     const p = probes.get(t.commentExternalId);
     if (!p || p.state === 'gone')
       skip.push({ t, f: final('noop', 'comment_gone', { commentState: 'deleted' }) });
-    else if (p.state === 'held' && t.kind !== 'unhide')
+    else if (p.state === 'held' && t.kind === 'hide')
       skip.push({ t, f: final('noop', 'already_moderated', { commentState: 'hidden' }) });
     else if (
       p.updatedAt !== null &&
