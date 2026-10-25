@@ -133,7 +133,7 @@ describe('viewOnUrl', () => {
     ['instagram', 'https://www.instagram.com.evil.example/'],
     ['instagram', 'https://www.facebook.com/1_2'],
     ['facebook', 'https://www.instagram.com/p/abc/'],
-    ['threads', 'https://www.threads.net/x'],
+    ['linkedin', 'https://www.linkedin.com/x'],
     ['youtube', 'https://www.youtube.com.evil.example/x'],
   ])('rejects %s %s', (platform, url) => {
     expect(viewOnUrl(platform, url)).toBeNull();

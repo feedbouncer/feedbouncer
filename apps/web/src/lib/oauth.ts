@@ -14,15 +14,21 @@ const SCOPE_TEXT: Record<string, string> = {
   'comment.list': 'Read comments on your videos',
   'comment.list.manage': 'Hide, delete and reply to comments',
   'youtube.force-ssl': 'Read comments, hold them for review and reject them',
+  threads_basic: 'See your profile and list your posts',
+  threads_read_replies: 'Read replies to your posts',
+  threads_manage_replies: 'Hide, unhide and post replies',
+  threads_content_publish: 'Publish the replies your rules send',
 };
 
 // Instagram is connected through Facebook Login, so its dialog is on www.facebook.com too;
-// TikTok and YouTube (Google) have their own authorization hosts.
+// TikTok, YouTube (Google) and Threads have their own authorization hosts.
 const AUTHORIZATION_HOSTS: ReadonlySet<string> = new Set([
   'www.facebook.com',
   'www.tiktok.com',
   'business-api.tiktok.com',
   'accounts.google.com',
+  'threads.com',
+  'threads.net',
 ]);
 
 export function safeAuthorizationUrl(raw: unknown): URL | null {

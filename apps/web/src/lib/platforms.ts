@@ -8,6 +8,7 @@ export const CONNECTABLE = [
   'tiktok',
   'tiktok_ads',
   'youtube',
+  'threads',
 ] as const;
 export type ConnectablePlatform = (typeof CONNECTABLE)[number];
 
@@ -93,5 +94,16 @@ export const PLATFORM_COPY: Record<ConnectablePlatform, PlatformCopy> = {
     pickerIntro: 'Choose the YouTube channels you own and want to moderate.',
     noEligible:
       'This Google account does not own a YouTube channel. Sign in with the account that owns your channel, then connect again.',
+  },
+  threads: {
+    label: 'Threads',
+    accountNoun: 'Threads account',
+    connectLabel: 'Connect Threads account',
+    pickerTitle: 'Confirm Threads account',
+    viewOn: 'View on Threads',
+    deleteConfirm: "Threads doesn't let you delete other people's replies.",
+    pickerIntro: 'Confirm the Threads account to connect.',
+    noEligible:
+      'This Threads account could not be read. Check that it is a public or professional account, then connect again.',
   },
 };

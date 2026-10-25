@@ -1,8 +1,13 @@
 import { AlertsNavLink } from '../../../../../../components/alerts/alerts-nav-link';
 import Link from 'next/link';
+import { Fragment } from 'react';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { ApiForm } from '../../../../../../components/api-form';
 import { ConnectButton } from '../../../../../../components/connect-button';
+import {
+  ConnectPermissions,
+  type ConnectPermission,
+} from '../../../../../../components/connect-permissions';
 import { ConnectChecklist } from '../../../../../../components/connect-checklist';
 import { YouTubeBudgetPanel } from '../../../../../../components/youtube-budget-panel';
 import { ReviewModeBanner } from '../../../../../../components/review-mode/review-mode-banner';
@@ -69,6 +74,27 @@ async function loadHealthNotes(orgId: string, brandId: string): Promise<Map<stri
   }
 }
 
+// What each platform asks the owner to approve. Like health, a nicety: without it the page still renders.
+async function loadPermissions(
+  orgId: string,
+  brandId: string,
+): Promise<Map<string, ConnectPermission[]>> {
+  const found = new Map<string, ConnectPermission[]>();
+  await Promise.all(
+    CONNECTABLE.map(async (platform) => {
+      try {
+        const r = await serverGet<{ permissions: ConnectPermission[] }>(
+          `/api/v1/orgs/${orgId}/brands/${brandId}/connections/${platform}/permissions`,
+        );
+        if (r.data && r.data.permissions.length > 0) found.set(platform, r.data.permissions);
+      } catch (err) {
+        unstable_rethrow(err);
+      }
+    }),
+  );
+  return found;
+}
+
 const platformLabel = (p: string): string => (isConnectable(p) ? PLATFORM_COPY[p].label : p);
 
 const one = (v: string | string[] | undefined): string | null => (typeof v === 'string' ? v : null);
@@ -98,6 +124,9 @@ export default async function ConnectionsPage({
       ).connections
     : [];
   const healthNotes = canManage ? await loadHealthNotes(orgId, brandId) : new Map<string, string>();
+  const permissions = canManage
+    ? await loadPermissions(orgId, brandId)
+    : new Map<string, ConnectPermission[]>();
   const hasPageOrInstagram = connections.some(
     (c) => c.platform === 'facebook' || c.platform === 'instagram',
   );
@@ -192,13 +221,15 @@ export default async function ConnectionsPage({
               </section>
             ))}
           {CONNECTABLE.map((p) => (
-            <ConnectButton
-              key={p}
-              orgId={orgId}
-              brandId={brandId}
-              platform={p}
-              label={PLATFORM_COPY[p].connectLabel}
-            />
+            <Fragment key={p}>
+              <ConnectPermissions permissions={permissions.get(p) ?? []} />
+              <ConnectButton
+                orgId={orgId}
+                brandId={brandId}
+                platform={p}
+                label={PLATFORM_COPY[p].connectLabel}
+              />
+            </Fragment>
           ))}
           {hasPageOrInstagram && !hasAdAccount ? (
             <p>Connect your ad account to moderate comments on your ads.</p>

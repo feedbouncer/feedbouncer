@@ -20,6 +20,7 @@ import {
   stepIssues,
   templateCount,
   toggleStep,
+  commentLog,
   undoLogStep,
   undoText,
   type ActionCapabilitiesDto,
@@ -219,6 +220,22 @@ describe('stepIssues', () => {
   });
 });
 
+describe('stepIssues for a reply that is too long', () => {
+  it('names the platform and its limit', () => {
+    const issues = [
+      { path: 'actions.0', message: 'template_too_long', platform: 'threads', max: 500 },
+    ];
+    expect(stepIssues(issues, 0)).toEqual([
+      'The reply is too long for Threads: the limit is 500 characters.',
+    ]);
+  });
+  it('falls back to a plain sentence when the platform is not named', () => {
+    expect(stepIssues([{ path: 'actions.0', message: 'template_too_long' }], 0)).toEqual([
+      'The reply is too long for this platform.',
+    ]);
+  });
+});
+
 describe('outcomeText', () => {
   it.each(['template_too_long', 'reply_to_deleted_comment', 'message_to_banned_author'])(
     'reads as a fragment after the status for %s',
@@ -263,6 +280,12 @@ describe('polling', () => {
 
 describe('requests', () => {
   beforeEach(() => vi.mocked(apiFetch).mockClear());
+
+  it("reads one comment's steps with a GET filtered by comment", async () => {
+    vi.mocked(apiFetch).mockResolvedValueOnce({ items: [], next: null });
+    await commentLog('/api/v1/orgs/o/brands/b', 'c1');
+    expect(apiFetch).toHaveBeenCalledWith('/api/v1/orgs/o/brands/b/action-log?commentId=c1');
+  });
 
   it('undoes a step with a POST to its undo path', async () => {
     await undoLogStep('/api/v1/orgs/o/brands/b', 's1');

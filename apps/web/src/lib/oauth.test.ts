@@ -87,3 +87,20 @@ describe('youtube', () => {
     ]);
   });
 });
+
+describe('threads', () => {
+  it.each(['https://threads.com/oauth/authorize?state=x', 'https://threads.net/oauth/authorize'])(
+    'accepts the Threads consent page %s',
+    (u) => expect(safeAuthorizationUrl(u)?.href).toBe(u),
+  );
+  it('rejects look-alike hosts', () => {
+    expect(safeAuthorizationUrl('https://threads.com.evil.example/')).toBeNull();
+    expect(safeAuthorizationUrl('http://threads.com/')).toBeNull();
+  });
+  it('describes the Threads permissions', () => {
+    expect(missingPermissionText('threads_read_replies,threads_manage_replies')).toEqual([
+      'Read replies to your posts (threads_read_replies)',
+      'Hide, unhide and post replies (threads_manage_replies)',
+    ]);
+  });
+});

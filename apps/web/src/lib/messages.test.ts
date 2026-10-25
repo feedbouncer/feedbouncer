@@ -202,3 +202,26 @@ describe('connect failures', () => {
     expect(statusReasonText('credential_decrypt_failed')).toContain('Reconnect');
   });
 });
+
+describe('Threads outcomes', () => {
+  it.each([
+    [
+      'hide_nested_reply_unsupported',
+      'Threads can only hide replies made directly to your post. Hiding that reply also hides this one.',
+    ],
+    [
+      'reply_quota_exhausted',
+      "Delayed: Threads' daily limit of 1,000 replies is reached. FeedBouncer will post it when the limit allows.",
+    ],
+    ['rate_limit_exhausted', "Not sent: the platform's limit stayed reached for 24 hours."],
+    ['threads_error_100', 'Threads refused this action (code 100).'],
+  ])('%s reads as a full sentence', (code, text) => {
+    expect(outcomeText(code)).toBe(text);
+    expect(outcomeSentence(code)).toBe(text);
+  });
+
+  it('does not format a malformed Threads error code', () => {
+    expect(outcomeText('threads_error_<b>')).toBe(outcomeText('definitely_not_a_code'));
+    expect(outcomeText('threads_error_')).toBe(outcomeText('definitely_not_a_code'));
+  });
+});

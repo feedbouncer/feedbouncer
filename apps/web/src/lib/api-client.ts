@@ -12,7 +12,7 @@ export class ApiRequestError extends Error {
     /** The limit a refused value exceeded (e.g. reply length in code points), when the API names one. */
     readonly max?: number | undefined,
     /** Field-level problems of a refused rule: a path such as conditions.patterns.1 and a message. */
-    readonly issues: { path: string; message: string }[] = [],
+    readonly issues: { path: string; message: string; platform?: string; max?: number }[] = [],
     /** Who already decided a suggestion, on suggestion_already_handled. */
     readonly handled?: HandledDetails | undefined,
     /** The platform permission a connection lacks, on missing_permission. */
@@ -46,11 +46,20 @@ function tagOf(v: unknown): { id: string; name: string } | undefined {
 const safeInt = (v: unknown): number | undefined =>
   typeof v === 'number' && Number.isSafeInteger(v) ? v : undefined;
 
-function issuesOf(v: unknown): { path: string; message: string }[] {
+function issuesOf(v: unknown): ApiRequestError['issues'] {
   if (!Array.isArray(v)) return [];
   return v.flatMap((i: unknown) => {
-    const { path, message } = (i ?? {}) as { path?: unknown; message?: unknown };
-    return typeof path === 'string' && typeof message === 'string' ? [{ path, message }] : [];
+    const { path, message, platform, max } = (i ?? {}) as Record<string, unknown>;
+    if (typeof path !== 'string' || typeof message !== 'string') return [];
+    const limit = safeInt(max);
+    return [
+      {
+        path,
+        message,
+        ...(typeof platform === 'string' && { platform }),
+        ...(limit !== undefined && { max: limit }),
+      },
+    ];
   });
 }
 

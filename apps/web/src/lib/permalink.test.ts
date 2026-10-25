@@ -47,3 +47,22 @@ describe('viewOnUrl (youtube)', () => {
     expect(viewOnUrl('youtube', 'https://www.facebook.com/x')).toBeNull();
   });
 });
+
+describe('viewOnUrl (threads)', () => {
+  it.each([
+    'https://www.threads.com/@shop/post/C1',
+    'https://threads.com/@shop/post/C1',
+    'https://www.threads.net/@shop/post/C1',
+    'https://threads.net/@shop/post/C1',
+  ])('accepts %s', (u) => {
+    expect(viewOnUrl('threads', u)).toBe(u);
+  });
+  it.each([
+    'https://threads.com.evil.example/x',
+    'https://www.threads.com@evil.example/x',
+    'http://www.threads.com/x',
+    'https://www.instagram.com/x',
+  ])('rejects %s', (u) => {
+    expect(viewOnUrl('threads', u)).toBeNull();
+  });
+});
