@@ -17,6 +17,7 @@
 // recorded outcome. It is skipped where the single-comment lookup cannot tell a
 // deleted comment from one it did not reach (TikTok): polling re-reads those.
 import type pg from 'pg';
+import { errorFields } from '@feedbouncer/service-runtime';
 import {
   ConnectorError,
   toConnectorError,
@@ -321,8 +322,11 @@ export function executeActionJob(d: {
               new Date(d.clock.now() + e.retryAfterMs),
               e.code,
             );
-          } catch {
-            d.log.warn('moderation.deferral_not_recorded', { actionId: a.id });
+          } catch (recordErr) {
+            d.log.warn('moderation.deferral_not_recorded', {
+              actionId: a.id,
+              ...errorFields(recordErr),
+            });
           }
         }
         if (e.kind === 'rate_limited' || e.kind === 'auth_expired')

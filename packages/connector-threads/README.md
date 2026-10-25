@@ -1,10 +1,15 @@
 # @feedbouncer/connector-threads
 
-Threads API connector, built on `SafeHttp` with no Meta SDK. This package currently holds the request layer; the connector itself is added on top of it.
+Threads API connector, built on `SafeHttp` with no Meta SDK. `createThreadsConnector` assembles OAuth, reading, hide/unhide and replies, and the signed webhook spec from the modules below.
 
 - `config.ts`: scopes and their purposes, rate-limit policy, scheduling constants, `ThreadsConfig` and `parseThreadsEnv` (`THREADS_CONNECTOR_ENABLED`, `THREADS_APP_ID`, `THREADS_APP_SECRET`, optional `THREADS_WEBHOOK_VERIFY_TOKEN`, `THREADS_POLL_INTERVAL_SEC`, `THREADS_DISCOVERY_INTERVAL_SEC`).
 - `api.ts`: `threadsPath`, a closed table of paths whose only variable segment is a numeric id checked before any I/O, and `threadsRequest`. Every token goes in a bearer header. Two values are in the query string because the API requires it: `client_secret` on `th_exchange_token` and `input_token` on `debug_token`. `threadsRequest` never logs, throws or stores a URL. POST bodies are form encoded. Errors carry a code only: never the URL, query string, response body or Meta's message.
 - `errors.ts`: `mapThreadsError` and `THREADS_ERROR_TABLE`, keyed on the Graph `error.code` and `error_subcode`; anything else falls back to the HTTP status.
+- `oauth.ts`, `accounts.ts`: authorize URL, code exchange, long-lived token and its self-refresh, granted scopes, account listing.
+- `reading.ts`: posts, conversations, single replies and the post-owner check, normalised for storage.
+- `actions.ts`: hide/unhide and quota-checked replies.
+- `webhook.ts`: webhook signature spec and payload parsing.
+- `testing/`: `FakeThreads`, a stateful fake of the API for tests.
 - `ids.ts`: strict validators for media ids, handles, cursors, permalinks and timestamps, and `sanitizeText`.
 
 ## Verified behaviour (v1.0, checked 2026-10-25)

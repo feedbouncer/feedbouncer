@@ -162,9 +162,7 @@ beforeEach(async () => {
 
   const store = new PgCommentStore(pool);
   const registry = new ConnectorRegistry();
-  registry.register(
-    createFacebookConnector(facebookMeta()),
-  );
+  registry.register(createFacebookConnector(facebookMeta()));
   actions = new ModerationActions({
     pool,
     store,
