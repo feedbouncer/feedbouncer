@@ -41,6 +41,7 @@
     "@feedbouncer/connector-meta-ads": "workspace:*",
     "@feedbouncer/connector-tiktok": "workspace:*",
     "@feedbouncer/connector-tiktok-ads": "workspace:*",
+    "@feedbouncer/connector-youtube": "workspace:*",
     "@feedbouncer/tiktok-business-api": "workspace:*",
     "@types/node": "24.13.6",
     "@types/pg": "8.23.1"

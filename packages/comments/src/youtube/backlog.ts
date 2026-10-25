@@ -39,6 +39,12 @@ export interface BacklogCounts {
 
 type Queryable = Pick<pg.ClientBase, 'query'>;
 
+/** A queued action as the dispatcher settles it. */
+export interface QueuedTarget extends SettleTarget {
+  /** When our copy of the comment was last read from YouTube; a later edit there makes it stale. */
+  readonly platformSyncedAt: Date | null;
+}
+
 const scopeParams = (s: ConnectionScope) => [s.organizationId, s.brandId, s.connectionId];
 
 const isQueuedKind = (k: string): k is QueuedKind => Object.hasOwn(TIER, k);
@@ -158,9 +164,13 @@ export class PgYouTubeBacklog implements BudgetedDispatch {
     return r.rowCount ?? 0;
   }
 
-  /** Puts actions back in the queue for a later cycle. */
-  async requeue(scope: ConnectionScope, actionIds: readonly string[]): Promise<void> {
-    await this.d.pool.query(
+  /** Puts actions back in the queue for a later cycle. `q` lets a caller requeue inside its transaction. */
+  async requeue(
+    scope: ConnectionScope,
+    actionIds: readonly string[],
+    q: Queryable = this.d.pool,
+  ): Promise<void> {
+    await q.query(
       `UPDATE youtube_action_queue q SET state = 'queued', batch_id = NULL
         WHERE ${SCOPED} AND q.action_id = ANY($4::uuid[])`,
       [...scopeParams(scope), actionIds],
@@ -256,7 +266,7 @@ export class PgYouTubeBacklog implements BudgetedDispatch {
         [...scopeParams(scope), actionIds],
       );
       const lockedIds = new Set(locked.rows.map((x) => x.action_id));
-      const targets = await this.#targets(
+      const targets = await this.targets(
         tx,
         scope,
         actionIds.filter((id) => lockedIds.has(id)),
@@ -280,11 +290,12 @@ export class PgYouTubeBacklog implements BudgetedDispatch {
     return settled.length;
   }
 
-  async #targets(
+  /** What settling each queued action needs, in the caller's order; ids not in the queue are skipped. */
+  async targets(
     q: Queryable,
     scope: ConnectionScope,
     actionIds: readonly string[],
-  ): Promise<SettleTarget[]> {
+  ): Promise<QueuedTarget[]> {
     if (actionIds.length === 0) return [];
     const r = await q.query<{
       id: string;
@@ -297,10 +308,11 @@ export class PgYouTubeBacklog implements BudgetedDispatch {
       request_key: string;
       comment_external_id: string;
       source_external_id: string;
+      platform_synced_at: Date | null;
     }>(
       `SELECT m.id, m.comment_id, m.kind, m.actor_type, m.actor_user_id, m.actor_api_key_id,
               m.rule_id, m.request_key, c.external_id AS comment_external_id,
-              s.external_id AS source_external_id
+              s.external_id AS source_external_id, c.platform_synced_at
        ${QUEUE_JOIN}
        WHERE ${SCOPED} AND q.action_id = ANY($4::uuid[])`,
       [...scopeParams(scope), actionIds],
@@ -322,6 +334,7 @@ export class PgYouTubeBacklog implements BudgetedDispatch {
               requestKey: x.request_key,
               commentExternalId: x.comment_external_id,
               sourceExternalId: x.source_external_id,
+              platformSyncedAt: x.platform_synced_at,
             },
           ]
         : [];

@@ -80,9 +80,14 @@ export class PgYouTubeQuotaLedger {
     return this.#meter(null, false);
   }
 
-  /** Today's real (non-simulated) usage for one connection. */
-  async usage(scope: ConnectionScope): Promise<BudgetInputs> {
-    return (await this.#snapshot(this.d.pool, scope, false, this.d.clock.now())).inputs;
+  /**
+   * Today's real (non-simulated) usage for one connection. With `simulated`, the
+   * connection's spend also counts its simulated (dry-run) rows: the allowance a
+   * dry run plans against. The project total is always real.
+   */
+  async usage(scope: ConnectionScope, opts: { simulated?: boolean } = {}): Promise<BudgetInputs> {
+    return (await this.#snapshot(this.d.pool, scope, opts.simulated ?? false, this.d.clock.now()))
+      .inputs;
   }
 
   /** Real spend per method and purpose for one connection on a Pacific day ('YYYY-MM-DD'). */

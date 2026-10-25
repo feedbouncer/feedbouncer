@@ -791,6 +791,9 @@ importers:
       '@feedbouncer/connector-tiktok-ads':
         specifier: workspace:*
         version: link:../connector-tiktok-ads
+      '@feedbouncer/connector-youtube':
+        specifier: workspace:*
+        version: link:../connector-youtube
       '@feedbouncer/tiktok-business-api':
         specifier: workspace:*
         version: link:../tiktok-business-api

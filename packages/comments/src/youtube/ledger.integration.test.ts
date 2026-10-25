@@ -353,6 +353,18 @@ describe('PgYouTubeQuotaLedger', () => {
     ]);
   });
 
+  it('simulated usage counts real and simulated rows; the project total stays real', async () => {
+    const s = await youtubeConnection('simulated-usage');
+    const sim = ledger().meterFor(s, { simulated: true });
+    await sim.settle(await sim.reserve({ ...write, units: 51 }), { ok: true });
+    await ledger().meterFor(s).reserve(read);
+    const u = await ledger().usage(s, { simulated: true });
+    expect(u.spentUnits).toBe(52);
+    expect(u.readsSpentUnits).toBe(1);
+    expect((await ledger().usage(s)).spentUnits).toBe(1);
+    expect(u.projectSpentUnits).toBe((await ledger().usage(s)).projectSpentUnits);
+  });
+
   it("usage and totals never count another tenant's rows", async () => {
     const s1 = await youtubeConnection('tenant-1');
     const s2 = await youtubeConnection('tenant-2');
