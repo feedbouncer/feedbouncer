@@ -10,7 +10,9 @@ export interface YouTubeSettings {
   protectedAuthorIds: string[];
 }
 
-export type YouTubeSettingsPatch = Partial<YouTubeSettings>;
+export type YouTubeSettingsPatch = {
+  [K in keyof YouTubeSettings]?: YouTubeSettings[K] | undefined;
+};
 
 interface Row {
   daily_budget_units: number;
