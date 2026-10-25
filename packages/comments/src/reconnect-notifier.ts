@@ -33,7 +33,10 @@ const PLATFORM_LABELS: Record<Platform, string> = {
 };
 
 /** The email addresses of an organization's owners. */
-export async function organizationOwnerEmails(pool: pg.Pool, organizationId: string): Promise<string[]> {
+export async function organizationOwnerEmails(
+  pool: pg.Pool,
+  organizationId: string,
+): Promise<string[]> {
   const owners = await pool.query<{ email: string }>(
     `SELECT u.email FROM membership m JOIN app_user u ON u.id = m.user_id
       WHERE m.organization_id = $1 AND m.role = 'owner'`,
@@ -68,9 +71,7 @@ export class EmailReconnectNotifier implements ReconnectNotifier {
       platformLabel: PLATFORM_LABELS[row.platform],
       settingsUrl: new URL(`/orgs/${org}/brands/${brand}/connections`, this.d.publicWebUrl).href,
     });
-    const sent = await Promise.allSettled(
-      owners.map((to) => this.d.mailer.send({ ...body, to })),
-    );
+    const sent = await Promise.allSettled(owners.map((to) => this.d.mailer.send({ ...body, to })));
     const failed = sent.find((s) => s.status === 'rejected');
     if (failed) throw failed.reason;
   }
