@@ -201,6 +201,13 @@ export interface Connector {
   getComment(ctx: CallContext, ref: CommentRef): Promise<NormalizedComment | null>;
 
   /**
+   * Whether the connection's account owns the source. Needed where a source id can reach the
+   * connection from outside (a webhook), so a post of another account is never read or stored.
+   * A source that no longer exists is not owned.
+   */
+  verifySourceOwner?(ctx: CallContext, sourceExternalId: string): Promise<boolean>;
+
+  /**
    * Return `{status:'not_found'}` (or throw `not_found`) when the target no longer exists;
    * repeated hide on a hidden comment is `applied`.
    */

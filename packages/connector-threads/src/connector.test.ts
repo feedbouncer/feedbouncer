@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createSafeHttp,
   ConnectorRegistry,
   MemoryDeliveryLedger,
   StaticWebhookSecrets,
   WebhookGate,
   validateConnector,
+  type CallContext,
   type InboundWebhook,
 } from '@feedbouncer/connectors';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
@@ -117,5 +119,52 @@ describe('Threads webhook through WebhookGate', () => {
     expect(await s.gate.handle(s.req({ headers: {} }), deliver)).toEqual({ status: 'rejected' });
     expect(s.lines.some((l) => l.includes('signature_mismatch'))).toBe(true);
     expect(s.lines.some((l) => l.includes('signature_missing'))).toBe(true);
+  });
+});
+
+describe('account-level reads', () => {
+  async function setup() {
+    const fake = new FakeThreads({ appId: APP_ID, appSecret: APP_SECRET, now: () => T0 });
+    const me = fake.addUser({ username: 'me' });
+    const other = fake.addUser({ username: 'other' });
+    const res = await fake.fetch('https://graph.threads.net/oauth/access_token', {
+      method: 'POST',
+      body: new URLSearchParams({
+        client_id: APP_ID,
+        client_secret: APP_SECRET,
+        grant_type: 'authorization_code',
+        redirect_uri: 'https://x.test/cb',
+        code: me.authCode,
+      }),
+    });
+    const { access_token } = (await res.json()) as { access_token: string };
+    const ctx = {
+      accessToken: new Secret(access_token),
+      externalAccountId: me.userId,
+      http: createSafeHttp({ allowedHosts: ['graph.threads.net'], fetch: fake.fetch }),
+      signal: AbortSignal.timeout(2000),
+      reportQuota: async () => {},
+    } satisfies CallContext;
+    return { fake, me, other, ctx };
+  }
+
+  it('is true for a post of the connected account, false for another account or a missing post', async () => {
+    const { fake, me, other, ctx } = await setup();
+    const c = createThreadsConnector(cfg);
+    const mine = fake.addPost(me.userId).postId;
+    const theirs = fake.addPost(other.userId).postId;
+    expect(await c.verifySourceOwner!(ctx, mine)).toBe(true);
+    expect(await c.verifySourceOwner!(ctx, theirs)).toBe(false);
+    expect(await c.verifySourceOwner!(ctx, '999')).toBe(false);
+  });
+
+  it('a refused post listing is a missing threads_basic grant, not a source problem', async () => {
+    const { fake, ctx } = await setup();
+    const c = createThreadsConnector(cfg);
+    fake.failNext('meThreads', { code: 10 });
+    await expect(c.listSources!(ctx, { cursor: null })).rejects.toMatchObject({
+      kind: 'auth_expired',
+      missingScopes: ['threads_basic'],
+    });
   });
 });

@@ -43,7 +43,6 @@ export const THREADS_RATE_LIMIT = {
   defaultRetryAfterMs: 60_000,
 } as const;
 
-export const THREADS_WAKE_TICK_SEC = 5;
 export const THREADS_ACTIVE_POST_DAYS = 14;
 export const THREADS_QUIET_POST_POLL_INTERVAL_SEC = 21_600;
 export const THREADS_FULL_SCAN_INTERVAL_SEC = 86_400;

@@ -760,6 +760,9 @@ importers:
 
   packages/comments:
     dependencies:
+      '@feedbouncer/connector-threads':
+        specifier: workspace:*
+        version: link:../connector-threads
       '@feedbouncer/connector-youtube':
         specifier: workspace:*
         version: link:../connector-youtube

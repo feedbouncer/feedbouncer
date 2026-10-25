@@ -76,6 +76,8 @@ export function validateConnector(c: Connector): void {
   )
     fail('capabilities.responsePriority');
   if (c.listReplies !== undefined && typeof c.listReplies !== 'function') fail('listReplies');
+  if (c.verifySourceOwner !== undefined && typeof c.verifySourceOwner !== 'function')
+    fail('verifySourceOwner');
   if (c.probeComments !== undefined && typeof c.probeComments !== 'function') fail('probeComments');
   if (c.listThreads !== undefined && typeof c.listThreads !== 'function') fail('listThreads');
   if (c.probeThreadReplyCounts !== undefined && typeof c.probeThreadReplyCounts !== 'function')

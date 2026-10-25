@@ -1,4 +1,5 @@
 import {
+  ConnectorError,
   systemClock,
   type CallContext,
   type Clock,
@@ -22,7 +23,7 @@ import {
 } from './config.js';
 import { MEDIA_ID } from './ids.js';
 import { buildAuthorizationUrl, exchangeCode, refreshTokens, type ThreadsLog } from './oauth.js';
-import { getComment, listComments, listReplies, listSources } from './reading.js';
+import { getComment, getPostOwner, listComments, listReplies, listSources } from './reading.js';
 import { threadsWebhookSpec } from './webhook.js';
 
 const DAY_MS = 86_400_000;
@@ -85,8 +86,19 @@ export function createThreadsConnector(
       listAccounts({ ...oauthCall(ctx), accessToken: token.reveal() }),
     listSources: async (ctx, req) => {
       const since = new Date(now().getTime() - THREADS_ACTIVE_POST_DAYS * DAY_MS);
-      const { sources, next } = await listSources(callOf(ctx), { since, cursor: req.cursor });
-      return { items: sources, nextCursor: next };
+      try {
+        const { sources, next } = await listSources(callOf(ctx), { since, cursor: req.cursor });
+        return { items: sources, nextCursor: next };
+      } catch (e) {
+        // Without threads_basic the account's posts cannot be listed: the grant is incomplete.
+        if (e instanceof ConnectorError && e.code === 'permission_denied') {
+          throw new ConnectorError('auth_expired', e.code, {
+            reauthorize: true,
+            missingScopes: ['threads_basic'],
+          });
+        }
+        throw e;
+      }
     },
     listComments: async (ctx, req) => {
       const r = await listComments(callOf(ctx), {
@@ -112,6 +124,8 @@ export function createThreadsConnector(
     }),
     getComment: (ctx, ref) =>
       getComment(callOf(ctx), { ownAccountExternalId: ctx.externalAccountId, ref }),
+    verifySourceOwner: async (ctx, sourceExternalId) =>
+      (await getPostOwner(callOf(ctx), sourceExternalId)) === ctx.externalAccountId,
     act: (ctx, req) => act(callOf(ctx), req),
     respond: (ctx, req) => respond({ ...callOf(ctx), userId: ctx.externalAccountId }, req),
     webhook: threadsWebhookSpec(cfg),

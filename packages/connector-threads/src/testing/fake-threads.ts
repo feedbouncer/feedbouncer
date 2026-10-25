@@ -198,6 +198,12 @@ export class FakeThreads {
     return { replyId: id };
   }
 
+  editReply(id: string, text: string): void {
+    const m = this.media.get(id);
+    if (!m) throw new Error(`unknown reply ${id}`);
+    m.text = text;
+  }
+
   deleteReply(id: string): void {
     const m = this.media.get(id);
     if (m) m.deleted = true;
@@ -539,6 +545,7 @@ export class FakeThreads {
       is_reply: m.parentId !== null,
       is_reply_owned_by_me: m.authorId === me.id,
       root_post: { id: m.rootId },
+      ...(m.authorId !== null && { owner: { id: m.authorId } }),
       ...(m.parentId !== null && { replied_to: { id: m.parentId } }),
     };
   }

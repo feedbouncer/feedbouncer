@@ -92,6 +92,18 @@ export const POLL_JOB = {
   platforms: ['facebook', 'instagram'] as readonly Platform[] | 'all',
 };
 
+// One run polls one Threads connection: discovers its posts, reads the conversation of every
+// due post and looks up the replies webhooks announced that no read has found. `bucket` is the
+// scheduler's wake-up slot, so each slot is its own ledger entry.
+export const THREADS_POLL_JOB = {
+  type: 'threads_poll' as const,
+  payload: pollPayload,
+  externalRef: (p: PollPayload): string => `threads_poll:${p.bucket}`,
+  policy: { maxAttempts: 5 } satisfies Partial<RetryPolicy>,
+  timeoutMs: 120_000,
+  platforms: ['threads'] as readonly Platform[] | 'all',
+};
+
 export const tiktokPollPayload = z.strictObject({ connectionId: z.uuid() });
 export type TikTokPollPayload = z.infer<typeof tiktokPollPayload>;
 

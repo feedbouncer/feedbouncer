@@ -26,6 +26,8 @@ export * from './tiktok/poll-organic.js';
 export * from './tiktok/poll-ads.js';
 export * from './tiktok/scheduler.js';
 export { PgThreadsPolling } from './threads/polling.js';
+export type { ClaimedThread, DiscoveryState, ThreadsWake } from './threads/polling.js';
+export * from './threads/poll.js';
 export * from './threads/wake-sink.js';
 export * from './youtube/quota-day.js';
 export * from './youtube/budget.js';

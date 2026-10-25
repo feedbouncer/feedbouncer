@@ -26,6 +26,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
+    "@feedbouncer/connector-threads": "workspace:*",
     "@feedbouncer/connector-youtube": "workspace:*",
     "@feedbouncer/connectors": "workspace:*",
     "@feedbouncer/db": "workspace:*",

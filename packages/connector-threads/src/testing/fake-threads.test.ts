@@ -121,6 +121,18 @@ describe('FakeThreads', () => {
     expect(await code(req(u.token, 'media', { id: other }))).toBe('media_not_found');
   });
 
+  it('an edited reply shows its new text and an owner on posts', async () => {
+    const { fake, req, login } = world();
+    const u = await login();
+    const { postId } = fake.addPost(u.userId);
+    const r = fake.addReply(postId, { at: NOW, text: 'before' }).replyId;
+    fake.editReply(r, 'after');
+    const reply = await req(u.token, 'media', { id: r, query: { fields: 'text' } });
+    expect(reply.text).toBe('after');
+    const post = await req(u.token, 'media', { id: postId, query: { fields: 'id,owner' } });
+    expect(post.owner.id).toBe(u.userId);
+  });
+
   it('publishing_limit reports usage and publish fails once quota is used', async () => {
     const { fake, req, login } = world();
     const u = await login();

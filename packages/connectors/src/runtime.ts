@@ -89,6 +89,7 @@ export type ConnectorOperation =
   | 'list_comments'
   | 'list_replies'
   | 'get_comment'
+  | 'verify_source_owner'
   | 'act'
   | 'act_batch'
   | 'probe_comments'
@@ -399,6 +400,18 @@ export class ConnectionClient {
         return null;
       throw err;
     }
+  }
+
+  /** Whether the connection's account owns the source. Runs at background priority. */
+  async verifySourceOwner(sourceExternalId: string): Promise<boolean> {
+    const op = this.connector.verifySourceOwner?.bind(this.connector);
+    if (!op) throw new ConnectorError('unsupported', 'verify_source_owner');
+    if (!externalIdSchema.safeParse(sourceExternalId).success) throw invalidRequest();
+    return (
+      (await this.#call('background', 'verify_source_owner', (ctx) =>
+        op(ctx, sourceExternalId),
+      )) === true
+    );
   }
 
   /** Never throws for platform outcomes; they are encoded in the result. */
