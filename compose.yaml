@@ -53,6 +53,17 @@ x-tiktok-env: &tiktok-env
   TIKTOK_ADS_APP_ID: ${TIKTOK_ADS_APP_ID:-}
   TIKTOK_ADS_APP_SECRET: ${TIKTOK_ADS_APP_SECRET:-}
 
+# YouTube connector. No defaults here: with YOUTUBE_CONNECTOR_ENABLED unset the connector is off,
+# and an empty tuning value means the default (.env.example).
+x-youtube-env: &youtube-env
+  YOUTUBE_CONNECTOR_ENABLED: ${YOUTUBE_CONNECTOR_ENABLED:-}
+  YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
+  YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
+  YOUTUBE_PROJECT_DAILY_QUOTA: ${YOUTUBE_PROJECT_DAILY_QUOTA:-}
+  YOUTUBE_PROJECT_HEADROOM_UNITS: ${YOUTUBE_PROJECT_HEADROOM_UNITS:-}
+  YOUTUBE_SCHEDULER_TICK_SEC: ${YOUTUBE_SCHEDULER_TICK_SEC:-}
+  YOUTUBE_BACKLOG_CAP: ${YOUTUBE_BACKLOG_CAP:-}
+
 x-node-service: &node-service
   init: true
   restart: on-failure:3
@@ -163,7 +174,7 @@ services:
       dockerfile: apps/api/Dockerfile
       target: dev
     environment:
-      <<: [*backend-env, *secrets-env, *facebook-env, *tiktok-env, *alerts-env]
+      <<: [*backend-env, *secrets-env, *facebook-env, *tiktok-env, *youtube-env, *alerts-env]
       # tsx watch gets no file events through Docker Desktop bind mounts.
       CHOKIDAR_USEPOLLING: '1'
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is not set - copy .env.example to .env}
@@ -216,6 +227,7 @@ services:
       - ./packages/connector-meta-ads/src:/repo/packages/connector-meta-ads/src:ro
       - ./packages/connector-tiktok/src:/repo/packages/connector-tiktok/src:ro
       - ./packages/connector-tiktok-ads/src:/repo/packages/connector-tiktok-ads/src:ro
+      - ./packages/connector-youtube/src:/repo/packages/connector-youtube/src:ro
       - ./packages/tiktok-business-api/src:/repo/packages/tiktok-business-api/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
@@ -254,7 +266,7 @@ services:
       dockerfile: apps/worker/Dockerfile
       target: dev
     environment:
-      <<: [*backend-env, *secrets-env, *facebook-env, *tiktok-env, *alerts-env]
+      <<: [*backend-env, *secrets-env, *facebook-env, *tiktok-env, *youtube-env, *alerts-env]
       CHOKIDAR_USEPOLLING: '1'
       # Reconnect notices go to the dev mail sink; links and the OAuth redirect
       # URI are built from PUBLIC_WEB_URL, which must match the api's.
@@ -351,6 +363,7 @@ services:
       - ./packages/connector-meta-ads/src:/repo/packages/connector-meta-ads/src:ro
       - ./packages/connector-tiktok/src:/repo/packages/connector-tiktok/src:ro
       - ./packages/connector-tiktok-ads/src:/repo/packages/connector-tiktok-ads/src:ro
+      - ./packages/connector-youtube/src:/repo/packages/connector-youtube/src:ro
       - ./packages/tiktok-business-api/src:/repo/packages/tiktok-business-api/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
@@ -413,6 +426,7 @@ services:
       - ./packages/authz/src:/repo/packages/authz/src:ro
       - ./packages/classifier/src:/repo/packages/classifier/src:ro
       - ./packages/comments/src:/repo/packages/comments/src:ro
+      - ./packages/connector-youtube/src:/repo/packages/connector-youtube/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/db/src:/repo/packages/db/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro

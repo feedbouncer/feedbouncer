@@ -8,6 +8,7 @@ import {
   POLL_JOB,
   TIKTOK_ADS_POLL_JOB,
   TIKTOK_POLL_JOB,
+  YOUTUBE_CYCLE_JOB,
   enqueueOnly,
   type IngestPayload,
 } from './specs.js';
@@ -128,7 +129,7 @@ describe('job definitions', () => {
     const def = enqueueOnly(INGEST_JOB);
     expect(def).toMatchObject({
       type: INGEST_JOB.type,
-      platforms: ['facebook', 'instagram'],
+      platforms: ['facebook', 'instagram', 'youtube'],
       policy: { maxAttempts: 8 },
     });
     expect(def.payload).toBe(INGEST_JOB.payload);
@@ -138,15 +139,26 @@ describe('job definitions', () => {
     expect(err).toMatchObject({ kind: 'non_retryable', code: 'not_a_worker' });
   });
 
-  it('ingest and execute run for facebook and instagram only', () => {
+  it('ingest and execute run for facebook and instagram, and ingest also for youtube', () => {
     const r = new JobRegistry();
     r.register(enqueueOnly(INGEST_JOB));
     r.register(enqueueOnly(EXECUTE_JOB));
     for (const type of [INGEST_JOB.type, EXECUTE_JOB.type]) {
       expect(r.supports(type, 'facebook')).toBe(true);
       expect(r.supports(type, 'instagram')).toBe(true);
-      expect(r.supports(type, 'youtube')).toBe(false);
+      expect(r.supports(type, 'threads')).toBe(false);
     }
+    // YouTube actions go through the budgeted backlog, never the per-action job.
+    expect(r.supports(INGEST_JOB.type, 'youtube')).toBe(true);
+    expect(r.supports(EXECUTE_JOB.type, 'youtube')).toBe(false);
+  });
+
+  it('youtube_cycle is registered for youtube only', () => {
+    const r = new JobRegistry();
+    r.register(enqueueOnly(YOUTUBE_CYCLE_JOB));
+    expect(r.supports('youtube_cycle', 'youtube')).toBe(true);
+    expect(r.supports('youtube_cycle', 'tiktok')).toBe(false);
+    expect(YOUTUBE_CYCLE_JOB.externalRef({ connectionId: 'c' })).toBe('youtube_cycle:c');
   });
 
   it('enqueueOnly carries the lane so the API enqueues on the lane queue', () => {
@@ -157,7 +169,7 @@ describe('job definitions', () => {
   });
 
   it('enqueueOnly takes its platforms from the spec', () => {
-    expect(enqueueOnly({ ...INGEST_JOB, platforms: ['youtube'] }).platforms).toEqual(['youtube']);
+    expect(enqueueOnly({ ...INGEST_JOB, platforms: ['threads'] }).platforms).toEqual(['threads']);
     expect(enqueueOnly({ ...INGEST_JOB, platforms: 'all' }).platforms).toBe('all');
   });
 
@@ -167,7 +179,7 @@ describe('job definitions', () => {
     const w = new JobRegistry();
     w.register(ingestCommentJob({} as Parameters<typeof ingestCommentJob>[0]));
     expect(w.supports(INGEST_JOB.type, 'facebook')).toBe(true);
-    expect(w.supports(INGEST_JOB.type, 'youtube')).toBe(false);
+    expect(w.supports(INGEST_JOB.type, 'threads')).toBe(false);
   });
 });
 

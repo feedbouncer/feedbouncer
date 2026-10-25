@@ -342,6 +342,10 @@ describe('migration round trip', () => {
 
       expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({
         status: 'rolled_back',
+        migration: '20261025000100_youtube',
+      });
+      expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({
+        status: 'rolled_back',
         migration: '20261024000200_oauth_grant_refresh',
       });
       expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({
@@ -375,5 +379,96 @@ describe('migration round trip', () => {
     } finally {
       await close();
     }
+  });
+});
+
+describe('youtube comment ids', () => {
+  const thread = (t: Tenant, id: string) =>
+    ctx.c.query(
+      `INSERT INTO youtube_thread (organization_id, brand_id, connection_id, thread_external_id,
+                                   video_external_id, reply_count, last_activity_at)
+       VALUES ($1,$2,$3,$4,'video',0, now())`,
+      [t.organizationId, t.brandId, t.connectionId, id],
+    );
+  const batch = async (t: Tenant, ids: string[]) =>
+    (
+      await ctx.c.query<{ id: string }>(
+        `INSERT INTO youtube_write_batch (organization_id, brand_id, connection_id, pacific_day,
+                                          moderation_status, ban_author, comment_external_ids, action_ids, state)
+         VALUES ($1,$2,$3,'2026-10-24','rejected',false,$4,'{}','confirmed') RETURNING id`,
+        [t.organizationId, t.brandId, t.connectionId, ids],
+      )
+    ).rows[0]!.id;
+  const batchIds = async (id: string) =>
+    (
+      await ctx.c.query<{ comment_external_ids: string[] }>(
+        'SELECT comment_external_ids FROM youtube_write_batch WHERE id = $1',
+        [id],
+      )
+    ).rows[0]?.comment_external_ids ?? null;
+  const addComment = (t: Tenant, externalId: string, parent: string | null = null) =>
+    ctx.c.query(
+      `INSERT INTO comment (organization_id, brand_id, connection_id, source_id, external_id,
+                            parent_external_id, body, posted_at)
+       VALUES ($1,$2,$3,$4,$5,$6,'text', now())`,
+      [t.organizationId, t.brandId, t.connectionId, t.sourceId, externalId, parent],
+    );
+  const erase = (t: Tenant, ids: string[]) =>
+    inTx(ctx.c, () =>
+      withRetentionDelete(asClient(ctx.c as pg.Client), () =>
+        ctx.c.query('DELETE FROM comment WHERE connection_id = $1 AND external_id = ANY($2)', [
+          t.connectionId,
+          ids,
+        ]),
+      ),
+    );
+  const threads = async (t: Tenant) =>
+    (
+      await ctx.c.query<{ thread_external_id: string }>(
+        'SELECT thread_external_id FROM youtube_thread WHERE connection_id = $1 ORDER BY 1',
+        [t.connectionId],
+      )
+    ).rows.map((r) => r.thread_external_id);
+
+  it('erasing comments removes their thread rows and their ids in write batches', async () => {
+    const t = await seedTenant(ctx.c, 'yt-erase');
+    const other = await seedTenant(ctx.c, 'yt-erase-other');
+    const [x, y, z] = ['Ugx.erase.aaaaaaaaaa', 'Ugx.erase.bbbbbbbbbb', 'Ugx.erase.cccccccccc'];
+    for (const id of [x, y, z]) {
+      await addComment(t, id);
+      await thread(t, id);
+    }
+    await addComment(t, `${x}.reply0000000`, x);
+    await addComment(other, x);
+    await thread(other, x);
+    const mixed = await batch(t, [x, y, z]);
+    const only = await batch(t, [y]);
+    const othersBatch = await batch(other, [x]);
+
+    await erase(t, [y]);
+    expect(await threads(t)).toEqual([x, z]);
+    expect(await batchIds(mixed)).toEqual([x, z]);
+    expect(await batchIds(only)).toBeNull();
+
+    // A reply carries no thread row of its own: erasing it leaves the thread.
+    await erase(t, [`${x}.reply0000000`]);
+    expect(await threads(t)).toEqual([x, z]);
+
+    await erase(t, [x, z]);
+    expect(await threads(t)).toEqual([]);
+    expect(await batchIds(mixed)).toBeNull();
+
+    // Another connection's identical ids are untouched.
+    expect(await threads(other)).toEqual([x]);
+    expect(await batchIds(othersBatch)).toEqual([x]);
+  });
+
+  it('deleting the connection removes its thread rows and batches', async () => {
+    const t = await seedTenant(ctx.c, 'yt-conn');
+    await thread(t, 'Ugx.conn.aaaaaaaaaaa');
+    const b = await batch(t, ['Ugx.conn.aaaaaaaaaaa']);
+    await ctx.c.query('DELETE FROM organization WHERE id = $1', [t.organizationId]);
+    expect(await threads(t)).toEqual([]);
+    expect(await batchIds(b)).toBeNull();
   });
 });

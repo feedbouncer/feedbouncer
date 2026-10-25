@@ -13,6 +13,7 @@
     { "path": "../../packages/connector-instagram/tsconfig.build.json" },
     { "path": "../../packages/connector-tiktok/tsconfig.build.json" },
     { "path": "../../packages/connector-tiktok-ads/tsconfig.build.json" },
+    { "path": "../../packages/connector-youtube/tsconfig.build.json" },
     { "path": "../../packages/comments/tsconfig.build.json" },
     { "path": "../../packages/rules/tsconfig.build.json" },
     { "path": "../../packages/mailer/tsconfig.build.json" },

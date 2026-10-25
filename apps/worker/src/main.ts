@@ -7,8 +7,13 @@ import {
   PgAdTracking,
   PgCommentStore,
   PgTikTokPolling,
+  PgYouTubeQuotaLedger,
+  PgYouTubeSettings,
+  PgYouTubeState,
   PollScheduler,
   TikTokPollScheduler,
+  YouTubeCycleScheduler,
+  youtubeQuotaMeters,
 } from '@feedbouncer/comments';
 import {
   PgSyncRecorder,
@@ -93,6 +98,7 @@ try {
 
 const PREVIEW_PRUNE_INTERVAL_MS = 3_600_000;
 const REVIEW_SWEEP_INTERVAL_MS = 300_000;
+const YOUTUBE_MAX_CONNECTIONS_PER_TICK = 200;
 
 const log = createLogger('worker', env.logLevel);
 installCrashHandlers(log);
@@ -163,19 +169,31 @@ try {
     client.on('error', (err) => log.warn(`${name} connection error`, errorFields(err)));
   }
 
-  const { facebook, mail, tiktokPolling } = env;
-  // Mail is only configured (and only needed) for Facebook, TikTok, email alerts or weekly reports.
+  const { facebook, mail, tiktokPolling, youtube } = env;
+  // Mail is only configured (and only needed) for Facebook, TikTok, YouTube, email alerts or weekly reports.
   const mailer = mail ? createSmtpMailer(mail.smtpUrl, mail.mailFrom) : null;
   let jobs = new JobRegistry();
   let scheduler: PollScheduler | null = null;
   let tiktokScheduler: TikTokPollScheduler | null = null;
+  let youtubeScheduler: YouTubeCycleScheduler | null = null;
+  let youtubeLedger: PgYouTubeQuotaLedger | null = null;
   let alertLoops: ReturnType<typeof startAlertLoops> = null;
   let reportLoops: ReturnType<typeof startReportLoops> = null;
   let idempotencyPurge: ReturnType<typeof startIdempotencyPurge> | null = null;
   let retentionLoop: ReturnType<typeof startRetentionLoop> | null = null;
   let scanMaintenance: ReturnType<typeof startScanMaintenanceLoop> | null = null;
   let webhookLoops: ReturnType<typeof startWebhookLoops> | null = null;
-  if ((facebook || tiktokPolling) && mail && mailer) {
+  if ((facebook || tiktokPolling || youtube) && mail && mailer) {
+    youtubeLedger = youtube
+      ? new PgYouTubeQuotaLedger({
+          pool,
+          clock: systemClock,
+          projectQuota: youtube.projectDailyQuota,
+          projectHeadroom: youtube.projectHeadroomUnits,
+          settings: new PgYouTubeSettings(pool),
+          log,
+        })
+      : null;
     const stack = buildPgConnectorStack({
       pool,
       lockPool,
@@ -183,7 +201,7 @@ try {
       redisPrefix: env.jobs.prefix,
       keys: env.encryption,
       registry: connectors,
-      // The Meta app signs the webhooks of every Meta platform; TikTok connectors poll and have none.
+      // The Meta app signs the webhooks of every Meta platform; TikTok and YouTube connectors poll and have none.
       appSecrets: new Map(
         facebook
           ? [
@@ -196,6 +214,7 @@ try {
       redirectUri: (p) => new URL(`/api/v1/oauth/${p}/callback`, mail.publicWebUrl).href,
       log,
       workerId,
+      ...(youtubeLedger && { quotaMeters: youtubeQuotaMeters(youtubeLedger) }),
       observer: promConnectorObserver(telemetry.metrics),
       webhookObserver: promWebhookObserver(telemetry.metrics),
       sync: new PgSyncRecorder(pool),
@@ -225,6 +244,16 @@ try {
       ...(tiktokPolling
         ? { tiktok: { settings: tiktokPolling.poll, platforms: tiktokPolling.platforms } }
         : {}),
+      ...(youtube && youtubeLedger
+        ? {
+            youtube: {
+              ledger: youtubeLedger,
+              backlogCap: youtube.backlogCap,
+              mailer,
+              publicWebUrl: mail.publicWebUrl,
+            },
+          }
+        : {}),
     });
     if (env.adPolling) {
       scheduler = new PollScheduler({
@@ -248,6 +277,16 @@ try {
           tiktok: tiktokPolling.poll.pollIntervalSec,
           tiktok_ads: tiktokPolling.poll.adsPollIntervalSec,
         },
+        log,
+      });
+    }
+    if (youtube) {
+      youtubeScheduler = new YouTubeCycleScheduler({
+        state: new PgYouTubeState(pool),
+        producer: { enqueue: (input) => producer.enqueue(input) },
+        clock: () => new Date(),
+        tickSec: youtube.schedulerTickSec,
+        maxConnectionsPerTick: YOUTUBE_MAX_CONNECTIONS_PER_TICK,
         log,
       });
     }
@@ -396,6 +435,7 @@ try {
     await webhookLoops?.stop();
     await scheduler?.stop();
     await tiktokScheduler?.stop();
+    await youtubeScheduler?.stop();
     await Promise.all([
       worker.close(),
       jobWorkers.close(),
@@ -432,6 +472,7 @@ try {
   log.info('job consumers ready', { platforms: jobWorkers.platforms().join(',') || 'none' });
   scheduler?.start();
   tiktokScheduler?.start();
+  youtubeScheduler?.start();
   const previewStore = new PgPolicyPreviewStore(pool);
   const previewPruner = setInterval(() => {
     previewStore
@@ -439,6 +480,14 @@ try {
       .catch((err: unknown) => log.warn('policy preview prune failed', errorFields(err)));
   }, PREVIEW_PRUNE_INTERVAL_MS);
   previewPruner.unref();
+  const ledgerPruner = youtubeLedger
+    ? setInterval(() => {
+        youtubeLedger
+          .prune()
+          .catch((err: unknown) => log.warn('youtube quota ledger prune failed', errorFields(err)));
+      }, PREVIEW_PRUNE_INTERVAL_MS)
+    : null;
+  ledgerPruner?.unref();
   const reviewSweeper = new ReviewModeSweeper({ pool, clock: systemClock, log });
   const reviewModeSweep = setInterval(() => {
     reviewSweeper

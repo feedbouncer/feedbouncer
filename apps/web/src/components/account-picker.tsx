@@ -69,6 +69,7 @@ const SUBMIT_LABEL: Record<ConnectablePlatform, string> = {
   meta_ads: 'Connect selected ad accounts',
   tiktok: 'Connect TikTok account',
   tiktok_ads: 'Connect selected TikTok ad accounts',
+  youtube: 'Connect selected YouTube channels',
 };
 
 export function AccountPicker(props: {

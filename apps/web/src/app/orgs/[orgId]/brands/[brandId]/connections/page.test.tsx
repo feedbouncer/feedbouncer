@@ -5,6 +5,7 @@ import ConnectionsPage from './page';
 const ORG = '00000000-0000-4000-8000-000000000001';
 const BRAND = '00000000-0000-4000-8000-000000000002';
 const TT = '00000000-0000-4000-8000-000000000003';
+const YT = '00000000-0000-4000-8000-000000000004';
 
 const responses = new Map<string, unknown>();
 
@@ -82,5 +83,37 @@ describe('connections page', () => {
     );
     expect(html).not.toContain('<script');
     expect(html).toContain('>Reconnect</button>');
+  });
+
+  it('lists YouTube as connectable', async () => {
+    const html = await render();
+    expect(html).toContain('>Connect YouTube channel</button>');
+  });
+
+  it('shows the quota budget panel under a YouTube connection only', async () => {
+    responses.set(base, {
+      connections: [
+        {
+          id: YT,
+          platform: 'youtube',
+          displayName: 'My channel',
+          status: 'connected',
+          statusReason: null,
+          backfill: null,
+        },
+        {
+          id: TT,
+          platform: 'tiktok',
+          displayName: 'shop.tt',
+          status: 'connected',
+          statusReason: null,
+          backfill: null,
+        },
+      ],
+    });
+    const html = await render();
+    expect(html).toContain('<td>YouTube channel</td>');
+    expect(html.match(/Loading YouTube budget/g)).toHaveLength(1);
+    expect(html).toContain('My channel');
   });
 });

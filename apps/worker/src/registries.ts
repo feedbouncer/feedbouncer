@@ -25,6 +25,7 @@ import { createInstagramConnector, type InstagramConfig } from '@feedbouncer/con
 import { createMetaAdsConnector, type MetaAdsConfig } from '@feedbouncer/connector-meta-ads';
 import { createTikTokConnector, type TikTokConfig } from '@feedbouncer/connector-tiktok';
 import { createTikTokAdsConnector, type TikTokAdsConfig } from '@feedbouncer/connector-tiktok-ads';
+import { createYouTubeConnector, type YouTubeEnvConfig } from '@feedbouncer/connector-youtube';
 import {
   adDiscoveryJob,
   adPollJob,
@@ -32,6 +33,12 @@ import {
   PgAdTracking,
   PgBackfillStore,
   PgTikTokPolling,
+  PgYouTubeBacklog,
+  PgYouTubeSettings,
+  PgYouTubeState,
+  YouTubeNotices,
+  youtubeCycleJob,
+  type PgYouTubeQuotaLedger,
   type PollSettings,
   type TikTokPollPlatform,
   type TikTokPollSettings,
@@ -56,6 +63,7 @@ import {
 } from '@feedbouncer/connectors';
 import { BrandSlots, type createPool } from '@feedbouncer/db';
 import { JobRegistry, type JobProducer } from '@feedbouncer/jobs';
+import type { Mailer } from '@feedbouncer/mailer';
 import {
   PgEvaluationStore,
   PgRuleStore,
@@ -106,6 +114,14 @@ export interface WorkerJobDeps {
     readonly settings: TikTokPollSettings;
     readonly platforms: readonly TikTokPollPlatform[];
   };
+  /** Set when the YouTube connector is enabled: registers the cycle job and budgeted dispatch. */
+  readonly youtube?: {
+    readonly ledger: PgYouTubeQuotaLedger;
+    readonly backlogCap: number;
+    /** Sends the once-a-day quota notices to the organization's owners. */
+    readonly mailer: Mailer;
+    readonly publicWebUrl: URL;
+  };
 }
 
 /** Platform connectors this deployment runs. Each registered platform gets its own queue. */
@@ -115,6 +131,7 @@ export function buildConnectorRegistry(cfg: {
   metaAds: MetaAdsConfig | null;
   tiktok?: TikTokConfig | null;
   tiktokAds?: TikTokAdsConfig | null;
+  youtube?: YouTubeEnvConfig | null;
 }): ConnectorRegistry {
   const registry = new ConnectorRegistry();
   if (cfg.facebook) registry.register(createFacebookConnector(cfg.facebook));
@@ -122,6 +139,7 @@ export function buildConnectorRegistry(cfg: {
   if (cfg.metaAds) registry.register(createMetaAdsConnector(cfg.metaAds));
   if (cfg.tiktok) registry.register(createTikTokConnector(cfg.tiktok));
   if (cfg.tiktokAds) registry.register(createTikTokAdsConnector(cfg.tiktokAds));
+  if (cfg.youtube) registry.register(createYouTubeConnector(cfg.youtube));
   return registry;
 }
 
@@ -142,6 +160,24 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
     }),
   );
   const classifications = new PgClassificationStore(deps.pool);
+  const policyEvaluations = new PgPolicyEvaluationStore(deps.pool);
+  const runs = new PgActionRunStore(deps.pool);
+  // Outcomes of platform-decided actions, from the execute job and from the YouTube backlog alike.
+  const outcomes = new CompositeActionOutcomeObserver([
+    new RuleActionFallback({ evaluations, log: deps.log }),
+    new ClassifierActionFallback({ classifications, log: deps.log }),
+    new PolicyActionFallback({ evaluations: policyEvaluations, log: deps.log }),
+    new ActionStepOutcomeObserver({ runs, producer: deps.producer, log: deps.log }),
+  ]);
+  const youtubeBacklog = deps.youtube
+    ? new PgYouTubeBacklog({
+        pool: deps.pool,
+        clock: deps.clock,
+        cap: deps.youtube.backlogCap,
+        log: deps.log,
+        outcomes,
+      })
+    : null;
   const actions = new ModerationActions({
     pool: deps.pool,
     store: deps.store,
@@ -149,10 +185,10 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
     capabilities: deps.capabilities,
     clock: deps.clock,
     log: deps.log,
+    ...(youtubeBacklog && { budgeted: youtubeBacklog }),
   });
   const policies = new PgPolicyStore(deps.pool);
   const rules = new PgRuleStore(deps.pool);
-  const runs = new PgActionRunStore(deps.pool);
   const runner = new ActionRunner({
     pool: deps.pool,
     runs,
@@ -215,7 +251,6 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
   registry.register(
     classifierRerunJob({ pool: deps.pool, producer: deps.producer, log: deps.log }),
   );
-  const policyEvaluations = new PgPolicyEvaluationStore(deps.pool);
   const policyUsage = new PgPolicyUsage(deps.pool, deps.clock);
   const policySlots = new BrandSlots(deps.slotsPool, deps.policy.perBrandInFlight, 'fb.policy');
   const policyEvaluator = createPolicyEvaluator(deps.policy);
@@ -260,12 +295,7 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
       log: deps.log,
       producer: deps.producer,
       clock: deps.clock,
-      outcomes: new CompositeActionOutcomeObserver([
-        new RuleActionFallback({ evaluations, log: deps.log }),
-        new ClassifierActionFallback({ classifications, log: deps.log }),
-        new PolicyActionFallback({ evaluations: policyEvaluations, log: deps.log }),
-        new ActionStepOutcomeObserver({ runs, producer: deps.producer, log: deps.log }),
-      ]),
+      outcomes,
     }),
   );
   registry.register(connectionLifecycleJob({ runtime: deps.runtime, log: deps.log }));
@@ -314,6 +344,31 @@ export function buildJobRegistry(deps: WorkerJobDeps): JobRegistry {
     };
     if (deps.tiktok.platforms.includes('tiktok')) registry.register(tiktokPollJob(pollDeps));
     if (deps.tiktok.platforms.includes('tiktok_ads')) registry.register(tiktokAdsPollJob(pollDeps));
+  }
+  if (deps.youtube && youtubeBacklog) {
+    registry.register(
+      youtubeCycleJob({
+        pool: deps.pool,
+        runtime: deps.runtime,
+        state: new PgYouTubeState(deps.pool),
+        settings: new PgYouTubeSettings(deps.pool),
+        ledger: deps.youtube.ledger,
+        backlog: youtubeBacklog,
+        notices: new YouTubeNotices({
+          pool: deps.pool,
+          mailer: deps.youtube.mailer,
+          publicWebUrl: deps.youtube.publicWebUrl,
+          log: deps.log,
+          clock: deps.clock,
+        }),
+        store: deps.store,
+        producer: deps.producer,
+        applied,
+        outcomes,
+        clock: deps.clock,
+        log: deps.log,
+      }),
+    );
   }
   return registry;
 }

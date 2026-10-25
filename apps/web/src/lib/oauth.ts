@@ -13,14 +13,16 @@ const SCOPE_TEXT: Record<string, string> = {
   'video.list': 'List your videos',
   'comment.list': 'Read comments on your videos',
   'comment.list.manage': 'Hide, delete and reply to comments',
+  'youtube.force-ssl': 'Read comments, hold them for review and reject them',
 };
 
 // Instagram is connected through Facebook Login, so its dialog is on www.facebook.com too;
-// TikTok has its own authorization hosts.
+// TikTok and YouTube (Google) have their own authorization hosts.
 const AUTHORIZATION_HOSTS: ReadonlySet<string> = new Set([
   'www.facebook.com',
   'www.tiktok.com',
   'business-api.tiktok.com',
+  'accounts.google.com',
 ]);
 
 export function safeAuthorizationUrl(raw: unknown): URL | null {

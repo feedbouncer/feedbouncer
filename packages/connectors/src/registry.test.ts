@@ -28,6 +28,7 @@ const base = (): Connector => ({
   getComment: async () => null,
   act: async () => ({ status: 'not_found' }),
 });
+const batchOk = async () => ({ status: 'applied' as const });
 const withCaps = (patch: Partial<Connector['capabilities']>): Connector => {
   const c = base();
   return { ...c, capabilities: { ...c.capabilities, ...patch } };
@@ -170,8 +171,44 @@ describe('validateConnector', () => {
       /oauthCodeParam/,
     ],
     ['listReplies is not a function', { ...withCaps({}), listReplies: 1 as never }, /listReplies/],
+    [
+      "actionDispatch 'budgeted' without actBatch and probeComments",
+      withCaps({ actionDispatch: 'budgeted', batchActions: { maxTargets: 50 } }),
+      /actionDispatch/,
+    ],
+    [
+      'actionDispatch outside the allowed set',
+      withCaps({ actionDispatch: 'later' as never }),
+      /actionDispatch/,
+    ],
+    [
+      'batchActions without actBatch',
+      withCaps({ batchActions: { maxTargets: 50 } }),
+      /batchActions/,
+    ],
+    ['actBatch without batchActions', { ...base(), actBatch: batchOk }, /batchActions/],
+    ['probeComments is not a function', { ...base(), probeComments: 1 as never }, /probeComments/],
   ])('rejects %s', (_n, c, msg) => {
     expect(() => validateConnector(c)).toThrow(msg);
+  });
+
+  it('rejects batchActions.maxTargets 0 and 501', () => {
+    for (const maxTargets of [0, 501, 1.5])
+      expect(() =>
+        validateConnector({ ...withCaps({ batchActions: { maxTargets } }), actBatch: batchOk }),
+      ).toThrow(/batchActions/);
+  });
+
+  it('accepts a budgeted connector with batch actions and probes', () => {
+    for (const maxTargets of [1, 500])
+      expect(() =>
+        validateConnector({
+          ...withCaps({ actionDispatch: 'budgeted', batchActions: { maxTargets } }),
+          actBatch: batchOk,
+          probeComments: async () => [],
+        }),
+      ).not.toThrow();
+    expect(() => validateConnector(withCaps({ actionDispatch: 'immediate' }))).not.toThrow();
   });
 });
 

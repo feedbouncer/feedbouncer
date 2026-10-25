@@ -47,6 +47,8 @@ import { ConnectionHealthController } from './connections/connection-health.cont
 import { ConnectionHealthService } from './connections/connection-health.service.js';
 import { ConnectionsController } from './connections/connections.controller.js';
 import { ConnectionsService } from './connections/connections.service.js';
+import { YouTubeConnectionController } from './connections/youtube.controller.js';
+import { YouTubeConnectionService } from './connections/youtube.service.js';
 import { ConnectablePlatformPipe } from './connections/connectable-platform.pipe.js';
 import {
   OAuthCallbackController,
@@ -137,6 +139,7 @@ export class AppModule {
         BrandsController,
         ConnectionHealthController,
         ConnectionsController,
+        YouTubeConnectionController,
         OAuthConnectController,
         OAuthCallbackController,
         CommentsController,
@@ -186,6 +189,7 @@ export class AppModule {
         BrandsService,
         ConnectionHealthService,
         ConnectionsService,
+        YouTubeConnectionService,
         OAuthConnectService,
         ConnectablePlatformPipe,
         CommentsService,

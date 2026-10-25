@@ -31,6 +31,13 @@ export const ACTION_LABEL: Record<RuleAction, string> = {
   remove: 'Delete',
 };
 
+/** What the moderation actions are called on YouTube, where hide holds and delete rejects. */
+export const YOUTUBE_ACTION_LABEL = {
+  hide: 'Hold for review',
+  delete: 'Reject',
+  ban_author: 'Reject and ban author (undo in YouTube Studio)',
+} as const;
+
 /** An outcome as the past-tense start of a sentence, e.g. "Hidden by rule X". */
 export const OUTCOME_DONE: Record<RuleAction, string> = {
   approve: 'Allowed',

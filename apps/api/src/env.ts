@@ -31,6 +31,11 @@ import { parseMetaAdsEnv, type MetaAdsConfig } from '@feedbouncer/connector-meta
 import { parseInstagramEnv, type InstagramConfig } from '@feedbouncer/connector-instagram';
 import { TIKTOK_FILE_VARS, parseTikTokEnv, type TikTokConfig } from '@feedbouncer/connector-tiktok';
 import {
+  YOUTUBE_FILE_VARS,
+  parseYouTubeEnv,
+  type YouTubeEnvConfig,
+} from '@feedbouncer/connector-youtube';
+import {
   TIKTOK_ADS_FILE_VARS,
   parseTikTokAdsEnv,
   type TikTokAdsConfig,
@@ -60,6 +65,7 @@ export const API_FILE_VARS = [
   ...FACEBOOK_FILE_VARS,
   ...TIKTOK_FILE_VARS,
   ...TIKTOK_ADS_FILE_VARS,
+  ...YOUTUBE_FILE_VARS,
 ] as const;
 
 export interface ApiEnv {
@@ -95,6 +101,8 @@ export interface ApiEnv {
   readonly tiktok: TikTokConfig | null;
   /** Null unless TIKTOK_ADS_CONNECTOR_ENABLED=true. Independent of the Facebook config. */
   readonly tiktokAds: TikTokAdsConfig | null;
+  /** Null unless YOUTUBE_CONNECTOR_ENABLED=true. Independent of the Facebook config. */
+  readonly youtube: YouTubeEnvConfig | null;
   /** Queue prefix and dedup window, shared with the worker so both sides use the same queues. */
   readonly jobs: JobsConfig;
   /** The classifier's provider and model, for display only: the API holds no key. */
@@ -194,6 +202,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     metaAds: parseMetaAdsEnv(env, facebook),
     tiktok: parseTikTokEnv(env),
     tiktokAds: parseTikTokAdsEnv(env),
+    youtube: parseYouTubeEnv(env),
     jobs: loadJobsConfig(env),
     classifier,
     policy: loadPolicyLimits(env),
@@ -237,6 +246,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     metaAdsEnabled: config.metaAds !== null,
     tiktokEnabled: config.tiktok !== null,
     tiktokAdsEnabled: config.tiktokAds !== null,
+    youtubeEnabled: config.youtube !== null,
     scanToolEnabled: config.scan.enabled,
     alertSlackEnabled: config.alerts.slack,
     alertEmailEnabled: config.alerts.email,

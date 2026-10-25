@@ -4,6 +4,7 @@ import type { JobProducer } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
 import type { PgBackfillStore } from './backfill/store.js';
+import type { PgYouTubeBacklog } from './youtube/backlog.js';
 import { LIFECYCLE_JOB } from './jobs/specs.js';
 
 const AUDIT_ACTION = {
@@ -51,13 +52,15 @@ export async function enqueueLifecycle(
  * queued next: this call disconnected it, or it was already disconnected by a
  * user (a retry, whose teardown deduplicates). False for a row revoked for any
  * other reason by a concurrent change (a reconnect), which is left alone.
- * A null actor is an operator.
+ * A null actor is an operator. A YouTube connection's queued actions settle
+ * failed / connection_disconnected here; a failure throws, and the repeated call finishes it.
  */
 export async function revokeConnection(
   d: {
     pool: pg.Pool;
     directory: Pick<ConnectionDirectory, 'disconnect'>;
     backfill: Pick<PgBackfillStore, 'cancel'>;
+    backlog: Pick<PgYouTubeBacklog, 'abandon'>;
     log: Logger;
   },
   scope: ConnectionScope,
@@ -77,7 +80,16 @@ export async function revokeConnection(
       errorName: err instanceof Error ? err.name : 'NonError',
     });
   }
+  if ((await platformOf(d.pool, scope)) === 'youtube') await d.backlog.abandon(scope);
   return true;
+}
+
+async function platformOf(pool: pg.Pool, scope: ConnectionScope): Promise<string | undefined> {
+  const r = await pool.query<{ platform: string }>(
+    `SELECT platform FROM connection WHERE id = $3 AND organization_id = $1 AND brand_id = $2`,
+    [scope.organizationId, scope.brandId, scope.connectionId],
+  );
+  return r.rows[0]?.platform;
 }
 
 async function isUserDisconnected(pool: pg.Pool, scope: ConnectionScope): Promise<boolean> {

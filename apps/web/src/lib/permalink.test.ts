@@ -38,3 +38,12 @@ describe('viewOnUrl (tiktok)', () => {
     expect(viewOnUrl('tiktok', 'https://www.facebook.com/x')).toBeNull();
   });
 });
+
+describe('viewOnUrl (youtube)', () => {
+  it('links only to youtube.com', () => {
+    const u = 'https://www.youtube.com/watch?v=abcdefghijk&lc=Ugx12345678';
+    expect(viewOnUrl('youtube', u)).toBe(u);
+    expect(viewOnUrl('youtube', 'https://youtube.com.evil.example/x')).toBeNull();
+    expect(viewOnUrl('youtube', 'https://www.facebook.com/x')).toBeNull();
+  });
+});

@@ -12,10 +12,13 @@ const KEYS = [
 ] as const;
 
 describe('isConnectable', () => {
-  it.each(['facebook', 'instagram', 'meta_ads', 'tiktok', 'tiktok_ads'])('accepts %s', (p) => {
-    expect(isConnectable(p)).toBe(true);
-  });
-  it.each(['../x', 'youtube', '', 'Instagram', 'TikTok', 'constructor', '__proto__'])(
+  it.each(['facebook', 'instagram', 'meta_ads', 'tiktok', 'tiktok_ads', 'youtube'])(
+    'accepts %s',
+    (p) => {
+      expect(isConnectable(p)).toBe(true);
+    },
+  );
+  it.each(['../x', 'YouTube', 'threads', '', 'Instagram', 'TikTok', 'constructor', '__proto__'])(
     'rejects %s',
     (p) => {
       expect(isConnectable(p)).toBe(false);
@@ -45,6 +48,14 @@ describe('PLATFORM_COPY', () => {
     expect(PLATFORM_COPY.tiktok_ads).toMatchObject({
       label: 'TikTok ad account',
       connectLabel: 'Connect TikTok ads',
+    });
+  });
+
+  it('has the YouTube copy', () => {
+    expect(PLATFORM_COPY.youtube).toMatchObject({
+      label: 'YouTube channel',
+      connectLabel: 'Connect YouTube channel',
+      viewOn: 'View on YouTube',
     });
   });
 

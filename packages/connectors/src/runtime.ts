@@ -17,11 +17,19 @@ import {
 } from '@feedbouncer/service-runtime';
 import type { RateBudget } from './budget.js';
 import type { Clock } from './clock.js';
-import type { CallContext, Connector, ConnectionCommentsPage } from './connector.js';
+import type {
+  BatchActionRequest,
+  CallContext,
+  CommentProbe,
+  Connector,
+  ConnectionCommentsPage,
+  NormalizedThread,
+} from './connector.js';
 import {
   ConnectorError,
   errorClassFor,
   toConnectorError,
+  type ConnectorErrorInfo,
   type ConnectorErrorKind,
 } from './errors.js';
 import type { SafeHttp } from './http.js';
@@ -32,10 +40,12 @@ import {
   type CredentialVault,
   type SyncRecorder,
 } from './ports.js';
+import { isQuotaRefusal, QUOTA_REFUSAL_CODES, type QuotaMeter } from './quota.js';
 import type { ConnectorRegistry } from './registry.js';
 import { scopeKey } from './scope.js';
 import {
   actionRequestSchema,
+  batchActionRequestSchema,
   commentRefSchema,
   commentSchema,
   cursorSchema,
@@ -44,6 +54,9 @@ import {
   parseComment,
   parseConnectionComments,
   parsePage,
+  parseProbes,
+  parseReplyCounts,
+  parseThreads,
   recentSourceSchema,
   respondRequestSchema,
   sourceSchema,
@@ -77,6 +90,10 @@ export type ConnectorOperation =
   | 'list_replies'
   | 'get_comment'
   | 'act'
+  | 'act_batch'
+  | 'probe_comments'
+  | 'list_threads'
+  | 'probe_thread_reply_counts'
   | 'respond'
   | 'lifecycle';
 export interface ConnectorCallEvent {
@@ -103,7 +120,22 @@ export interface RuntimeDeps {
   callTimeoutMs?: number;
   observer?: ConnectorCallObserver;
   sync?: SyncRecorder;
+  /** The daily quota meter for a connection, placed on every CallContext built for it. */
+  quotaMeters?: (platform: Platform, scope: ConnectionScope) => QuotaMeter | undefined;
 }
+
+export type BatchActionResult =
+  | { readonly status: 'applied' }
+  | { readonly status: 'not_found' }
+  | { readonly status: 'failed'; readonly error: ConnectorErrorInfo };
+
+/** Writes: #call records their failures itself, and never their success, as sync health. */
+const WRITE_OPERATIONS: ReadonlySet<ConnectorOperation> = new Set(['act', 'act_batch', 'respond']);
+/** Local refusals say nothing about platform health. */
+const LOCAL_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  'budget_exhausted',
+  ...QUOTA_REFUSAL_CODES,
+]);
 
 /** Per-call options for reads; `background` is for ad discovery, ad polling and backfill. */
 export interface ListOptions {
@@ -169,6 +201,7 @@ export class ConnectorRuntime {
       return 'no_token';
     }
     await loadRevoked();
+    const quota = this.d.quotaMeters?.(rec.platform, scope);
     try {
       await lifecycle.onDisconnected({
         accessToken: access.value,
@@ -176,6 +209,7 @@ export class ConnectorRuntime {
         http: this.d.http(connector),
         signal: AbortSignal.timeout(this.d.callTimeoutMs ?? 15_000),
         reportQuota: async () => {},
+        ...(quota ? { quota } : {}),
       });
     } catch (err) {
       const ce = toConnectorError(err);
@@ -218,6 +252,7 @@ async function viaPort<T>(
 export class ConnectionClient {
   readonly platform: Platform;
   readonly capabilities: ConnectorCapabilities;
+  readonly #quota: QuotaMeter | undefined;
 
   constructor(
     private readonly d: RuntimeDeps,
@@ -226,6 +261,7 @@ export class ConnectionClient {
   ) {
     this.platform = connector.platform;
     this.capabilities = connector.capabilities;
+    this.#quota = d.quotaMeters?.(connector.platform, scope);
   }
 
   supports(action: ModerationAction): boolean {
@@ -430,6 +466,114 @@ export class ConnectionClient {
     }
   }
 
+  /** One platform call for every target. Never throws for platform outcomes; runs at urgent priority. */
+  actBatch(req: BatchActionRequest): Promise<BatchActionResult> {
+    return withSpan(
+      'moderation.apply_batch',
+      {
+        attributes: {
+          'feedbouncer.platform': this.platform,
+          'feedbouncer.action': req.action,
+          'feedbouncer.action.batch_size': Array.isArray(req.targets) ? req.targets.length : 0,
+        },
+      },
+      async (span) => {
+        const result = await this.#actBatchInner(req);
+        setSpanAttributes(span, {
+          'feedbouncer.action.status': result.status,
+          'feedbouncer.error.code': result.status === 'failed' ? result.error.code : null,
+        });
+        // As in act(): failures are recorded here because #actBatchInner turns throws into results.
+        if (
+          result.status === 'failed' &&
+          !LOCAL_REFUSAL_CODES.has(result.error.code) &&
+          result.error.code !== 'invalid_action_request' &&
+          result.error.kind !== 'unsupported'
+        ) {
+          const e = result.error;
+          const ids = this.#ids();
+          recordSync(this.d.sync, this.d.log, ids, (s) =>
+            s.failure(ids.connectionId, {
+              code: e.code,
+              errorClass: errorClassFor(e.kind, e.reauthorize),
+            }),
+          );
+        }
+        return result;
+      },
+    );
+  }
+
+  async #actBatchInner(req: BatchActionRequest): Promise<BatchActionResult> {
+    const failed = (kind: ConnectorErrorKind, code: string): BatchActionResult => ({
+      status: 'failed',
+      error: new ConnectorError(kind, code).info(),
+    });
+    const op = this.connector.actBatch?.bind(this.connector);
+    const max = this.capabilities.batchActions?.maxTargets;
+    if (!op || max === undefined) return failed('unsupported', 'unsupported');
+    const parsed = batchActionRequestSchema.safeParse(req);
+    if (!parsed.success || parsed.data.targets.length > max)
+      return failed('permanent', 'invalid_action_request');
+    if (!this.supports(parsed.data.action)) return failed('unsupported', 'unsupported');
+    try {
+      const out = await this.#call('urgent', 'act_batch', (ctx) => op(ctx, parsed.data));
+      if (out?.status === 'applied' || out?.status === 'not_found') return { status: out.status };
+      throw new ConnectorError('permanent', 'invalid_connector_output');
+    } catch (err) {
+      const ce = toConnectorError(err);
+      if (ce.kind === 'not_found' && ce.code !== 'connection_not_found')
+        return { status: 'not_found' };
+      return { status: 'failed', error: ce.info() };
+    }
+  }
+
+  /** At most `batchActions.maxTargets` (else `maxPageSize`) comments in one call. Throws ConnectorError. */
+  async probeComments(refs: readonly CommentRef[]): Promise<readonly CommentProbe[]> {
+    const op = this.connector.probeComments?.bind(this.connector);
+    if (!op) throw new ConnectorError('unsupported', 'probe_comments');
+    const max = this.capabilities.batchActions?.maxTargets ?? this.capabilities.maxPageSize;
+    if (
+      !Array.isArray(refs) ||
+      refs.length === 0 ||
+      refs.length > max ||
+      !refs.every((r) => commentRefSchema.safeParse(r).success)
+    )
+      throw invalidRequest();
+    const raw = await this.#call('urgent', 'probe_comments', (ctx) => op(ctx, refs));
+    return parseProbes(raw, refs);
+  }
+
+  async listThreads(cursor: string | null, opts?: ListOptions): Promise<Page<NormalizedThread>> {
+    const op = this.connector.listThreads?.bind(this.connector);
+    if (!op) throw new ConnectorError('unsupported', 'list_threads');
+    if (!cursorSchema.safeParse(cursor).success) throw invalidRequest();
+    return parseThreads(
+      await this.#call(opts?.priority ?? 'bulk', 'list_threads', (ctx) => op(ctx, { cursor })),
+    );
+  }
+
+  /** At most `batchActions.maxTargets` (else `maxPageSize`) threads in one call. Throws ConnectorError. */
+  async probeThreadReplyCounts(
+    threadIds: readonly string[],
+    opts?: ListOptions,
+  ): Promise<Map<string, number>> {
+    const op = this.connector.probeThreadReplyCounts?.bind(this.connector);
+    if (!op) throw new ConnectorError('unsupported', 'probe_thread_reply_counts');
+    const max = this.capabilities.batchActions?.maxTargets ?? this.capabilities.maxPageSize;
+    if (
+      !Array.isArray(threadIds) ||
+      threadIds.length === 0 ||
+      threadIds.length > max ||
+      !threadIds.every((id) => externalIdSchema.safeParse(id).success)
+    )
+      throw invalidRequest();
+    const raw = await this.#call(opts?.priority ?? 'bulk', 'probe_thread_reply_counts', (ctx) =>
+      op(ctx, threadIds),
+    );
+    return parseReplyCounts(raw, threadIds);
+  }
+
   /** Never throws for platform outcomes; they are encoded in the result. Runs at urgent priority. */
   respond(req: RespondRequest): Promise<RespondResult> {
     return withSpan(
@@ -548,17 +692,17 @@ export class ConnectionClient {
         try {
           const out = await this.#callInner(priority, op);
           this.#observe(operation, 'ok', started);
-          if (operation !== 'act' && operation !== 'respond')
+          if (!WRITE_OPERATIONS.has(operation))
             recordSync(this.d.sync, this.d.log, ids, (s) => s.success(ids.connectionId));
           return out;
         } catch (err) {
           const ce = err instanceof ConnectorError ? err : null;
           this.#observe(operation, ce?.kind ?? 'permanent', started);
-          if (ce && operation !== 'act' && operation !== 'respond') {
+          if (ce && !WRITE_OPERATIONS.has(operation)) {
             if (ce.kind === 'not_found' && ce.code !== 'connection_not_found') {
               // The platform answered: a missing comment or source is not a sync failure.
               recordSync(this.d.sync, this.d.log, ids, (s) => s.success(ids.connectionId));
-            } else if (ce.code !== 'budget_exhausted') {
+            } else if (!LOCAL_REFUSAL_CODES.has(ce.code)) {
               recordSync(this.d.sync, this.d.log, ids, (s) =>
                 s.failure(ids.connectionId, { code: ce.code, errorClass: ce.errorClass }),
               );
@@ -616,6 +760,8 @@ export class ConnectionClient {
         return await op(this.#ctx(rec, token));
       } catch (err) {
         const ce = this.#replace(err);
+        // The quota meter refused before any platform call: nothing to feed back into the budget.
+        if (isQuotaRefusal(ce)) throw ce;
         if (ce.kind === 'rate_limited') {
           const retryAfterMs = ce.retryAfterMs ?? policy.defaultRetryAfterMs;
           await this.#port(() =>
@@ -675,6 +821,7 @@ export class ConnectionClient {
           });
         }
       },
+      ...(this.#quota ? { quota: this.#quota } : {}),
     };
   }
 }

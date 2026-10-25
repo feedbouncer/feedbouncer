@@ -196,6 +196,28 @@ export const CASES: IsolationCase[] = [
     name: 'disconnect B connection under A brand',
     url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections/${f.bConnectionId}`,
   },
+  ...(
+    [
+      ['GET', ''],
+      ['PATCH', ''],
+      ['GET', '/quota'],
+    ] as const
+  ).flatMap(([method, tail]) => [
+    {
+      route: `${method} /api/v1/orgs/:orgId/brands/:brandId/connections/:connectionId/youtube${tail}`,
+      name: `${method} youtube${tail} of B's connection under A's own brand`,
+      url: (f: IsolationFixture) =>
+        `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/connections/${f.bConnectionId}/youtube${tail}`,
+      ...(method === 'PATCH' && { body: () => ({ dailyBudgetUnits: 1 }) }),
+    },
+    {
+      route: `${method} /api/v1/orgs/:orgId/brands/:brandId/connections/:connectionId/youtube${tail}`,
+      name: `${method} youtube${tail} of B's connection via A org`,
+      url: (f: IsolationFixture) =>
+        `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/connections/${f.bConnectionId}/youtube${tail}`,
+      ...(method === 'PATCH' && { body: () => ({ dailyBudgetUnits: 1 }) }),
+    },
+  ]),
   {
     route: 'GET /api/v1/orgs/:orgId/brands/:brandId/ads',
     name: 'list B ads',

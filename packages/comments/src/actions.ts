@@ -19,6 +19,7 @@ import {
   type ResponseKind,
 } from '@feedbouncer/connectors';
 import type { JobProducer } from '@feedbouncer/jobs';
+import type { ConnectionScope } from '@feedbouncer/secrets';
 import { UUID, type Logger } from '@feedbouncer/service-runtime';
 import { ACTION_KINDS, type ActionActor, type ActionKind } from './action-kinds.js';
 import type { BrandScope, CommentRow, PgCommentStore } from './store.js';
@@ -139,6 +140,26 @@ const INSERT = `
           CASE WHEN $12::text = 'pending' THEN NULL ELSE now() END)
   RETURNING ${VIEW_COLUMNS}`;
 
+/** The quota a budgeted dispatch spent on the batch an action went out in. */
+export interface AuditQuota {
+  readonly units: number;
+  readonly batchSize: number;
+  readonly remainingUnits: number;
+  /** YYYY-MM-DD in America/Los_Angeles. */
+  readonly pacificDay: string;
+  /** Dry run: the units were not spent. */
+  readonly simulated: boolean;
+}
+
+/** Takes pending actions of `actionDispatch: 'budgeted'` platforms instead of the execute job. */
+export interface BudgetedDispatch {
+  /** Idempotent per action id: a request replay enqueues again. */
+  enqueue(
+    scope: ConnectionScope,
+    a: { actionId: string; commentId: string; kind: ActionKind; requestedAt: Date },
+  ): Promise<void>;
+}
+
 /**
  * The audit record of a finished action. Details hold identifiers and codes
  * only: never the reply text or anything from the platform.
@@ -156,6 +177,7 @@ export async function recordActionAudit(
     actorApiKeyId: string | null;
     status: Exclude<ActionStatus, 'pending'>;
     outcomeCode: string | null;
+    quota?: AuditQuota;
   },
 ): Promise<void> {
   await tx.query(
@@ -174,6 +196,15 @@ export async function recordActionAudit(
         status: a.status,
         outcomeCode: a.outcomeCode,
         ...(a.actorApiKeyId && { apiKeyId: a.actorApiKeyId }),
+        ...(a.quota && {
+          quota: {
+            units: a.quota.units,
+            batchSize: a.quota.batchSize,
+            remainingUnits: a.quota.remainingUnits,
+            pacificDay: a.quota.pacificDay,
+            simulated: a.quota.simulated,
+          },
+        }),
       }),
     ],
   );
@@ -240,6 +271,7 @@ export class ModerationActions {
       capabilities: (p: Platform) => ConnectorCapabilities | undefined;
       clock: Clock;
       log: Logger;
+      budgeted?: BudgetedDispatch;
     },
   ) {}
 
@@ -370,7 +402,7 @@ export class ModerationActions {
     });
     if (action.status !== 'pending') return { status: 'recorded', action };
     try {
-      await this.#enqueue(i.scope, c, action.id);
+      await this.#enqueue(i.scope, c, action);
     } catch (err) {
       // Nothing will run it, and a pending private reply would block later ones.
       await this.#markEnqueueFailed(i, action);
@@ -417,7 +449,7 @@ export class ModerationActions {
     )
       return refused('request_key_conflict');
     if (existing.status === 'pending') {
-      await this.#enqueue(i.scope, c, existing.id);
+      await this.#enqueue(i.scope, c, existing);
       return { status: 'accepted', action: existing };
     }
     return {
@@ -427,16 +459,27 @@ export class ModerationActions {
     };
   }
 
-  async #enqueue(scope: BrandScope, c: CommentRow, actionId: string): Promise<void> {
+  async #enqueue(scope: BrandScope, c: CommentRow, action: ModerationActionView): Promise<void> {
+    const target: ConnectionScope = {
+      organizationId: scope.organizationId,
+      brandId: scope.brandId,
+      connectionId: c.connectionId,
+    };
+    if (this.d.capabilities(c.platform)?.actionDispatch === 'budgeted') {
+      if (!this.d.budgeted) throw new Error('budgeted_dispatch_unconfigured');
+      await this.d.budgeted.enqueue(target, {
+        actionId: action.id,
+        commentId: action.commentId,
+        kind: action.kind,
+        requestedAt: action.createdAt,
+      });
+      return;
+    }
     await this.d.producer.enqueue({
-      scope: {
-        organizationId: scope.organizationId,
-        brandId: scope.brandId,
-        connectionId: c.connectionId,
-      },
+      scope: target,
       platform: c.platform,
       type: EXECUTE_JOB.type,
-      payload: { actionId },
+      payload: { actionId: action.id },
     });
   }
 

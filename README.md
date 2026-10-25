@@ -45,6 +45,7 @@ pnpm test
 | `packages/connector-meta-ads`        | Meta Ads connector: ad accounts and active ads; comments are read through the Page and Instagram connections |
 | `packages/connector-tiktok`          | TikTok connector: a Business account's videos and their comments, moderation actions, replies                |
 | `packages/connector-tiktok-ads`      | TikTok ads connector: advertisers and the comments on their ads, moderation actions, replies                 |
+| `packages/connector-youtube`         | YouTube connector: a channel's comment threads, hold/reject/ban moderation under a daily quota budget        |
 | `packages/tiktok-business-api`       | Shared TikTok API request layer, id validation and a test double of the TikTok API                           |
 | `packages/connectors`                | Contract and shared services for platform connectors                                                         |
 | `packages/db`                        | Postgres schema, migrations and the migration CLI                                                            |

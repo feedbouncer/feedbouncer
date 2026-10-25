@@ -71,6 +71,21 @@ export function validateConnector(c: Connector): void {
     fail('capabilities.responses');
   if (responses.length > 0 !== (typeof c.respond === 'function')) fail('capabilities.responses');
   if (c.listReplies !== undefined && typeof c.listReplies !== 'function') fail('listReplies');
+  if (c.probeComments !== undefined && typeof c.probeComments !== 'function') fail('probeComments');
+  if (c.listThreads !== undefined && typeof c.listThreads !== 'function') fail('listThreads');
+  if (c.probeThreadReplyCounts !== undefined && typeof c.probeThreadReplyCounts !== 'function')
+    fail('probeThreadReplyCounts');
+  const dispatch = k.actionDispatch ?? 'immediate';
+  if (dispatch !== 'immediate' && dispatch !== 'budgeted') fail('capabilities.actionDispatch');
+  if (
+    dispatch === 'budgeted' &&
+    (typeof c.actBatch !== 'function' || typeof c.probeComments !== 'function')
+  )
+    fail('capabilities.actionDispatch');
+  if (k.batchActions !== undefined && !int(k.batchActions.maxTargets, 1, 500))
+    fail('capabilities.batchActions');
+  if ((k.batchActions !== undefined) !== (typeof c.actBatch === 'function'))
+    fail('capabilities.batchActions');
   const constraints = k.constraints;
   if (constraints !== undefined) {
     const posInt = (n: unknown) => Number.isSafeInteger(n) && (n as number) > 0;

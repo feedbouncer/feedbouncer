@@ -34,6 +34,7 @@ vi.mock('@feedbouncer/comments', async (importOriginal) => {
     adPollJob: vi.fn(actual.adPollJob),
     tiktokPollJob: vi.fn(actual.tiktokPollJob),
     tiktokAdsPollJob: vi.fn(actual.tiktokAdsPollJob),
+    ModerationActions: vi.fn(actual.ModerationActions),
   };
 });
 
@@ -139,6 +140,46 @@ describe('tiktok', () => {
       expect(spy.mock.calls.at(-1)![0].applied).toBeInstanceOf(RuleTrigger);
       expect(spy.mock.calls.at(-1)![0].settings).toBe(settings);
     }
+  });
+});
+
+describe('youtube', () => {
+  const youtube = {
+    clientId: '123-abc.apps.googleusercontent.com',
+    clientSecret: new Secret('youtube-secret-0123456789'),
+    projectDailyQuota: 10_000,
+    projectHeadroomUnits: 1000,
+    schedulerTickSec: 60,
+    backlogCap: 5000,
+  };
+  const meter = { reserve: vi.fn(), settle: vi.fn() };
+  const ledger = { meterFor: vi.fn(() => meter) } as unknown as comments.PgYouTubeQuotaLedger;
+  const withYouTube = {
+    ...fakeDeps,
+    youtube: { ledger, backlogCap: 250, mailer: {}, publicWebUrl: new URL('https://app.test') },
+  } as unknown as WorkerJobDeps;
+
+  it('registers the connector only when enabled', () => {
+    const none = { facebook: null, instagram: null, metaAds: null };
+    expect(buildConnectorRegistry(none).platforms()).toEqual([]);
+    expect(buildConnectorRegistry({ ...none, youtube }).platforms()).toEqual(['youtube']);
+  });
+  it('registers youtube with budgeted dispatch and a quota meter', () => {
+    vi.mocked(comments.ModerationActions).mockClear();
+    const jobs = buildJobRegistry(withYouTube);
+    expect(jobs.supports('youtube_cycle', 'youtube')).toBe(true);
+    const actions = vi.mocked(comments.ModerationActions).mock.calls[0]![0];
+    expect(actions.budgeted).toBeInstanceOf(comments.PgYouTubeBacklog);
+    const scope = { organizationId: 'o', brandId: 'b', connectionId: 'c' };
+    expect(comments.youtubeQuotaMeters(ledger)('youtube', scope)).toBe(meter);
+    expect(ledger.meterFor).toHaveBeenCalledWith(scope);
+    expect(comments.youtubeQuotaMeters(ledger)('tiktok', scope)).toBeUndefined();
+  });
+  it('without youtube there is no cycle job and no budgeted dispatch', () => {
+    vi.mocked(comments.ModerationActions).mockClear();
+    const jobs = buildJobRegistry(fakeDeps);
+    expect(jobs.get('youtube_cycle')).toBeUndefined();
+    expect(vi.mocked(comments.ModerationActions).mock.calls[0]![0].budgeted).toBeUndefined();
   });
 });
 

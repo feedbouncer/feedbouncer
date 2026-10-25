@@ -14,6 +14,7 @@
     { "path": "../connector-meta-ads/tsconfig.build.json" },
     { "path": "../tiktok-business-api/tsconfig.build.json" },
     { "path": "../connector-tiktok/tsconfig.build.json" },
-    { "path": "../connector-tiktok-ads/tsconfig.build.json" }
+    { "path": "../connector-tiktok-ads/tsconfig.build.json" },
+    { "path": "../connector-youtube/tsconfig.build.json" }
   ]
 }

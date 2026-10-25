@@ -5,6 +5,8 @@ import {
   renderInvitation,
   renderReconnectRequired,
   renderSignupClosed,
+  renderYouTubeBacklogOverflow,
+  renderYouTubeQuotaPaused,
 } from './templates.js';
 
 describe('templates', () => {
@@ -92,5 +94,46 @@ describe('renderSignupClosed', () => {
     const m = renderSignupClosed({ supportEmail: 'help@example.com' });
     expect(m.text).toContain('help@example.com');
     expect(m.html).toContain('help@example.com');
+  });
+});
+
+describe('youtube notices', () => {
+  const settingsUrl = 'https://app.test/orgs/o/brands/b/connections';
+
+  it('escapes channel names', () => {
+    const paused = renderYouTubeQuotaPaused({
+      channelName: '<b>Evil</b>\r\nBcc: x@y.test',
+      resumeAt: new Date('2026-10-25T07:00:00Z'),
+      waiting: 3,
+      settingsUrl,
+    });
+    const overflow = renderYouTubeBacklogOverflow({
+      channelName: '<b>Evil</b>',
+      skipped: 7,
+      settingsUrl,
+    });
+    for (const m of [paused, overflow]) {
+      expect(m.html).not.toContain('<b>');
+      expect(m.html).toContain('&lt;b&gt;Evil&lt;/b&gt;');
+      expect(m.subject).not.toMatch(/[\r\n]/);
+    }
+  });
+
+  it('says when the quota resumes and how many actions wait', () => {
+    const m = renderYouTubeQuotaPaused({
+      channelName: 'My channel',
+      resumeAt: new Date('2026-10-25T07:00:00Z'),
+      waiting: 3,
+      settingsUrl,
+    });
+    expect(m.text).toContain('Oct 25, 2026, 12:00 AM Pacific Time');
+    expect(m.text).toContain('3 moderation actions');
+    expect(m.text).toContain(settingsUrl);
+  });
+
+  it('reports skipped actions', () => {
+    const m = renderYouTubeBacklogOverflow({ channelName: null, skipped: 1, settingsUrl });
+    expect(m.text).toContain('1 moderation action ');
+    expect(m.text).not.toContain('null');
   });
 });

@@ -69,3 +69,21 @@ describe('tiktok', () => {
     ]);
   });
 });
+
+describe('youtube', () => {
+  it('accepts only the Google consent page over https', () => {
+    const u = 'https://accounts.google.com/o/oauth2/v2/auth?state=x';
+    expect(safeAuthorizationUrl(u)?.href).toBe(u);
+    for (const bad of [
+      'http://accounts.google.com/o/oauth2/v2/auth',
+      'https://accounts.google.com.evil.example/',
+      'https://www.google.com/',
+    ])
+      expect(safeAuthorizationUrl(bad)).toBeNull();
+  });
+  it('describes the YouTube permission', () => {
+    expect(missingPermissionText('youtube.force-ssl')).toEqual([
+      'Read comments, hold them for review and reject them (youtube.force-ssl)',
+    ]);
+  });
+});

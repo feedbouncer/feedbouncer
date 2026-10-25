@@ -16,9 +16,7 @@
 // without any webhook. That enqueue is best-effort and never changes the
 // recorded outcome. It is skipped where the single-comment lookup cannot tell a
 // deleted comment from one it did not reach (TikTok): polling re-reads those.
-import { createHash } from 'node:crypto';
 import type pg from 'pg';
-import { withTransaction } from '@feedbouncer/db';
 import {
   ConnectorError,
   toConnectorError,
@@ -28,46 +26,30 @@ import {
   type ConnectionClient,
   type ConnectorErrorInfo,
   type ConnectorRuntime,
-  type Platform,
-  type PlatformState,
   type RespondResult,
 } from '@feedbouncer/connectors';
-import { JobError, type JobDefinition, type JobProducer, type JobResult } from '@feedbouncer/jobs';
+import { JobError, type JobDefinition, type JobProducer } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import type { Logger } from '@feedbouncer/service-runtime';
 import { AUTHOR_KINDS, type ActionActor, type ActionKind } from '../action-kinds.js';
-import { recordActionAudit, type ActionStatus } from '../actions.js';
-import { setCommentPlatformState } from '../store.js';
-import type { ActionOutcomeObserver, ActionOutcomeStatus } from '../hooks.js';
-import { EXECUTE_JOB, INGEST_JOB, type ExecutePayload, type IngestPayload } from './specs.js';
+import type { ActionStatus } from '../actions.js';
+import type { ActionOutcomeObserver } from '../hooks.js';
+import {
+  enqueueResync,
+  notifyOutcome,
+  settleAction,
+  STATE_AFTER,
+  type Final,
+  type SettleTarget,
+  type Terminal,
+} from './settle.js';
+import { EXECUTE_JOB, type ExecutePayload } from './specs.js';
 
-type Terminal = Exclude<ActionStatus, 'pending'>;
-
-interface Final {
-  readonly status: Terminal;
-  readonly code: string | null;
-  readonly platformRef: string | null;
-  readonly undo: ActionKind | null;
-  readonly commentState: PlatformState | null;
-  /** The platform's answer means our copy of the comment may be stale: re-read it. */
-  readonly resync: boolean;
-}
-
-interface LoadedAction {
-  readonly id: string;
-  readonly commentId: string;
-  readonly kind: ActionKind;
-  readonly actorType: ActionActor['type'];
-  readonly actorUserId: string | null;
-  readonly actorApiKeyId: string | null;
-  readonly ruleId: string | null;
-  readonly requestKey: string;
+interface LoadedAction extends SettleTarget {
   readonly status: ActionStatus;
   readonly replyText: string | null;
   readonly createdAt: Date;
-  readonly commentExternalId: string;
   readonly parentExternalId: string | null;
-  readonly sourceExternalId: string;
   readonly authorExternalId: string | null;
   readonly pageExternalId: string;
 }
@@ -83,11 +65,6 @@ const NOT_ELIGIBLE_CODES: ReadonlySet<string> = new Set([
   'reblock_too_soon',
 ]);
 const UNDO_KINDS: ReadonlySet<string> = new Set(['hide', 'unhide', 'ban_author', 'unban_author']);
-const STATE_AFTER: Partial<Record<ActionKind, PlatformState>> = {
-  hide: 'hidden',
-  unhide: 'visible',
-  delete: 'deleted',
-};
 /** Allowance for clock skew between our database and the platform. */
 const OWN_REPLY_SKEW_MS = 60_000;
 const OWN_REPLY_SCAN = 25;
@@ -276,116 +253,6 @@ async function checkBeforeUnhide(
   }
 }
 
-/** `recorded` is false when another run recorded the outcome first. */
-async function finish(
-  pool: pg.Pool,
-  scope: ConnectionScope,
-  a: LoadedAction,
-  f: Final,
-): Promise<{ result: JobResult; recorded: boolean }> {
-  return withTransaction(pool, async (tx) => {
-    const ids = [scope.organizationId, scope.brandId, scope.connectionId, a.id];
-    const u = await tx.query(
-      `UPDATE moderation_action
-          SET status = $5, outcome_code = $6, platform_ref = $7, undo_kind = $8, completed_at = now()
-        WHERE id = $4 AND organization_id = $1 AND brand_id = $2 AND connection_id = $3
-          AND status = 'pending'
-        RETURNING id`,
-      [...ids, f.status, f.code, f.platformRef, f.undo],
-    );
-    if (u.rows.length === 0) {
-      // Another run recorded it first.
-      const cur = await tx.query<{ status: string }>(
-        `SELECT status FROM moderation_action
-          WHERE id = $4 AND organization_id = $1 AND brand_id = $2 AND connection_id = $3`,
-        ids,
-      );
-      return { result: { status: cur.rows[0]?.status ?? null }, recorded: false };
-    }
-    if (f.commentState !== null)
-      await setCommentPlatformState(tx, scope, a.commentId, f.commentState);
-    await recordActionAudit(tx, {
-      organizationId: scope.organizationId,
-      brandId: scope.brandId,
-      actionId: a.id,
-      commentId: a.commentId,
-      kind: a.kind,
-      actorType: a.actorType,
-      actorUserId: a.actorUserId,
-      actorApiKeyId: a.actorApiKeyId,
-      status: f.status,
-      outcomeCode: f.code,
-    });
-    return { result: { status: f.status, outcomeCode: f.code, undo: f.undo }, recorded: true };
-  });
-}
-
-/** Re-reads the comment through the ingest job. Failures are logged, never thrown. */
-async function enqueueResync(
-  d: { producer: Pick<JobProducer, 'enqueue'>; log: Logger; clock: Clock },
-  scope: ConnectionScope,
-  platform: Platform,
-  a: LoadedAction,
-): Promise<void> {
-  const payload: IngestPayload = {
-    sourceExternalId: a.sourceExternalId,
-    commentExternalId: a.commentExternalId,
-    event: 'updated',
-    platformEventSec: Math.floor(d.clock.now() / 1000),
-    // The ingest change id is 16 hex characters; derived from the action so it is stable.
-    changeId: createHash('sha256').update(`resync_${a.id}`).digest('hex').slice(0, 16),
-  };
-  try {
-    await d.producer.enqueue({
-      scope: {
-        organizationId: scope.organizationId,
-        brandId: scope.brandId,
-        connectionId: scope.connectionId,
-      },
-      platform,
-      type: INGEST_JOB.type,
-      payload,
-    });
-  } catch {
-    d.log.warn('moderation.resync_not_queued', { actionId: a.id });
-  }
-}
-
-/** Tells the observer about an outcome. Never throws; logs the error class only (no message text). */
-async function notify(
-  d: { log: Logger; outcomes?: ActionOutcomeObserver },
-  scope: ConnectionScope,
-  platform: Platform,
-  a: LoadedAction,
-  status: ActionOutcomeStatus,
-  code: string | null,
-): Promise<void> {
-  if (d.outcomes === undefined) return;
-  try {
-    await d.outcomes.onActionOutcome({
-      scope: {
-        organizationId: scope.organizationId,
-        brandId: scope.brandId,
-        connectionId: scope.connectionId,
-      },
-      platform,
-      actionId: a.id,
-      commentId: a.commentId,
-      kind: a.kind,
-      actorType: a.actorType,
-      ruleId: a.ruleId,
-      requestKey: a.requestKey,
-      status,
-      code,
-    });
-  } catch (err) {
-    d.log.error('moderation.outcome_observer_failed', {
-      actionId: a.id,
-      errorName: err instanceof Error ? err.name : 'unknown',
-    });
-  }
-}
-
 export function executeActionJob(d: {
   pool: pg.Pool;
   runtime: ConnectorRuntime;
@@ -444,10 +311,10 @@ export function executeActionJob(d: {
         const e = outcome.rethrow;
         // The framework defers or retries from here: raise it before the action waits.
         if (e.kind === 'rate_limited' || e.kind === 'auth_expired')
-          await notify(d, ctx.scope, ctx.platform, a, 'deferred', e.code);
+          await notifyOutcome(d, ctx.scope, ctx.platform, a, 'deferred', e.code);
         throw e;
       }
-      const { result, recorded } = await finish(d.pool, ctx.scope, a, outcome.final);
+      const { result, recorded } = await settleAction(d.pool, ctx.scope, a, outcome.final);
       d.log.info('moderation action completed', {
         actionId: a.id,
         kind: a.kind,
@@ -455,7 +322,14 @@ export function executeActionJob(d: {
         outcomeCode: outcome.final.code,
       });
       if (recorded)
-        await notify(d, ctx.scope, ctx.platform, a, outcome.final.status, outcome.final.code);
+        await notifyOutcome(
+          d,
+          ctx.scope,
+          ctx.platform,
+          a,
+          outcome.final.status,
+          outcome.final.code,
+        );
       if (recorded && outcome.final.resync && !client.capabilities.partialCommentLookup)
         await enqueueResync(d, ctx.scope, ctx.platform, a);
       if (outcome.rethrow) throw outcome.rethrow;
@@ -470,13 +344,13 @@ export function executeActionJob(d: {
       if (!a || a.status !== 'pending') return;
       const code =
         e.reason === 'rate_limit_exhausted' ? 'rate_limit_exhausted' : 'retries_exhausted';
-      const { recorded } = await finish(d.pool, e.scope, a, done('failed', code));
+      const { recorded } = await settleAction(d.pool, e.scope, a, done('failed', code));
       d.log.info('moderation action dead-lettered', {
         actionId: a.id,
         kind: a.kind,
         outcomeCode: code,
       });
-      if (recorded) await notify(d, e.scope, e.platform, a, 'failed', code);
+      if (recorded) await notifyOutcome(d, e.scope, e.platform, a, 'failed', code);
     },
   };
 }
