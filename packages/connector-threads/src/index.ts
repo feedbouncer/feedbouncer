@@ -5,3 +5,6 @@ export * from './errors.js';
 export * from './oauth.js';
 export * from './accounts.js';
 export * from './reading.js';
+export * from './actions.js';
+export * from './webhook.js';
+export * from './connector.js';
