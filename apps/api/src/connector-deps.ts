@@ -1,5 +1,5 @@
 // The API's side of the platform connectors: one registry composed from the
-// Meta and TikTok connectors, the connector stack for OAuth and webhook routing,
+// Meta, TikTok and YouTube connectors, the connector stack for OAuth and webhook routing,
 // an enqueue-only job producer, and the comment store and moderation actions.
 // The worker runs the jobs. Null (not built) when no connector is configured, so
 // no queue connection is opened.
@@ -10,13 +10,35 @@ import {
   EXECUTE_JOB,
   INGEST_JOB,
   LIFECYCLE_JOB,
+  CompositeActionOutcomeObserver,
+  DEFAULT_BACKLOG_CAP,
   ModerationActions,
   PgCommentStore,
+  PgYouTubeBacklog,
+  PgYouTubeQuotaLedger,
+  PgYouTubeSettings,
+  YOUTUBE_CYCLE_JOB,
   enqueueOnly,
+  youtubeQuotaMeters,
 } from '@feedbouncer/comments';
-import { ACTION_RUN_ADVANCE_JOB, SUGGESTION_BULK_JOB } from '@feedbouncer/actions';
-import { CLASSIFIER_RERUN_JOB } from '@feedbouncer/classifier';
-import { POLICY_PREVIEW_JOB, POLICY_RUN_JOB } from '@feedbouncer/policies';
+import {
+  ACTION_RUN_ADVANCE_JOB,
+  ActionStepOutcomeObserver,
+  PgActionRunStore,
+  SUGGESTION_BULK_JOB,
+} from '@feedbouncer/actions';
+import {
+  CLASSIFIER_RERUN_JOB,
+  ClassifierActionFallback,
+  PgClassificationStore,
+} from '@feedbouncer/classifier';
+import {
+  POLICY_PREVIEW_JOB,
+  POLICY_RUN_JOB,
+  PgPolicyEvaluationStore,
+  PolicyActionFallback,
+} from '@feedbouncer/policies';
+import { PgEvaluationStore, RuleActionFallback } from '@feedbouncer/rules';
 import {
   ConnectorRegistry,
   buildPgConnectorStack,
@@ -43,6 +65,7 @@ import type { AppDeps } from './deps.js';
 import type { ApiEnv } from './env.js';
 import { buildMetaDeps } from './meta-deps.js';
 import { buildTikTokDeps } from './tiktok-deps.js';
+import { buildYouTubeDeps } from './youtube-deps.js';
 
 export interface ConnectorDeps extends Pick<AppDeps, 'connectors' | 'producer' | 'comments'> {
   readonly connectors: { registry: ConnectorRegistry; stack: PgConnectorStack };
@@ -63,13 +86,29 @@ export function buildConnectorDeps(d: {
   const { env, pool, log, metrics } = d;
   const meta = buildMetaDeps(env);
   const tiktok = buildTikTokDeps(env);
-  const connectors = [...(meta?.connectors ?? []), ...(tiktok?.connectors ?? [])];
+  const ledger = env.youtube
+    ? new PgYouTubeQuotaLedger({
+        pool,
+        clock: systemClock,
+        projectQuota: env.youtube.projectDailyQuota,
+        projectHeadroom: env.youtube.projectHeadroomUnits,
+        settings: new PgYouTubeSettings(pool),
+        log,
+      })
+    : null;
+  const youtube = ledger ? buildYouTubeDeps(env, ledger.projectMeter()) : null;
+  const connectors = [
+    ...(meta?.connectors ?? []),
+    ...(tiktok?.connectors ?? []),
+    ...(youtube?.connectors ?? []),
+  ];
   if (connectors.length === 0) return null;
   const registry = new ConnectorRegistry();
   for (const c of connectors) registry.register(c);
   const appSecrets = new Map<Platform, Secret>([
     ...(Object.entries(meta?.appSecrets ?? {}) as [Platform, Secret][]),
     ...(Object.entries(tiktok?.appSecrets ?? {}) as [Platform, Secret][]),
+    ...(Object.entries(youtube?.appSecrets ?? {}) as [Platform, Secret][]),
   ]);
 
   const redis = createProducerConnection(env.redisUrl.href);
@@ -93,6 +132,7 @@ export function buildConnectorDeps(d: {
     workerId: `api-${hostname()}`,
     observer: promConnectorObserver(metrics),
     webhookObserver: promWebhookObserver(metrics),
+    ...(ledger && { quotaMeters: youtubeQuotaMeters(ledger) }),
     ...(d.fetch && { fetch: d.fetch }),
   });
   // Same job types and keys as the worker's registry, without handlers. Each
@@ -102,6 +142,7 @@ export function buildConnectorDeps(d: {
   jobs.register(enqueueOnly(EXECUTE_JOB));
   jobs.register(enqueueOnly(LIFECYCLE_JOB));
   jobs.register(enqueueOnly(BACKFILL_JOB));
+  jobs.register(enqueueOnly(YOUTUBE_CYCLE_JOB));
   // The lane travels with the spec, so QueueSet routes it to the classifier's queue.
   jobs.register(enqueueOnly(CLASSIFIER_RERUN_JOB));
   jobs.register(enqueueOnly(POLICY_PREVIEW_JOB));
@@ -123,6 +164,19 @@ export function buildConnectorDeps(d: {
     dedupWindowMs: env.jobs.dedupWindowMs,
   });
   const store = new PgCommentStore(pool);
+  // Actions the backlog settles itself (an abandoned queue, an evicted overflow) reach the same observers as the worker's.
+  const youtubeBacklog = new PgYouTubeBacklog({
+    pool,
+    clock: systemClock,
+    cap: env.youtube?.backlogCap ?? DEFAULT_BACKLOG_CAP,
+    log,
+    outcomes: new CompositeActionOutcomeObserver([
+      new RuleActionFallback({ evaluations: new PgEvaluationStore(pool), log }),
+      new ClassifierActionFallback({ classifications: new PgClassificationStore(pool), log }),
+      new PolicyActionFallback({ evaluations: new PgPolicyEvaluationStore(pool), log }),
+      new ActionStepOutcomeObserver({ runs: new PgActionRunStore(pool), producer, log }),
+    ]),
+  });
   const actions = new ModerationActions({
     pool,
     store,
@@ -130,11 +184,12 @@ export function buildConnectorDeps(d: {
     capabilities: (p) => registry.get(p)?.capabilities,
     clock: systemClock,
     log,
+    budgeted: youtubeBacklog,
   });
   return {
     connectors: { registry, stack },
     producer,
-    comments: { store, actions },
+    comments: { store, actions, youtubeBacklog },
     async close() {
       await queues.close();
       await Promise.allSettled([redis.quit(), lockPool.end()]);

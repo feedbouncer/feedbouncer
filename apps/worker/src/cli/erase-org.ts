@@ -1,6 +1,12 @@
 import { parseArgs } from 'node:util';
-import { PgBackfillStore, enqueueLifecycle, revokeConnection } from '@feedbouncer/comments';
-import { PgConnectionDirectory } from '@feedbouncer/connectors';
+import {
+  DEFAULT_BACKLOG_CAP,
+  PgBackfillStore,
+  PgYouTubeBacklog,
+  enqueueLifecycle,
+  revokeConnection,
+} from '@feedbouncer/comments';
+import { PgConnectionDirectory, systemClock } from '@feedbouncer/connectors';
 import { deleteOrganization, withTransaction } from '@feedbouncer/db';
 import { UsageError } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
@@ -141,11 +147,18 @@ export function operatorDisconnect(ctx: OpsContext): EraseOrgDeps['disconnect'] 
   const pool = ctx.pool();
   const directory = new PgConnectionDirectory(pool);
   const backfill = new PgBackfillStore(pool);
+  // The organization is being erased, so the abandoned actions need no outcome observers.
+  const backlog = new PgYouTubeBacklog({
+    pool,
+    clock: systemClock,
+    cap: DEFAULT_BACKLOG_CAP,
+    log: ctx.log,
+  });
   return async (scope) => {
     const rec = await directory.load(scope);
     if (!rec) return;
     const revoked = await revokeConnection(
-      { pool, directory, backfill, log: ctx.log },
+      { pool, directory, backfill, backlog, log: ctx.log },
       scope,
       null,
     );

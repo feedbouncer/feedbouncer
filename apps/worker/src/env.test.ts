@@ -612,6 +612,64 @@ describe('tiktok connectors and polling settings', () => {
   });
 });
 
+describe('youtube connector settings', () => {
+  const secret = 'youtube-sentinel-secret-0123456789';
+  const enabled = {
+    YOUTUBE_CONNECTOR_ENABLED: 'true',
+    YOUTUBE_CLIENT_ID: '123-abc.apps.googleusercontent.com',
+    YOUTUBE_CLIENT_SECRET: secret,
+  };
+  it('is off by default', () => {
+    expect(load(base).youtube).toBeNull();
+    expect(load({ ...base, YOUTUBE_PROJECT_DAILY_QUOTA: '0' }).youtube).toBeNull();
+  });
+  it('reads the defaults when enabled', () => {
+    expect(load({ ...base, ...enabled }).youtube).toMatchObject({
+      clientId: enabled.YOUTUBE_CLIENT_ID,
+      projectDailyQuota: 10_000,
+      projectHeadroomUnits: 1000,
+      schedulerTickSec: 60,
+      backlogCap: 5000,
+    });
+  });
+  it('enabled without a client secret fails fast', () => {
+    const noSecret = { ...base, ...enabled, YOUTUBE_CLIENT_SECRET: undefined };
+    expect(messageOf(() => load(noSecret))).toMatch(/YOUTUBE_CLIENT_SECRET/);
+  });
+  it('rejects headroom at or above the quota', () => {
+    const env = { ...base, ...enabled, YOUTUBE_PROJECT_DAILY_QUOTA: '2000' };
+    expect(() => load({ ...env, YOUTUBE_PROJECT_HEADROOM_UNITS: '2000' })).toThrow(
+      /YOUTUBE_PROJECT_HEADROOM_UNITS/,
+    );
+    expect(() => load({ ...env, YOUTUBE_PROJECT_HEADROOM_UNITS: '1999' })).not.toThrow();
+  });
+  it('reads the client secret from YOUTUBE_CLIENT_SECRET_FILE', () => {
+    const fs = { size: () => secret.length + 1, read: () => `${secret}\n` };
+    const env = loadWorkerEnv(
+      {
+        ...base,
+        ...enabled,
+        YOUTUBE_CLIENT_SECRET: undefined,
+        YOUTUBE_CLIENT_SECRET_FILE: '/run/s',
+      },
+      { warn: () => {}, fs },
+    );
+    expect(env.youtube?.clientSecret.reveal()).toBe(secret);
+  });
+  it('needs the public web url and mail config, for the quota notices and oauth', () => {
+    expect(messageOf(() => load({ ...without('PUBLIC_WEB_URL'), ...enabled }))).toMatch(
+      /PUBLIC_WEB_URL/,
+    );
+    expect(load({ ...base, ...enabled }).mail?.smtpUrl.href).toBe('smtp://mailpit:1025');
+  });
+  it('never serializes or inspects the client secret', () => {
+    const env = load({ ...base, ...enabled });
+    expect(JSON.stringify(env)).toContain('"youtubeEnabled":true');
+    for (const out of [JSON.stringify(env), inspect(env, { depth: 10, showHidden: true })])
+      expect(out).not.toContain(secret);
+  });
+});
+
 describe('retention and privacy settings', () => {
   it('keeps everything forever by default', () => {
     const env = load(base);

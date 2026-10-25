@@ -20,7 +20,7 @@ import type {
   WebhookSecretSource,
 } from '../ports.js';
 import type { ConnectorRegistry } from '../registry.js';
-import { ConnectorRuntime, type ConnectorCallObserver } from '../runtime.js';
+import { ConnectorRuntime, type ConnectorCallObserver, type RuntimeDeps } from '../runtime.js';
 import { TokenManager } from '../tokens.js';
 import type { Platform } from '../types.js';
 import { WebhookGate, type WebhookObserver } from '../webhook.js';
@@ -65,6 +65,8 @@ export function buildPgConnectorStack(d: {
   observer?: ConnectorCallObserver;
   webhookObserver?: WebhookObserver;
   sync?: SyncRecorder;
+  /** The runtime's per-connection daily quota meter (YouTube). */
+  quotaMeters?: RuntimeDeps['quotaMeters'];
   /** Decorates the directory every service uses (e.g. to notify on reconnect). */
   wrapDirectory?: (d: ConnectionDirectory) => ConnectionDirectory;
   /** Replaces the global fetch behind SafeHttp (tests: an in-memory platform double). */
@@ -119,6 +121,7 @@ export function buildPgConnectorStack(d: {
       http,
       ...(d.observer ? { observer: d.observer } : {}),
       ...sync,
+      ...(d.quotaMeters ? { quotaMeters: d.quotaMeters } : {}),
     }),
     oauth: new OAuthFlow({
       registry,
@@ -140,6 +143,7 @@ export function buildPgConnectorStack(d: {
       log,
       ...(d.webhookObserver ? { observer: d.webhookObserver } : {}),
       ...sync,
+      ...(d.quotaMeters ? { quotaMeters: d.quotaMeters } : {}),
     }),
   };
 }

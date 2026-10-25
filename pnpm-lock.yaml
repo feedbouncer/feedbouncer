@@ -179,6 +179,9 @@ importers:
       '@feedbouncer/connector-tiktok-ads':
         specifier: workspace:*
         version: link:../../packages/connector-tiktok-ads
+      '@feedbouncer/connector-youtube':
+        specifier: workspace:*
+        version: link:../../packages/connector-youtube
       '@feedbouncer/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
@@ -504,6 +507,9 @@ importers:
       '@feedbouncer/connector-tiktok-ads':
         specifier: workspace:*
         version: link:../../packages/connector-tiktok-ads
+      '@feedbouncer/connector-youtube':
+        specifier: workspace:*
+        version: link:../../packages/connector-youtube
       '@feedbouncer/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors

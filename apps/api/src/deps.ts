@@ -1,6 +1,6 @@
 import type pg from 'pg';
 import type { Redis } from 'ioredis';
-import type { ModerationActions, PgCommentStore } from '@feedbouncer/comments';
+import type { ModerationActions, PgCommentStore, PgYouTubeBacklog } from '@feedbouncer/comments';
 import type { ConnectorRegistry, PgConnectorStack } from '@feedbouncer/connectors';
 import type { JobProducer } from '@feedbouncer/jobs';
 import type { Mailer } from '@feedbouncer/mailer';
@@ -19,7 +19,7 @@ export interface AppDeps {
   readonly health: HealthReader;
   /** Prepended to every Redis key the API writes, so tests can isolate and clean up. */
   readonly redisKeyPrefix: string;
-  /** The configured platform connectors (Meta and TikTok). Null when none is configured. */
+  /** The configured platform connectors (Meta, TikTok and YouTube). Null when none is configured. */
   readonly connectors: { registry: ConnectorRegistry; stack: PgConnectorStack } | null;
   /** Enqueue-only job producer (the worker runs the jobs). Null when no connector is configured. */
   readonly producer: JobProducer | null;
@@ -27,5 +27,10 @@ export interface AppDeps {
   readonly alertsFetch?: typeof fetch;
   /** Replaces the network behind the free scan's Graph client; tests only. */
   readonly scanFetch?: typeof fetch;
-  readonly comments: { store: PgCommentStore; actions: ModerationActions } | null;
+  readonly comments: {
+    store: PgCommentStore;
+    actions: ModerationActions;
+    /** Where YouTube actions wait for the budget; disconnecting abandons a connection's queue. */
+    youtubeBacklog: PgYouTubeBacklog;
+  } | null;
 }

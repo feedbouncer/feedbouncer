@@ -8,6 +8,7 @@ import type pg from 'pg';
 import {
   ConnectorError,
   type Clock,
+  type Platform,
   type QuotaMeter,
   type QuotaPurpose,
   type QuotaTicket,
@@ -55,6 +56,12 @@ interface Snapshot {
 }
 
 const errorName = (err: unknown) => (err instanceof Error ? err.name : 'unknown');
+
+/** The runtime's quota-meter hook: YouTube calls are metered per connection, other platforms not at all. */
+export const youtubeQuotaMeters =
+  (ledger: Pick<PgYouTubeQuotaLedger, 'meterFor'>) =>
+  (platform: Platform, scope: ConnectionScope): QuotaMeter | undefined =>
+    platform === 'youtube' ? ledger.meterFor(scope) : undefined;
 
 export class PgYouTubeQuotaLedger {
   constructor(private readonly d: QuotaLedgerDeps) {}

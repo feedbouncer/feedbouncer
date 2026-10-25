@@ -60,8 +60,7 @@ export async function revokeConnection(
     pool: pg.Pool;
     directory: Pick<ConnectionDirectory, 'disconnect'>;
     backfill: Pick<PgBackfillStore, 'cancel'>;
-    /** Required wherever YouTube connections can be disconnected. */
-    backlog?: Pick<PgYouTubeBacklog, 'abandon'>;
+    backlog: Pick<PgYouTubeBacklog, 'abandon'>;
     log: Logger;
   },
   scope: ConnectionScope,
@@ -81,7 +80,7 @@ export async function revokeConnection(
       errorName: err instanceof Error ? err.name : 'NonError',
     });
   }
-  if (d.backlog && (await platformOf(d.pool, scope)) === 'youtube') await d.backlog.abandon(scope);
+  if ((await platformOf(d.pool, scope)) === 'youtube') await d.backlog.abandon(scope);
   return true;
 }
 

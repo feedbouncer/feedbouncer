@@ -22,6 +22,7 @@
     { "path": "../../packages/connector-meta-ads/tsconfig.build.json" },
     { "path": "../../packages/connector-tiktok/tsconfig.build.json" },
     { "path": "../../packages/connector-tiktok-ads/tsconfig.build.json" },
+    { "path": "../../packages/connector-youtube/tsconfig.build.json" },
     { "path": "../../packages/tiktok-business-api/tsconfig.build.json" },
     { "path": "../../packages/comments/tsconfig.build.json" },
     { "path": "../../packages/jobs/tsconfig.build.json" },

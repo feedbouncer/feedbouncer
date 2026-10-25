@@ -16,29 +16,38 @@ const brandId = '33333333-3333-4333-8333-333333333333';
 const connectionId = '44444444-4444-4444-8444-444444444444';
 
 /** The row as it stands after `directory.disconnect` returned `disconnected`. */
-function setup(disconnected: boolean, row: { status: string; status_reason: string | null }) {
+function setup(
+  disconnected: boolean,
+  row: { status: string; status_reason: string | null },
+  platform = 'facebook',
+) {
   const query = vi.fn(async (sql: string) => {
     if (sql.includes('connection_backfill')) return { rowCount: 0, rows: [] };
     if (sql.includes('FROM brand')) return { rowCount: 1, rows: [{}] };
-    if (sql.includes('FROM connection')) return { rowCount: 1, rows: [row] };
+    if (sql.includes('FROM connection')) return { rowCount: 1, rows: [{ ...row, platform }] };
     if (sql.includes('FROM audit_event')) return { rowCount: 1, rows: [{ sequence: '7' }] };
     throw new Error(`unexpected query: ${sql}`);
   });
   const stack = {
     directory: {
-      load: async () => ({ platform: 'facebook', status: row.status }),
+      load: async () => ({ platform, status: row.status }),
       disconnect: async () => disconnected,
     },
   } as unknown as PgConnectorStack;
   const enqueue = vi.fn(async () => undefined);
-  const deps = { pool: { query }, log: { error: vi.fn(), warn: vi.fn() } } as unknown as AppDeps;
+  const abandon = vi.fn(async () => 0);
+  const deps = {
+    pool: { query },
+    log: { error: vi.fn(), warn: vi.fn() },
+    comments: { youtubeBacklog: { abandon } },
+  } as unknown as AppDeps;
   const svc = new ConnectionsService(
     deps,
     stack,
     { enqueue } as unknown as JobProducer,
     new PgBackfillStore(deps.pool),
   );
-  return { svc, enqueue };
+  return { svc, enqueue, abandon };
 }
 
 describe('ConnectionsService.disconnect', () => {
@@ -55,6 +64,16 @@ describe('ConnectionsService.disconnect', () => {
     });
     await svc.disconnect(org, brandId, connectionId);
     expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('abandons the queued actions of a youtube connection, and only of those', async () => {
+    const gone = { status: 'revoked', status_reason: 'user_disconnected' };
+    const yt = setup(true, gone, 'youtube');
+    await yt.svc.disconnect(org, brandId, connectionId);
+    expect(yt.abandon).toHaveBeenCalledTimes(1);
+    const fb = setup(true, gone);
+    await fb.svc.disconnect(org, brandId, connectionId);
+    expect(fb.abandon).not.toHaveBeenCalled();
   });
 
   it.each([

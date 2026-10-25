@@ -175,7 +175,9 @@ export class ConnectionsService {
    * disconnect for any other reason (a concurrent reconnect) is left alone.
    */
   async disconnect(org: OrgContext, brandId: unknown, connectionId: unknown): Promise<void> {
-    if (!this.stack || !this.producer) throw new ApiError(404, 'platform_not_configured');
+    const backlog = this.deps.comments?.youtubeBacklog;
+    if (!this.stack || !this.producer || !backlog)
+      throw new ApiError(404, 'platform_not_configured');
     const brand = await requireBrand(this.deps.pool, org, brandId);
     const scope = { ...brand, connectionId: parseUuidOr404(connectionId) };
     const rec = await this.stack.directory.load(scope);
@@ -185,6 +187,7 @@ export class ConnectionsService {
         pool: this.deps.pool,
         directory: this.stack.directory,
         backfill: this.backfill,
+        backlog,
         log: this.deps.log,
       },
       scope,
