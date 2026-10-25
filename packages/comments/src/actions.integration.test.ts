@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type pg from 'pg';
-import { createPool } from '@feedbouncer/db';
+import { createPool, withTransaction } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import {
   PRIVATE_REPLY_WINDOW_MS,
@@ -17,7 +17,7 @@ import type { ConnectionScope } from '@feedbouncer/secrets';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
 import { PgCommentStore } from './store.js';
 import type { ActionActor, ActionKind } from './action-kinds.js';
-import { ModerationActions } from './actions.js';
+import { ModerationActions, recordActionAudit } from './actions.js';
 import { EXECUTE_JOB } from './jobs/specs.js';
 import { upsertStored } from './testing/index.js';
 
@@ -989,5 +989,117 @@ describe('ModerationActions.request in review mode', () => {
       status: 'refused',
       code: 'review_mode_active',
     });
+  });
+});
+
+describe('budgeted dispatch', () => {
+  const budgetedCaps: ConnectorCapabilities = { ...capabilities, actionDispatch: 'budgeted' };
+  const budgetedActions = (
+    budgeted?: ConstructorParameters<typeof ModerationActions>[0]['budgeted'],
+  ) =>
+    new ModerationActions({
+      pool,
+      store,
+      producer: { enqueue } as never,
+      capabilities: (p) => (p === 'facebook' ? budgetedCaps : undefined),
+      clock,
+      log,
+      ...(budgeted ? { budgeted } : {}),
+    });
+
+  it('budgeted platform enqueues to budgeted port, not EXECUTE_JOB', async () => {
+    const port = { enqueue: vi.fn(async () => {}) };
+    const commentId = await seedComment();
+    const r = await budgetedActions(port).request({
+      scope: t,
+      commentId,
+      kind: 'hide',
+      actor: user(),
+      requestKey: key(),
+    });
+    expect(r).toMatchObject({ status: 'accepted', action: { status: 'pending', kind: 'hide' } });
+    if (r.status !== 'accepted') throw new Error('unreachable');
+    expect(enqueue).toHaveBeenCalledTimes(0);
+    expect(port.enqueue).toHaveBeenCalledTimes(1);
+    expect(port.enqueue).toHaveBeenCalledWith(scope, {
+      actionId: r.action.id,
+      commentId,
+      kind: 'hide',
+      requestedAt: r.action.createdAt,
+    });
+  });
+
+  it('budgeted platform without port records failed enqueue_failed', async () => {
+    const commentId = await seedComment();
+    await expect(
+      budgetedActions().request({
+        scope: t,
+        commentId,
+        kind: 'delete',
+        actor: user(),
+        requestKey: key(),
+      }),
+    ).rejects.toThrow('budgeted_dispatch_unconfigured');
+    expect(enqueue).toHaveBeenCalledTimes(0);
+    const rows = await rowsFor(commentId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: 'failed', outcome_code: 'enqueue_failed' });
+  });
+
+  it('immediate platforms ignore the budgeted port', async () => {
+    const port = { enqueue: vi.fn(async () => {}) };
+    const commentId = await seedComment();
+    const r = await new ModerationActions({
+      pool,
+      store,
+      producer: { enqueue } as never,
+      capabilities: (p) => (p === 'facebook' ? capabilities : undefined),
+      clock,
+      log,
+      budgeted: port,
+    }).request({ scope: t, commentId, kind: 'hide', actor: user(), requestKey: key() });
+    expect(r.status).toBe('accepted');
+    expect(port.enqueue).not.toHaveBeenCalled();
+    expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('recordActionAudit', () => {
+  it('writes quota details under details.quota and omits them when absent', async () => {
+    const commentId = await seedComment();
+    const base = {
+      organizationId: t.organizationId,
+      brandId: t.brandId,
+      commentId,
+      kind: 'hide' as const,
+      actorType: 'system' as const,
+      actorUserId: null,
+      actorApiKeyId: null,
+      status: 'applied' as const,
+      outcomeCode: null,
+    };
+    const quota = {
+      units: 51,
+      batchSize: 3,
+      remainingUnits: 1949,
+      pacificDay: '2026-10-13',
+      simulated: false,
+    };
+    const a1 = randomUUID();
+    const a2 = randomUUID();
+    await withTransaction(pool, async (tx) => {
+      await recordActionAudit(tx, { ...base, actionId: a1, quota });
+      await recordActionAudit(tx, { ...base, actionId: a2 });
+    });
+    const r = await pool.query<{ details: Record<string, unknown> }>(
+      `SELECT details FROM audit_event
+        WHERE organization_id = $1 AND brand_id = $2 AND subject_id = $3
+        ORDER BY details->>'actionId' = $4 DESC`,
+      [t.organizationId, t.brandId, commentId, a1],
+    );
+    expect(r.rows.map((x) => x.details)).toEqual([
+      { actionId: a1, kind: 'hide', status: 'applied', outcomeCode: null, quota },
+      { actionId: a2, kind: 'hide', status: 'applied', outcomeCode: null },
+    ]);
   });
 });

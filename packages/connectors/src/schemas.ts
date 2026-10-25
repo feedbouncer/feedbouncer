@@ -3,13 +3,14 @@
 // of control characters, URLs are https only, bodies are bounded. Errors carry
 // no input (zod issues are not attached), only the code invalid_connector_output.
 import * as z from 'zod';
-import type { ConnectionCommentsPage } from './connector.js';
+import type { CommentProbe, ConnectionCommentsPage } from './connector.js';
 import { ConnectorError } from './errors.js';
 import { Secret } from '@feedbouncer/service-runtime';
 import {
   MODERATION_ACTIONS,
   RESPONSE_KINDS,
   type AdLookup,
+  type CommentRef,
   type NormalizedComment,
   type Page,
 } from './types.js';
@@ -111,6 +112,18 @@ export const actionRequestSchema = z.strictObject({
   authorExternalId: externalIdSchema.optional(),
 });
 
+export const batchActionRequestSchema = z.strictObject({
+  action: z.enum(MODERATION_ACTIONS),
+  targets: z.array(commentRefSchema).min(1).max(500),
+});
+
+const commentProbeSchema = z.strictObject({
+  externalId: externalIdSchema,
+  state: z.enum(['visible', 'held', 'gone']),
+  updatedAt: z.date().nullable(),
+  authorExternalId: externalIdSchema.nullable(),
+});
+
 const REPLY_FORBIDDEN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
 export const replyTextSchema = z
   .string()
@@ -192,4 +205,19 @@ export function parsePage<T extends { externalId: string }>(
     items.push(parsed);
   }
   return { items, nextCursor: page.nextCursor };
+}
+
+/** One probe per requested comment at most; a probe for a comment not asked about is invalid. */
+export function parseProbes(raw: unknown, refs: readonly CommentRef[]): CommentProbe[] {
+  const asked = new Set(refs.map((r) => r.externalId));
+  const probes = parseWith(z.array(commentProbeSchema).max(500), raw);
+  const seen = new Set<string>();
+  const out: CommentProbe[] = [];
+  for (const p of probes) {
+    if (!asked.has(p.externalId)) throw invalid();
+    if (seen.has(p.externalId)) continue;
+    seen.add(p.externalId);
+    out.push(p);
+  }
+  return out;
 }

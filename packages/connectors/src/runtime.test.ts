@@ -6,7 +6,8 @@ import { ConnectorError } from './errors.js';
 import { MemoryConnectionDirectory, MemoryCredentialVault, MemoryRefreshLock } from './memory.js';
 import { ConnectorRegistry } from './registry.js';
 import { isPlatform } from './types.js';
-import { ConnectorRuntime, isSuccessEquivalent } from './runtime.js';
+import type { QuotaMeter } from './quota.js';
+import { ConnectorRuntime, isSuccessEquivalent, type RuntimeDeps } from './runtime.js';
 import { TokenManager } from './tokens.js';
 
 const scope = { organizationId: 'o1', brandId: 'b1', connectionId: 'c1' };
@@ -231,6 +232,151 @@ describe('ConnectionClient.act', () => {
     });
     expect(r).toMatchObject({ status: 'failed', error: { code: 'invalid_action_request' } });
     expect(act).not.toHaveBeenCalled();
+  });
+});
+
+describe('ConnectionClient batch actions and probes', () => {
+  const ref2 = { sourceExternalId: 's1', externalId: 'c2' };
+  let actBatch: Mock<NonNullable<Connector['actBatch']>>;
+  let probeComments: Mock<NonNullable<Connector['probeComments']>>;
+  let meter: QuotaMeter;
+  let quotaMeters: Mock<NonNullable<RuntimeDeps['quotaMeters']>>;
+  let batching: ConnectorRuntime;
+
+  beforeEach(() => {
+    actBatch = vi.fn(async () => ({ status: 'applied' }));
+    probeComments = vi.fn(async (_ctx, refs) =>
+      refs.map((r) => ({
+        externalId: r.externalId,
+        state: 'visible' as const,
+        updatedAt: null,
+        authorExternalId: 'UCauthor',
+      })),
+    );
+    meter = { reserve: vi.fn(), settle: vi.fn() };
+    quotaMeters = vi.fn(() => meter);
+    const registry = new ConnectorRegistry();
+    registry.register({
+      ...baseConnector,
+      capabilities: {
+        ...baseConnector.capabilities,
+        actionDispatch: 'budgeted',
+        batchActions: { maxTargets: 2 },
+      },
+      actBatch,
+      probeComments,
+    });
+    batching = new ConnectorRuntime({ ...runtimeDeps, registry, quotaMeters });
+  });
+
+  it("actBatch passes ctx.quota from quotaMeters and maps a thrown rate_limited to {status:'failed'}", async () => {
+    const c = await batching.connect(scope);
+    expect(await c.actBatch({ action: 'hide', targets: [ref, ref2] })).toEqual({
+      status: 'applied',
+    });
+    expect(quotaMeters).toHaveBeenCalledWith('youtube', scope);
+    const ctx = actBatch.mock.calls[0]![0];
+    expect(ctx.quota).toBe(meter);
+    expect(ctx.accessToken.reveal()).toBe('access-1');
+    expect(actBatch.mock.calls[0]![1]).toEqual({ action: 'hide', targets: [ref, ref2] });
+
+    actBatch.mockRejectedValueOnce(
+      new ConnectorError('rate_limited', 'quota_budget_exhausted', { retryAfterMs: 3_600_000 }),
+    );
+    expect(await c.actBatch({ action: 'delete', targets: [ref] })).toEqual({
+      status: 'failed',
+      error: {
+        kind: 'rate_limited',
+        code: 'quota_budget_exhausted',
+        retryAfterMs: 3_600_000,
+        reauthorize: false,
+      },
+    });
+    // A local quota refusal is not a platform throttle: reads keep their rate budget.
+    await expect(c.probeComments([ref])).resolves.toHaveLength(1);
+  });
+
+  it("actBatch on a connector without actBatch returns failed 'unsupported'", async () => {
+    const c = await runtime.connect(scope);
+    expect(await c.actBatch({ action: 'hide', targets: [ref] })).toEqual({
+      status: 'failed',
+      error: { kind: 'unsupported', code: 'unsupported', retryAfterMs: null, reauthorize: false },
+    });
+    await expect(c.probeComments([ref])).rejects.toMatchObject({
+      kind: 'unsupported',
+      code: 'probe_comments',
+    });
+  });
+
+  it('actBatch maps not_found, refuses undeclared actions and oversize or malformed batches without a call', async () => {
+    const c = await batching.connect(scope);
+    actBatch.mockResolvedValueOnce({ status: 'not_found' });
+    expect(await c.actBatch({ action: 'hide', targets: [ref] })).toEqual({ status: 'not_found' });
+    actBatch.mockRejectedValueOnce(new ConnectorError('not_found', 'comment_not_found'));
+    expect(await c.actBatch({ action: 'hide', targets: [ref] })).toEqual({ status: 'not_found' });
+    const calls = actBatch.mock.calls.length;
+    expect(await c.actBatch({ action: 'ban_author', targets: [ref] })).toMatchObject({
+      status: 'failed',
+      error: { kind: 'unsupported' },
+    });
+    for (const targets of [
+      [],
+      [ref, ref2, ref],
+      [{ sourceExternalId: 's1', externalId: 'x\u0000' }],
+    ])
+      expect(await c.actBatch({ action: 'hide', targets })).toMatchObject({
+        status: 'failed',
+        error: { kind: 'permanent' },
+      });
+    expect(actBatch.mock.calls.length).toBe(calls);
+  });
+
+  it('actBatch refreshes once on a rejected token, then flags the connection', async () => {
+    actBatch.mockRejectedValue(new ConnectorError('auth_expired', 'token_rejected'));
+    const c = await batching.connect(scope);
+    expect(await c.actBatch({ action: 'hide', targets: [ref] })).toMatchObject({
+      status: 'failed',
+      error: { kind: 'auth_expired', reauthorize: true },
+    });
+    expect(refreshTokens).toHaveBeenCalledTimes(1);
+    expect((await directory.load(scope))?.status).toBe('reconnect_required');
+  });
+
+  it('actBatch rejects connector output it does not recognise', async () => {
+    actBatch.mockResolvedValueOnce({ status: 'done' } as never);
+    const c = await batching.connect(scope);
+    expect(await c.actBatch({ action: 'hide', targets: [ref] })).toMatchObject({
+      status: 'failed',
+      error: { kind: 'permanent', code: 'invalid_connector_output' },
+    });
+  });
+
+  it('probeComments validates refs and output and passes ctx.quota', async () => {
+    const c = await batching.connect(scope);
+    expect(await c.probeComments([ref, ref2])).toEqual([
+      { externalId: 'c1', state: 'visible', updatedAt: null, authorExternalId: 'UCauthor' },
+      { externalId: 'c2', state: 'visible', updatedAt: null, authorExternalId: 'UCauthor' },
+    ]);
+    expect(probeComments.mock.calls[0]![0].quota).toBe(meter);
+    for (const refs of [[], [ref, ref2, ref]])
+      await expect(c.probeComments(refs)).rejects.toMatchObject({ code: 'invalid_request' });
+    probeComments.mockResolvedValueOnce([
+      { externalId: 'c1', state: 'nuked' as never, updatedAt: null, authorExternalId: null },
+    ]);
+    await expect(c.probeComments([ref])).rejects.toMatchObject({
+      kind: 'permanent',
+      code: 'invalid_connector_output',
+    });
+  });
+
+  it('no quotaMeters, or none for the platform, leaves ctx.quota unset', async () => {
+    const c = await runtime.connect(scope);
+    await c.act({ action: 'hide', target: ref });
+    expect(act.mock.calls[0]![0].quota).toBeUndefined();
+    quotaMeters.mockReturnValue(undefined);
+    const b = await batching.connect(scope);
+    await b.actBatch({ action: 'hide', targets: [ref] });
+    expect(actBatch.mock.calls[0]![0].quota).toBeUndefined();
   });
 });
 

@@ -1,10 +1,12 @@
 import type { Secret } from '@feedbouncer/service-runtime';
 import type { SafeHttp } from './http.js';
+import type { QuotaMeter } from './quota.js';
 import type {
   ActionRequest,
   AdLookup,
   CommentRef,
   ConnectorCapabilities,
+  ModerationAction,
   NormalizedComment,
   NormalizedSource,
   RecentSource,
@@ -39,11 +41,28 @@ export interface CallContext {
   readonly signal: AbortSignal;
   /** Best-effort: never rejects; if the budget store is down the report is logged and dropped. */
   reportQuota(q: { remaining: number; resetAt: Date }): Promise<void>;
+  /** Set when the runtime meters this platform's daily quota; reserve before and settle after every call. */
+  readonly quota?: QuotaMeter;
 }
 
 export type RawActionOutcome =
   | { readonly status: 'applied'; readonly platformActionId: string | null }
   | { readonly status: 'not_found' };
+
+export interface BatchActionRequest {
+  readonly action: ModerationAction;
+  readonly targets: readonly CommentRef[];
+}
+
+export type BatchActionOutcome = { readonly status: 'applied' } | { readonly status: 'not_found' };
+
+export interface CommentProbe {
+  readonly externalId: string;
+  /** `gone`: deleted or rejected, no longer discoverable. */
+  readonly state: 'visible' | 'held' | 'gone';
+  readonly updatedAt: Date | null;
+  readonly authorExternalId: string | null;
+}
 
 export type RawRespondOutcome =
   | { readonly status: 'sent'; readonly platformRef: string | null }
@@ -174,6 +193,15 @@ export interface Connector {
    * repeated hide on a hidden comment is `applied`.
    */
   act(ctx: CallContext, req: ActionRequest): Promise<RawActionOutcome>;
+
+  /**
+   * One platform call applying `action` to every target (at most `batchActions.maxTargets`).
+   * `not_found` when the platform refuses the call because a target no longer exists.
+   */
+  actBatch?(ctx: CallContext, req: BatchActionRequest): Promise<BatchActionOutcome>;
+
+  /** Current state of each comment in one call; a comment the platform did not return is `gone`. */
+  probeComments?(ctx: CallContext, refs: readonly CommentRef[]): Promise<readonly CommentProbe[]>;
 
   /**
    * Only for `accountSelection: 'multiple'`. Returns every account the user token can act for,

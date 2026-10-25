@@ -223,6 +223,10 @@ export interface ConnectorCapabilities {
   readonly connectionComments?: boolean;
   /** getComment only searches recent comments, so its null does not mean deleted. Default false. */
   readonly partialCommentLookup?: boolean;
+  /** Implements actBatch; `maxTargets` 1..500. Default none. */
+  readonly batchActions?: { readonly maxTargets: number };
+  /** `budgeted` actions wait in a quota-aware backlog (needs actBatch and probeComments). Default `immediate`. */
+  readonly actionDispatch?: 'immediate' | 'budgeted';
   /** 1..500 */
   readonly maxPageSize: number;
 }
