@@ -1,0 +1,9 @@
+DROP TABLE youtube_notice;
+DROP TABLE youtube_quota_pause;
+DROP TABLE youtube_quota_ledger;
+DROP TABLE youtube_write_batch;
+DROP TABLE youtube_action_queue;
+DROP TABLE youtube_thread;
+DROP TABLE youtube_connection_state;
+DROP TABLE youtube_connection_settings;
+DROP FUNCTION fb_youtube_channel_ids_valid(text[]);

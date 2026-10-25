@@ -29,6 +29,12 @@ const NATURAL_KEY_TABLES: Record<string, string> = {
   retention_confirmation: 'PRIMARY KEY (category, days)',
   retention_status: 'PRIMARY KEY (id)',
   scan_oauth_state: 'PRIMARY KEY (state_hash)',
+  youtube_connection_settings: 'PRIMARY KEY (connection_id)',
+  youtube_connection_state: 'PRIMARY KEY (connection_id)',
+  youtube_thread: 'PRIMARY KEY (connection_id, thread_external_id)',
+  youtube_action_queue: 'PRIMARY KEY (action_id)',
+  youtube_quota_pause: 'PRIMARY KEY (pacific_day)',
+  youtube_notice: 'PRIMARY KEY (connection_id, kind, pacific_day)',
 };
 // Link and grant rows are inserted or deleted, never edited: they keep one event timestamp
 // (added_at, done_at, created_at) instead of created_at/updated_at and have no updated_at trigger.
@@ -39,6 +45,8 @@ const IMMUTABLE_ROW_TABLES = [
   'erased_comment',
   'retention_confirmation',
   'scan_oauth_state',
+  // Insert-only: one row per Pacific day, keeps paused_at.
+  'youtube_quota_pause',
 ];
 const GLOBAL_TABLES = [
   'organization',
@@ -56,6 +64,10 @@ const GLOBAL_TABLES = [
   'scan_oauth_state',
   'scan_grant',
   'scan',
+  // YouTube quota is project-wide: the ledger keeps its rows (organization_id nullable) when a
+  // connection goes away, and the pause row is shared by every tenant.
+  'youtube_quota_ledger',
+  'youtube_quota_pause',
 ];
 
 // Credential-like columns that are allowed on purpose. Each one holds a hash,
@@ -85,6 +97,8 @@ const ALLOWED_CREDENTIAL_COLUMNS: Record<string, string> = {
     'SHA-256 digest of a random visitor cookie token; the raw token exists only in the cookie',
   'scan.share_token_hash':
     'SHA-256 digest of a random share link token; the raw token exists only in the link',
+  'youtube_connection_state.resume_page_token': 'YouTube API pagination cursor, not a credential',
+  'youtube_connection_state.lease_token': 'Random id of the cycle lease holder, not a credential',
 };
 
 describe('schema conventions', () => {
