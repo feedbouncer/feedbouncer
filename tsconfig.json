@@ -11,6 +11,7 @@
     { "path": "packages/tiktok-business-api" },
     { "path": "packages/connector-tiktok" },
     { "path": "packages/connector-tiktok-ads" },
+    { "path": "packages/connector-youtube" },
     { "path": "packages/jobs" },
     { "path": "packages/comments" },
     { "path": "packages/rules" },

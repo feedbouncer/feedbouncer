@@ -89,6 +89,13 @@ describe('ConnectorError.missingScopes', () => {
     expect(e.missingScopes).not.toContain('Bad Scope');
   });
 
+  it('keeps hyphenated scope names such as youtube.force-ssl', () => {
+    const e = new ConnectorError('auth_expired', 'x_code', {
+      missingScopes: ['youtube.force-ssl', 'a/b', 'a b'],
+    });
+    expect(e.missingScopes).toEqual(['youtube.force-ssl']);
+  });
+
   it('is undefined when absent or when nothing valid remains', () => {
     expect(new ConnectorError('auth_expired', 'x_code').missingScopes).toBeUndefined();
     expect(

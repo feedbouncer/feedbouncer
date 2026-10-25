@@ -68,6 +68,9 @@ describe('missing permissions', () => {
     expect(missing(['comment.list', 'video.list'])).toBe(
       'Missing permission: comment.list, video.list. Reconnect and approve all requested permissions.',
     );
+    expect(missing(['youtube.force-ssl'])).toBe(
+      'Missing permission: youtube.force-ssl. Reconnect and approve all requested permissions.',
+    );
   });
 
   it('shows only well-formed scope names', () => {

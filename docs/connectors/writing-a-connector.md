@@ -592,7 +592,7 @@ Rules:
   refresh-and-retry, marks the connection `reconnect_required` with reason
   `oauth_scope_missing`, stores the names on the connection (its health then
   shows "Missing permission: ..."), and owners are emailed. `missingScopes`
-  keeps at most 20 names matching `^[a-z0-9_.]{1,64}$` and drops the rest, so
+  keeps at most 20 names matching `^[a-z0-9_.-]{1,64}$` and drops the rest, so
   use the connector's own scope names, never platform text. A permission
   error on one post's comments should not do this: report it for that post
   only, so one bad object never takes the connection down.
