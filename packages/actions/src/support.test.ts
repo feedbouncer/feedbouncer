@@ -139,6 +139,10 @@ describe('stepOutcomeFor', () => {
     [action('noop', 'comment_gone'), ok('not_applicable', 'comment_gone')],
     [action('noop', 'already_deleted'), ok('not_applicable', 'comment_gone')],
     [refused('not_found'), ok('not_applicable', 'comment_gone')],
+    [
+      action('not_eligible', 'hide_nested_reply_unsupported'),
+      ok('not_supported', 'hide_nested_reply_unsupported'),
+    ],
     [action('noop', 'already_hidden'), ok('skipped', 'already_hidden')],
     [action('noop', 'already_visible'), ok('skipped', 'already_visible')],
     [action('not_eligible', 'author_unavailable'), ok('not_applicable', 'author_unavailable')],

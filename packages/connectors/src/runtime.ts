@@ -622,7 +622,11 @@ export class ConnectionClient {
     if (!this.supportsResponse(req.kind)) return { status: 'unsupported', request: req };
     const respond = this.connector.respond!.bind(this.connector);
     try {
-      const out = await this.#call('urgent', 'respond', (ctx) => respond(ctx, req));
+      const out = await this.#call(
+        this.connector.capabilities.responsePriority ?? 'urgent',
+        'respond',
+        (ctx) => respond(ctx, req),
+      );
       if (out?.status === 'not_found') return { status: 'not_found', request: req };
       if (out?.status === 'not_eligible') {
         if (typeof out.code !== 'string' || !SNAKE_CODE.test(out.code))

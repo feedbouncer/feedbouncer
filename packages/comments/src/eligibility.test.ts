@@ -223,6 +223,41 @@ describe('evaluateEligibility', () => {
     expect(evaluateEligibility({ kind, actorType, comment, caps, now })).toEqual(expected);
   });
 
+  describe('hideTopLevelOnly', () => {
+    const TH = {
+      actions: ['hide', 'unhide'],
+      responses: ['public_reply'],
+      constraints: { hideTopLevelOnly: true },
+    } as unknown as ConnectorCapabilities;
+    const ev = (kind: 'hide' | 'unhide', comment: EligibilityComment) =>
+      evaluateEligibility({ kind, actorType: 'user', comment, caps: TH, now });
+
+    it('hideTopLevelOnly blocks hide and unhide on a reply with a parent, allows a top-level reply', () => {
+      const nested = c({ parentExternalId: 'p1', platformState: 'visible' });
+      expect(ev('hide', nested)).toEqual({
+        verdict: 'not_eligible',
+        code: 'hide_nested_reply_unsupported',
+      });
+      expect(ev('unhide', c({ parentExternalId: 'p1', platformState: 'hidden' }))).toEqual({
+        verdict: 'not_eligible',
+        code: 'hide_nested_reply_unsupported',
+      });
+      expect(ev('hide', c())).toEqual({ verdict: 'ok' });
+      expect(ev('unhide', c({ platformState: 'hidden' }))).toEqual({ verdict: 'ok' });
+      // Without the constraint a nested reply can be hidden.
+      expect(
+        evaluateEligibility({ kind: 'hide', actorType: 'user', comment: nested, caps: FB, now }),
+      ).toEqual({ verdict: 'ok' });
+    });
+
+    it('hide on a hidden nested reply reports hide_nested_reply_unsupported, not already_hidden', () => {
+      expect(ev('hide', c({ parentExternalId: 'p1', platformState: 'hidden' }))).toEqual({
+        verdict: 'not_eligible',
+        code: 'hide_nested_reply_unsupported',
+      });
+    });
+  });
+
   it('facebook defaults equal the previous hard-coded behaviour', () => {
     expect(resolveConstraints(FB)).toEqual({
       privateReplyWindowMs: 7 * DAY,

@@ -70,6 +70,11 @@ export function validateConnector(c: Connector): void {
   )
     fail('capabilities.responses');
   if (responses.length > 0 !== (typeof c.respond === 'function')) fail('capabilities.responses');
+  if (
+    k.responsePriority !== undefined &&
+    !(['urgent', 'bulk', 'background'] as readonly string[]).includes(k.responsePriority)
+  )
+    fail('capabilities.responsePriority');
   if (c.listReplies !== undefined && typeof c.listReplies !== 'function') fail('listReplies');
   if (c.probeComments !== undefined && typeof c.probeComments !== 'function') fail('probeComments');
   if (c.listThreads !== undefined && typeof c.listThreads !== 'function') fail('listThreads');

@@ -37,6 +37,7 @@ import type { ActionOutcomeObserver } from '../hooks.js';
 import {
   enqueueResync,
   notifyOutcome,
+  recordDeferral,
   settleAction,
   STATE_AFTER,
   type Final,
@@ -310,6 +311,20 @@ export function executeActionJob(d: {
       if (!('final' in outcome)) {
         const e = outcome.rethrow;
         // The framework defers or retries from here: raise it before the action waits.
+        if (e.kind === 'rate_limited' && e.retryAfterMs !== null) {
+          // Display-only: a failure here must not mask the rethrow below.
+          try {
+            await recordDeferral(
+              d.pool,
+              ctx.scope,
+              a.id,
+              new Date(d.clock.now() + e.retryAfterMs),
+              e.code,
+            );
+          } catch {
+            d.log.warn('moderation.deferral_not_recorded', { actionId: a.id });
+          }
+        }
         if (e.kind === 'rate_limited' || e.kind === 'auth_expired')
           await notifyOutcome(d, ctx.scope, ctx.platform, a, 'deferred', e.code);
         throw e;

@@ -105,6 +105,8 @@ const OUTCOMES: Record<string, string> = {
   rate_limit_exhausted: 'the platform kept refusing because of rate limits',
   retries_exhausted: 'it kept failing after several tries',
   awaiting_reconnect: 'waiting for the connection to be reconnected',
+  hide_nested_reply_unsupported: 'Threads only lets you hide top-level replies',
+  reply_quota_exhausted: 'the daily reply limit for this account has been reached',
   request_key_conflict: 'this request was already used for a different action',
   failed: 'the platform did not accept it',
   moderator_override: 'a team member reversed this earlier, so it was not repeated',

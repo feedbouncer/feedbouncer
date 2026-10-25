@@ -146,11 +146,19 @@ describe('job definitions', () => {
     for (const type of [INGEST_JOB.type, EXECUTE_JOB.type]) {
       expect(r.supports(type, 'facebook')).toBe(true);
       expect(r.supports(type, 'instagram')).toBe(true);
-      expect(r.supports(type, 'threads')).toBe(false);
+      expect(r.supports(type, 'linkedin')).toBe(false);
     }
     // YouTube actions go through the budgeted backlog, never the per-action job.
     expect(r.supports(INGEST_JOB.type, 'youtube')).toBe(true);
     expect(r.supports(EXECUTE_JOB.type, 'youtube')).toBe(false);
+  });
+
+  it('execute also runs for threads, ingest does not', () => {
+    const r = new JobRegistry();
+    r.register(enqueueOnly(INGEST_JOB));
+    r.register(enqueueOnly(EXECUTE_JOB));
+    expect(r.supports(EXECUTE_JOB.type, 'threads')).toBe(true);
+    expect(r.supports(INGEST_JOB.type, 'threads')).toBe(false);
   });
 
   it('youtube_cycle is registered for youtube only', () => {
@@ -169,7 +177,7 @@ describe('job definitions', () => {
   });
 
   it('enqueueOnly takes its platforms from the spec', () => {
-    expect(enqueueOnly({ ...INGEST_JOB, platforms: ['threads'] }).platforms).toEqual(['threads']);
+    expect(enqueueOnly({ ...INGEST_JOB, platforms: ['linkedin'] }).platforms).toEqual(['linkedin']);
     expect(enqueueOnly({ ...INGEST_JOB, platforms: 'all' }).platforms).toBe('all');
   });
 
@@ -179,7 +187,7 @@ describe('job definitions', () => {
     const w = new JobRegistry();
     w.register(ingestCommentJob({} as Parameters<typeof ingestCommentJob>[0]));
     expect(w.supports(INGEST_JOB.type, 'facebook')).toBe(true);
-    expect(w.supports(INGEST_JOB.type, 'threads')).toBe(false);
+    expect(w.supports(INGEST_JOB.type, 'linkedin')).toBe(false);
   });
 });
 
@@ -231,7 +239,13 @@ describe('TikTok poll jobs', () => {
     }
   });
 
-  it('EXECUTE_JOB includes both TikTok platforms', () => {
-    expect(EXECUTE_JOB.platforms).toEqual(['facebook', 'instagram', 'tiktok', 'tiktok_ads']);
+  it('EXECUTE_JOB includes both TikTok platforms and Threads', () => {
+    expect(EXECUTE_JOB.platforms).toEqual([
+      'facebook',
+      'instagram',
+      'tiktok',
+      'tiktok_ads',
+      'threads',
+    ]);
   });
 });

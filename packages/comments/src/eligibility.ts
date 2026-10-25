@@ -111,6 +111,13 @@ export function evaluateEligibility({
   // Bans are against the author, so a deleted comment does not make them moot.
   if (c.platformState === 'deleted' && !byAuthor)
     return { verdict: 'noop', code: 'already_deleted' };
+  // Before the already_hidden check, so a hidden nested reply reports a stable reason.
+  if (
+    caps.constraints?.hideTopLevelOnly === true &&
+    (kind === 'hide' || kind === 'unhide') &&
+    c.parentExternalId !== null
+  )
+    return no('hide_nested_reply_unsupported');
   if (kind === 'hide' && c.platformState === 'hidden')
     return { verdict: 'noop', code: 'already_hidden' };
   if (kind === 'unhide' && c.platformState === 'visible')

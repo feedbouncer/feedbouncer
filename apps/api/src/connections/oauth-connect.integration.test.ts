@@ -734,7 +734,7 @@ describe('instagram connect flow', () => {
       error: { code: 'platform_not_configured', message: expect.any(String) },
     };
     const grant = '00000000-0000-4000-8000-000000000000';
-    for (const platform of ['threads', 'nope', 'FACEBOOK']) {
+    for (const platform of ['linkedin', 'nope', 'FACEBOOK']) {
       const p = encodeURIComponent(platform);
       const a = await call('POST', `${base(org)}/${p}/authorize`, org.owner, {});
       expect(a.status, platform).toBe(404);

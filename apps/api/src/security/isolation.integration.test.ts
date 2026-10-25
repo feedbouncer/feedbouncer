@@ -54,7 +54,7 @@ beforeAll(async () => {
       [
         o.orgId,
         o.brandId,
-        fb ? 'facebook' : 'threads',
+        fb ? 'facebook' : 'linkedin',
         fb ? `9${o.orgId.replace(/\D/g, '').slice(0, 15)}` : `ext-${o.orgId}`,
       ],
     );

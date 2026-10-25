@@ -186,6 +186,8 @@ export interface ActionConstraints {
   readonly hideOwnAccountComments?: boolean;
   /** Max code points per response kind. Default 8000 (replyTextSchema's limit). */
   readonly maxReplyChars?: Readonly<Partial<Record<ResponseKind, number>>>;
+  /** Default false. Threads: true (a reply to a reply cannot be hidden, only top-level replies). */
+  readonly hideTopLevelOnly?: boolean;
 }
 
 export interface ConnectorCapabilities {
@@ -209,6 +211,8 @@ export interface ConnectorCapabilities {
   readonly accountSelection?: 'single' | 'multiple';
   /** Response kinds `respond()` supports (needs `respond`). Default none. */
   readonly responses?: readonly ResponseKind[];
+  /** Budget priority `respond` draws on. Default `urgent`; a platform with a small reply quota uses `bulk`. */
+  readonly responsePriority?: Priority;
   /** Per-platform action limits; see `ActionConstraints`. Default: none. */
   readonly constraints?: ActionConstraints;
   /** Platform permissions each action or response needs. Absent or empty means none are checked. */

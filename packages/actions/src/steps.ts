@@ -142,6 +142,8 @@ export const REASON_CODES: readonly string[] = [
   'reply_too_long',
   'rate_limited',
   'awaiting_reconnect',
+  'hide_nested_reply_unsupported',
+  'reply_quota_exhausted',
   // settling and fallbacks
   'rate_limit_exhausted',
   'retries_exhausted',
