@@ -55,7 +55,18 @@ export async function settleAction(
   f: Final,
   audit: { quota?: AuditQuota } = {},
 ): Promise<{ result: JobResult; recorded: boolean }> {
-  return withTransaction(pool, async (tx) => {
+  return withTransaction(pool, (tx) => settleActionIn(tx, scope, a, f, audit));
+}
+
+/** `settleAction` inside the caller's transaction, on its connection. */
+export async function settleActionIn(
+  tx: pg.ClientBase,
+  scope: ConnectionScope,
+  a: SettleTarget,
+  f: Final,
+  audit: { quota?: AuditQuota } = {},
+): Promise<{ result: JobResult; recorded: boolean }> {
+  {
     const ids = [scope.organizationId, scope.brandId, scope.connectionId, a.id];
     const u = await tx.query(
       `UPDATE moderation_action
@@ -90,7 +101,7 @@ export async function settleAction(
       ...(audit.quota ? { quota: audit.quota } : {}),
     });
     return { result: { status: f.status, outcomeCode: f.code, undo: f.undo }, recorded: true };
-  });
+  }
 }
 
 /** Re-reads the comment through the ingest job. Failures are logged, never thrown. */

@@ -29,3 +29,5 @@ export * from './youtube/quota-day.js';
 export * from './youtube/budget.js';
 export * from './youtube/settings.js';
 export * from './youtube/ledger.js';
+export * from './youtube/planner.js';
+export * from './youtube/backlog.js';
