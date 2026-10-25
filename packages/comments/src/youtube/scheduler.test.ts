@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { JobProducer } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { YOUTUBE_CYCLE_JOB } from '../jobs/specs.js';
 import { YouTubeCycleScheduler, type YouTubeSchedulerDeps } from './scheduler.js';
@@ -9,10 +10,12 @@ const scope = (n: number): ConnectionScope => ({
   connectionId: `00000000-0000-4000-a000-00000000000${n}`,
 });
 
+type Enqueued = Awaited<ReturnType<JobProducer['enqueue']>>;
+
 function setup(o: Partial<YouTubeSchedulerDeps> = {}) {
   let now = Date.parse('2026-10-24T12:00:10Z');
-  const enqueue = vi.fn(async () => ({
-    status: 'enqueued' as const,
+  const enqueue = vi.fn<(job: unknown) => Promise<Enqueued>>(async () => ({
+    status: 'enqueued',
     ledgerId: 'l',
     jobId: 'j',
   }));
@@ -35,15 +38,18 @@ describe('YouTubeCycleScheduler', () => {
     const { scheduler, enqueue, state, advance } = setup();
     expect(await scheduler.tick()).toEqual({ enqueued: 2 });
     expect(state.dueConnections).toHaveBeenCalledWith(expect.any(Date), 50);
-    const [first] = enqueue.mock.calls.map((c) => c[0] as Record<string, unknown>);
+    const first = enqueue.mock.calls[0]![0];
     expect(first).toMatchObject({
       scope: scope(1),
       platform: 'youtube',
       type: YOUTUBE_CYCLE_JOB.type,
       payload: { connectionId: scope(1).connectionId },
     });
-    const keyOf = (i: number) => (enqueue.mock.calls[i]![0] as { idempotencyKey: string }).idempotencyKey;
-    expect(keyOf(0)).toBe(`youtube_cycle:${scope(1).connectionId}:${Math.floor(Date.parse('2026-10-24T12:00:10Z') / 60_000)}`);
+    const keyOf = (i: number) =>
+      (enqueue.mock.calls[i]![0] as { idempotencyKey: string }).idempotencyKey;
+    expect(keyOf(0)).toBe(
+      `youtube_cycle:${scope(1).connectionId}:${Math.floor(Date.parse('2026-10-24T12:00:10Z') / 60_000)}`,
+    );
     expect(keyOf(0)).not.toBe(keyOf(1));
 
     // Within the slot the key is the same (the job ledger deduplicates); the next slot has a new one.
@@ -55,8 +61,8 @@ describe('YouTubeCycleScheduler', () => {
   });
 
   it('counts only newly enqueued jobs', async () => {
-    const enqueue = vi.fn(async () => ({
-      status: 'deduplicated' as const,
+    const enqueue = vi.fn<(job: unknown) => Promise<Enqueued>>(async () => ({
+      status: 'deduplicated',
       ledgerId: 'l',
       jobId: 'j',
       state: 'queued',

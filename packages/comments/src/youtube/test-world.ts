@@ -30,6 +30,7 @@ import type { ActionOutcomeObserver, CommentAppliedHook } from '../hooks.js';
 import { EmailReconnectNotifier, NotifyingConnectionDirectory } from '../reconnect-notifier.js';
 import { PgCommentStore } from '../store.js';
 import { PgYouTubeBacklog } from './backlog.js';
+import { youtubeCycleJob } from './cycle.js';
 import { PgYouTubeQuotaLedger } from './ledger.js';
 import { planCycle, type CyclePlan, type QueuedKind } from './planner.js';
 import { PgYouTubeSettings } from './settings.js';
@@ -149,6 +150,25 @@ export async function youtubeWorld(label: string, o: { wrap?: (c: Connector) => 
     signal: AbortSignal.timeout(60_000),
     log,
   });
+
+  const cycleJob = youtubeCycleJob({
+    pool,
+    runtime,
+    state,
+    settings,
+    ledger,
+    backlog,
+    notices,
+    store,
+    producer,
+    applied,
+    outcomes: observer,
+    clock,
+    log,
+  });
+  /** One run of the cycle job for a connection. */
+  const runCycle = (scope: ConnectionScope) =>
+    cycleJob.handle(jobCtx(scope), { connectionId: scope.connectionId });
 
   const ids = (s: ConnectionScope) => [s.organizationId, s.brandId, s.connectionId];
   const one = async (sql: string, v: unknown[]) =>
@@ -352,6 +372,9 @@ export async function youtubeWorld(label: string, o: { wrap?: (c: Connector) => 
     mailer,
     applied,
     jobCtx,
+    directory,
+    cycleJob,
+    runCycle,
     comments,
     outcomes,
     observer,

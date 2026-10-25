@@ -403,8 +403,8 @@ describe('dispatchPlan (live)', () => {
     const c = await w.connect('budget');
     const a = await w.queuedAction(c, 'hide');
     const plan = await w.plan(c.scope);
-    // Budget 100 is all read reserve: the probe fits, the write does not.
-    await w.settings.update(c.scope, { dailyBudgetUnits: 100 }, c.userId);
+    // Budget 140 leaves a write allowance of 40 after the 100-unit read reserve: the probe fits, the write does not.
+    await w.settings.update(c.scope, { dailyBudgetUnits: 140 }, c.userId);
     const from = w.fake.calls.length;
     expect(await dispatch(c.scope, undefined, plan)).toEqual({
       batchesSent: 0,
