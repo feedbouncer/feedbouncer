@@ -80,6 +80,13 @@ describe('toNormalized', () => {
     });
   });
 
+  it('a non-owned reply whose handle equals the own account id has author null', () => {
+    const stranger = toNormalized(raw({ username: OWN }), opts)!;
+    expect(stranger.author).toBeNull();
+    const owned = toNormalized(raw({ username: OWN, is_reply_owned_by_me: true }), opts)!;
+    expect(owned.author!.externalId).toBe(OWN);
+  });
+
   it('a private user (no username) has author null and is still returned', () => {
     const { username: _u, ...rest } = raw();
     void _u;
@@ -243,6 +250,23 @@ describe('listReplies / getComment / getPostOwner', () => {
     expect(out.map((x) => x.externalId)).toEqual([r2]);
     expect(out[0]!.author!.externalId).toBe(owner.userId);
     expect(fake.calls('replies')[0]!.query.fields).toBe(REPLY_FIELDS);
+  });
+
+  it('listReplies drops items whose root_post is another post', async () => {
+    const stub = {
+      http: createSafeHttp({
+        allowedHosts: [THREADS_API_HOST],
+        fetch: async () =>
+          Response.json({ data: [raw({ id: '101', root_post: { id: '2' } }), raw({ id: '102' })] }),
+      }),
+      signal: AbortSignal.timeout(2000),
+      accessToken: 't',
+    };
+    const out = await listReplies(stub, {
+      ownAccountExternalId: OWN,
+      target: { sourceExternalId: '1', externalId: '1' },
+    });
+    expect(out.map((x) => x.externalId)).toEqual(['102']);
   });
 
   it('getComment returns the reply and a deleted reply → null', async () => {

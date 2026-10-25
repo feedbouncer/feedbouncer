@@ -62,11 +62,13 @@ function build(
     return null;
   }
   const handle = username(p.username);
+  const owned = p.is_reply_owned_by_me === true;
+  // A stranger whose handle equals our account id must not pass for the owner.
   const author: NormalizedAuthor | null =
-    handle === null
+    handle === null || (!owned && handle === o.ownAccountExternalId)
       ? null
       : {
-          externalId: p.is_reply_owned_by_me === true ? o.ownAccountExternalId : handle,
+          externalId: owned ? o.ownAccountExternalId : handle,
           displayName: handle,
           profileUrl: `https://www.threads.com/@${handle}`,
         };

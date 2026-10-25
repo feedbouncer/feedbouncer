@@ -203,4 +203,28 @@ describe('FakeThreads', () => {
     expect(body.values.value.permalink).toContain(replyId);
     expect(typeof body.values.value.shortcode).toBe('string');
   });
+
+  it('conversation and replies are newest first by default and oldest first only with reverse=false', async () => {
+    const { fake, req, login } = world();
+    const u = await login();
+    const { postId } = fake.addPost(u.userId);
+    const t = (i: number) => new Date(NOW.getTime() - 100_000 + i * 1000);
+    const a = fake.addReply(postId, { at: t(1) }).replyId;
+    const b = fake.addReply(postId, { at: t(2) }).replyId;
+    const c = fake.addReply(postId, { at: t(3) }).replyId;
+    const ids = async (endpoint: 'conversation' | 'replies', reverse?: string) =>
+      (
+        (
+          await req(u.token, endpoint, {
+            id: postId,
+            query: { fields: 'id', ...(reverse !== undefined && { reverse }) },
+          })
+        ).data as { id: string }[]
+      ).map((x) => x.id);
+    for (const endpoint of ['conversation', 'replies'] as const) {
+      expect(await ids(endpoint)).toEqual([c, b, a]);
+      expect(await ids(endpoint, 'true')).toEqual([c, b, a]);
+      expect(await ids(endpoint, 'false')).toEqual([a, b, c]);
+    }
+  });
 });

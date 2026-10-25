@@ -403,7 +403,7 @@ export class FakeThreads {
         const replies = [...this.media.values()]
           .filter((m) => m.rootId === root.id && m.parentId !== null && !m.deleted)
           .sort(newestFirst);
-        if (r.query.reverse === 'true') replies.reverse();
+        if (r.query.reverse === 'false') replies.reverse();
         return this.page(replies, r.query, (m) => this.render(m, me));
       }
       case 'replies': {
@@ -412,6 +412,7 @@ export class FakeThreads {
         const replies = [...this.media.values()]
           .filter((m) => m.parentId === parent.id && !m.deleted)
           .sort(newestFirst);
+        if (r.query.reverse === 'false') replies.reverse();
         return this.page(replies, r.query, (m) => this.render(m, me));
       }
       case 'manageReply': {
