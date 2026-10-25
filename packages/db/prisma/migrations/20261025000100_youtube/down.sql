@@ -1,3 +1,5 @@
+DROP TRIGGER comment_youtube_forget_trg ON comment;
+DROP FUNCTION fb_youtube_forget_comments();
 DROP TABLE youtube_notice;
 DROP TABLE youtube_quota_pause;
 DROP TABLE youtube_quota_ledger;

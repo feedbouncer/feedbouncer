@@ -218,4 +218,35 @@ CREATE INDEX youtube_notice_scope_idx
 CREATE TRIGGER youtube_notice_set_updated_at_trg BEFORE UPDATE ON youtube_notice
   FOR EACH ROW EXECUTE FUNCTION fb_set_updated_at();
 
+-- Comment ids kept for YouTube bookkeeping must not outlive the comment: when comments are deleted
+-- (subject erasure, retention purge, or a cascade from a source), their thread rows and their ids in
+-- write batches go too. A batch left with no id is deleted. Deleting a connection cascades to these
+-- tables by itself.
+CREATE FUNCTION fb_youtube_forget_comments() RETURNS trigger
+  LANGUAGE plpgsql
+  AS $$
+BEGIN
+  DELETE FROM youtube_thread t USING old_rows o
+   WHERE t.connection_id = o.connection_id AND t.thread_external_id = o.external_id
+     AND o.parent_external_id IS NULL;
+  DELETE FROM youtube_write_batch b
+   WHERE b.connection_id IN (SELECT connection_id FROM old_rows)
+     AND b.comment_external_ids && (SELECT array_agg(o.external_id) FROM old_rows o WHERE o.connection_id = b.connection_id)
+     AND NOT EXISTS (
+       SELECT 1 FROM unnest(b.comment_external_ids) AS e
+        WHERE e <> ALL (SELECT o.external_id FROM old_rows o WHERE o.connection_id = b.connection_id));
+  UPDATE youtube_write_batch b
+     SET comment_external_ids = ARRAY(
+       SELECT e FROM unnest(b.comment_external_ids) WITH ORDINALITY AS u(e, n)
+        WHERE e <> ALL (SELECT o.external_id FROM old_rows o WHERE o.connection_id = b.connection_id)
+        ORDER BY n)
+   WHERE b.connection_id IN (SELECT connection_id FROM old_rows)
+     AND b.comment_external_ids && (SELECT array_agg(o.external_id) FROM old_rows o WHERE o.connection_id = b.connection_id);
+  RETURN NULL;
+END
+$$;
+CREATE TRIGGER comment_youtube_forget_trg AFTER DELETE ON comment
+  REFERENCING OLD TABLE AS old_rows
+  FOR EACH STATEMENT EXECUTE FUNCTION fb_youtube_forget_comments();
+
 COMMIT;

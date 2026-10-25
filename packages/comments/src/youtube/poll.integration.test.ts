@@ -2,6 +2,7 @@
 // The fake's one channel is shared by every connection in this file, so assertions look at
 // this test's own videos and at call deltas.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { commentFingerprint } from '@feedbouncer/db';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { pollChannel, type PollDeps, type PollState } from './poll.js';
 import { CHANNEL, youtubeWorld, type YouTubeWorld } from './test-world.js';
@@ -82,7 +83,9 @@ describe('pollChannel', () => {
     }
     // Google inlines only five replies, so the first poll finds one missing in each thread.
     await poll(c.scope);
-    expect((await stored(c.scope, c.videoId)).filter((x) => x.body.startsWith('a'))).toHaveLength(6);
+    expect((await stored(c.scope, c.videoId)).filter((x) => x.body.startsWith('a'))).toHaveLength(
+      6,
+    );
     w.advance(300_000);
     w.fake.addComment({ parentId: a, text: 'a6' });
     const from = w.fake.calls.length;
@@ -94,7 +97,9 @@ describe('pollChannel', () => {
     expect(sweeps).toHaveLength(1);
     expect(replies).toHaveLength(1);
     expect(replies[0]!.query['parentId']).toBe(a);
-    expect((await stored(c.scope, c.videoId)).filter((x) => x.body.startsWith('a'))).toHaveLength(7);
+    expect((await stored(c.scope, c.videoId)).filter((x) => x.body.startsWith('a'))).toHaveLength(
+      7,
+    );
   });
 
   it('commentsDisabled on one video does not fail the poll', async () => {
@@ -172,6 +177,24 @@ describe('pollChannel', () => {
     const r = await poll(c.scope);
 
     expect(r.readUnits).toBeLessThanOrEqual(1);
+  });
+
+  it('does not track the thread of an erased comment', async () => {
+    const c = await w.connect('erased');
+    const top = w.fake.addComment({ videoId: c.videoId, text: 'erased top' });
+    await w.pool.query('INSERT INTO erased_comment (connection_id, fingerprint) VALUES ($1, $2)', [
+      c.scope.connectionId,
+      commentFingerprint(c.scope.connectionId, top),
+    ]);
+
+    await poll(c.scope);
+
+    expect(await stored(c.scope, c.videoId)).toEqual([]);
+    const { rowCount } = await w.pool.query(
+      'SELECT 1 FROM youtube_thread WHERE connection_id = $1 AND thread_external_id = $2',
+      [c.scope.connectionId, top],
+    );
+    expect(rowCount).toBe(0);
   });
 
   it('does not re-process held comments', async () => {

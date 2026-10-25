@@ -432,6 +432,38 @@ describe('eraseSubject', () => {
     expect(await exists('decision', s.cbChildren.decision)).toBe(true);
   });
 
+  it('also removes the YouTube thread rows and batch ids of erased comments', async () => {
+    const xa = await author(connA(), X);
+    const gone = await comment(connA(), xa);
+    const kept = await comment(connA(), A.authorId);
+    for (const c of [gone, kept])
+      await ctx.c.query(
+        `INSERT INTO youtube_thread (organization_id, brand_id, connection_id, thread_external_id,
+                                     video_external_id, reply_count, last_activity_at)
+         VALUES ($1, $2, $3, $4, 'video', 0, now())`,
+        [A.organizationId, A.brandId, A.connectionId, c.externalId],
+      );
+    const batch = await one(
+      `INSERT INTO youtube_write_batch (organization_id, brand_id, connection_id, pacific_day,
+                                        moderation_status, ban_author, comment_external_ids, action_ids, state)
+       VALUES ($1, $2, $3, '2026-10-24', 'rejected', false, $4, '{}', 'confirmed') RETURNING id`,
+      [A.organizationId, A.brandId, A.connectionId, [gone.externalId, kept.externalId]],
+    );
+
+    await erase(A.organizationId, [fb(X)]);
+
+    const threads = await ctx.c.query<{ thread_external_id: string }>(
+      'SELECT thread_external_id FROM youtube_thread WHERE connection_id = $1',
+      [A.connectionId],
+    );
+    expect(threads.rows.map((r) => r.thread_external_id)).toEqual([kept.externalId]);
+    const ids = await ctx.c.query<{ comment_external_ids: string[] }>(
+      'SELECT comment_external_ids FROM youtube_write_batch WHERE id = $1',
+      [batch],
+    );
+    expect(ids.rows[0]!.comment_external_ids).toEqual([kept.externalId]);
+  });
+
   it("keeps other people's replies to the subject, marked as replying to a removed comment", async () => {
     const s = await seedSubject();
 
