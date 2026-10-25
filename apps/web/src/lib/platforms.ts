@@ -1,7 +1,14 @@
 // Platforms whose accounts are connected through the OAuth connect flow and
 // the account picker. The API decides whether each one is configured; the web
 // app only knows their names and copy.
-export const CONNECTABLE = ['facebook', 'instagram', 'meta_ads', 'tiktok', 'tiktok_ads'] as const;
+export const CONNECTABLE = [
+  'facebook',
+  'instagram',
+  'meta_ads',
+  'tiktok',
+  'tiktok_ads',
+  'youtube',
+] as const;
 export type ConnectablePlatform = (typeof CONNECTABLE)[number];
 
 export function isConnectable(p: string): p is ConnectablePlatform {
@@ -74,5 +81,17 @@ export const PLATFORM_COPY: Record<ConnectablePlatform, PlatformCopy> = {
     pickerIntro: 'Choose the TikTok ad accounts whose ads belong to this brand.',
     noEligible:
       'None of your TikTok ad accounts can be used right now. Check your access in TikTok Ads Manager, then connect again.',
+  },
+  youtube: {
+    label: 'YouTube channel',
+    accountNoun: 'YouTube channel',
+    connectLabel: 'Connect YouTube channel',
+    pickerTitle: 'Choose YouTube channels',
+    viewOn: 'View on YouTube',
+    deleteConfirm:
+      "Reject this comment on YouTube? FeedBouncer can't undo this; it is only recoverable in YouTube Studio.",
+    pickerIntro: 'Choose the YouTube channels you own and want to moderate.',
+    noEligible:
+      'This Google account does not own a YouTube channel. Sign in with the account that owns your channel, then connect again.',
   },
 };

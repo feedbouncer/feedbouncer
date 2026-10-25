@@ -20,7 +20,11 @@ function missingPermissionText(scopes: string[] | undefined): string {
 }
 
 const throttler = (platform: string | undefined): string =>
-  platform === 'tiktok' || platform === 'tiktok_ads' ? 'TikTok' : 'Meta';
+  platform === 'tiktok' || platform === 'tiktok_ads'
+    ? 'TikTok'
+    : platform === 'youtube'
+      ? 'YouTube'
+      : 'Meta';
 
 function statusText(h: HealthTextInput): string | null {
   switch (h.status) {

@@ -89,3 +89,8 @@ it('names TikTok when TikTok throttles', () =>
   ).toBe(
     'Processing delayed: TikTok asked FeedBouncer to slow down. New comments are queued and will be checked; none are dropped.',
   ));
+
+it('names YouTube when YouTube throttles', () =>
+  expect(h({ platform: 'youtube', reason: 'recent_failures', lastErrorCode: 'rate_limited' })).toBe(
+    'Processing delayed: YouTube asked FeedBouncer to slow down. New comments are queued and will be checked; none are dropped.',
+  ));

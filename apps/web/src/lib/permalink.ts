@@ -3,6 +3,7 @@ const HOSTS: Record<string, string> = {
   instagram: 'instagram.com',
   tiktok: 'tiktok.com',
   tiktok_ads: 'tiktok.com',
+  youtube: 'youtube.com',
 };
 
 /**

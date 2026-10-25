@@ -4,6 +4,7 @@ import { notFound, unstable_rethrow } from 'next/navigation';
 import { ApiForm } from '../../../../../../components/api-form';
 import { ConnectButton } from '../../../../../../components/connect-button';
 import { ConnectChecklist } from '../../../../../../components/connect-checklist';
+import { YouTubeBudgetPanel } from '../../../../../../components/youtube-budget-panel';
 import { ReviewModeBanner } from '../../../../../../components/review-mode/review-mode-banner';
 import { backfillText, type BackfillViewDto } from '../../../../../../lib/backfill-text';
 import { healthText } from '../../../../../../lib/health-text';
@@ -177,6 +178,19 @@ export default async function ConnectionsPage({
               </tbody>
             </table>
           ) : null}
+          {connections
+            .filter((c) => c.platform === 'youtube')
+            .map((c) => (
+              <section key={c.id}>
+                <h2>{c.displayName ?? 'Unnamed account'}</h2>
+                <YouTubeBudgetPanel
+                  orgId={orgId}
+                  brandId={brandId}
+                  connectionId={c.id}
+                  canManage={canManage}
+                />
+              </section>
+            ))}
           {CONNECTABLE.map((p) => (
             <ConnectButton
               key={p}
