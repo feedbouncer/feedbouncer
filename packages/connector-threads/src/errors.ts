@@ -52,7 +52,7 @@ export function mapThreadsError(e: {
           ? tokenInvalid
           : httpStatus >= 500
             ? unavailable
-            : code !== null && Number.isInteger(code) && code >= 0
+            : code !== null && code >= 0
               ? { kind: 'permanent', code: `threads_error_${code}` }
               : { kind: 'permanent', code: `threads_http_${httpStatus}` });
   return new ConnectorError(

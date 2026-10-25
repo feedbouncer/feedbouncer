@@ -49,6 +49,13 @@ let creds: CredentialStore;
 let actions: ModerationActions;
 let commentRowId: string;
 
+const facebookMeta = () => ({
+  appId: '111',
+  appSecret: new Secret(APP_SECRET),
+  graphVersion: 'v26.0',
+  webhookVerifyToken: new Secret('v'.repeat(24)),
+});
+
 const jobCtx = (jobType: string = EXECUTE_JOB.type): JobContext => ({
   scope,
   platform: 'facebook',
@@ -62,14 +69,8 @@ const jobCtx = (jobType: string = EXECUTE_JOB.type): JobContext => ({
 
 /** A runtime with its own rate budget, so a throttle on one does not block the next. */
 function makeRuntime(): ConnectorRuntime {
-  const meta = {
-    appId: '111',
-    appSecret: new Secret(APP_SECRET),
-    graphVersion: 'v26.0',
-    webhookVerifyToken: new Secret('v'.repeat(24)),
-  };
   const registry = new ConnectorRegistry();
-  registry.register(createFacebookConnector(meta, { clock }));
+  registry.register(createFacebookConnector(facebookMeta(), { clock }));
   const http = (c: Connector) =>
     createSafeHttp({ allowedHosts: c.capabilities.apiHosts, fetch: graph.fetch });
   const directory = new PgConnectionDirectory(pool);
@@ -162,12 +163,7 @@ beforeEach(async () => {
   const store = new PgCommentStore(pool);
   const registry = new ConnectorRegistry();
   registry.register(
-    createFacebookConnector({
-      appId: '111',
-      appSecret: new Secret(APP_SECRET),
-      graphVersion: 'v26.0',
-      webhookVerifyToken: new Secret('v'.repeat(24)),
-    }),
+    createFacebookConnector(facebookMeta()),
   );
   actions = new ModerationActions({
     pool,

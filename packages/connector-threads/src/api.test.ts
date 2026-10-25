@@ -158,6 +158,20 @@ describe('threadsRequest', () => {
     });
   });
 
+  it('reads an HTTP-date Retry-After against the injected clock', async () => {
+    const { call } = scripted([
+      {
+        status: 429,
+        json: { error: { code: 4 } },
+        headers: { 'retry-after': 'Wed, 21 Oct 2026 07:28:30 GMT' },
+      },
+    ]);
+    const now = () => Date.parse('Wed, 21 Oct 2026 07:28:00 GMT');
+    await expect(
+      threadsRequest({ ...call, now }, { endpoint: 'me', method: 'GET', schema: z.object({}) }),
+    ).rejects.toMatchObject({ kind: 'rate_limited', retryAfterMs: 30_000 });
+  });
+
   it('a non-JSON 5xx is transient, a non-JSON 200 is invalid_threads_response', async () => {
     const schema = z.object({});
     const a = scripted([{ status: 502, text: '<html>secret</html>' }]);

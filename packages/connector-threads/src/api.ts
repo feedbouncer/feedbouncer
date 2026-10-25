@@ -57,6 +57,8 @@ export interface ThreadsCall {
   readonly signal: AbortSignal;
   /** Sent as a bearer header only, never in the URL. */
   readonly accessToken?: string;
+  /** Epoch ms; defaults to Date.now. */
+  readonly now?: () => number;
 }
 
 const TRACE_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -98,7 +100,7 @@ export async function threadsRequest<T>(
     call.signal,
   );
 
-  const retryAfterMs = parseRetryAfter(res.headers.get('retry-after'), Date.now());
+  const retryAfterMs = parseRetryAfter(res.headers.get('retry-after'), (call.now ?? Date.now)());
   let json: unknown;
   try {
     json = JSON.parse(res.body);

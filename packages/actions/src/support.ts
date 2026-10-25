@@ -147,6 +147,7 @@ const NOT_APPLICABLE = new Set([
   'reply_to_hidden_comment',
   'own_comment_always_visible',
 ]);
+const NOT_SUPPORTED = new Set(['hide_nested_reply_unsupported']);
 const MISSING_PERMISSION = new Set([
   'permission_denied',
   'permission_revoked',
@@ -179,8 +180,7 @@ export function stepOutcomeFor(
       return { status: 'not_applicable', reason: 'comment_gone' };
     if (status === 'noop' && SKIPPED.has(code)) return { status: 'skipped', reason: code };
     if (status === 'not_eligible') {
-      if (code === 'hide_nested_reply_unsupported')
-        return { status: 'not_supported', reason: code };
+      if (NOT_SUPPORTED.has(code)) return { status: 'not_supported', reason: code };
       if (NOT_APPLICABLE.has(code)) return { status: 'not_applicable', reason: code };
       if (SKIPPED.has(code)) return { status: 'skipped', reason: code };
     }

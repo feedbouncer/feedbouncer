@@ -43,6 +43,7 @@ pnpm test
 | `packages/connector-facebook`        | Facebook Pages connector: OAuth, comments, moderation actions                                                |
 | `packages/connector-instagram`       | Instagram connector (Facebook Login): comments, moderation actions, replies                                  |
 | `packages/connector-meta-ads`        | Meta Ads connector: ad accounts and active ads; comments are read through the Page and Instagram connections |
+| `packages/connector-threads`         | Threads connector: OAuth, reply reading and the request layer for moderation of replies                      |
 | `packages/connector-tiktok`          | TikTok connector: a Business account's videos and their comments, moderation actions, replies                |
 | `packages/connector-tiktok-ads`      | TikTok ads connector: advertisers and the comments on their ads, moderation actions, replies                 |
 | `packages/connector-youtube`         | YouTube connector: a channel's comment threads, hold/reject/ban moderation under a daily quota budget        |
