@@ -18,9 +18,8 @@ describe('buildYouTubeDeps', () => {
     expect(buildYouTubeDeps({ youtube: null }, meter)).toBeNull();
   });
 
-  it('registers the connector, which needs no webhook app secret', () => {
+  it('registers the connector', () => {
     const d = buildYouTubeDeps({ youtube }, meter)!;
     expect(d.connectors.map((c) => c.platform)).toEqual(['youtube']);
-    expect(d.appSecrets).toEqual({});
   });
 });

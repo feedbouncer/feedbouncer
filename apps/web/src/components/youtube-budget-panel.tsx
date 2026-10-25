@@ -13,7 +13,7 @@ import { LocalTime, TextWithTimes } from './local-time';
 
 type Props = { orgId: string; brandId: string; connectionId: string; canManage: boolean };
 
-const url = (p: Props) =>
+const url = (p: Pick<Props, 'orgId' | 'brandId' | 'connectionId'>) =>
   `/api/v1/orgs/${p.orgId}/brands/${p.brandId}/connections/${p.connectionId}/youtube` as const;
 
 export function YouTubeBudgetPanel(props: Props) {
@@ -22,7 +22,7 @@ export function YouTubeBudgetPanel(props: Props) {
   const { orgId, brandId, connectionId } = props;
   useEffect(() => {
     let live = true;
-    apiFetch<YouTubeBudgetStatus>(url({ orgId, brandId, connectionId, canManage: false }))
+    apiFetch<YouTubeBudgetStatus>(url({ orgId, brandId, connectionId }))
       .then((s) => live && setStatus(s))
       .catch(() => live && setFailed(true));
     return () => {
@@ -72,7 +72,6 @@ export function YouTubeBudgetView(props: Props & { initial: YouTubeBudgetStatus 
     }
   }
 
-  const banner = bannerText(status, (iso) => iso);
   const tiers: [string, number][] = [
     [YOUTUBE_ACTION_LABEL.ban_author, backlog.ban],
     [YOUTUBE_ACTION_LABEL.delete, backlog.reject],
@@ -82,7 +81,7 @@ export function YouTubeBudgetView(props: Props & { initial: YouTubeBudgetStatus 
   return (
     <section aria-label="YouTube quota budget">
       <h3>YouTube quota budget</h3>
-      {banner !== null ? (
+      {today.mode !== 'active' ? (
         <p role="status">
           <TextWithTimes build={(fmt) => bannerText(status, fmt) ?? ''} />
         </p>

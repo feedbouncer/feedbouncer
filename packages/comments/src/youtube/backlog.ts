@@ -25,8 +25,8 @@ const LOAD_LIMIT = 2500;
 export interface YouTubeBacklogDeps {
   pool: pg.Pool;
   clock: Clock;
-  /** Most actions kept per connection; beyond it the lowest tier, newest first, are evicted. */
-  cap: number;
+  /** Most actions kept per connection; beyond it the lowest tier, newest first, are evicted. Defaults to DEFAULT_BACKLOG_CAP. */
+  cap?: number;
   log: Logger;
   outcomes?: ActionOutcomeObserver;
 }
@@ -215,7 +215,7 @@ export class PgYouTubeBacklog implements BudgetedDispatch {
            FROM youtube_action_queue q WHERE ${SCOPED}) ranked
         WHERE rank > $4 AND state = 'queued'
         ORDER BY tier DESC, requested_at DESC, action_id DESC`,
-      [...scopeParams(scope), Math.max(0, Math.floor(this.d.cap))],
+      [...scopeParams(scope), Math.max(0, Math.floor(this.d.cap ?? DEFAULT_BACKLOG_CAP))],
     );
     if (r.rows.length === 0) return;
     const evicted = await this.#fail(

@@ -47,14 +47,15 @@ export class PgYouTubeSettings {
     return rows[0] ? toSettings(rows[0]) : defaultYouTubeSettings();
   }
 
-  /** Upserts the patched fields. Throws when the connection is not in this scope. */
+  /** Upserts the patched fields; `q` lets a caller write inside its own transaction. Throws when the connection is not in this scope. */
   async update(
     scope: ConnectionScope,
     patch: YouTubeSettingsPatch,
     userId: string,
+    q: Queryable = this.pool,
   ): Promise<YouTubeSettings> {
     const d = defaultYouTubeSettings();
-    const { rows } = await this.pool.query<Row>(
+    const { rows } = await q.query<Row>(
       `INSERT INTO youtube_connection_settings AS s
          (connection_id, organization_id, brand_id, daily_budget_units, dry_run,
           protected_author_ids, updated_by_user_id)

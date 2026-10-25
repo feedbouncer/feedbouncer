@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type pg from 'pg';
-import { createPool } from '@feedbouncer/db';
+import { createPool, withTransaction } from '@feedbouncer/db';
 import { migratedDb, seedTenant } from '@feedbouncer/db/testing';
 import { ConnectorError, type Clock, type QuotaMeter } from '@feedbouncer/connectors';
 import type { ConnectionScope } from '@feedbouncer/secrets';
-import { PgYouTubeQuotaLedger, type QuotaLedgerLog } from './ledger.js';
+import { LEDGER_RETENTION_DAYS, PgYouTubeQuotaLedger, type QuotaLedgerLog } from './ledger.js';
 import { PgYouTubeSettings } from './settings.js';
 import { nextPacificMidnight, pacificDayKey } from './quota-day.js';
 
@@ -389,5 +389,37 @@ describe('PgYouTubeQuotaLedger', () => {
     expect((await ledger().usage(s)).spentUnits).toBe(0);
     await m.reserve(read);
     expect((await ledger().usage(s)).spentUnits).toBe(1);
+  });
+
+  it('prune drops rows past the retention window and keeps the rest', async () => {
+    const s = await youtubeConnection('prune');
+    const m = ledger().meterFor(s);
+    await m.reserve(read);
+    await pool.query('UPDATE youtube_quota_ledger SET pacific_day = pacific_day - $1::int', [
+      LEDGER_RETENTION_DAYS + 1,
+    ]);
+    await m.reserve(read);
+    await pool.query(
+      `INSERT INTO youtube_quota_ledger (call_key, pacific_day, method, purpose, units)
+       VALUES ('edge', $1::date - $2::int, 'channels.list', 'connect', 1)`,
+      [pacificDayKey(t), LEDGER_RETENTION_DAYS],
+    );
+    expect(await ledger().prune()).toBe(1);
+    const left = await pool.query('SELECT count(*)::int AS n FROM youtube_quota_ledger');
+    expect(left.rows[0].n).toBe(2);
+  });
+});
+
+describe('PgYouTubeSettings in a caller transaction', () => {
+  it('rolls back with the transaction', async () => {
+    const s = await youtubeConnection('settings-tx');
+    const a = await seedTenant(db.c, 'yt-ledger-settings-tx-user');
+    await expect(
+      withTransaction(pool, async (tx) => {
+        await settings.update(s, { dailyBudgetUnits: 123 }, a.userId, tx);
+        throw new Error('later step failed');
+      }),
+    ).rejects.toThrow('later step failed');
+    expect((await settings.get(s)).dailyBudgetUnits).toBe(2000);
   });
 });

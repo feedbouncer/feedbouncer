@@ -1,11 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
-  PgYouTubeBacklog,
-  PgYouTubeQuotaLedger,
-  PgYouTubeSettings,
   budgetView,
   nextPacificMidnight,
   pacificDayKey,
+  type PgYouTubeBacklog,
+  type PgYouTubeQuotaLedger,
+  type PgYouTubeSettings,
   type YouTubeSettings,
 } from '@feedbouncer/comments';
 import { systemClock } from '@feedbouncer/connectors';
@@ -18,36 +18,28 @@ import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { DEPS } from '../tokens.js';
 import { quotaDay, youtubeSettingsPatch } from './youtube.dto.js';
 
+interface ResolvedYouTube {
+  scope: { organizationId: string; brandId: string; connectionId: string };
+  ledger: PgYouTubeQuotaLedger;
+  backlog: PgYouTubeBacklog;
+  settings: PgYouTubeSettings;
+}
+
 @Injectable()
 export class YouTubeConnectionService {
-  readonly #settings: PgYouTubeSettings;
-  readonly #ledger: PgYouTubeQuotaLedger | null;
-
-  constructor(@Inject(DEPS) private readonly deps: AppDeps) {
-    const { env, pool, log } = deps;
-    this.#settings = new PgYouTubeSettings(pool);
-    this.#ledger = env.youtube
-      ? new PgYouTubeQuotaLedger({
-          pool,
-          clock: systemClock,
-          projectQuota: env.youtube.projectDailyQuota,
-          projectHeadroom: env.youtube.projectHeadroomUnits,
-          settings: this.#settings,
-          log,
-        })
-      : null;
-  }
+  constructor(@Inject(DEPS) private readonly deps: AppDeps) {}
 
   async status(org: OrgContext, brandId: unknown, connectionId: unknown) {
-    const { scope, ledger, backlog } = await this.#resolve(org, brandId, connectionId);
-    return this.#view(scope, ledger, backlog);
+    const youtube = await this.#resolve(org, brandId, connectionId);
+    return this.#view(youtube);
   }
 
   async update(org: OrgContext, brandId: unknown, connectionId: unknown, body: unknown) {
-    const { scope, ledger, backlog } = await this.#resolve(org, brandId, connectionId);
+    const youtube = await this.#resolve(org, brandId, connectionId);
+    const { scope, ledger } = youtube;
     const patch = parseBody(youtubeSettingsPatch(ledger.projectCapUnits), body);
-    const settings = await this.#settings.update(scope, patch, org.actorUserId);
-    await withTransaction(this.deps.pool, async (tx) => {
+    const settings = await withTransaction(this.deps.pool, async (tx) => {
+      const saved = await youtube.settings.update(scope, patch, org.actorUserId, tx);
       if (patch.dailyBudgetUnits !== undefined || patch.dryRun !== undefined) {
         // A connection sleeping until Pacific midnight must see the change on the next scheduler tick.
         await tx.query(
@@ -65,13 +57,14 @@ export class YouTubeConnectionService {
         subjectType: 'connection',
         subjectId: scope.connectionId,
         details: {
-          dailyBudgetUnits: settings.dailyBudgetUnits,
-          dryRun: settings.dryRun,
-          protectedAuthorCount: settings.protectedAuthorIds.length,
+          dailyBudgetUnits: saved.dailyBudgetUnits,
+          dryRun: saved.dryRun,
+          protectedAuthorCount: saved.protectedAuthorIds.length,
         },
       });
+      return saved;
     });
-    return this.#view(scope, ledger, backlog, settings);
+    return this.#view(youtube, settings);
   }
 
   async quota(org: OrgContext, brandId: unknown, connectionId: unknown, day: unknown) {
@@ -91,15 +84,18 @@ export class YouTubeConnectionService {
         WHERE id = $1 AND organization_id = $2 AND brand_id = $3 AND platform = 'youtube'`,
       [scope.connectionId, scope.organizationId, scope.brandId],
     );
-    const backlog = this.deps.comments?.youtubeBacklog;
-    if (found.rowCount === 0 || !this.#ledger || !backlog) throw notFound();
-    return { scope, ledger: this.#ledger, backlog };
+    const youtube = this.deps.comments;
+    if (found.rowCount === 0 || !youtube?.youtubeLedger) throw notFound();
+    return {
+      scope,
+      ledger: youtube.youtubeLedger,
+      backlog: youtube.youtubeBacklog,
+      settings: youtube.youtubeSettings,
+    };
   }
 
   async #view(
-    scope: { organizationId: string; brandId: string; connectionId: string },
-    ledger: PgYouTubeQuotaLedger,
-    backlog: PgYouTubeBacklog,
+    { scope, ledger, backlog, settings: settingsStore }: ResolvedYouTube,
     known?: YouTubeSettings,
   ) {
     const { pool, env } = this.deps;
@@ -108,7 +104,7 @@ export class YouTubeConnectionService {
     const day = pacificDayKey(nowMs);
     const ids = [scope.organizationId, scope.brandId, scope.connectionId];
     const [settings, usage, withSimulated, counts, pause, notice, state] = await Promise.all([
-      known ?? this.#settings.get(scope),
+      known ?? settingsStore.get(scope),
       ledger.usage(scope),
       ledger.usage(scope, { simulated: true }),
       backlog.counts(scope),

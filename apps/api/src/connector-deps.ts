@@ -11,7 +11,6 @@ import {
   INGEST_JOB,
   LIFECYCLE_JOB,
   CompositeActionOutcomeObserver,
-  DEFAULT_BACKLOG_CAP,
   ModerationActions,
   PgCommentStore,
   PgYouTubeBacklog,
@@ -86,13 +85,14 @@ export function buildConnectorDeps(d: {
   const { env, pool, log, metrics } = d;
   const meta = buildMetaDeps(env);
   const tiktok = buildTikTokDeps(env);
+  const youtubeSettings = new PgYouTubeSettings(pool);
   const ledger = env.youtube
     ? new PgYouTubeQuotaLedger({
         pool,
         clock: systemClock,
         projectQuota: env.youtube.projectDailyQuota,
         projectHeadroom: env.youtube.projectHeadroomUnits,
-        settings: new PgYouTubeSettings(pool),
+        settings: youtubeSettings,
         log,
       })
     : null;
@@ -108,7 +108,6 @@ export function buildConnectorDeps(d: {
   const appSecrets = new Map<Platform, Secret>([
     ...(Object.entries(meta?.appSecrets ?? {}) as [Platform, Secret][]),
     ...(Object.entries(tiktok?.appSecrets ?? {}) as [Platform, Secret][]),
-    ...(Object.entries(youtube?.appSecrets ?? {}) as [Platform, Secret][]),
   ]);
 
   const redis = createProducerConnection(env.redisUrl.href);
@@ -168,7 +167,7 @@ export function buildConnectorDeps(d: {
   const youtubeBacklog = new PgYouTubeBacklog({
     pool,
     clock: systemClock,
-    cap: env.youtube?.backlogCap ?? DEFAULT_BACKLOG_CAP,
+    ...(env.youtube && { cap: env.youtube.backlogCap }),
     log,
     outcomes: new CompositeActionOutcomeObserver([
       new RuleActionFallback({ evaluations: new PgEvaluationStore(pool), log }),
@@ -189,7 +188,7 @@ export function buildConnectorDeps(d: {
   return {
     connectors: { registry, stack },
     producer,
-    comments: { store, actions, youtubeBacklog },
+    comments: { store, actions, youtubeBacklog, youtubeSettings, youtubeLedger: ledger },
     async close() {
       await queues.close();
       await Promise.allSettled([redis.quit(), lockPool.end()]);

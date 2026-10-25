@@ -1,6 +1,12 @@
 import type pg from 'pg';
 import type { Redis } from 'ioredis';
-import type { ModerationActions, PgCommentStore, PgYouTubeBacklog } from '@feedbouncer/comments';
+import type {
+  ModerationActions,
+  PgCommentStore,
+  PgYouTubeBacklog,
+  PgYouTubeQuotaLedger,
+  PgYouTubeSettings,
+} from '@feedbouncer/comments';
 import type { ConnectorRegistry, PgConnectorStack } from '@feedbouncer/connectors';
 import type { JobProducer } from '@feedbouncer/jobs';
 import type { Mailer } from '@feedbouncer/mailer';
@@ -32,5 +38,8 @@ export interface AppDeps {
     actions: ModerationActions;
     /** Where YouTube actions wait for the budget; disconnecting abandons a connection's queue. */
     youtubeBacklog: PgYouTubeBacklog;
+    /** The YouTube budget ledger and owner settings, shared by every request. The ledger is null unless YouTube is enabled. */
+    youtubeLedger: PgYouTubeQuotaLedger | null;
+    youtubeSettings: PgYouTubeSettings;
   } | null;
 }

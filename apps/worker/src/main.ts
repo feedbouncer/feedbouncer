@@ -176,6 +176,7 @@ try {
   let scheduler: PollScheduler | null = null;
   let tiktokScheduler: TikTokPollScheduler | null = null;
   let youtubeScheduler: YouTubeCycleScheduler | null = null;
+  let youtubeLedger: PgYouTubeQuotaLedger | null = null;
   let alertLoops: ReturnType<typeof startAlertLoops> = null;
   let reportLoops: ReturnType<typeof startReportLoops> = null;
   let idempotencyPurge: ReturnType<typeof startIdempotencyPurge> | null = null;
@@ -183,7 +184,7 @@ try {
   let scanMaintenance: ReturnType<typeof startScanMaintenanceLoop> | null = null;
   let webhookLoops: ReturnType<typeof startWebhookLoops> | null = null;
   if ((facebook || tiktokPolling || youtube) && mail && mailer) {
-    const youtubeLedger = youtube
+    youtubeLedger = youtube
       ? new PgYouTubeQuotaLedger({
           pool,
           clock: systemClock,
@@ -479,6 +480,14 @@ try {
       .catch((err: unknown) => log.warn('policy preview prune failed', errorFields(err)));
   }, PREVIEW_PRUNE_INTERVAL_MS);
   previewPruner.unref();
+  const ledgerPruner = youtubeLedger
+    ? setInterval(() => {
+        youtubeLedger
+          .prune()
+          .catch((err: unknown) => log.warn('youtube quota ledger prune failed', errorFields(err)));
+      }, PREVIEW_PRUNE_INTERVAL_MS)
+    : null;
+  ledgerPruner?.unref();
   const reviewSweeper = new ReviewModeSweeper({ pool, clock: systemClock, log });
   const reviewModeSweep = setInterval(() => {
     reviewSweeper

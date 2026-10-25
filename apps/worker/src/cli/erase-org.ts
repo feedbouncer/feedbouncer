@@ -1,6 +1,5 @@
 import { parseArgs } from 'node:util';
 import {
-  DEFAULT_BACKLOG_CAP,
   PgBackfillStore,
   PgYouTubeBacklog,
   enqueueLifecycle,
@@ -151,7 +150,6 @@ export function operatorDisconnect(ctx: OpsContext): EraseOrgDeps['disconnect'] 
   const backlog = new PgYouTubeBacklog({
     pool,
     clock: systemClock,
-    cap: DEFAULT_BACKLOG_CAP,
     log: ctx.log,
   });
   return async (scope) => {

@@ -13,6 +13,7 @@ import {
   type QuotaPurpose,
   type QuotaTicket,
 } from '@feedbouncer/connectors';
+import { withTransaction } from '@feedbouncer/db';
 import type { ConnectionScope } from '@feedbouncer/secrets';
 import { budgetView, type BudgetInputs } from './budget.js';
 import { nextPacificMidnight, pacificDayKey } from './quota-day.js';
@@ -41,6 +42,9 @@ export interface DailyTotal {
   units: number;
   calls: number;
 }
+
+/** Matches the API's furthest quota lookback. */
+export const LEDGER_RETENTION_DAYS = 90;
 
 const ERROR_CODE = /^[a-z0-9_]{1,64}$/;
 
@@ -158,13 +162,11 @@ export class PgYouTubeQuotaLedger {
     req: { method: string; units: number; purpose: QuotaPurpose },
   ): Promise<QuotaTicket> {
     const nowMs = this.d.clock.now();
-    const client = await this.d.pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query("SELECT pg_advisory_xact_lock(hashtext('youtube_quota:' || $1))", [
+    return withTransaction(this.d.pool, async (tx) => {
+      await tx.query("SELECT pg_advisory_xact_lock(hashtext('youtube_quota:' || $1))", [
         pacificDayKey(nowMs),
       ]);
-      const { inputs, day } = await this.#snapshot(client, scope, simulated, nowMs);
+      const { inputs, day } = await this.#snapshot(tx, scope, simulated, nowMs);
       const refuse = (code: 'quota_budget_exhausted' | 'quota_paused') =>
         new ConnectorError('rate_limited', code, { retryAfterMs: inputs.msUntilReset });
       if (inputs.paused) throw refuse('quota_paused');
@@ -178,7 +180,7 @@ export class PgYouTubeQuotaLedger {
             : req.units <= v.writeAllowanceUnits;
       if (!fits) throw refuse('quota_budget_exhausted');
       const callKey = randomUUID();
-      await client.query(
+      await tx.query(
         `INSERT INTO youtube_quota_ledger
            (call_key, pacific_day, organization_id, brand_id, connection_id,
             method, purpose, units, simulated, created_at)
@@ -194,14 +196,17 @@ export class PgYouTubeQuotaLedger {
           new Date(nowMs),
         ],
       );
-      await client.query('COMMIT');
       return { callKey, units: req.units };
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
+  }
+
+  /** Deletes rows older than the retention window, which is as far back as `dailyTotals` is ever asked. Returns how many. */
+  async prune(): Promise<number> {
+    const r = await this.d.pool.query(
+      'DELETE FROM youtube_quota_ledger WHERE pacific_day < $1::date - $2::int',
+      [pacificDayKey(this.d.clock.now()), LEDGER_RETENTION_DAYS],
+    );
+    return r.rowCount ?? 0;
   }
 
   /**
