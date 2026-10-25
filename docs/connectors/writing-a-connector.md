@@ -394,6 +394,13 @@ Facebook-like default.
 | `publicReplyOnHidden`      | `true`        | `false` refuses public replies to hidden comments (`reply_to_hidden_comment`).                |
 | `hideOwnAccountComments`   | `true`        | `false` refuses hide and unhide of the account's own comments (`own_comment_always_visible`). |
 | `maxReplyChars`            | 8000 per kind | Maximum code points per response kind. Longer text is `reply_too_long`.                       |
+| `hideTopLevelOnly`         | `false`       | `true` refuses hide and unhide of a reply to a reply (`hide_nested_reply_unsupported`).       |
+
+`hideTopLevelOnly` is for platforms where hiding a reply also hides everything
+under it and a nested reply cannot be hidden alone (Threads). A top-level
+comment is one stored with no parent. A rule step the constraint refuses is
+treated as not supported, so the comment is flagged for review with that
+reason, and the framework never hides the parent in its place.
 
 Constraints are for rules you know in advance. A refusal that only the
 platform can decide still comes back from `respond` as `not_eligible`.
@@ -417,7 +424,14 @@ the platform supports in `capabilities.responses` (`public_reply`,
 - A kind you do not declare returns `unsupported` before any platform call.
 - `PRIVATE_REPLY_WINDOW_MS` (7 days) is the shared private-reply window the
   moderation core checks before it calls you.
-- Calls are urgent priority and use the same budget as `act`.
+- Calls draw on the request budget at `capabilities.responsePriority`, which
+  defaults to `urgent`, the same as `act`. A platform with a small reply quota
+  declares `responsePriority: 'bulk'` so replies can never use the points
+  reserved for moderation actions (Threads allows 1,000 API replies per 24
+  hours and declares `bulk`). `Priority` is `urgent`, `bulk` or `background`.
+- A reply quota that is used up is reported as `rate_limited` with a
+  `retryAfterMs`, not as `not_eligible`. The action waits, and the history
+  shows it as delayed until the retry time.
 
 ## `listReplies`
 
@@ -481,6 +495,29 @@ record.
 The platform's verification handshake (Meta's `hub.challenge`, for example)
 is not part of the gate. It belongs to the receiver route; the Facebook route
 in `apps/api` is the example.
+
+### Webhook sinks
+
+By default `routeWebhookDelivery` turns each routed event into one ingest job,
+which re-fetches the comment. That costs one platform call per event. When the
+platform's request budget is small and one notification says only that
+something changed, give the platform a sink instead:
+`sinks: { <platform>: sink }`, where a sink is the function
+`(scope, event) => Promise<void>`.
+
+- A platform with a sink gets its routed events there, and no ingest job is
+  enqueued for them. Routing is unchanged: the event still goes to the one
+  live connection for its account, and events without one are dropped and
+  counted before the sink is called.
+- A sink only records that something happened, for example that a post is due
+  to be read; a scheduled job does the reading. Threads records the reply id as
+  pending and marks the post due (`threadsWakeSink`), and the next poll pass
+  reads the whole conversation in pages of 100.
+- A sink must finish its write before it returns, and must throw when the write
+  fails. The receiver then answers with an error, the gate leaves the delivery
+  unprocessed and the platform redelivers.
+- A connector with a sink still declares `ingestion: 'webhook_and_polling'`:
+  polling is the fallback for deliveries that never arrive.
 
 ## Lifecycle hooks
 

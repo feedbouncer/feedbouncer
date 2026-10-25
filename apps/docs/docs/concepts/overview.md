@@ -24,13 +24,14 @@ You can connect:
 - TikTok Business accounts, for comments on your own videos.
 - TikTok ad accounts, for comments on your TikTok ads.
 - YouTube channels, for comments on your own videos.
+- Threads accounts, for replies to your own posts.
 
 <FeatureStatus status="partial">
-  The TikTok and YouTube connections have not yet been checked against the live platform APIs, and their comments arrive by polling only, every few minutes. See [TikTok and TikTok ads](./tiktok.md) and [YouTube](./youtube.md).
+  The TikTok, YouTube and Threads connections have not yet been checked against the live platform APIs. TikTok and YouTube comments arrive by polling only, every few minutes; Threads replies arrive by polling, and within seconds when webhooks are set up. See [TikTok and TikTok ads](./tiktok.md), [YouTube](./youtube.md) and [Threads](./threads.md).
 </FeatureStatus>
 
 <FeatureStatus status="planned">
-  Threads, LinkedIn, X and Bluesky are planned. They are not available yet.
+  LinkedIn, X and Bluesky are planned. They are not available yet.
 </FeatureStatus>
 
 ## Where to go next
