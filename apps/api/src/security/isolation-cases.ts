@@ -154,6 +154,11 @@ export const CASES: IsolationCase[] = [
   // The connect flow, once per account-selection platform.
   ...PICKER_PLATFORMS.flatMap((p): IsolationCase[] => [
     {
+      route: 'GET /api/v1/orgs/:orgId/brands/:brandId/connections/:platform/permissions',
+      name: `${p}: permissions under B brand from A path`,
+      url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/connections/${p}/permissions`,
+    },
+    {
       route: 'POST /api/v1/orgs/:orgId/brands/:brandId/connections/:platform/authorize',
       name: `${p}: authorize B brand under A path`,
       url: (f) => `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/connections/${p}/authorize`,

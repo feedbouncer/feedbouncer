@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { SCOPE_NAME } from '@feedbouncer/connectors';
+import { SCOPE_NAME, isPlatform } from '@feedbouncer/connectors';
 import { HEALTH_REASONS, type HealthStatus } from '@feedbouncer/observability';
 import type { AppDeps } from '../deps.js';
 import { notFound } from '../http/errors.js';
@@ -20,6 +20,10 @@ export interface ConnectionHealthView {
   failedImports: number;
   /** Permissions a reconnect must approve, when the platform named them. */
   missingScopes: string[];
+  /** Default permissions the owner did not grant; empty when the platform reported none. */
+  declinedScopes: string[];
+  /** Whether replies arrive by webhook; null for platforms where that is not a choice. */
+  webhooks: 'on' | 'off' | null;
 }
 
 // Anything outside the health vocabulary (a stored free-form reason) is not echoed.
@@ -46,15 +50,16 @@ export class ConnectionHealthService {
     if (brand.rowCount === 0) throw notFound();
     const [rows, scopes] = await Promise.all([
       this.deps.health.forBrand(org.organizationId, brandId),
-      this.deps.pool.query<{ id: string; missing_scopes: string[] }>(
-        `SELECT id, missing_scopes FROM connection
-          WHERE organization_id = $1 AND brand_id = $2 AND cardinality(missing_scopes) > 0`,
+      this.deps.pool.query<{ id: string; missing_scopes: string[]; granted_scopes: string[] }>(
+        `SELECT id, missing_scopes, granted_scopes FROM connection
+          WHERE organization_id = $1 AND brand_id = $2`,
         [org.organizationId, brandId],
       ),
     ]);
     const missing = new Map(
       scopes.rows.map((r) => [r.id, r.missing_scopes.filter((s) => SCOPE_NAME.test(s))]),
     );
+    const granted = new Map(scopes.rows.map((r) => [r.id, r.granted_scopes]));
     return rows.map((h) => ({
       connectionId: h.connectionId,
       platform: h.platform,
@@ -68,6 +73,20 @@ export class ConnectionHealthService {
       ingestLagSeconds: Math.floor(h.ingestLagMs / 1000),
       failedImports: h.failedImports,
       missingScopes: missing.get(h.connectionId) ?? [],
+      declinedScopes: this.#declined(h.platform, granted.get(h.connectionId) ?? []),
+      webhooks: this.#webhooks(h.platform),
     }));
+  }
+
+  #declined(platform: string, granted: readonly string[]): string[] {
+    // No granted scopes recorded: the platform did not report them, so nothing is known declined.
+    if (granted.length === 0 || !isPlatform(platform)) return [];
+    const defaults = this.deps.connectors?.registry.get(platform)?.capabilities.defaultScopes ?? [];
+    return defaults.filter((s) => !granted.includes(s));
+  }
+
+  #webhooks(platform: string): 'on' | 'off' | null {
+    if (platform !== 'threads') return null;
+    return this.deps.env.threads?.webhookVerifyToken ? 'on' : 'off';
   }
 }

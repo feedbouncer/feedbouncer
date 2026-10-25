@@ -1,8 +1,10 @@
+import { randomInt } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PgSyncRecorder, buildPgConnectorStack } from '@feedbouncer/connectors';
 import { createPool } from '@feedbouncer/db';
 import { Secret } from '@feedbouncer/service-runtime';
 import { TIKTOK_API_HOST, TIKTOK_ENDPOINTS } from '@feedbouncer/tiktok-business-api';
+import { FakeThreads } from '@feedbouncer/connector-threads/testing';
 import { FakeTikTok } from '@feedbouncer/tiktok-business-api/testing';
 import { orgWithRoles, startTestApi, type OrgFixture, type TestApi } from '../testing/harness.js';
 
@@ -191,6 +193,8 @@ describe('connection health endpoint', () => {
         'consecutiveFailures',
         'failedImports',
         'missingScopes',
+        'declinedScopes',
+        'webhooks',
         'stalenessSeconds',
         'ingestLagSeconds',
       ].sort(),
@@ -349,5 +353,65 @@ describe('tiktok connection health', () => {
     );
     expect(mine).toMatchObject({ missingScopes: ['comment.list'] });
     expect(JSON.stringify(r.body)).not.toContain('<script>');
+  });
+});
+
+describe('threads connection health', () => {
+  const THREADS = { appId: '2220001112223334', appSecret: 'threads-app-secret-0123456789' };
+  const cfg = (verifyToken: string | null) => ({
+    appId: THREADS.appId,
+    appSecret: new Secret(THREADS.appSecret),
+    webhookVerifyToken: verifyToken === null ? null : new Secret(verifyToken),
+    pollIntervalSec: 600,
+    discoveryIntervalSec: 900,
+  });
+  const GRANTED = ['threads_basic', 'threads_read_replies', 'threads_content_publish'];
+  let withHooks: TestApi;
+  let withoutHooks: TestApi;
+
+  beforeAll(async () => {
+    const fake = new FakeThreads(THREADS);
+    withHooks = await startTestApi(
+      { threads: cfg('threads-verify-token-0123456789') },
+      { fetch: fake.fetch },
+    );
+    withoutHooks = await startTestApi({ threads: cfg(null) }, { fetch: fake.fetch });
+  });
+  afterAll(async () => {
+    await withHooks?.close();
+    await withoutHooks?.close();
+  });
+
+  async function health(t: TestApi, granted: string[]) {
+    const org = await orgWithRoles(t, 'thh');
+    const { scope } = await t.seedConnection(org, {
+      platform: 'threads',
+      externalAccountId: `1784${randomInt(0, 1e12)}`,
+    });
+    await t.pool.query('UPDATE connection SET granted_scopes = $2 WHERE id = $1', [
+      scope.connectionId,
+      granted,
+    ]);
+    const r = await t.req('GET', healthUrl(org.orgId, org.brandId), { cookie: org.owner.cookie });
+    expect(r.status).toBe(200);
+    return r.body.connections[0] as { declinedScopes: string[]; webhooks: string | null };
+  }
+
+  it('health lists threads_manage_replies as declined when not granted', async () => {
+    expect((await health(withHooks, GRANTED)).declinedScopes).toEqual(['threads_manage_replies']);
+  });
+
+  it('declines nothing when every default scope was granted', async () => {
+    const all = [...GRANTED, 'threads_manage_replies'];
+    expect((await health(withHooks, all)).declinedScopes).toEqual([]);
+  });
+
+  it('names no declined scope when the platform reported none', async () => {
+    expect((await health(withHooks, [])).declinedScopes).toEqual([]);
+  });
+
+  it('reports webhooks on with a verify token and off without one', async () => {
+    expect((await health(withHooks, GRANTED)).webhooks).toBe('on');
+    expect((await health(withoutHooks, GRANTED)).webhooks).toBe('off');
   });
 });

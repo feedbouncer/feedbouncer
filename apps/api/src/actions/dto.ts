@@ -33,6 +33,8 @@ export interface LogEntryDto {
   previewText: string | null;
   reviewItemId: string | null;
   actionStatus: LogEntry['actionStatus'];
+  deferredUntil: string | null;
+  deferredCode: string | null;
   undoStatus: LogEntry['undoStatus'];
   undoable: boolean;
   undoneAt: string | null;
@@ -54,6 +56,8 @@ export const toLogEntryDto = (e: LogEntry): LogEntryDto => ({
   previewText: e.previewText,
   reviewItemId: e.reviewItemId,
   actionStatus: e.actionStatus,
+  deferredUntil: e.deferredUntil?.toISOString() ?? null,
+  deferredCode: e.deferredCode,
   undoStatus: e.undoStatus,
   undoable: e.undoable,
   undoneAt: e.undoneAt?.toISOString() ?? null,

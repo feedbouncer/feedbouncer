@@ -39,6 +39,16 @@ const ConnectBody = z.strictObject({
 export class OAuthConnectController {
   constructor(@Inject(OAuthConnectService) private readonly svc: OAuthConnectService) {}
 
+  @Get('permissions')
+  @RequireCapability('connection.manage')
+  async permissions(
+    @Req() req: OrgRequest,
+    @Param('platform', ConnectablePlatformPipe) platform: Platform,
+    @Param('brandId') brandId: string,
+  ) {
+    return { permissions: await this.svc.permissions(platform, req.org, brandId) };
+  }
+
   @Post('authorize')
   @HttpCode(200)
   @RequireCapability('connection.manage')

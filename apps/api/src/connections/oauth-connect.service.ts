@@ -22,6 +22,7 @@ import { ApiError, notFound } from '../http/errors.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { BACKFILL_STORE, CONNECTOR_STACK, DEPS, JOB_PRODUCER } from '../tokens.js';
+import { connectPermissions, type ConnectPermission } from './connect-permissions.js';
 import { requestBackfill } from './backfill.js';
 
 /**
@@ -73,6 +74,15 @@ export class OAuthConnectService {
   async #actor(org: OrgContext, brandId: unknown): Promise<OAuthActor> {
     const brand = await requireBrand(this.deps.pool, org, brandId);
     return { ...brand, userId: org.actorUserId };
+  }
+
+  async permissions(
+    platform: Platform,
+    org: OrgContext,
+    brandId: unknown,
+  ): Promise<ConnectPermission[]> {
+    await this.#actor(org, brandId);
+    return connectPermissions(platform);
   }
 
   async authorize(
