@@ -109,7 +109,11 @@ export class FakeThreads {
     const url = new URL(req?.url ?? String(input));
     const method = (init?.method ?? req?.method ?? 'GET').toUpperCase();
     const headers = new Headers(init?.headers ?? req?.headers);
-    const rawBody = typeof init?.body === 'string' ? init.body : '';
+    const b = init?.body;
+    if (b !== undefined && b !== null && typeof b !== 'string' && !(b instanceof URLSearchParams)) {
+      throw new Error('FakeThreads: unsupported request body type');
+    }
+    const rawBody = b === undefined || b === null ? '' : b.toString();
     const form = Object.fromEntries(new URLSearchParams(rawBody));
     const query = Object.fromEntries(url.searchParams);
     const route = this.route(url.pathname, method);
@@ -245,28 +249,29 @@ export class FakeThreads {
     const rootPostId = o.rootPostId ?? reply.rootId;
     const ownerId = o.ownerId ?? root?.authorId ?? '';
     const body = {
-      object: 'threads',
-      entry: [
-        {
-          id: ownerId,
-          app_id: o.appId ?? this.appId,
-          time: Math.floor(this.now().getTime() / 1000),
-          changes: [
-            {
-              field: 'replies',
-              value: {
-                id: reply.id,
-                ...(reply.username !== null && { username: reply.username }),
-                text: reply.text,
-                media_type: reply.mediaType,
-                timestamp: threadsTime(reply.at),
-                replied_to: { id: reply.parentId },
-                root_post: { id: rootPostId, owner_id: ownerId },
-              },
-            },
-          ],
+      app_id: o.appId ?? this.appId,
+      topic: 'moderate',
+      target_id: ownerId,
+      time: Math.floor(this.now().getTime() / 1000),
+      subscription_id: '17841000000000001',
+      values: {
+        value: {
+          id: reply.id,
+          ...(reply.username !== null && { username: reply.username }),
+          text: reply.text,
+          media_type: reply.mediaType,
+          permalink: `https://www.threads.com/@${reply.username ?? 'unknown'}/post/${reply.id}`,
+          replied_to: { id: reply.parentId },
+          root_post: {
+            id: rootPostId,
+            owner_id: ownerId,
+            username: this.media.get(rootPostId)?.username ?? root?.username ?? null,
+          },
+          shortcode: `C${reply.id.slice(-10)}`,
+          timestamp: threadsTime(reply.at),
         },
-      ],
+        field: 'replies',
+      },
     };
     const rawBody = Buffer.from(JSON.stringify(body), 'utf8');
     const sig = createHmac('sha256', this.appSecret).update(rawBody).digest('hex');

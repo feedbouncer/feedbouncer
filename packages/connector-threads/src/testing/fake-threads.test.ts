@@ -74,7 +74,8 @@ describe('FakeThreads', () => {
     const { postId } = fake.addPost(u.userId);
     const ids: string[] = [];
     for (let i = 0; i < 60; i++) {
-      const parent = i < 30 || ids.length === 0 ? postId : ids[i - 30]!;
+      // depth 1 (0-29), depth 2 (30-44), depth 3 (45-59)
+      const parent = i < 30 ? postId : i < 45 ? ids[i - 30]! : ids[i - 15]!;
       const { replyId } = fake.addReply(parent, {
         at: new Date(NOW.getTime() - 100_000 + i * 1000),
         text: `r${i}`,
@@ -111,7 +112,7 @@ describe('FakeThreads', () => {
     const other = fake.addReply(postId, { at: NOW }).replyId;
     await req(u.token, 'manageReply', { id: a, method: 'POST', form: { hide: 'true' } });
     expect([a, b, c].map((i) => fake.hideStatus(i))).toEqual(['HIDDEN', 'HIDDEN', 'HIDDEN']);
-    expect(fake.hideStatus(other)).not.toBe('HIDDEN');
+    expect(fake.hideStatus(other)).toBe('NOT_HUSHED');
     // nested replies cannot be managed directly
     expect(
       await code(req(u.token, 'manageReply', { id: b, method: 'POST', form: { hide: 'false' } })),
@@ -183,15 +184,23 @@ describe('FakeThreads', () => {
     const u = fake.addUser();
     const { postId } = fake.addPost(u.userId);
     const { replyId } = fake.addReply(postId, { at: NOW, text: 'hello' });
-    const d = fake.signedDelivery({ replyId });
+    const d = fake.signedDelivery({ replyId, appId: 'other-app' });
     const expected = createHmac('sha256', 'shh').update(d.rawBody).digest('hex');
     expect(d.headers['x-hub-signature-256']).toBe(`sha256=${expected}`);
     const body = JSON.parse(d.rawBody.toString('utf8'));
-    expect(body.entry[0].changes[0].field).toBe('replies');
-    expect(body.entry[0].changes[0].value).toMatchObject({
+    expect(body.app_id).toBe('other-app');
+    expect(fake.signedDelivery({ replyId }).rawBody.toString()).toContain('"app_id":"app1"');
+    expect(body.topic).toBe('moderate');
+    expect(body.target_id).toBe(u.userId);
+    expect(body.values.field).toBe('replies');
+    expect(body.values.value).toMatchObject({
       id: replyId,
       text: 'hello',
-      root_post: { id: postId, owner_id: u.userId },
+      media_type: 'TEXT_POST',
+      replied_to: { id: postId },
+      root_post: { id: postId, owner_id: u.userId, username: 'user1' },
     });
+    expect(body.values.value.permalink).toContain(replyId);
+    expect(typeof body.values.value.shortcode).toBe('string');
   });
 });
