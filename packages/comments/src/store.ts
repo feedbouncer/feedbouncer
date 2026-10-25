@@ -61,7 +61,7 @@ export interface CommentRow {
 export type CommentOrigin = 'ad' | 'organic';
 
 /** Source kinds a connector lists itself (an organic post is created by its first comment). */
-export type ListedSourceKind = 'ad_post' | 'video';
+export type ListedSourceKind = 'ad_post' | 'video' | 'thread';
 
 /** Position in the newest-first listing: the last row of the previous page. */
 export interface CommentCursor {

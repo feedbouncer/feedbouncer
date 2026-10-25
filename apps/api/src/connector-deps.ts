@@ -1,5 +1,5 @@
 // The API's side of the platform connectors: one registry composed from the
-// Meta, TikTok and YouTube connectors, the connector stack for OAuth and webhook routing,
+// Meta, TikTok, YouTube and Threads connectors, the connector stack for OAuth and webhook routing,
 // an enqueue-only job producer, and the comment store and moderation actions.
 // The worker runs the jobs. Null (not built) when no connector is configured, so
 // no queue connection is opened.
@@ -63,6 +63,7 @@ import { Secret, errorFields, type Logger } from '@feedbouncer/service-runtime';
 import type { AppDeps } from './deps.js';
 import type { ApiEnv } from './env.js';
 import { buildMetaDeps } from './meta-deps.js';
+import { buildThreadsDeps } from './threads-deps.js';
 import { buildTikTokDeps } from './tiktok-deps.js';
 import { buildYouTubeDeps } from './youtube-deps.js';
 
@@ -97,10 +98,12 @@ export function buildConnectorDeps(d: {
       })
     : null;
   const youtube = ledger ? buildYouTubeDeps(env, ledger.projectMeter()) : null;
+  const threads = buildThreadsDeps(env, log);
   const connectors = [
     ...(meta?.connectors ?? []),
     ...(tiktok?.connectors ?? []),
     ...(youtube?.connectors ?? []),
+    ...(threads?.connectors ?? []),
   ];
   if (connectors.length === 0) return null;
   const registry = new ConnectorRegistry();
@@ -108,6 +111,7 @@ export function buildConnectorDeps(d: {
   const appSecrets = new Map<Platform, Secret>([
     ...(Object.entries(meta?.appSecrets ?? {}) as [Platform, Secret][]),
     ...(Object.entries(tiktok?.appSecrets ?? {}) as [Platform, Secret][]),
+    ...(Object.entries(threads?.appSecrets ?? {}) as [Platform, Secret][]),
   ]);
 
   const redis = createProducerConnection(env.redisUrl.href);

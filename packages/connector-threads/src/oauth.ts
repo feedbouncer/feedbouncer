@@ -20,7 +20,11 @@ const AUTHORIZE_PATH = '/oauth/authorize';
 const NAME_MAX_CODE_POINTS = 200;
 const KNOWN_SCOPES: ReadonlySet<string> = new Set(THREADS_SCOPES);
 
-export type ThreadsLog = (msg: string, fields: Record<string, unknown>) => void;
+/** Fields are codes, counts and ids: never tokens or text. Matches the service logger. */
+export type ThreadsLog = (
+  msg: string,
+  fields: Readonly<Record<string, string | number | boolean | null>>,
+) => void;
 
 export function buildAuthorizationUrl(
   cfg: ThreadsConfig,

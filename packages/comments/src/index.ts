@@ -25,6 +25,8 @@ export type { TikTokPollDeps, TikTokPollSettings } from './tiktok/ingest.js';
 export * from './tiktok/poll-organic.js';
 export * from './tiktok/poll-ads.js';
 export * from './tiktok/scheduler.js';
+export { PgThreadsPolling } from './threads/polling.js';
+export * from './threads/wake-sink.js';
 export * from './youtube/quota-day.js';
 export * from './youtube/budget.js';
 export * from './youtube/settings.js';

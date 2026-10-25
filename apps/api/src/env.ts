@@ -31,6 +31,11 @@ import { parseMetaAdsEnv, type MetaAdsConfig } from '@feedbouncer/connector-meta
 import { parseInstagramEnv, type InstagramConfig } from '@feedbouncer/connector-instagram';
 import { TIKTOK_FILE_VARS, parseTikTokEnv, type TikTokConfig } from '@feedbouncer/connector-tiktok';
 import {
+  THREADS_FILE_VARS,
+  parseThreadsEnv,
+  type ThreadsConfig,
+} from '@feedbouncer/connector-threads';
+import {
   YOUTUBE_FILE_VARS,
   parseYouTubeEnv,
   type YouTubeEnvConfig,
@@ -66,6 +71,7 @@ export const API_FILE_VARS = [
   ...TIKTOK_FILE_VARS,
   ...TIKTOK_ADS_FILE_VARS,
   ...YOUTUBE_FILE_VARS,
+  ...THREADS_FILE_VARS,
 ] as const;
 
 export interface ApiEnv {
@@ -103,6 +109,11 @@ export interface ApiEnv {
   readonly tiktokAds: TikTokAdsConfig | null;
   /** Null unless YOUTUBE_CONNECTOR_ENABLED=true. Independent of the Facebook config. */
   readonly youtube: YouTubeEnvConfig | null;
+  /**
+   * Null unless THREADS_CONNECTOR_ENABLED=true. Runs on its own Threads app, independent of
+   * the Facebook config. Its webhook route exists only when the verify token is set.
+   */
+  readonly threads: ThreadsConfig | null;
   /** Queue prefix and dedup window, shared with the worker so both sides use the same queues. */
   readonly jobs: JobsConfig;
   /** The classifier's provider and model, for display only: the API holds no key. */
@@ -203,6 +214,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     tiktok: parseTikTokEnv(env),
     tiktokAds: parseTikTokAdsEnv(env),
     youtube: parseYouTubeEnv(env),
+    threads: parseThreadsEnv(env),
     jobs: loadJobsConfig(env),
     classifier,
     policy: loadPolicyLimits(env),
@@ -247,6 +259,8 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     tiktokEnabled: config.tiktok !== null,
     tiktokAdsEnabled: config.tiktokAds !== null,
     youtubeEnabled: config.youtube !== null,
+    threadsEnabled: config.threads !== null,
+    threadsWebhooksEnabled: config.threads?.webhookVerifyToken != null,
     scanToolEnabled: config.scan.enabled,
     alertSlackEnabled: config.alerts.slack,
     alertEmailEnabled: config.alerts.email,

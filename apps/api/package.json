@@ -33,6 +33,7 @@
     "@feedbouncer/connector-facebook": "workspace:*",
     "@feedbouncer/connector-instagram": "workspace:*",
     "@feedbouncer/connector-meta-ads": "workspace:*",
+    "@feedbouncer/connector-threads": "workspace:*",
     "@feedbouncer/connector-tiktok": "workspace:*",
     "@feedbouncer/connector-tiktok-ads": "workspace:*",
     "@feedbouncer/connector-youtube": "workspace:*",

@@ -228,6 +228,7 @@ services:
       - ./packages/connector-tiktok/src:/repo/packages/connector-tiktok/src:ro
       - ./packages/connector-tiktok-ads/src:/repo/packages/connector-tiktok-ads/src:ro
       - ./packages/connector-youtube/src:/repo/packages/connector-youtube/src:ro
+      - ./packages/connector-threads/src:/repo/packages/connector-threads/src:ro
       - ./packages/tiktok-business-api/src:/repo/packages/tiktok-business-api/src:ro
       - ./packages/connectors/src:/repo/packages/connectors/src:ro
       - ./packages/jobs/src:/repo/packages/jobs/src:ro
