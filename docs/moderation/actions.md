@@ -276,14 +276,14 @@ evaluation, a classifier or a policy) is left alone and the step is skipped as
 
 ## Platform support
 
-| Step          | Facebook                              | Instagram                                                                           | TikTok | TikTok ads |
-| ------------- | ------------------------------------- | ----------------------------------------------------------------------------------- | ------ | ---------- |
-| Hide          | yes                                   | yes                                                                                 | yes\*  | yes\*      |
-| Delete        | yes                                   | yes                                                                                 | yes\*  | yes\*      |
-| Ban           | yes                                   | no                                                                                  | no     | no         |
-| Auto-reply    | yes (8000 characters)                 | yes (2200 characters, not on hidden comments)                                       | yes\*  | yes\*      |
-| Private reply | yes (7 days, once, `pages_messaging`) | yes (7 days, top-level comments only, 1000 characters, `instagram_manage_messages`) | no     | no         |
-| Flag          | yes                                   | yes                                                                                 | yes    | yes        |
+| Step          | Facebook                              | Instagram                                                                           | TikTok | TikTok ads | YouTube               |
+| ------------- | ------------------------------------- | ----------------------------------------------------------------------------------- | ------ | ---------- | --------------------- |
+| Hide          | yes                                   | yes                                                                                 | yes\*  | yes\*      | yes (hold for review) |
+| Delete        | yes                                   | yes                                                                                 | yes\*  | yes\*      | yes (reject)          |
+| Ban           | yes                                   | no                                                                                  | no     | no         | yes (reject and ban)  |
+| Auto-reply    | yes (8000 characters)                 | yes (2200 characters, not on hidden comments)                                       | yes\*  | yes\*      | no                    |
+| Private reply | yes (7 days, once, `pages_messaging`) | yes (7 days, top-level comments only, 1000 characters, `instagram_manage_messages`) | no     | no         | no                    |
+| Flag          | yes                                   | yes                                                                                 | yes    | yes        | yes                   |
 
 \* Unverified against live TikTok. The TikTok connectors implement TikTok's
 documented or expected endpoints, which have not been checked with a real app;
@@ -293,6 +293,31 @@ see [tiktok.md](../connectors/tiktok.md#supported-actions) and
 Meta ads comments follow the Facebook or Instagram connection that owns the
 post: see [meta-ads.md](../connectors/meta-ads.md). TikTok ad comments have
 their own connection, one per advertiser.
+
+### YouTube
+
+YouTube's API has no way to delete another person's comment (`comments.delete`
+is for the author only), so the steps use comment moderation states through
+`comments.setModerationStatus`:
+
+| Step   | YouTube status                      | Undo from the log             |
+| ------ | ----------------------------------- | ----------------------------- |
+| Hide   | `heldForReview` ("Hold for review") | Unhide: `published`           |
+| Delete | `rejected` ("Reject")               | none                          |
+| Ban    | `rejected` with `banAuthor=true`    | none; unban in YouTube Studio |
+
+A rejected or published comment cannot be put back on hold, and rejecting a
+comment also hides its replies. A reply under a parent that is rejected,
+banned or already deleted is settled as `noop` with `covered_by_parent`. A ban
+is never sent for the connected channel, a protected channel id or an author
+with no channel id (`author_protected`, `author_unavailable`).
+
+YouTube actions do not run as soon as they are requested. They wait in a
+backlog and are sent in batches of up to 50 within the connection's daily
+quota budget, so a hold, reject or ban can stay pending for hours. Overflow
+settles as `failed` with `backlog_overflow`, which falls back to flagging the
+comment for review. In dry-run the outcome is `noop` with `dry_run`. See
+[youtube.md](../connectors/youtube.md#5-priority-backlog-cap-and-overflow).
 
 A private reply goes out once per comment, within 7 days of the comment being
 posted. See [facebook.md](../connectors/facebook.md) and

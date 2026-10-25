@@ -18,7 +18,7 @@ Items describe what you get, not when you get it.
 
 ## Next
 
-- **TikTok, YouTube and Threads comments**: Moderate comments from three more platforms in the same place as Facebook and Instagram.
+- **Threads comments**: Moderate Threads comments in the same place as Facebook and Instagram.
 - **Messenger and Instagram direct messages**: See and answer private messages next to the comments from the same people.
 - **Team inbox**: Assign conversations to teammates, leave internal notes and reuse saved replies.
 - **Contact profiles**: See one person's comments and messages across platforms on a single page.
@@ -39,6 +39,7 @@ Items describe what you get, not when you get it.
 Shipped means merged on the main branch. It reaches you in the next release, or now if you build from main.
 
 - **Facebook Page and Instagram comment moderation**: Hide, delete or reply to comments on your Page and your Instagram account.
+- **TikTok and YouTube comments**: Moderate comments on your TikTok and YouTube videos, with a daily budget for YouTube's API quota.
 - **Ad comment coverage**: Moderate the comments on your ads as well as your organic posts.
 - **Backfill on connect**: Existing comments are checked when you connect an account.
 - **Rules**: Decide by keyword, link, author or pattern what gets hidden or flagged.

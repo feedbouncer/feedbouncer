@@ -558,8 +558,44 @@ if (err.status === 429)
   });
 ```
 
-App-wide quotas, such as YouTube's daily project quota, are not covered:
-the budget does not see calls made for other accounts of the same app.
+### Metered daily quotas
+
+`RateBudget` limits the rate per connected account. It does not see an
+app-wide daily quota, such as YouTube's units per Google project, and
+`reportQuota` is best effort: it cannot refuse a call. For a platform that
+charges calls against a daily quota, the runtime sets a `QuotaMeter` on
+`CallContext.quota`. Reserve each call's cost before sending it and settle it
+afterwards:
+
+- `reserve({ method, units, purpose })` returns a ticket, or throws
+  `rate_limited` with the code `quota_budget_exhausted` or `quota_paused`
+  (and `retryAfterMs`) when the call does not fit. No platform call has been
+  made then, and `isQuotaRefusal(err)` recognises it.
+- `settle(ticket, { ok, errorCode, quotaExceeded })` is idempotent per
+  `callKey`. Settle in a `finally`, so a failed call is charged too, and pass
+  `quotaExceeded: true` when the platform reports the project quota as used up.
+  Throw `permanent` / `quota_meter_required` if `ctx.quota` is missing, so
+  such calls are never unmetered.
+- `purpose` is `read`, `write` or `connect`, the last for calls before a
+  connection exists.
+
+A connector whose actions are paid from such a quota declares
+`actionDispatch: 'budgeted'` in its capabilities, together with `batchActions`
+and the two batch methods below. The registry rejects a `budgeted` connector
+that lacks `actBatch` or `probeComments`. Moderation actions for it are not
+queued as jobs; they wait in a persistent backlog that a budget engine sends
+in batches. The default is `'immediate'`.
+
+- `actBatch(ctx, { action, targets })` applies one action to up to
+  `batchActions.maxTargets` targets in a single platform call, and returns
+  `not_found` when the platform refuses the call because a target is gone.
+- `probeComments(ctx, refs)` returns the current state of each comment in one
+  call, with a comment the platform did not return as `gone`. It lets the
+  engine skip comments that are gone, edited or already moderated before a
+  write is paid for.
+
+YouTube is the reference implementation: see
+[youtube.md](youtube.md#2-quota-costs) and `packages/connector-youtube`.
 
 ## Errors
 

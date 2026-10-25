@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
         'concepts/comment-lifecycle',
         'concepts/organizations-brands-connections',
         'concepts/tiktok',
+        'concepts/youtube',
         'concepts/decisions-and-audit',
         'concepts/review-mode',
         'concepts/ai-classifier-and-policies',

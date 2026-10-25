@@ -23,13 +23,14 @@ You can connect:
 - Meta ad accounts, for comments on your Facebook and Instagram ads.
 - TikTok Business accounts, for comments on your own videos.
 - TikTok ad accounts, for comments on your TikTok ads.
+- YouTube channels, for comments on your own videos.
 
 <FeatureStatus status="partial">
-  The TikTok connections have not yet been checked against the live TikTok API, and their comments arrive by polling only, every few minutes. See [TikTok and TikTok ads](./tiktok.md).
+  The TikTok and YouTube connections have not yet been checked against the live platform APIs, and their comments arrive by polling only, every few minutes. See [TikTok and TikTok ads](./tiktok.md) and [YouTube](./youtube.md).
 </FeatureStatus>
 
 <FeatureStatus status="planned">
-  YouTube, Threads, LinkedIn, X and Bluesky are planned. They are not available yet.
+  Threads, LinkedIn, X and Bluesky are planned. They are not available yet.
 </FeatureStatus>
 
 ## Where to go next
