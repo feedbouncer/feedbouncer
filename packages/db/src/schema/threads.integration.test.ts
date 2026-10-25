@@ -51,7 +51,7 @@ describe('threads schema', () => {
     await expectPg(
       connection(account, 'active', other),
       '23505',
-      'connection_threads_live_account_key',
+      'connection_threads_live_external_account_id_key',
     );
     await c.query(`UPDATE connection SET status = 'revoked' WHERE id = $1`, [first]);
     await connection(account, 'active', other);

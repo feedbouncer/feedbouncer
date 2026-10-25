@@ -8,7 +8,7 @@ ALTER TABLE connection_poll DROP CONSTRAINT connection_poll_kind_check,
 -- 2. One live FeedBouncer connection per Threads account across all tenants, because Meta
 -- allows one app subscription per account. Disconnected (revoked) rows keep their history
 -- and do not count.
-CREATE UNIQUE INDEX connection_threads_live_account_key
+CREATE UNIQUE INDEX connection_threads_live_external_account_id_key
   ON connection (external_account_id)
   WHERE platform = 'threads' AND status <> 'revoked';
 

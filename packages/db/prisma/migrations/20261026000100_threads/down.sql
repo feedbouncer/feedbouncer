@@ -5,7 +5,7 @@ ALTER TABLE moderation_action
   DROP COLUMN deferred_until;
 ALTER TABLE source_poll DROP COLUMN owner_verified;
 DROP TABLE threads_pending_reply;
-DROP INDEX connection_threads_live_account_key;
+DROP INDEX connection_threads_live_external_account_id_key;
 -- Destructive rollback: threads_posts poll rows cannot satisfy the restored check, so they are deleted.
 DELETE FROM connection_poll WHERE kind = 'threads_posts';
 ALTER TABLE connection_poll DROP CONSTRAINT connection_poll_kind_check,
