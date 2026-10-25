@@ -1,6 +1,12 @@
 import type { OrgFixture } from '../testing/harness.js';
 
-export const PICKER_PLATFORMS = ['facebook', 'instagram', 'tiktok', 'tiktok_ads'] as const;
+export const PICKER_PLATFORMS = [
+  'facebook',
+  'instagram',
+  'tiktok',
+  'tiktok_ads',
+  'threads',
+] as const;
 export type PickerPlatform = (typeof PICKER_PLATFORMS)[number];
 
 export interface IsolationFixture {
@@ -40,6 +46,10 @@ export interface IsolationFixture {
   /** B's TikTok account id and a comment on B's TikTok connection. */
   bTikTokAccountId: string;
   bTikTokCommentId: string;
+  /** B's Threads account id, a reply on its connection, and an applied hide step of that reply. */
+  bThreadsAccountId: string;
+  bThreadsCommentId: string;
+  bThreadsStepId: string;
   /** B's Slack alert channel; B's brand also has alert settings and a route to it. */
   bAlertChannelId: string;
   /** B's active API key. */
@@ -150,6 +160,32 @@ export const CASES: IsolationCase[] = [
     name: "tiktok: reply to B's comment under A path",
     url: (f) => `/api/v1/orgs/${f.A.orgId}/comments/${f.bTikTokCommentId}/replies`,
     body: () => ({ text: 'hi', requestKey: 'iso-tt-2' }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/comments/:commentId/actions',
+    name: "threads: hide B's reply under A brand",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/comments/${f.bThreadsCommentId}/actions`,
+    body: () => ({ kind: 'hide', requestKey: 'iso-th-1' }),
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/comments/:commentId/replies',
+    name: "threads: reply to B's reply",
+    url: (f) => `/api/v1/orgs/${f.A.orgId}/comments/${f.bThreadsCommentId}/replies`,
+    body: () => ({ text: 'hi', requestKey: 'iso-th-2' }),
+  },
+  {
+    route: 'GET /api/v1/orgs/:orgId/brands/:brandId/action-log',
+    name: "threads: action-log for B's comment",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.B.brandId}/action-log?commentId=${f.bThreadsCommentId}`,
+  },
+  {
+    route: 'POST /api/v1/orgs/:orgId/brands/:brandId/action-log/:stepId/undo',
+    name: "threads: undo B's step",
+    url: (f) =>
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/action-log/${f.bThreadsStepId}/undo`,
+    body: () => ({}),
   },
   // The connect flow, once per account-selection platform.
   ...PICKER_PLATFORMS.flatMap((p): IsolationCase[] => [
@@ -930,6 +966,8 @@ export const PUBLIC_ROUTES = [
   'POST /api/v1/webhooks/facebook',
   'GET /api/v1/webhooks/instagram',
   'POST /api/v1/webhooks/instagram',
+  'GET /api/v1/webhooks/threads',
+  'POST /api/v1/webhooks/threads',
   /** Token-authenticated: the emailed confirm and unsubscribe links. Also exempt from the Origin check. */
   'POST /api/v1/alert-recipients/confirm',
   'POST /api/v1/alert-recipients/unsubscribe',

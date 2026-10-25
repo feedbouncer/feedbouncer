@@ -37,9 +37,12 @@ beforeAll(async () => {
 afterAll(() => api.close());
 
 /** A Threads account connected in the org's brand, with one post and one reply on it. */
-async function connectedReply(status: 'active' | 'reconnect_required' = 'active') {
+async function connectedReply(
+  status: 'active' | 'reconnect_required' = 'active',
+  owner: OrgFixture = org,
+) {
   const { userId } = fake.addUser();
-  const conn = await api.seedConnection(org, { platform: 'threads', externalAccountId: userId });
+  const conn = await api.seedConnection(owner, { platform: 'threads', externalAccountId: userId });
   if (status !== 'active')
     await api.pool.query(
       "UPDATE connection SET status = $2, status_reason = 'token_expired' WHERE id = $1",
@@ -116,6 +119,34 @@ describe('Threads webhook', () => {
     // Nothing the stranger wrote, and no secret, reaches the logs.
     const all = api.logLines.join('\n');
     for (const s of [THREADS_SECRET, VERIFY]) expect(all).not.toContain(s);
+  });
+
+  it("a delivery naming org B's account only writes B-scoped rows; org A's pending/source/comment counts are unchanged", async () => {
+    const other = await orgWithRoles(api, 'threads-hook-b');
+    const a = await connectedReply('active', org);
+    const b = await connectedReply('active', other);
+    const counts = async (orgId: string) =>
+      (
+        await api.pool.query<{ pending: string; sources: string; comments: string }>(
+          `SELECT (SELECT count(*) FROM threads_pending_reply WHERE organization_id = $1) AS pending,
+                  (SELECT count(*) FROM source WHERE organization_id = $1) AS sources,
+                  (SELECT count(*) FROM comment WHERE organization_id = $1) AS comments`,
+          [orgId],
+        )
+      ).rows[0];
+    const beforeA = await counts(org.orgId);
+    const res = await deliver(fake.signedDelivery({ replyId: b.replyId }));
+    expect(res.status).toBe(200);
+    expect(await counts(org.orgId)).toEqual(beforeA);
+    expect(await pendingOf(a.scope.connectionId)).toEqual([]);
+    expect(await pendingOf(b.scope.connectionId)).toEqual([
+      { external_id: b.replyId, source_external_id: b.postId },
+    ]);
+    const foreign = await api.pool.query(
+      `SELECT 1 FROM threads_pending_reply WHERE external_id = $1 AND organization_id <> $2`,
+      [b.replyId, other.orgId],
+    );
+    expect(foreign.rowCount).toBe(0);
   });
 
   it('same body delivered twice → one pending row (ledger dedup)', async () => {

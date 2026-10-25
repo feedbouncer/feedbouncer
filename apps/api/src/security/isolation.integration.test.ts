@@ -5,6 +5,7 @@ import { extractFirstUrl } from '@feedbouncer/mailer/testing';
 import { Secret } from '@feedbouncer/service-runtime';
 import { PgAlertChannels } from '@feedbouncer/alerts';
 import { PgApiKeys } from '@feedbouncer/public-api';
+import { FakeThreads } from '@feedbouncer/connector-threads/testing';
 import { FakeTikTok } from '@feedbouncer/tiktok-business-api/testing';
 import { orgWithRoles, startTestApi, type TestApi } from '../testing/harness.js';
 import {
@@ -26,10 +27,25 @@ const TIKTOK = { appId: '7300000000000001', appSecret: 'tiktok-app-secret-012345
 
 const TIKTOK_CFG = { ...TIKTOK, appSecret: new Secret(TIKTOK.appSecret) };
 
+const THREADS = { appId: '2220001112223334', appSecret: 'threads-app-secret-0123456789' };
+const THREADS_CFG = {
+  appId: THREADS.appId,
+  appSecret: new Secret(THREADS.appSecret),
+  webhookVerifyToken: null,
+  pollIntervalSec: 600,
+  discoveryIntervalSec: 900,
+};
+
 let api: TestApi;
 let f: IsolationFixture;
 /** Every TikTok request the app makes; no case may make one. */
 const tiktok = new FakeTikTok(TIKTOK);
+/** Every Threads request the app makes; no case may make one either. */
+const threads = new FakeThreads(THREADS);
+const fetchAny: typeof globalThis.fetch = (input, init) =>
+  new URL(input instanceof Request ? input.url : String(input)).hostname.endsWith('threads.net')
+    ? threads.fetch(input, init)
+    : tiktok.fetch(input, init);
 beforeAll(async () => {
   api = await startTestApi(
     {
@@ -37,9 +53,10 @@ beforeAll(async () => {
       instagram: { meta: FACEBOOK },
       tiktok: TIKTOK_CFG,
       tiktokAds: TIKTOK_CFG,
+      threads: THREADS_CFG,
       alerts: { slack: true, email: true, capPerHour: 30, emailPerMinute: 60 },
     },
-    { fetch: tiktok.fetch },
+    { fetch: fetchAny },
   );
   const A = await orgWithRoles(api, 'isoA');
   const B = await orgWithRoles(api, 'isoB');
@@ -245,6 +262,66 @@ beforeAll(async () => {
      VALUES ($1, $2, $3, $4, '7300000000000100', 'tt hi', now()) RETURNING id`,
     [B.orgId, B.brandId, tiktokConnections.tiktok, ttVideo.rows[0].id],
   );
+  // B's Threads account with a stored token, a reply on it, and an applied hide of that reply.
+  const bThreadsAccountId = `1784${B.orgId.replace(/\D/g, '').slice(0, 12)}`;
+  const { scope: threadsScope } = await api.seedConnection(B, {
+    platform: 'threads',
+    externalAccountId: bThreadsAccountId,
+  });
+  await api.deps.connectors!.stack.store.put(threadsScope, 'access_token', new Secret('th'), null);
+  const thPost = await api.pool.query(
+    `INSERT INTO source (organization_id, brand_id, connection_id, kind, external_id)
+     VALUES ($1, $2, $3, 'thread', '17840000000000099') RETURNING id`,
+    [B.orgId, B.brandId, threadsScope.connectionId],
+  );
+  const thComment = await api.pool.query(
+    `INSERT INTO comment (organization_id, brand_id, connection_id, source_id, external_id, body, posted_at,
+                          platform_state)
+     VALUES ($1, $2, $3, $4, '17840000000000100', 'th hi', now(), 'hidden') RETURNING id`,
+    [B.orgId, B.brandId, threadsScope.connectionId, thPost.rows[0].id],
+  );
+  const thEvaluation = await api.pool.query(
+    `INSERT INTO rule_evaluation (organization_id, brand_id, connection_id, comment_id, body_sha256,
+                                  trigger_key, ruleset_version, status)
+     VALUES ($1, $2, $3, $4, decode(repeat('ab', 32), 'hex'), 'iso-th', 'v1', 'no_match') RETURNING id`,
+    [B.orgId, B.brandId, threadsScope.connectionId, thComment.rows[0].id],
+  );
+  const thRun = await api.pool.query(
+    `INSERT INTO action_run (organization_id, brand_id, connection_id, comment_id, rule_id,
+                             rule_evaluation_id, dry_run)
+     VALUES ($1, $2, $3, $4, $5, $6, false) RETURNING id`,
+    [
+      B.orgId,
+      B.brandId,
+      threadsScope.connectionId,
+      thComment.rows[0].id,
+      bRule.rows[0].id,
+      thEvaluation.rows[0].id,
+    ],
+  );
+  const thStep = await api.pool.query(
+    `INSERT INTO action_run_step (organization_id, brand_id, run_id, position, step_type, config, status,
+                                  completed_at)
+     VALUES ($1, $2, $3, 0, 'hide', '{"type":"hide"}'::jsonb, 'succeeded', now()) RETURNING id`,
+    [B.orgId, B.brandId, thRun.rows[0].id],
+  );
+  const thHide = await api.pool.query(
+    `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind,
+                                    actor_type, request_key, status, completed_at)
+     VALUES ($1, $2, $3, $4, 'hide', 'rule', $5, 'applied', now()) RETURNING id`,
+    [
+      B.orgId,
+      B.brandId,
+      threadsScope.connectionId,
+      thComment.rows[0].id,
+      `auto:${thStep.rows[0].id}`,
+    ],
+  );
+  await api.pool.query(
+    `UPDATE action_run_step SET moderation_action_id = $3, request_key = $4
+      WHERE brand_id = $1 AND id = $2`,
+    [B.brandId, thStep.rows[0].id, thHide.rows[0].id, `auto:${thStep.rows[0].id}`],
+  );
   const grants = new PgOAuthGrantStore(api.pool, api.deps.env.encryption);
   const bGrantIds = Object.fromEntries(PICKER_PLATFORMS.map((p) => [p, randomUUID()])) as Record<
     PickerPlatform,
@@ -293,11 +370,15 @@ beforeAll(async () => {
       facebook: bConnectionId,
       instagram: igConnection.rows[0].id,
       ...tiktokConnections,
+      threads: threadsScope.connectionId,
     },
     bTagId: bTag.rows[0].id,
     bGrantIds,
     bTikTokAccountId,
     bTikTokCommentId: ttComment.rows[0].id,
+    bThreadsAccountId,
+    bThreadsCommentId: thComment.rows[0].id,
+    bThreadsStepId: thStep.rows[0].id,
     bAlertChannelId: bChannel.channel.id,
     bApiKeyId: bApiKey.key.id,
     bProposalId: bProposal.rows[0].id,
@@ -414,6 +495,7 @@ describe('A owner cannot reach B', () => {
       expect(await snapshot(f.B.orgId)).toEqual(beforeB);
       expect(await snapshot(f.A.orgId)).toEqual(beforeA);
       expect(tiktok.calls()).toEqual([]);
+      expect(threads.calls()).toEqual([]);
     });
   }
 });
@@ -476,6 +558,25 @@ describe('backfill status', () => {
       },
     );
     expect(cross.status).toBe(404);
+  });
+});
+
+describe("B's Threads comment id in A's own action log", () => {
+  it('lists nothing of B', async () => {
+    const r = await api.req(
+      'GET',
+      `/api/v1/orgs/${f.A.orgId}/brands/${f.A.brandId}/action-log?commentId=${f.bThreadsCommentId}`,
+      { cookie: f.A.owner.cookie },
+    );
+    expect(r.status).toBe(200);
+    expect(r.body.items).toEqual([]);
+    // The step exists: B's own owner sees it.
+    const own = await api.req(
+      'GET',
+      `/api/v1/orgs/${f.B.orgId}/brands/${f.B.brandId}/action-log?commentId=${f.bThreadsCommentId}`,
+      { cookie: f.B.owner.cookie },
+    );
+    expect(own.body.items.map((i: { id: string }) => i.id)).toEqual([f.bThreadsStepId]);
   });
 });
 
