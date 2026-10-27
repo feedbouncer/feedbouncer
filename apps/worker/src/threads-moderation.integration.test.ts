@@ -596,7 +596,7 @@ describe('threads moderation end to end', () => {
     expect(applied(missed)).toHaveLength(1);
   });
 
-  it('declined threads_manage_replies: replies still ingested; hide step not_supported with missing_permission; flagged for review', async () => {
+  it('declined threads_manage_replies: replies still ingested; hide step fails with missing_permission; flagged for review', async () => {
     const w = await world('declined', { scopes: NO_MANAGE });
     await addRule(w, kw('spam'), HIDE);
     const id = reply(w, 'spam');
