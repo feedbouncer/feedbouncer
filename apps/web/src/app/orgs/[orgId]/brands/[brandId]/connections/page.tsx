@@ -17,7 +17,12 @@ import { formatUtc } from '../../../../../../lib/format';
 import { isUuid } from '../../../../../../lib/ids';
 import { messageFor, statusReasonText } from '../../../../../../lib/messages';
 import { missingPermissionText } from '../../../../../../lib/oauth';
-import { CONNECTABLE, PLATFORM_COPY, isConnectable } from '../../../../../../lib/platforms';
+import {
+  CONNECTABLE,
+  PLATFORM_COPY,
+  PLATFORMS_WITH_CONNECT_PERMISSIONS,
+  isConnectable,
+} from '../../../../../../lib/platforms';
 import {
   dataOrThrow,
   loadReviewMode,
@@ -81,7 +86,7 @@ async function loadPermissions(
 ): Promise<Map<string, ConnectPermission[]>> {
   const found = new Map<string, ConnectPermission[]>();
   await Promise.all(
-    CONNECTABLE.map(async (platform) => {
+    PLATFORMS_WITH_CONNECT_PERMISSIONS.map(async (platform) => {
       try {
         const r = await serverGet<{ permissions: ConnectPermission[] }>(
           `/api/v1/orgs/${orgId}/brands/${brandId}/connections/${platform}/permissions`,

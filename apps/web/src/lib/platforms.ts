@@ -16,6 +16,14 @@ export function isConnectable(p: string): p is ConnectablePlatform {
   return (CONNECTABLE as readonly string[]).includes(p);
 }
 
+/**
+ * Platforms whose connect screen lists specific requested permissions and
+ * their purpose (`GET connections/<platform>/permissions`). Every other
+ * connectable platform has no per-feature choice, so the connections page
+ * does not bother asking.
+ */
+export const PLATFORMS_WITH_CONNECT_PERMISSIONS: readonly ConnectablePlatform[] = ['threads'];
+
 export interface PlatformCopy {
   label: string;
   accountNoun: string;

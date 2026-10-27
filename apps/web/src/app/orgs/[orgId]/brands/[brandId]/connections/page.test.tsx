@@ -8,6 +8,7 @@ const TT = '00000000-0000-4000-8000-000000000003';
 const YT = '00000000-0000-4000-8000-000000000004';
 
 const responses = new Map<string, unknown>();
+const requestedPaths: string[] = [];
 
 vi.mock('next/navigation', () => ({
   notFound: () => {
@@ -19,7 +20,10 @@ vi.mock('next/navigation', () => ({
 vi.mock('../../../../../../lib/server-api', () => ({
   requireMe: async () => ({ id: 'u1' }),
   loadReviewMode: async () => ({ connections: [], pendingTotal: 0, canManage: true }),
-  serverGet: async (path: string) => ({ status: 200, data: responses.get(path) ?? null }),
+  serverGet: async (path: string) => {
+    requestedPaths.push(path);
+    return { status: 200, data: responses.get(path) ?? null };
+  },
   dataOrThrow: <T,>(r: { data: T | null }) => {
     if (!r.data) throw new Error('missing');
     return r.data;
@@ -37,6 +41,7 @@ const render = async () =>
 
 beforeEach(() => {
   responses.clear();
+  requestedPaths.length = 0;
   responses.set(`/api/v1/orgs/${ORG}`, { role: 'owner' });
   responses.set(base, { connections: [] });
   responses.set(`${base}/health`, { connections: [] });
@@ -134,6 +139,12 @@ describe('connections page', () => {
   it('still shows the Threads connect button when permissions cannot be loaded', async () => {
     const html = await render();
     expect(html).toContain('>Connect Threads account</button>');
+  });
+
+  it('only asks for permissions on platforms that have them, not every connectable platform', async () => {
+    await render();
+    const permissionRequests = requestedPaths.filter((p) => p.endsWith('/permissions'));
+    expect(permissionRequests).toEqual([`${base}/threads/permissions`]);
   });
 
   it('shows what a Threads connection declined and that webhooks are off', async () => {
