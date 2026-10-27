@@ -102,6 +102,8 @@ const OUTCOMES: Record<string, string> = {
   author_gone: 'the author no longer exists',
   missing_permission: 'FeedBouncer lacks the permission for this action',
   rate_limited: 'the platform asked FeedBouncer to slow down',
+  throttled: 'the platform asked FeedBouncer to slow down',
+  rate_limit_exhausted: 'the platform kept refusing because of rate limits',
   retries_exhausted: 'it kept failing after several tries',
   awaiting_reconnect: 'waiting for the connection to be reconnected',
   request_key_conflict: 'this request was already used for a different action',
@@ -141,8 +143,7 @@ const OUTCOMES: Record<string, string> = {
   hide_nested_reply_unsupported:
     'Threads can only hide replies made directly to your post. Hiding that reply also hides this one.',
   reply_quota_exhausted:
-    "Delayed: Threads' daily limit of 1,000 replies is reached. FeedBouncer will post it when the limit allows.",
-  rate_limit_exhausted: "Not sent: the platform's limit stayed reached for 24 hours.",
+    "Threads' daily limit of 1,000 replies is reached, so FeedBouncer will send it once the limit allows",
   platform_not_configured: "This platform isn't set up on this FeedBouncer server.",
 };
 

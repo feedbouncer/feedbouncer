@@ -209,11 +209,6 @@ describe('Threads outcomes', () => {
       'hide_nested_reply_unsupported',
       'Threads can only hide replies made directly to your post. Hiding that reply also hides this one.',
     ],
-    [
-      'reply_quota_exhausted',
-      "Delayed: Threads' daily limit of 1,000 replies is reached. FeedBouncer will post it when the limit allows.",
-    ],
-    ['rate_limit_exhausted', "Not sent: the platform's limit stayed reached for 24 hours."],
     ['threads_error_100', 'Threads refused this action (code 100).'],
   ])('%s reads as a full sentence', (code, text) => {
     expect(outcomeText(code)).toBe(text);
@@ -223,5 +218,26 @@ describe('Threads outcomes', () => {
   it('does not format a malformed Threads error code', () => {
     expect(outcomeText('threads_error_<b>')).toBe(outcomeText('definitely_not_a_code'));
     expect(outcomeText('threads_error_')).toBe(outcomeText('definitely_not_a_code'));
+  });
+
+  // reply_quota_exhausted and rate_limit_exhausted are fragments (like every other
+  // entry in OUTCOMES), because callers prepend their own prefix: "Delayed until
+  // <time>: " in the comment history, "<StatusLabel>: " in the action log. A full
+  // sentence here would read as a doubled-up prefix in both places.
+  it('reply_quota_exhausted is a lowercase fragment with no "Delayed" prefix of its own', () => {
+    const text = outcomeText('reply_quota_exhausted');
+    expect(text).not.toMatch(/^Delayed/);
+    expect(text).toContain("Threads' daily limit of 1,000 replies is reached");
+  });
+
+  it('rate_limit_exhausted stays generic across platforms and action kinds', () => {
+    const text = outcomeText('rate_limit_exhausted');
+    expect(text).not.toMatch(/^Not sent/);
+    expect(text).not.toMatch(/24 hours/);
+    expect(outcomeText('rate_limit_exhausted', 'facebook')).toBe(text);
+  });
+
+  it('throttled has its own text instead of the generic fallback', () => {
+    expect(outcomeText('throttled')).not.toBe(outcomeText('definitely_not_a_code'));
   });
 });

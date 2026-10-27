@@ -68,6 +68,21 @@ describe('HistoryRows', () => {
     ]);
     expect(out).toContain('Delayed until 2026-10-18 08:15 UTC');
     expect(out).toContain('Threads&#x27; daily limit of 1,000 replies is reached');
+    // The deferral reason must not repeat its own "Delayed" prefix.
+    expect(out.match(/Delayed/g)).toHaveLength(1);
+  });
+
+  it('shows a generic deferral reason for a throttled hide, on any platform', () => {
+    const out = html([
+      entry({
+        type: 'hide',
+        status: 'pending',
+        deferredUntil: '2026-10-18T08:15:00.000Z',
+        deferredCode: 'throttled',
+      }),
+    ]);
+    expect(out).toContain('Delayed until 2026-10-18 08:15 UTC');
+    expect(out).not.toContain('it could not be completed');
   });
 
   it('says there is no history yet for an empty list', () => {
