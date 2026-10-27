@@ -12,7 +12,7 @@ CREATE UNIQUE INDEX connection_threads_live_external_account_id_key
   ON connection (external_account_id)
   WHERE platform = 'threads' AND status <> 'revoked';
 
--- 3. Reply webhooks that arrived before their post is known; resolved on the next poll.
+-- 3. Reply ids announced by webhook, held until a poll pass reads and stores them.
 CREATE TABLE threads_pending_reply (
   organization_id    uuid NOT NULL,
   brand_id           uuid NOT NULL,

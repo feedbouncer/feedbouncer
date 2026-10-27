@@ -24,7 +24,6 @@ import {
   type NormalizedComment,
 } from '@feedbouncer/connectors';
 import { JobError, type JobContext, type JobDefinition } from '@feedbouncer/jobs';
-import type { Logger } from '@feedbouncer/service-runtime';
 import { BACKFILL_DEFAULTS } from '../backfill/settings.js';
 import type { CommentAppliedHook } from '../hooks.js';
 import { ingestComment } from '../ingest-comment.js';
@@ -380,7 +379,7 @@ export function threadsPollJob(d: ThreadsPollDeps): JobDefinition<{ bucket: numb
             await d.polling
               .saveSourcePoll(ctx.scope, rest.sourceId, { nextPollAt: retryAt })
               .catch((saveErr: unknown) =>
-                (ctx.log as Logger).warn('threads.poll_defer_failed', {
+                ctx.log.warn('threads.poll_defer_failed', {
                   errorName: saveErr instanceof Error ? saveErr.name : 'unknown',
                 }),
               );

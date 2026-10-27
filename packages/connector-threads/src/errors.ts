@@ -28,7 +28,7 @@ export const THREADS_ERROR_TABLE = {
     ['4:2207051', { kind: 'rate_limited', code: 'reply_quota_exhausted' }],
     ['100:33', notFound],
   ]),
-} as const;
+};
 
 export function mapThreadsError(e: {
   httpStatus: number;
