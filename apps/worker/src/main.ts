@@ -6,11 +6,13 @@ import {
   NotifyingConnectionDirectory,
   PgAdTracking,
   PgCommentStore,
+  PgThreadsPolling,
   PgTikTokPolling,
   PgYouTubeQuotaLedger,
   PgYouTubeSettings,
   PgYouTubeState,
   PollScheduler,
+  ThreadsPollScheduler,
   TikTokPollScheduler,
   YouTubeCycleScheduler,
   youtubeQuotaMeters,
@@ -169,12 +171,13 @@ try {
     client.on('error', (err) => log.warn(`${name} connection error`, errorFields(err)));
   }
 
-  const { facebook, mail, tiktokPolling, youtube } = env;
+  const { facebook, mail, threads, tiktokPolling, youtube } = env;
   // Mail is only configured (and only needed) for Facebook, TikTok, YouTube, email alerts or weekly reports.
   const mailer = mail ? createSmtpMailer(mail.smtpUrl, mail.mailFrom) : null;
   let jobs = new JobRegistry();
   let scheduler: PollScheduler | null = null;
   let tiktokScheduler: TikTokPollScheduler | null = null;
+  let threadsScheduler: ThreadsPollScheduler | null = null;
   let youtubeScheduler: YouTubeCycleScheduler | null = null;
   let youtubeLedger: PgYouTubeQuotaLedger | null = null;
   let alertLoops: ReturnType<typeof startAlertLoops> = null;
@@ -183,7 +186,7 @@ try {
   let retentionLoop: ReturnType<typeof startRetentionLoop> | null = null;
   let scanMaintenance: ReturnType<typeof startScanMaintenanceLoop> | null = null;
   let webhookLoops: ReturnType<typeof startWebhookLoops> | null = null;
-  if ((facebook || tiktokPolling || youtube) && mail && mailer) {
+  if ((facebook || threads || tiktokPolling || youtube) && mail && mailer) {
     youtubeLedger = youtube
       ? new PgYouTubeQuotaLedger({
           pool,
@@ -241,6 +244,16 @@ try {
       producer: { enqueue: (input) => producer.enqueue(input) },
       capabilities: (p) => connectors.get(p)?.capabilities,
       ...(env.adPolling ? { ads: { poll: env.adPolling.poll } } : {}),
+      ...(threads
+        ? {
+            threads: {
+              settings: {
+                pollIntervalSec: threads.pollIntervalSec,
+                discoveryIntervalSec: threads.discoveryIntervalSec,
+              },
+            },
+          }
+        : {}),
       ...(tiktokPolling
         ? { tiktok: { settings: tiktokPolling.poll, platforms: tiktokPolling.platforms } }
         : {}),
@@ -263,6 +276,14 @@ try {
         clock: systemClock,
         log,
         settings: env.adPolling.scheduler,
+      });
+    }
+    if (threads) {
+      threadsScheduler = new ThreadsPollScheduler({
+        polling: new PgThreadsPolling(pool),
+        producer: { enqueue: (input) => producer.enqueue(input) },
+        clock: systemClock,
+        log,
       });
     }
     if (tiktokPolling) {
@@ -435,6 +456,7 @@ try {
     await webhookLoops?.stop();
     await scheduler?.stop();
     await tiktokScheduler?.stop();
+    await threadsScheduler?.stop();
     await youtubeScheduler?.stop();
     await Promise.all([
       worker.close(),
@@ -472,6 +494,7 @@ try {
   log.info('job consumers ready', { platforms: jobWorkers.platforms().join(',') || 'none' });
   scheduler?.start();
   tiktokScheduler?.start();
+  threadsScheduler?.start();
   youtubeScheduler?.start();
   const previewStore = new PgPolicyPreviewStore(pool);
   const previewPruner = setInterval(() => {

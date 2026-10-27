@@ -102,6 +102,7 @@ const OUTCOMES: Record<string, string> = {
   author_gone: 'the author no longer exists',
   missing_permission: 'FeedBouncer lacks the permission for this action',
   rate_limited: 'the platform asked FeedBouncer to slow down',
+  throttled: 'the platform asked FeedBouncer to slow down',
   rate_limit_exhausted: 'the platform kept refusing because of rate limits',
   retries_exhausted: 'it kept failing after several tries',
   awaiting_reconnect: 'waiting for the connection to be reconnected',
@@ -139,6 +140,10 @@ const OUTCOMES: Record<string, string> = {
   instagram_account_restricted:
     'Instagram has restricted this account. Open the Instagram app to resolve it.',
   unsupported: 'Not available on this platform.',
+  hide_nested_reply_unsupported:
+    'Threads can only hide replies made directly to your post. Hiding that reply also hides this one.',
+  reply_quota_exhausted:
+    "Threads' daily limit of 1,000 replies is reached, so FeedBouncer will send it once the limit allows",
   platform_not_configured: "This platform isn't set up on this FeedBouncer server.",
 };
 
@@ -152,6 +157,9 @@ const PLATFORM_OUTCOMES: Record<string, Record<string, string>> = {
 
 // An Instagram Graph error the connector could not classify, e.g. instagram_error_190_0.
 const INSTAGRAM_ERROR = /^instagram_error_(\d{1,10})_(\d{1,10})$/;
+
+// A Threads error the connector could not classify, e.g. threads_error_100.
+const THREADS_ERROR = /^threads_error_(\d{1,10})$/;
 
 const STATUS_REASONS: Record<string, string> = {
   oauth_not_refreshable: 'Access was lost or expired. Reconnect to resume moderation.',
@@ -191,7 +199,7 @@ export function messageFor(code: string): string {
 
 /** Whether `code` is a known outcome code, as opposed to an API error code. */
 export const isOutcomeCode = (code: string): boolean =>
-  Object.hasOwn(OUTCOMES, code) || INSTAGRAM_ERROR.test(code);
+  Object.hasOwn(OUTCOMES, code) || INSTAGRAM_ERROR.test(code) || THREADS_ERROR.test(code);
 
 export function outcomeText(code: string, platform?: string): string {
   const variants = platform !== undefined ? own(PLATFORM_OUTCOMES, platform) : undefined;
@@ -201,6 +209,8 @@ export function outcomeText(code: string, platform?: string): string {
   if (known !== undefined) return known;
   const ig = INSTAGRAM_ERROR.exec(code);
   if (ig) return `Instagram refused this action (error ${ig[1]}/${ig[2]}).`;
+  const threads = THREADS_ERROR.exec(code);
+  if (threads) return `Threads refused this action (code ${threads[1]}).`;
   return 'it could not be completed';
 }
 

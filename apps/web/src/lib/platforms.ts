@@ -8,12 +8,21 @@ export const CONNECTABLE = [
   'tiktok',
   'tiktok_ads',
   'youtube',
+  'threads',
 ] as const;
 export type ConnectablePlatform = (typeof CONNECTABLE)[number];
 
 export function isConnectable(p: string): p is ConnectablePlatform {
   return (CONNECTABLE as readonly string[]).includes(p);
 }
+
+/**
+ * Platforms whose connect screen lists specific requested permissions and
+ * their purpose (`GET connections/<platform>/permissions`). Every other
+ * connectable platform has no per-feature choice, so the connections page
+ * does not bother asking.
+ */
+export const PLATFORMS_WITH_CONNECT_PERMISSIONS: readonly ConnectablePlatform[] = ['threads'];
 
 export interface PlatformCopy {
   label: string;
@@ -93,5 +102,16 @@ export const PLATFORM_COPY: Record<ConnectablePlatform, PlatformCopy> = {
     pickerIntro: 'Choose the YouTube channels you own and want to moderate.',
     noEligible:
       'This Google account does not own a YouTube channel. Sign in with the account that owns your channel, then connect again.',
+  },
+  threads: {
+    label: 'Threads',
+    accountNoun: 'Threads account',
+    connectLabel: 'Connect Threads account',
+    pickerTitle: 'Confirm Threads account',
+    viewOn: 'View on Threads',
+    deleteConfirm: "Threads doesn't let you delete other people's replies.",
+    pickerIntro: 'Confirm the Threads account to connect.',
+    noEligible:
+      'This Threads account could not be read. Check that it is a public or professional account, then connect again.',
   },
 };

@@ -20,7 +20,9 @@ export type ActionRunAdvancePayload = z.infer<typeof actionRunAdvancePayload>;
 
 export const ACTION_RUN_ADVANCE_JOB = {
   type: 'action_run_advance' as const,
-  platforms: ['facebook', 'instagram', 'tiktok', 'tiktok_ads'] as readonly Platform[] | 'all',
+  platforms: ['facebook', 'instagram', 'tiktok', 'tiktok_ads', 'threads'] as
+    | readonly Platform[]
+    | 'all',
   payload: actionRunAdvancePayload,
   externalRef: (p: ActionRunAdvancePayload): string =>
     `run:${p.runId}:${p.settled}:${p.cause ?? ''}`,

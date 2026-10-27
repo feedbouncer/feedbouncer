@@ -47,6 +47,25 @@ export const STATE_AFTER: Partial<Record<ActionKind, PlatformState>> = {
   delete: 'deleted',
 };
 
+/**
+ * Notes when a pending action will next be tried and why, for the comments list.
+ * Touches only a pending action of this tenant; settling clears it.
+ */
+export async function recordDeferral(
+  pool: pg.Pool,
+  scope: Pick<ConnectionScope, 'organizationId' | 'brandId'>,
+  actionId: string,
+  retryAt: Date,
+  code: string,
+): Promise<void> {
+  await pool.query(
+    `UPDATE moderation_action
+        SET deferred_until = $4, deferred_code = $5, updated_at = now()
+      WHERE organization_id = $1 AND brand_id = $2 AND id = $3 AND status = 'pending'`,
+    [scope.organizationId, scope.brandId, actionId, retryAt, code],
+  );
+}
+
 /** `recorded` is false when another run recorded the outcome first. */
 export async function settleAction(
   pool: pg.Pool,
@@ -69,7 +88,8 @@ export async function settleActionIn(
   const ids = [scope.organizationId, scope.brandId, scope.connectionId, a.id];
   const u = await tx.query(
     `UPDATE moderation_action
-          SET status = $5, outcome_code = $6, platform_ref = $7, undo_kind = $8, completed_at = now()
+          SET status = $5, outcome_code = $6, platform_ref = $7, undo_kind = $8, completed_at = now(),
+              deferred_until = NULL, deferred_code = NULL
         WHERE id = $4 AND organization_id = $1 AND brand_id = $2 AND connection_id = $3
           AND status = 'pending'
         RETURNING id`,

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CommentActions } from '../../../../../../components/comment-actions';
+import { CommentHistory } from '../../../../../../components/comment-history';
 import { CommentBody } from '../../../../../../components/comment-body';
 import { CommentLinks } from '../../../../../../components/comment-links';
 import { DecisionBadge } from '../../../../../../components/rules/decision-badge';
@@ -135,6 +136,12 @@ export default async function CommentsPage({
               permalink={c.permalink}
               mediaExternalId={c.mediaExternalId}
               sourcePermalink={c.sourcePermalink}
+            />
+            <CommentHistory
+              orgId={orgId}
+              brandId={brandId}
+              commentId={c.id}
+              platform={c.platform}
             />
             <DecisionHistory orgId={orgId} brandId={brandId} commentId={c.id} />
             <CommentActions

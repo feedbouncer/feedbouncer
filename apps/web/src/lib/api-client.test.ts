@@ -33,6 +33,29 @@ describe('apiFetch', () => {
     expect(calls[0]![1].body).toBe('{}');
   });
 
+  it('keeps the platform and limit a step issue names', async () => {
+    stubFetch(
+      json(
+        {
+          error: {
+            code: 'invalid_actions',
+            message: 'm',
+            issues: [
+              { path: 'actions.0', message: 'template_too_long', platform: 'threads', max: 500 },
+              { path: 'actions.1', message: 'x', platform: 7, max: 'many' },
+            ],
+          },
+        },
+        422,
+      ),
+    );
+    const err = await apiFetch('/api/v1/x', { method: 'POST' }).catch((e: unknown) => e);
+    expect((err as ApiRequestError).issues).toEqual([
+      { path: 'actions.0', message: 'template_too_long', platform: 'threads', max: 500 },
+      { path: 'actions.1', message: 'x' },
+    ]);
+  });
+
   it('returns parsed JSON and serializes the body', async () => {
     const { calls } = stubFetch(json({ ok: 1 }, 200));
     await expect(apiFetch('/api/v1/x', { method: 'POST', body: { a: 1 } })).resolves.toEqual({

@@ -19,6 +19,7 @@ import { noNul } from './sanitize.js';
 const LIVE_ACCOUNT_INDEXES = [
   'connection_facebook_live_external_account_id_key',
   'connection_instagram_live_external_account_id_key',
+  'connection_threads_live_external_account_id_key',
 ];
 
 interface ReviewRow {

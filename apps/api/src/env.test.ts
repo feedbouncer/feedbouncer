@@ -416,6 +416,68 @@ describe('loadApiEnv', () => {
     });
   });
 
+  describe('threads connector', () => {
+    const secret = 'sentinel-threads-secret-0123456789';
+    const verify = 'sentinel-threads-verify-0123456789';
+    const enabled = {
+      THREADS_CONNECTOR_ENABLED: 'true',
+      THREADS_APP_ID: '2220001112223334',
+      THREADS_APP_SECRET: secret,
+    };
+    it('is off by default', () => {
+      expect(load(base).threads).toBeNull();
+    });
+    it('works without any Facebook config, with its own secret and an optional verify token', () => {
+      const env = load({ ...base, ...enabled });
+      expect(env.facebook).toBeNull();
+      expect(env.threads).toMatchObject({
+        appId: enabled.THREADS_APP_ID,
+        webhookVerifyToken: null,
+      });
+      expect(env.threads?.appSecret.reveal()).toBe(secret);
+      expect(JSON.parse(JSON.stringify(env))).toMatchObject({
+        threadsEnabled: true,
+        threadsWebhooksEnabled: false,
+      });
+      const hooks = load({ ...base, ...enabled, THREADS_WEBHOOK_VERIFY_TOKEN: verify });
+      expect(hooks.threads?.webhookVerifyToken?.reveal()).toBe(verify);
+      expect(JSON.parse(JSON.stringify(hooks))).toMatchObject({ threadsWebhooksEnabled: true });
+      for (const out of [JSON.stringify(hooks), inspect(hooks, { depth: 10, showHidden: true })]) {
+        expect(out).not.toContain(secret);
+        expect(out).not.toContain(verify);
+      }
+    });
+    it('enabled without credentials fails startup', () => {
+      expect(() => load({ ...base, THREADS_CONNECTOR_ENABLED: 'true' })).toThrow(EnvError);
+      expect(() =>
+        load({ ...base, THREADS_CONNECTOR_ENABLED: 'true', THREADS_APP_ID: '2220001112223334' }),
+      ).toThrow(/THREADS_APP_SECRET/);
+      expect(() => load({ ...base, ...enabled, THREADS_APP_ID: 'not-a-number' })).toThrow(
+        /THREADS_APP_ID/,
+      );
+      expect(() => load({ ...base, THREADS_CONNECTOR_ENABLED: 'yes' })).toThrow(EnvError);
+    });
+    it('honours THREADS_APP_SECRET_FILE and THREADS_WEBHOOK_VERIFY_TOKEN_FILE', () => {
+      const fs = {
+        size: () => 40,
+        read: (p: string) =>
+          p === '/run/s' ? 'file-threads-secret-0123456789\n' : 'file-threads-verify-0123456789\n',
+      };
+      const env = loadApiEnv(
+        {
+          ...base,
+          ...enabled,
+          THREADS_APP_SECRET: undefined,
+          THREADS_APP_SECRET_FILE: '/run/s',
+          THREADS_WEBHOOK_VERIFY_TOKEN_FILE: '/run/v',
+        },
+        { warn: () => {}, fs },
+      );
+      expect(env.threads?.appSecret.reveal()).toBe('file-threads-secret-0123456789');
+      expect(env.threads?.webhookVerifyToken?.reveal()).toBe('file-threads-verify-0123456789');
+    });
+  });
+
   describe('TRUST_PROXY_HOPS', () => {
     it.each([
       ['0', 0],

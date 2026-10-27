@@ -173,6 +173,9 @@ importers:
       '@feedbouncer/connector-meta-ads':
         specifier: workspace:*
         version: link:../../packages/connector-meta-ads
+      '@feedbouncer/connector-threads':
+        specifier: workspace:*
+        version: link:../../packages/connector-threads
       '@feedbouncer/connector-tiktok':
         specifier: workspace:*
         version: link:../../packages/connector-tiktok
@@ -501,6 +504,9 @@ importers:
       '@feedbouncer/connector-meta-ads':
         specifier: workspace:*
         version: link:../../packages/connector-meta-ads
+      '@feedbouncer/connector-threads':
+        specifier: workspace:*
+        version: link:../../packages/connector-threads
       '@feedbouncer/connector-tiktok':
         specifier: workspace:*
         version: link:../../packages/connector-tiktok
@@ -757,6 +763,9 @@ importers:
 
   packages/comments:
     dependencies:
+      '@feedbouncer/connector-threads':
+        specifier: workspace:*
+        version: link:../connector-threads
       '@feedbouncer/connector-youtube':
         specifier: workspace:*
         version: link:../connector-youtube
@@ -850,6 +859,22 @@ importers:
       '@feedbouncer/connector-facebook':
         specifier: workspace:*
         version: link:../connector-facebook
+      '@feedbouncer/connectors':
+        specifier: workspace:*
+        version: link:../connectors
+      '@feedbouncer/service-runtime':
+        specifier: workspace:*
+        version: link:../service-runtime
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+
+  packages/connector-threads:
+    dependencies:
       '@feedbouncer/connectors':
         specifier: workspace:*
         version: link:../connectors

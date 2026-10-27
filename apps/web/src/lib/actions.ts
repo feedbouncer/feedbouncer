@@ -247,12 +247,23 @@ export function stepIssueText(code: string): string {
   return Object.hasOwn(TEMPLATE_ISSUES, code) ? TEMPLATE_ISSUES[code]! : outcomeSentence(code);
 }
 
+interface StepIssue {
+  path: string;
+  message: string;
+  platform?: string | undefined;
+  max?: number | undefined;
+}
+
+function issueText(i: StepIssue): string {
+  if (i.message === 'template_too_long' && i.platform !== undefined && i.max !== undefined)
+    return `The reply is too long for ${platformLabel(i.platform)}: the limit is ${i.max} characters.`;
+  return stepIssueText(i.message);
+}
+
 /** Server messages for the step at `index`, from issues whose path is actions.<index>[.…]. */
-export function stepIssues(issues: readonly { path: string; message: string }[], index: number) {
+export function stepIssues(issues: readonly StepIssue[], index: number) {
   const prefix = `actions.${index}`;
-  return issues
-    .filter((i) => i.path === prefix || i.path.startsWith(`${prefix}.`))
-    .map((i) => stepIssueText(i.message));
+  return issues.filter((i) => i.path === prefix || i.path.startsWith(`${prefix}.`)).map(issueText);
 }
 
 export const STATUS_LABEL: Record<StepStatus, string> = {
@@ -277,6 +288,11 @@ export interface LogEntryView {
   type: StepType;
   status: StepStatus;
   reasonCode: string | null;
+  /** The reply text a reply step would send or sent; render as text only. */
+  previewText: string | null;
+  /** When a deferred step will be tried again, and why it was deferred. */
+  deferredUntil: string | null;
+  deferredCode: string | null;
   undoable: boolean;
   /** When the step was last undone; null if never, or if the latest undo was refused at once. */
   undoneAt: string | null;
@@ -320,6 +336,9 @@ export const hasPending = (
   entries.some((e) => e.status === 'pending' || (e.undoneAt != null && e.undoStatus === 'pending'));
 
 export type BrandApiBase = `/api/v1/orgs/${string}/brands/${string}`;
+
+export const commentLog = (base: BrandApiBase, commentId: string) =>
+  apiFetch<Page<LogEntryView>>(`${base}/action-log?commentId=${commentId}`);
 
 export const undoLogStep = (base: BrandApiBase, stepId: string) =>
   apiFetch(`${base}/action-log/${stepId}/undo`, { method: 'POST', body: {} });

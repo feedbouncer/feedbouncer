@@ -342,6 +342,10 @@ describe('migration round trip', () => {
 
       expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({
         status: 'rolled_back',
+        migration: '20261026000100_threads',
+      });
+      expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({
+        status: 'rolled_back',
         migration: '20261025000100_youtube',
       });
       expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({

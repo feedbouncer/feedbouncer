@@ -62,6 +62,7 @@ const PLATFORM_LABEL: Record<string, string> = {
   instagram: 'Instagram',
   tiktok: 'TikTok',
   tiktok_ads: 'TikTok ads',
+  threads: 'Threads',
 };
 
 const VERB: Record<'hide' | 'remove' | Exclude<StepType, 'flag_for_review'>, string> = {

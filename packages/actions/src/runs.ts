@@ -48,6 +48,9 @@ export interface LogEntry extends StepRow {
   dryRun: boolean;
   createdAt: Date;
   actionStatus: ActionStatus | null;
+  /** Set while the platform's limit holds the action back. */
+  deferredUntil: Date | null;
+  deferredCode: string | null;
   undoStatus: ActionStatus | null;
   undoable: boolean;
 }
@@ -555,12 +558,14 @@ export class PgActionRunStore {
         dry_run: boolean;
         created_at: Date;
         action_status: ActionStatus | null;
+        deferred_until: Date | null;
+        deferred_code: string | null;
         undo_status: ActionStatus | null;
         undoable: boolean;
       }
     >(
       `SELECT ${STEP_COLS}, r.comment_id, r.rule_id, ru.name AS rule_name, r.suggestion_id, r.dry_run, s.created_at,
-              a.status AS action_status, u.status AS undo_status, ${UNDOABLE_SQL} AS undoable
+              a.status AS action_status, a.deferred_until, a.deferred_code, u.status AS undo_status, ${UNDOABLE_SQL} AS undoable
          FROM action_run_step s
          JOIN action_run r ON r.brand_id = s.brand_id AND r.id = s.run_id
          LEFT JOIN rule ru ON ru.organization_id = r.organization_id AND ru.brand_id = r.brand_id AND ru.id = r.rule_id
@@ -598,6 +603,8 @@ export class PgActionRunStore {
       dryRun: row.dry_run,
       createdAt: row.created_at,
       actionStatus: row.action_status,
+      deferredUntil: row.deferred_until,
+      deferredCode: row.deferred_code,
       undoStatus: row.undo_status,
       undoable: row.undoable,
     }));

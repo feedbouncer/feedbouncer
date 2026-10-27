@@ -8,6 +8,10 @@ export interface HealthTextInput {
   ingestLagSeconds: number;
   failedImports: number;
   missingScopes?: string[];
+  /** Default permissions the owner did not grant. */
+  declinedScopes?: string[];
+  /** Whether replies arrive by webhook; null or absent where that is not a choice. */
+  webhooks?: 'on' | 'off' | null;
 }
 
 const APPROVE = 'Reconnect and approve all requested permissions.';
@@ -24,7 +28,9 @@ const throttler = (platform: string | undefined): string =>
     ? 'TikTok'
     : platform === 'youtube'
       ? 'YouTube'
-      : 'Meta';
+      : platform === 'threads'
+        ? 'Threads'
+        : 'Meta';
 
 function statusText(h: HealthTextInput): string | null {
   switch (h.status) {
@@ -48,10 +54,23 @@ function statusText(h: HealthTextInput): string | null {
   return 'This connection needs attention.';
 }
 
-// Delay and failed-import notice for a connection; null when there is nothing to say.
+function declinedText(scopes: string[] | undefined): string | null {
+  const named = (scopes ?? []).filter((s) => SCOPE_NAME.test(s));
+  return named.length > 0
+    ? `Permission not granted: ${named.join(', ')}. Steps that need it won't run. Reconnect and approve it to turn them on.`
+    : null;
+}
+
+// Delay, permission, webhook and failed-import notices for a connection; null when there is nothing to say.
 export function healthText(h: HealthTextInput): string | null {
-  const status = statusText(h);
-  if (h.failedImports <= 0) return status;
-  const failed = `${h.failedImports} ${h.failedImports === 1 ? 'comment' : 'comments'} couldn't be imported. FeedBouncer support has been notified.`;
-  return status ? `${status} ${failed}` : failed;
+  const failed =
+    h.failedImports > 0
+      ? `${h.failedImports} ${h.failedImports === 1 ? 'comment' : 'comments'} couldn't be imported. FeedBouncer support has been notified.`
+      : null;
+  const webhooks =
+    h.webhooks === 'off' ? 'Webhooks off: replies arrive within the poll interval.' : null;
+  const parts = [statusText(h), declinedText(h.declinedScopes), webhooks, failed].filter(
+    (p): p is string => p !== null,
+  );
+  return parts.length > 0 ? parts.join(' ') : null;
 }

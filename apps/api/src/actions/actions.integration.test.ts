@@ -325,6 +325,39 @@ describe('simulate', () => {
 });
 
 describe('action log and undo', () => {
+  it('action-log row exposes deferredUntil/deferredCode for a deferred reply', async () => {
+    const s = await seedBase(fb);
+    const { stepId } = await seedStep(fb, s, { type: 'auto_reply', template: 'Thanks!' });
+    const until = new Date(Date.now() + 15 * 60_000);
+    await withTransaction(api.pool, async (client) => {
+      const action = await client.query(
+        `INSERT INTO moderation_action (organization_id, brand_id, connection_id, comment_id, kind,
+                                        actor_type, request_key, status, reply_text, deferred_until, deferred_code)
+         VALUES ($1, $2, $3, $4, 'public_reply', 'rule', $5, 'pending', 'Thanks!', $6, 'reply_quota_exhausted')
+         RETURNING id`,
+        [fb.orgId, fb.brandId, s.connectionId, s.commentId, `auto:${stepId}`, until],
+      );
+      await client.query(
+        'UPDATE action_run_step SET moderation_action_id = $3 WHERE brand_id = $1 AND id = $2',
+        [fb.brandId, stepId, action.rows[0].id],
+      );
+    });
+    const list = await call(fb, 'GET', `/action-log?commentId=${s.commentId}`);
+    expect(list.status).toBe(200);
+    expect(list.body.items[0]).toMatchObject({
+      id: stepId,
+      deferredUntil: until.toISOString(),
+      deferredCode: 'reply_quota_exhausted',
+    });
+  });
+
+  it('action-log row has no deferral for a settled action', async () => {
+    const s = await seedBase(fb, 'hidden');
+    await seedStep(fb, s, { type: 'hide' });
+    const list = await call(fb, 'GET', `/action-log?commentId=${s.commentId}`);
+    expect(list.body.items[0]).toMatchObject({ deferredUntil: null, deferredCode: null });
+  });
+
   it('lists steps without request keys and undoes a hide once', async () => {
     const s = await seedBase(fb, 'hidden');
     const { stepId } = await seedStep(fb, s, { type: 'hide' });

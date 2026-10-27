@@ -35,6 +35,7 @@ const NATURAL_KEY_TABLES: Record<string, string> = {
   youtube_action_queue: 'PRIMARY KEY (action_id)',
   youtube_quota_pause: 'PRIMARY KEY (pacific_day)',
   youtube_notice: 'PRIMARY KEY (connection_id, kind, pacific_day)',
+  threads_pending_reply: 'PRIMARY KEY (connection_id, external_id)',
 };
 // Link and grant rows are inserted or deleted, never edited: they keep one event timestamp
 // (added_at, done_at, created_at) instead of created_at/updated_at and have no updated_at trigger.

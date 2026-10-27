@@ -87,7 +87,7 @@ export interface TestApi {
  * `deps` replaces individual AppDeps built by the harness (e.g. a failing
  * producer). Connector-backed deps exist only when a connector is configured:
  * `overrides.facebook` (plus Instagram and Meta Ads when `overrides.instagram` or
- * `overrides.metaAds` is set), `overrides.tiktok`, `overrides.tiktokAds` or `overrides.youtube`.
+ * `overrides.metaAds` is set), `overrides.tiktok`, `overrides.tiktokAds`, `overrides.youtube` or `overrides.threads`.
  * `fetch` (e.g. FakeGraph's or FakeTikTok's) then replaces the network behind
  * their SafeHttp and the free scan's Graph client.
  */
@@ -127,6 +127,7 @@ export async function startTestApi(
     tiktok: null,
     tiktokAds: null,
     youtube: null,
+    threads: null,
     classifier: { id: 'none', model: '', enabled: false },
     policy: { monthlyCallsPerBrand: 20_000, evaluatorConfigured: true },
     publicApiRateLimitPerMinute: 60,

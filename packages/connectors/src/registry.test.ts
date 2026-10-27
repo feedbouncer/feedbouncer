@@ -213,6 +213,14 @@ describe('validateConnector', () => {
 });
 
 describe('ConnectorRegistry', () => {
+  it('rejects a responsePriority that is not a Priority', () => {
+    expect(() => validateConnector(withCaps({ responsePriority: 'now' as never }))).toThrow(
+      /responsePriority/,
+    );
+    for (const responsePriority of ['urgent', 'bulk', 'background'] as const)
+      expect(() => validateConnector(withCaps({ responsePriority }))).not.toThrow();
+  });
+
   it('registers once per platform', () => {
     const r = new ConnectorRegistry();
     r.register(base());

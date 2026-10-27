@@ -94,3 +94,40 @@ it('names YouTube when YouTube throttles', () =>
   expect(h({ platform: 'youtube', reason: 'recent_failures', lastErrorCode: 'rate_limited' })).toBe(
     'Processing delayed: YouTube asked FeedBouncer to slow down. New comments are queued and will be checked; none are dropped.',
   ));
+
+it('names Threads when Threads throttles', () =>
+  expect(h({ platform: 'threads', reason: 'recent_failures', lastErrorCode: 'rate_limited' })).toBe(
+    'Processing delayed: Threads asked FeedBouncer to slow down. New comments are queued and will be checked; none are dropped.',
+  ));
+
+it('names the permissions the owner did not grant', () =>
+  expect(
+    h({
+      status: 'healthy',
+      reason: 'ok',
+      declinedScopes: ['threads_manage_replies', '<script>'],
+    }),
+  ).toBe(
+    "Permission not granted: threads_manage_replies. Steps that need it won't run. Reconnect and approve it to turn them on.",
+  ));
+
+it('says nothing about permissions when none were declined', () =>
+  expect(h({ status: 'healthy', reason: 'ok', declinedScopes: [], webhooks: 'on' })).toBeNull());
+
+it('says replies arrive by polling when webhooks are off', () =>
+  expect(h({ status: 'healthy', reason: 'ok', webhooks: 'off' })).toBe(
+    'Webhooks off: replies arrive within the poll interval.',
+  ));
+
+it('joins status, permission, webhook and import notes', () =>
+  expect(
+    h({
+      status: 'pending_first_sync',
+      reason: 'pending_first_sync',
+      declinedScopes: ['threads_content_publish'],
+      webhooks: 'off',
+      failedImports: 1,
+    }),
+  ).toBe(
+    "Waiting for the first comments. Permission not granted: threads_content_publish. Steps that need it won't run. Reconnect and approve it to turn them on. Webhooks off: replies arrive within the poll interval. 1 comment couldn't be imported. FeedBouncer support has been notified.",
+  ));

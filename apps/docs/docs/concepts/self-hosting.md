@@ -11,6 +11,7 @@ The same code runs self-hosted and in the cloud. A self-hosted instance has the 
 - The services and database, started with Docker Compose.
 - Your own Meta app, for Facebook Pages and optional Instagram. Follow the <RepoLink path="docs/self-hosting/meta-app.md">Meta app guide</RepoLink>.
 - Secrets and encryption keys.
+- Your own Threads app, if you want Threads. It is separate from the Meta app. Follow the <RepoLink path="docs/connectors/threads.md">Threads connector guide</RepoLink>.
 - The model provider for the <Term id="classifier">classifier</Term> and <Term id="policy">policies</Term>, if you want them.
 - <RepoLink path="docs/operations/data-retention.md">Data retention</RepoLink> for your deployment.
 

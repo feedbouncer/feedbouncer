@@ -480,6 +480,68 @@ describe('ConnectionClient edge cases', () => {
     expect(listComments).not.toHaveBeenCalled();
   });
 
+  it('respond draws from the bulk budget when responsePriority is bulk: with only the urgent reserve left, respond is rate_limited/budget_exhausted while act succeeds', async () => {
+    const respond = vi.fn(async (_ctx: CallContext, req: { kind: 'public_reply' }) => ({
+      status: 'sent' as const,
+      request: req,
+      platformRef: 'r1',
+    }));
+    const threadsLike = {
+      ...baseConnector,
+      platform: 'bluesky',
+      capabilities: {
+        ...baseConnector.capabilities,
+        responses: ['public_reply'],
+        responsePriority: 'bulk',
+      },
+      respond,
+    } as unknown as Connector;
+    const registry = new ConnectorRegistry();
+    registry.register(threadsLike);
+    const sc = { organizationId: 'o1', brandId: 'b1', connectionId: 'c3' };
+    directory.seed({ scope: sc, platform: 'bluesky', externalAccountId: 'bs', status: 'active' });
+    await vault.writeAccessToken(sc, { value: new Secret('access-1'), expiresAt: null });
+    await vault.writeRefreshToken(sc, { value: new Secret('refresh-1'), expiresAt: null });
+    const rt = new ConnectorRuntime({ ...runtimeDeps, registry, budget: memoryBudget() });
+    const c = await rt.connect(sc);
+    // 4 points, 2 reserved for urgent: two bulk calls use up the bulk share.
+    await c.listComments({ sourceExternalId: 's1', cursor: null });
+    await c.listComments({ sourceExternalId: 's1', cursor: null });
+    const r = await c.respond({ kind: 'public_reply', target: ref, text: 'hello' });
+    expect(r).toMatchObject({
+      status: 'failed',
+      error: { kind: 'rate_limited', code: 'budget_exhausted' },
+    });
+    expect(respond).not.toHaveBeenCalled();
+    expect((await c.act({ action: 'hide', target: ref })).status).toBe('applied');
+  });
+
+  it('respond stays urgent when the connector does not set responsePriority', async () => {
+    const respond = vi.fn(async (_ctx: CallContext, req: { kind: 'public_reply' }) => ({
+      status: 'sent' as const,
+      request: req,
+      platformRef: 'r1',
+    }));
+    const registry = new ConnectorRegistry();
+    registry.register({
+      ...baseConnector,
+      platform: 'bluesky',
+      capabilities: { ...baseConnector.capabilities, responses: ['public_reply'] },
+      respond,
+    } as unknown as Connector);
+    const sc = { organizationId: 'o1', brandId: 'b1', connectionId: 'c3' };
+    directory.seed({ scope: sc, platform: 'bluesky', externalAccountId: 'bs', status: 'active' });
+    await vault.writeAccessToken(sc, { value: new Secret('access-1'), expiresAt: null });
+    await vault.writeRefreshToken(sc, { value: new Secret('refresh-1'), expiresAt: null });
+    const rt = new ConnectorRuntime({ ...runtimeDeps, registry, budget: memoryBudget() });
+    const c = await rt.connect(sc);
+    await c.listComments({ sourceExternalId: 's1', cursor: null });
+    await c.listComments({ sourceExternalId: 's1', cursor: null });
+    expect((await c.respond({ kind: 'public_reply', target: ref, text: 'hello' })).status).toBe(
+      'sent',
+    );
+  });
+
   it('connect() reports an unregistered platform as unsupported', async () => {
     const other = { organizationId: 'o1', brandId: 'b1', connectionId: 'c2' };
     directory.seed({ scope: other, platform: 'x', externalAccountId: 'a', status: 'active' });

@@ -12,13 +12,13 @@ const KEYS = [
 ] as const;
 
 describe('isConnectable', () => {
-  it.each(['facebook', 'instagram', 'meta_ads', 'tiktok', 'tiktok_ads', 'youtube'])(
+  it.each(['facebook', 'instagram', 'meta_ads', 'tiktok', 'tiktok_ads', 'youtube', 'threads'])(
     'accepts %s',
     (p) => {
       expect(isConnectable(p)).toBe(true);
     },
   );
-  it.each(['../x', 'YouTube', 'threads', '', 'Instagram', 'TikTok', 'constructor', '__proto__'])(
+  it.each(['../x', 'YouTube', 'linkedin', '', 'Instagram', 'TikTok', 'constructor', '__proto__'])(
     'rejects %s',
     (p) => {
       expect(isConnectable(p)).toBe(false);
@@ -56,6 +56,20 @@ describe('PLATFORM_COPY', () => {
       label: 'YouTube channel',
       connectLabel: 'Connect YouTube channel',
       viewOn: 'View on YouTube',
+    });
+  });
+
+  it('has the Threads copy', () => {
+    expect(PLATFORM_COPY.threads).toEqual({
+      label: 'Threads',
+      accountNoun: 'Threads account',
+      connectLabel: 'Connect Threads account',
+      pickerTitle: 'Confirm Threads account',
+      viewOn: 'View on Threads',
+      deleteConfirm: "Threads doesn't let you delete other people's replies.",
+      pickerIntro: 'Confirm the Threads account to connect.',
+      noEligible:
+        'This Threads account could not be read. Check that it is a public or professional account, then connect again.',
     });
   });
 

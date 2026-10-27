@@ -25,7 +25,7 @@ export interface AppDeps {
   readonly health: HealthReader;
   /** Prepended to every Redis key the API writes, so tests can isolate and clean up. */
   readonly redisKeyPrefix: string;
-  /** The configured platform connectors (Meta, TikTok and YouTube). Null when none is configured. */
+  /** The configured platform connectors (Meta, TikTok, YouTube and Threads). Null when none is configured. */
   readonly connectors: { registry: ConnectorRegistry; stack: PgConnectorStack } | null;
   /** Enqueue-only job producer (the worker runs the jobs). Null when no connector is configured. */
   readonly producer: JobProducer | null;

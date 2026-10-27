@@ -1,11 +1,11 @@
-// Meta's signed webhook intake (Facebook Pages, and Instagram through Facebook
-// Login). These routes carry no session and no Origin: authenticity is the
+// Meta's signed webhook intake (Facebook Pages, Instagram through Facebook
+// Login, and Threads on its own app and secret). These routes carry no session and no Origin: authenticity is the
 // X-Hub-Signature-256 HMAC over the exact bytes received (verified by the
 // connector framework's gate) and, for the subscription handshake, the shared
 // verify token. Nothing here echoes request data except a challenge that
 // matched a strict token pattern, as text/plain.
 import type { FastifyError, FastifyInstance } from 'fastify';
-import { routeWebhookDelivery } from '@feedbouncer/comments';
+import { PgThreadsPolling, routeWebhookDelivery, threadsWakeSink } from '@feedbouncer/comments';
 import { verifyHandshake } from '@feedbouncer/connector-facebook';
 import type { Platform } from '@feedbouncer/connectors';
 import { errorFields, type Secret } from '@feedbouncer/service-runtime';
@@ -25,6 +25,7 @@ declare module 'fastify' {
 export const WEBHOOK_BODY_LIMIT = 1_048_576;
 export const FACEBOOK_WEBHOOK_PATH = '/api/v1/webhooks/facebook';
 export const INSTAGRAM_WEBHOOK_PATH = '/api/v1/webhooks/instagram';
+export const THREADS_WEBHOOK_PATH = '/api/v1/webhooks/threads';
 
 interface MetaWebhookRoute {
   platform: Platform;
@@ -54,7 +55,8 @@ export function registerMetaWebhook(scope: FastifyInstance, r: MetaWebhookRoute)
     bodyLimit: WEBHOOK_BODY_LIMIT,
     config: { publicWebhook: true },
     handler: async (req, reply) => {
-      // deliver() only enqueues; ingest runs in the worker, so nothing here waits on Graph.
+      // deliver() only enqueues (or, for Threads, records a wake-up); ingest runs in the
+      // worker, so nothing here waits on Graph.
       const outcome = await r.connectors.stack.webhooks.handle(
         {
           platform: r.platform,
@@ -77,14 +79,17 @@ export function registerMetaWebhook(scope: FastifyInstance, r: MetaWebhookRoute)
 
 export async function registerMetaWebhooks(fastify: FastifyInstance, deps: AppDeps): Promise<void> {
   const fb = deps.env.facebook;
+  const threadsToken = deps.env.threads?.webhookVerifyToken ?? null;
   const connectors = deps.connectors;
   const producer = deps.producer;
-  // Without the connector configured the routes do not exist.
-  if (!fb || !connectors || !producer) return;
+  // Without a connector configured for webhooks the routes do not exist.
+  if ((!fb && !threadsToken) || !connectors || !producer) return;
   const deliver = routeWebhookDelivery({
     directory: connectors.stack.directory,
     producer,
     log: deps.log,
+    // A Threads reply wakes its post's poll; the poll pass ingests it.
+    sinks: { threads: threadsWakeSink(new PgThreadsPolling(deps.pool)) },
   });
 
   await fastify.register(async (scope) => {
@@ -98,8 +103,8 @@ export async function registerMetaWebhooks(fastify: FastifyInstance, deps: AppDe
 
     // These routes bypass Nest's exception filter, so map errors here: the
     // envelope never carries error text (it can quote infrastructure details).
-    // A server-side failure (in practice: the job queue is unreachable) is a
-    // 503, so Meta redelivers instead of the event being dropped.
+    // A server-side failure (in practice: the job queue or database is unreachable)
+    // is a 503, so Meta redelivers instead of the event being dropped.
     scope.setErrorHandler((err: FastifyError, _req, reply) => {
       const status = err.statusCode !== undefined && err.statusCode < 500 ? err.statusCode : 503;
       if (status === 503) deps.log.error('webhook intake failed', errorFields(err));
@@ -114,14 +119,25 @@ export async function registerMetaWebhooks(fastify: FastifyInstance, deps: AppDe
       return reply.status(e.status).header('cache-control', 'no-store').send(errorBody(e));
     });
 
-    // Both platforms are subscribed on the same Meta app, so they share its verify token.
-    const common = { verifyToken: fb.webhookVerifyToken, connectors, deliver };
-    registerMetaWebhook(scope, { ...common, platform: 'facebook', path: FACEBOOK_WEBHOOK_PATH });
-    if (deps.env.instagram)
+    if (fb) {
+      // Both platforms are subscribed on the same Meta app, so they share its verify token.
+      const common = { verifyToken: fb.webhookVerifyToken, connectors, deliver };
+      registerMetaWebhook(scope, { ...common, platform: 'facebook', path: FACEBOOK_WEBHOOK_PATH });
+      if (deps.env.instagram)
+        registerMetaWebhook(scope, {
+          ...common,
+          platform: 'instagram',
+          path: INSTAGRAM_WEBHOOK_PATH,
+        });
+    }
+    // Threads has its own app: its own verify token here, its own secret in the gate.
+    if (threadsToken)
       registerMetaWebhook(scope, {
-        ...common,
-        platform: 'instagram',
-        path: INSTAGRAM_WEBHOOK_PATH,
+        platform: 'threads',
+        path: THREADS_WEBHOOK_PATH,
+        verifyToken: threadsToken,
+        connectors,
+        deliver,
       });
   });
 }

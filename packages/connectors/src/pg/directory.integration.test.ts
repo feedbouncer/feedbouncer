@@ -4,6 +4,7 @@ import type pg from 'pg';
 import { createPool } from '@feedbouncer/db';
 import { migratedDb, seedTenant, type Tenant } from '@feedbouncer/db/testing';
 import type { ConnectionScope } from '@feedbouncer/secrets';
+import { ConnectionTakenError } from '../ports.js';
 import { PgConnectionDirectory } from './directory.js';
 
 const HOURS_168_MS = 168 * 3_600_000;
@@ -200,4 +201,26 @@ describe('PgConnectionDirectory.disconnect', () => {
       { actor_type: 'system', actor_user_id: null },
     ]);
   });
+});
+
+describe('PgConnectionDirectory.upsertPending live account uniqueness', () => {
+  it.each(['facebook', 'instagram', 'threads'] as const)(
+    'another tenant cannot take a live %s account',
+    async (platform) => {
+      const other = await seedTenant(h.c, `dir-taken-${platform}`);
+      const input = (tenant: Tenant) => ({
+        organizationId: tenant.organizationId,
+        brandId: tenant.brandId,
+        platform,
+        externalAccountId: `taken-${platform}-${++n}`,
+        displayName: 'Account',
+        grantedScopes: ['read'],
+      });
+      const first = input(t);
+      await dir.upsertPending(first);
+      await expect(
+        dir.upsertPending({ ...input(other), externalAccountId: first.externalAccountId }),
+      ).rejects.toBeInstanceOf(ConnectionTakenError);
+    },
+  );
 });

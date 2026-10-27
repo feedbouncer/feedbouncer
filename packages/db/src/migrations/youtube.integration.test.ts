@@ -285,6 +285,10 @@ describe('youtube migration', () => {
   it('down.sql removes every table and re-applying round-trips', async () => {
     expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({
       status: 'rolled_back',
+      migration: '20261026000100_threads',
+    });
+    expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({
+      status: 'rolled_back',
       migration: MIGRATION,
     });
     expect(await existing()).toEqual(TABLES.map(() => false));

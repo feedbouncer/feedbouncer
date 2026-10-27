@@ -20,12 +20,23 @@ const FACEBOOK = {
   graphVersion: 'v26.0',
   webhookVerifyToken: new Secret('verify-token-0123456789'),
 };
+const THREADS = {
+  appId: '2220001112223334',
+  appSecret: new Secret('threads-app-secret-0123456789'),
+  webhookVerifyToken: new Secret('threads-verify-token-0123456789'),
+  pollIntervalSec: 600,
+  discoveryIntervalSec: 900,
+};
 // A route may have several cases (e.g. one per platform); each is listed once.
 const COVERED_ROUTES = [...new Set(CASES.map((c) => c.route))];
 
 let api: TestApi;
 beforeAll(async () => {
-  api = await startTestApi({ facebook: FACEBOOK, instagram: { meta: FACEBOOK } });
+  api = await startTestApi({
+    facebook: FACEBOOK,
+    instagram: { meta: FACEBOOK },
+    threads: THREADS,
+  });
 });
 afterAll(() => api.close());
 

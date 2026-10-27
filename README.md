@@ -4,7 +4,7 @@ FeedBouncer is an open-source comment firewall and inbox for brands that run soc
 
 ## Project status
 
-**Pre-alpha. Not for production use.** The foundations are in place: workspace and CI, data model and migrations, sign-up and organizations, encrypted token storage, the connector framework, the job queue and observability. Connectors exist for Facebook Pages, Instagram, Meta ads, TikTok Business accounts and TikTok ads. None of them has been through the platform's app review yet, and the TikTok connectors have not been checked against the live TikTok API. Interfaces and the database schema will change without notice.
+**Pre-alpha. Not for production use.** The foundations are in place: workspace and CI, data model and migrations, sign-up and organizations, encrypted token storage, the connector framework, the job queue and observability. Connectors exist for Facebook Pages, Instagram, Meta ads, TikTok Business accounts, TikTok ads, YouTube and Threads. None of them has been through the platform's app review yet, and the TikTok, YouTube and Threads connectors have not been checked against the live platform APIs. Interfaces and the database schema will change without notice.
 
 FeedBouncer is not affiliated with or endorsed by Meta, TikTok, Google/YouTube or any other platform it integrates with. Platform names are trademarks of their owners.
 
@@ -43,6 +43,7 @@ pnpm test
 | `packages/connector-facebook`        | Facebook Pages connector: OAuth, comments, moderation actions                                                |
 | `packages/connector-instagram`       | Instagram connector (Facebook Login): comments, moderation actions, replies                                  |
 | `packages/connector-meta-ads`        | Meta Ads connector: ad accounts and active ads; comments are read through the Page and Instagram connections |
+| `packages/connector-threads`         | Threads connector: a profile's replies, hide/unhide and replies, signed webhooks as poll wake-ups            |
 | `packages/connector-tiktok`          | TikTok connector: a Business account's videos and their comments, moderation actions, replies                |
 | `packages/connector-tiktok-ads`      | TikTok ads connector: advertisers and the comments on their ads, moderation actions, replies                 |
 | `packages/connector-youtube`         | YouTube connector: a channel's comment threads, hold/reject/ban moderation under a daily quota budget        |
@@ -122,6 +123,10 @@ The connector is off until `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` and `FACEBOO
 ### TikTok (optional)
 
 Two independent connectors: TikTok Business accounts (comments on your own videos) and TikTok ads (comments on an advertiser's ads). Each is off until its flag is set: `TIKTOK_CONNECTOR_ENABLED=true` with `TIKTOK_APP_ID` and `TIKTOK_APP_SECRET`, and `TIKTOK_ADS_CONNECTOR_ENABLED=true`, which reuses the same app unless `TIKTOK_ADS_APP_ID` and `TIKTOK_ADS_APP_SECRET` are set. They work without Facebook. Comments are polled, by default every 5 minutes. The worker also needs `SMTP_URL` and `PUBLIC_WEB_URL`. The TikTok connectors have not been checked against the live TikTok API yet. Setup, permissions, supported actions and limitations: [docs/connectors/tiktok.md](docs/connectors/tiktok.md) and [docs/connectors/tiktok-ads.md](docs/connectors/tiktok-ads.md).
+
+### Threads (optional)
+
+Replies to your Threads posts: hide, unhide and reply. Off until `THREADS_CONNECTOR_ENABLED=true` with `THREADS_APP_ID` and `THREADS_APP_SECRET`, from a Threads app of its own (not the Facebook app). It works without Facebook. Setting `THREADS_WEBHOOK_VERIFY_TOKEN` turns on the webhook route `/api/v1/webhooks/threads`, which makes new replies appear in seconds; without it replies are polled, by default every 10 minutes. The worker also needs `SMTP_URL` and `PUBLIC_WEB_URL` (compose sets both). Permissions, webhook setup, limits and the list of unverified behaviour: [docs/connectors/threads.md](docs/connectors/threads.md).
 
 ### Stop, restart, reset
 

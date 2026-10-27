@@ -1,4 +1,9 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["src/**/*.test.ts", "src/tiktok/test-world.ts", "src/youtube/test-world.ts"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/tiktok/test-world.ts",
+    "src/threads/test-world.ts",
+    "src/youtube/test-world.ts"
+  ]
 }

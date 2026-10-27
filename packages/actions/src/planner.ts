@@ -31,6 +31,7 @@ export interface SimulatedStep {
 const PLATFORM_NAME: Partial<Record<Platform, string>> = {
   facebook: 'Facebook',
   instagram: 'Instagram',
+  threads: 'Threads',
 };
 const WOULD_RUN: StepOutcome = { status: 'succeeded', reason: 'would_run' };
 

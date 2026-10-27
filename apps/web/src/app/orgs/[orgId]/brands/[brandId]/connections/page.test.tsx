@@ -8,6 +8,7 @@ const TT = '00000000-0000-4000-8000-000000000003';
 const YT = '00000000-0000-4000-8000-000000000004';
 
 const responses = new Map<string, unknown>();
+const requestedPaths: string[] = [];
 
 vi.mock('next/navigation', () => ({
   notFound: () => {
@@ -19,7 +20,10 @@ vi.mock('next/navigation', () => ({
 vi.mock('../../../../../../lib/server-api', () => ({
   requireMe: async () => ({ id: 'u1' }),
   loadReviewMode: async () => ({ connections: [], pendingTotal: 0, canManage: true }),
-  serverGet: async (path: string) => ({ status: 200, data: responses.get(path) ?? null }),
+  serverGet: async (path: string) => {
+    requestedPaths.push(path);
+    return { status: 200, data: responses.get(path) ?? null };
+  },
   dataOrThrow: <T,>(r: { data: T | null }) => {
     if (!r.data) throw new Error('missing');
     return r.data;
@@ -37,6 +41,7 @@ const render = async () =>
 
 beforeEach(() => {
   responses.clear();
+  requestedPaths.length = 0;
   responses.set(`/api/v1/orgs/${ORG}`, { role: 'owner' });
   responses.set(base, { connections: [] });
   responses.set(`${base}/health`, { connections: [] });
@@ -115,5 +120,65 @@ describe('connections page', () => {
     expect(html).toContain('<td>YouTube channel</td>');
     expect(html.match(/Loading YouTube budget/g)).toHaveLength(1);
     expect(html).toContain('My channel');
+  });
+
+  it('lists Threads permissions before the Threads connect button', async () => {
+    responses.set(`${base}/threads/permissions`, {
+      permissions: [
+        { scope: 'threads_basic', purpose: 'See your profile.', required: true },
+        { scope: 'threads_manage_replies', purpose: 'Hide replies.', required: false },
+      ],
+    });
+    const html = await render();
+    const list = html.indexOf('threads_manage_replies');
+    const button = html.indexOf('>Connect Threads account</button>');
+    expect(list).toBeGreaterThan(-1);
+    expect(button).toBeGreaterThan(list);
+  });
+
+  it('still shows the Threads connect button when permissions cannot be loaded', async () => {
+    const html = await render();
+    expect(html).toContain('>Connect Threads account</button>');
+  });
+
+  it('only asks for permissions on platforms that have them, not every connectable platform', async () => {
+    await render();
+    const permissionRequests = requestedPaths.filter((p) => p.endsWith('/permissions'));
+    expect(permissionRequests).toEqual([`${base}/threads/permissions`]);
+  });
+
+  it('shows what a Threads connection declined and that webhooks are off', async () => {
+    responses.set(base, {
+      connections: [
+        {
+          id: TT,
+          platform: 'threads',
+          displayName: 'shop',
+          status: 'connected',
+          statusReason: null,
+          backfill: null,
+        },
+      ],
+    });
+    responses.set(`${base}/health`, {
+      connections: [
+        {
+          connectionId: TT,
+          platform: 'threads',
+          status: 'healthy',
+          reason: 'ok',
+          lastErrorCode: null,
+          ingestLagSeconds: 0,
+          failedImports: 0,
+          missingScopes: [],
+          declinedScopes: ['threads_manage_replies'],
+          webhooks: 'off',
+        },
+      ],
+    });
+    const html = await render();
+    expect(html).toContain('<td>Threads</td>');
+    expect(html).toContain('Permission not granted: threads_manage_replies.');
+    expect(html).toContain('Webhooks off: replies arrive within the poll interval.');
   });
 });
