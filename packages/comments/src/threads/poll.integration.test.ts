@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { THREADS_FULL_SCAN_INTERVAL_SEC } from '@feedbouncer/connector-threads';
 import { classifyFailure } from '@feedbouncer/jobs';
 import type { ConnectionScope } from '@feedbouncer/secrets';
+import { BACKFILL_DEFAULTS } from '../backfill/settings.js';
 import type { CommentAppliedHook } from '../hooks.js';
 import { THREADS_POLL_JOB } from '../jobs/specs.js';
 import { threadsPollJob, type ThreadsPollResult } from './poll.js';
@@ -338,6 +340,38 @@ describe('threads_poll', () => {
     w.advance((SETTINGS.pollIntervalSec + 1) * 1000);
     await poll(scope, h.applied);
     expect(h.onApplied).toHaveBeenCalledTimes(3);
+  });
+
+  it('a busy post’s periodic full rescan is not cut short by the shared comment cap', async () => {
+    const originalMax = BACKFILL_DEFAULTS.maxComments;
+    BACKFILL_DEFAULTS.maxComments = 5;
+    try {
+      const { scope, userId } = await account('busy-rescan');
+      const { postId } = w.fake.addPost(userId, { at: ago(10 * DAY_MS) });
+      const seed = w.fake.addReply(postId, { at: ago(9 * DAY_MS), text: 'seed' }).replyId;
+      await poll(scope);
+      expect(await w.comments(scope)).toHaveLength(1);
+
+      w.advance((THREADS_FULL_SCAN_INTERVAL_SEC + 1) * 1000);
+      const fresh = Array.from(
+        { length: 12 },
+        (_, i) => w.fake.addReply(postId, { at: ago(3_600_000 - i * 1000), text: `r${i}` }).replyId,
+      );
+
+      const out = await poll(scope);
+      expect(out).toMatchObject({ created: 12 });
+      const rows = await w.comments(scope);
+      // All 13 replies (the backfilled seed plus the 12 added before the rescan) survive the
+      // rescan: the cap that bounds the one-time backfill must not truncate a periodic full
+      // rescan and have it recorded as complete anyway.
+      expect(rows.map((r) => r.external_id).sort()).toEqual([seed, ...fresh].sort());
+
+      const poll1 = (await w.sourcePoll(scope, postId))!;
+      expect(poll1.resume_cursor).toBeNull();
+      expect(poll1.last_full_scan_at).toEqual(w.now());
+    } finally {
+      BACKFILL_DEFAULTS.maxComments = originalMax;
+    }
   });
 
   it('empty-text media reply and emoji/RTL/CJK replies are stored byte-exact', async () => {

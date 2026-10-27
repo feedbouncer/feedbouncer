@@ -81,7 +81,7 @@ interface Pass {
   readonly own: string;
   readonly now: Date;
   readonly backfilling: boolean;
-  /** Replies a first pass or a full scan may still read in this job. */
+  /** Backfill replies still allowed on the connection's first pass. */
   cap: number;
   /** Individual lookups of pending replies this job may still make. */
   lookups: number;
@@ -164,7 +164,7 @@ async function pollSource(
     let ended = page.nextCursor === null;
     const read: string[] = [];
     for (const c of page.items) {
-      if (c.postedAt < floor || (boundary === null && p.cap <= 0)) {
+      if (c.postedAt < floor || (origin === 'backfill' && p.cap <= 0)) {
         ended = true;
         break;
       }
@@ -172,7 +172,7 @@ async function pollSource(
       read.push(c.externalId);
       newest = max(newest, c.postedAt);
       lastReply = max(lastReply, c.postedAt);
-      if (boundary === null) p.cap--;
+      if (origin === 'backfill') p.cap--;
     }
     await d.polling.resolvePending(scope, read);
     if (ended) {
@@ -317,7 +317,7 @@ export function threadsPollJob(d: ThreadsPollDeps): JobDefinition<{ bucket: numb
         backfilling,
         cap: backfilling
           ? BACKFILL_DEFAULTS.maxComments - (await d.polling.backfilledCount(ctx.scope))
-          : BACKFILL_DEFAULTS.maxComments,
+          : Infinity,
         lookups: THREADS_PENDING_LOOKUPS_PER_PASS,
         counts,
         failure,
