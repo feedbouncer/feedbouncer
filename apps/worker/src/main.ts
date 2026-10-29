@@ -321,7 +321,7 @@ try {
       log,
       sleep,
     }),
-    { connection: redis, concurrency: env.concurrency, autorun: false },
+    { connection: redis, prefix: env.jobs.prefix, concurrency: env.concurrency, autorun: false },
   );
   worker.on('failed', (job, err) =>
     log.error('job failed', { jobId: job?.id ?? null, ...errorFields(err) }),

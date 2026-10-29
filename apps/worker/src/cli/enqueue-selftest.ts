@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { Queue } from 'bullmq';
+import { loadJobsConfig } from '@feedbouncer/jobs';
 import { REDIS_PROTOCOLS, readUrl, redact } from '@feedbouncer/service-runtime';
 import { SELFTEST_JOB, SYSTEM_QUEUE } from '../processor.js';
 
@@ -62,7 +63,10 @@ export function selftestJobs(args: EnqueueArgs) {
 async function main(): Promise<void> {
   const args = parseEnqueueArgs(process.argv.slice(2));
   const redisUrl = readUrl(process.env, 'REDIS_URL', REDIS_PROTOCOLS);
-  const queue = new Queue(SYSTEM_QUEUE, { connection: { url: redisUrl.href } });
+  // Must match the worker's own prefix (env.jobs.prefix), or enqueued jobs sit under a
+  // different keyspace than the one the SYSTEM_QUEUE worker is actually watching.
+  const { prefix } = loadJobsConfig(process.env);
+  const queue = new Queue(SYSTEM_QUEUE, { connection: { url: redisUrl.href }, prefix });
   queue.on('error', () => {});
   try {
     await queue.addBulk(selftestJobs(args));
