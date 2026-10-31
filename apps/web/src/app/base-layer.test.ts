@@ -5,7 +5,10 @@ const css = readFileSync('src/app/globals.css', 'utf8');
 
 describe('base layer', () => {
   it.each([
-    [':focus-visible outline', /:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--fb-accent\)/],
+    [
+      ':focus-visible outline',
+      /:where\(:focus-visible\)\s*\{[^}]*outline:\s*2px solid var\(--fb-accent\)/,
+    ],
     [
       'reduced-motion block',
       /@media \(prefers-reduced-motion: reduce\)[\s\S]*transition-duration:\s*var\(--fb-dur-reduced\) !important/,

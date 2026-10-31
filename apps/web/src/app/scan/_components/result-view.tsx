@@ -20,9 +20,7 @@ export function ResultView({
   const ads = totals.adsCovered === 1 ? 'ad' : `${totals.adsCovered} ads`;
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="min-w-0 truncate" title={pageName}>
-        {pageName}
-      </h1>
+      <h1 className="min-w-0 break-words">{pageName}</h1>
       <h2>
         {hasShare
           ? `${pct(result.sharePct ?? 0)} of comments on your last ${ads} look like scam or spam`

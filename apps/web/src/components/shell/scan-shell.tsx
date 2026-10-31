@@ -1,11 +1,9 @@
 import type { ReactNode } from 'react';
-import { SkipLink } from './skip-link';
 import { Wordmark } from './wordmark';
 
 export function ScanShell({ children }: { children: ReactNode }) {
   return (
     <>
-      <SkipLink />
       <header
         data-shell="scan"
         className="sticky top-0 z-10 border-b bg-background/85 backdrop-blur-[10px]"

@@ -2,7 +2,6 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { brandNav, type NavItem } from '@/lib/nav';
 import { NavLinks } from './nav-links';
-import { SkipLink } from './skip-link';
 import { Wordmark } from './wordmark';
 
 const linkClass =
@@ -11,7 +10,6 @@ const linkClass =
 export function AppShell({ nav, children }: { nav?: NavItem[]; children: ReactNode }) {
   return (
     <>
-      <SkipLink />
       <header
         data-shell="app"
         className="sticky top-0 z-10 border-b bg-background/85 backdrop-blur-[10px]"

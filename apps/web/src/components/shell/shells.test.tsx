@@ -22,13 +22,15 @@ const cases: [string, string, string][] = [
 ];
 
 describe('shells', () => {
-  it.each(cases)('%s puts the skip link first and exposes #content', (_n, shell, html) => {
-    expect(html.indexOf('Skip to content')).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf('Skip to content')).toBeLessThan(html.indexOf('child'));
-    expect(html).toContain('id="content"');
-    expect(html).toContain(`data-shell="${shell}"`);
-    expect(html).not.toMatch(/https?:\/\//);
-  });
+  it.each(cases)(
+    '%s exposes #content and leaves the skip link to the root layout',
+    (_n, shell, html) => {
+      expect(html).not.toContain('Skip to content');
+      expect(html).toContain('id="content"');
+      expect(html).toContain(`data-shell="${shell}"`);
+      expect(html).not.toMatch(/https?:\/\//);
+    },
+  );
 
   it('AppShell renders the org nav and header links', () => {
     const html = renderToStaticMarkup(<AppShell nav={orgNav(O)}>{child}</AppShell>);

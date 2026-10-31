@@ -1,11 +1,9 @@
 import type { ReactNode } from 'react';
-import { SkipLink } from './skip-link';
 import { Wordmark } from './wordmark';
 
 export function StandaloneShell({ children }: { children: ReactNode }) {
   return (
     <>
-      <SkipLink />
       <header data-shell="standalone" className="border-b">
         <div className="mx-auto flex min-h-(--fb-header-h) w-full max-w-content items-center px-(--fb-gutter)">
           <Wordmark href="/" />

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { SkipLink } from '../components/shell/skip-link';
 import { BetaNotice } from '../components/beta-notice';
 import { cn } from '../lib/utils';
 import { body, display } from './fonts';
@@ -11,6 +12,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={cn('dark', display.variable, body.variable)}>
       <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
+        <SkipLink />
         <BetaNotice />
         {children}
       </body>

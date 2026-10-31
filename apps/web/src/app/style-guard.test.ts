@@ -23,12 +23,10 @@ describe('style guard', () => {
     ).toEqual([]);
   });
 
-  it('(b) has no inline style={{ outside comment-body.tsx', () => {
+  it('(b) has no inline style={ outside comment-body.tsx', () => {
     // comment-body.tsx is allowlisted: comment-body.test.tsx asserts its inline style.
     expect(
-      offenders(
-        (l, _ls, _i, f) => f !== 'src/components/comment-body.tsx' && l.includes('style={{'),
-      ),
+      offenders((l, _ls, _i, f) => f !== 'src/components/comment-body.tsx' && /\bstyle=\{/.test(l)),
     ).toEqual([]);
   });
 

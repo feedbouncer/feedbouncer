@@ -12,8 +12,6 @@ const SOURCE_NOTE = {
   live: 'Calculated from current data. No weekly email was created for this week.',
 } as const;
 
-const numeric = { textAlign: 'right' } as const;
-
 /** The weekly email's sections, from the same ReportView, so labels and rounding are identical. */
 export function WeeklyReport({
   view,
@@ -59,7 +57,11 @@ export function WeeklyReport({
                   <thead>
                     <tr>
                       {TOP_ADS_COLUMNS.map((c, i) => (
-                        <th key={c} scope="col" style={i < 2 ? undefined : numeric}>
+                        <th
+                          key={c}
+                          scope="col"
+                          className={i < 2 ? undefined : 'text-end tabular-nums'}
+                        >
                           {c}
                         </th>
                       ))}
@@ -71,9 +73,9 @@ export function WeeklyReport({
                       <tr key={i}>
                         <td>{a.archived ? `${a.ad} (archived)` : a.ad}</td>
                         <td>{a.platform}</td>
-                        <td style={numeric}>{a.hidden}</td>
-                        <td style={numeric}>{a.total}</td>
-                        <td style={numeric}>{a.share}</td>
+                        <td className="text-end tabular-nums">{a.hidden}</td>
+                        <td className="text-end tabular-nums">{a.total}</td>
+                        <td className="text-end tabular-nums">{a.share}</td>
                       </tr>
                     ))}
                   </tbody>

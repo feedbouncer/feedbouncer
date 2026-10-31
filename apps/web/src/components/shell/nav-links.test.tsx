@@ -12,6 +12,7 @@ describe('NavLinks', () => {
     const html = renderToStaticMarkup(<NavLinks items={orgNav(O)} label="Organization" />);
     expect(html).toContain('aria-label="Organization"');
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(html.match(/<li class="shrink-0"/g)).toHaveLength(orgNav(O).length);
     expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*>Comments<\/a>/);
   });
 });

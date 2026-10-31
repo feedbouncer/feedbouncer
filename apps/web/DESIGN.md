@@ -56,16 +56,16 @@ Weights match the website's font request (`index.html:12`): display 500, 600, 70
 
 Tailwind's default `--spacing: 0.25rem` stays. The named layout tokens are:
 
-| token            | value    | website source | Tailwind utility       |
-| ---------------- | -------- | -------------- | ---------------------- |
-| `--fb-gutter`    | `24px`   | styles.css:96  | `px-(--fb-gutter)`     |
-| `--fb-header-h`  | `68px`   | styles.css:147 | `h-(--fb-header-h)`    |
-| `--fb-section-y` | `72px`   | styles.css:365 | `py-(--fb-section-y)`  |
-| `--fb-card-pad`  | `26px`   | styles.css:470 | `p-(--fb-card-pad)`    |
-| `--fb-form-gap`  | `16px`   | styles.css:653 | `gap-(--fb-form-gap)`  |
-| `--fb-field-gap` | `6px`    | styles.css:659 | `gap-(--fb-field-gap)` |
-| `--fb-maxw`      | `1120px` | styles.css:14  | `max-w-content`        |
-| `--fb-lede-maxw` | `620px`  | styles.css:306 | `max-w-lede`           |
+| token            | value    | website source | Tailwind utility        |
+| ---------------- | -------- | -------------- | ----------------------- |
+| `--fb-gutter`    | `24px`   | styles.css:96  | `px-(--fb-gutter)`      |
+| `--fb-header-h`  | `68px`   | styles.css:147 | `min-h-(--fb-header-h)` |
+| `--fb-section-y` | `72px`   | styles.css:365 | `py-(--fb-section-y)`   |
+| `--fb-card-pad`  | `26px`   | styles.css:470 | `p-(--fb-card-pad)`     |
+| `--fb-form-gap`  | `16px`   | styles.css:653 | `gap-(--fb-form-gap)`   |
+| `--fb-field-gap` | `6px`    | styles.css:659 | `gap-(--fb-field-gap)`  |
+| `--fb-maxw`      | `1120px` | styles.css:14  | `max-w-content`         |
+| `--fb-lede-maxw` | `620px`  | styles.css:306 | `max-w-lede`            |
 
 ### Radius
 
@@ -125,7 +125,7 @@ The website has no equivalent for these.
 
 ## Contrast results
 
-Computed by `src/app/tokens.test.ts`. Columns are the surfaces `--fb-bg`, `--fb-bg-elevated` and `--fb-bg-card`.
+These figures are recomputed from the tokens in `globals.css`; `src/app/tokens.test.ts` asserts the thresholds (not the printed numbers). Columns are the surfaces `--fb-bg`, `--fb-bg-elevated` and `--fb-bg-card`.
 
 | foreground on background                                     | bg    | elevated | card  | requirement |
 | ------------------------------------------------------------ | ----- | -------- | ----- | ----------- |
@@ -162,12 +162,14 @@ Headings use `--fb-leading-heading` (1.2) and the display family.
 
 ## How to style a new screen
 
-1. Use the shell (header, page container and footer) rather than building your own layout chrome.
+1. Use the shell (header and page container) rather than building your own layout chrome.
 2. Use the primitives in `src/components/ui` (button, input, card and the rest) before writing new markup.
 3. Never write raw values. Colours, font sizes, radii, shadows and durations come from the utilities above. If a value is missing, add it to `:root` and this document together.
 4. Use logical utilities (`ps-`, `pe-`, `ms-`, `me-`, `text-start`, `text-end`, `start-`, `end-`), never the physical left and right ones, so right-to-left comment content lays out correctly.
 
 ## Keeping in sync
+
+0. `themeColor: '#0b0e14'` in the `viewport` export of `src/app/layout.tsx` is the one hex outside `globals.css`. It is copied from `--fb-bg` and must change with it.
 
 1. Re-diff `feedbouncer-website/styles.css:1-18` against the "Copied from feedbouncer-website" tables.
 2. Update the `:root` block in `src/app/globals.css` and this document in the same change. `src/app/design-doc.test.ts` fails if a token or its value is missing here.

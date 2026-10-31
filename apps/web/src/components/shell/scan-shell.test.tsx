@@ -19,9 +19,8 @@ describe('ScanShell', () => {
     expect(html).not.toMatch(/https?:\/\//);
   });
 
-  it('puts the skip link before the children', () => {
-    expect(html.indexOf('Skip to content')).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf('Skip to content')).toBeLessThan(html.indexOf('child'));
+  it('leaves the skip link to the root layout', () => {
+    expect(html).not.toContain('Skip to content');
   });
 });
 

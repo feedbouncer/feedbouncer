@@ -13,7 +13,7 @@ export function NavLinks({ items, label }: { items: NavItem[]; label: string }) 
         {items.map((item) => {
           const active = isActive(pathname, item);
           return (
-            <li key={item.href}>
+            <li key={item.href} className="shrink-0">
               <Link
                 href={item.href}
                 aria-current={active ? 'page' : undefined}

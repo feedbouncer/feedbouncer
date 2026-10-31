@@ -66,8 +66,7 @@ export default async function ScanPage({
                 <Card className="flex-row flex-wrap items-center gap-x-3 gap-y-2 px-(--fb-card-pad) py-4">
                   <Link
                     href={`/scan/results/${s.id}`}
-                    title={s.pageName}
-                    className="min-w-0 flex-1 truncate font-semibold"
+                    className="min-w-0 flex-1 break-words font-semibold"
                   >
                     {s.pageName}
                   </Link>
