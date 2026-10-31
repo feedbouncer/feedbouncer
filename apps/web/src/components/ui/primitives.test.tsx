@@ -32,6 +32,11 @@ describe('Button', () => {
     }
   });
 
+  it('keeps its font size next to the text colour', () => {
+    expect(renderToStaticMarkup(<Button>x</Button>)).toContain('text-ui');
+    expect(renderToStaticMarkup(<Button size="sm">x</Button>)).toContain('text-small');
+  });
+
   it('icon size is square 10', () => {
     expect(renderToStaticMarkup(<Button size="icon">x</Button>)).toContain('size-10');
   });
@@ -42,6 +47,11 @@ describe('Badge', () => {
     const html = renderToStaticMarkup(<Badge variant="coral">x</Badge>);
     expect(html).toContain('text-coral-strong');
     expect(html).not.toContain('text-coral ');
+  });
+  it('keeps text-caption in every variant', () => {
+    for (const v of ['default', 'good', 'coral', 'danger', 'destructive'] as const) {
+      expect(renderToStaticMarkup(<Badge variant={v}>x</Badge>)).toContain('text-caption');
+    }
   });
   it('good and danger', () => {
     expect(renderToStaticMarkup(<Badge variant="good">x</Badge>)).toContain('text-good');
