@@ -1,6 +1,6 @@
 'use client';
-import { TableScroll } from '@/components/states';
 import { useState } from 'react';
+import { TableScroll } from '../states';
 import {
   CATEGORY_LABEL,
   buildThresholdUpdate,

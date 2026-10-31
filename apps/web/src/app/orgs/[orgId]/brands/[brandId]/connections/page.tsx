@@ -1,4 +1,4 @@
-import { TableScroll } from '@/components/states';
+import { TableScroll } from '../../../../../../components/states';
 import { AlertsNavLink } from '../../../../../../components/alerts/alerts-nav-link';
 import Link from 'next/link';
 import { Fragment } from 'react';

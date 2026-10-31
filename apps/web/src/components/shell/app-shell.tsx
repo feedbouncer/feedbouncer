@@ -12,7 +12,7 @@ export function AppShell({ nav, children }: { nav?: NavItem[]; children: ReactNo
     <>
       <header
         data-shell="app"
-        className="sticky top-0 z-10 border-b bg-background/85 backdrop-blur-[10px]"
+        className="sticky top-0 z-10 border-b bg-background/85 backdrop-blur-(--fb-blur-header)"
       >
         <div className="mx-auto w-full max-w-content px-(--fb-gutter)">
           <div className="flex min-h-(--fb-header-h) items-center justify-between gap-4">

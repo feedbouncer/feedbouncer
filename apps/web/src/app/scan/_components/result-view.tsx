@@ -1,5 +1,5 @@
-import { TableScroll } from '@/components/states';
 import type { ScanFailure, ScanResultV1 } from '@feedbouncer/scan/contract';
+import { TableScroll } from '../../../components/states';
 import { CATEGORY_LABEL, NOTICE_COPY, TAG_LABEL, errorCopy } from './copy';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;

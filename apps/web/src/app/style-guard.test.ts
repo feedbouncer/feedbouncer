@@ -40,11 +40,7 @@ describe('style guard', () => {
   it('(d) has no arbitrary raw values', () => {
     const re =
       /(rounded|text|font|max-w|duration|ease|shadow|p[xytrbl]?|m[xytrbl]?|gap)-\[[^\]]*\d(px|ms|rem)/;
-    expect(
-      offenders((l) =>
-        re.test(l.replace(/scale-\[\.97\]|backdrop-blur-\[10px\]|bg-background\/85/g, '')),
-      ),
-    ).toEqual([]);
+    expect(offenders((l) => re.test(l) || /(?:scale|blur)-\[/.test(l))).toEqual([]);
   });
 
   it('(e) uses logical, not physical, direction utilities', () => {
@@ -69,7 +65,7 @@ describe('style guard', () => {
       if (!/>\s*(No |Nothing )/.test(line)) return false;
       if (allow.some((a) => line.includes(a))) return false;
       const near = [line, lines[i - 1] ?? ''];
-      return !near.some((l) => l.includes('data-state="empty"') || l.includes('<EmptyPanel'));
+      return !near.some((l) => l.includes('data-state="empty"'));
     });
     expect(bad).toEqual([]);
   });

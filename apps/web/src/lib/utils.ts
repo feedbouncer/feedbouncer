@@ -4,7 +4,7 @@ import { extendTailwindMerge } from 'tailwind-merge';
 // Custom `--text-*` theme tokens from globals.css. Without registering them
 // as font sizes, tailwind-merge reads `text-ui` etc. as colours and drops them
 // when a text colour follows.
-const FONT_SIZES = [
+export const FONT_SIZES = [
   'micro',
   'caption',
   'small',

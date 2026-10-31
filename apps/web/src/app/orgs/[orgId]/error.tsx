@@ -12,15 +12,17 @@ export default function OrgError({
   reset: () => void;
 }) {
   return (
-    <Card className="max-w-form">
-      <CardContent className="flex flex-col gap-4">
-        <ErrorPanel title="Something went wrong">
-          {error.digest ? <p className="text-small text-dim">Reference: {error.digest}</p> : null}
-        </ErrorPanel>
-        <div>
-          <Button onClick={reset}>Try again</Button>
-        </div>
-      </CardContent>
-    </Card>
+    <main>
+      <Card className="max-w-form">
+        <CardContent className="flex flex-col gap-4">
+          <ErrorPanel title="Something went wrong">
+            {error.digest ? <p className="text-small text-dim">Reference: {error.digest}</p> : null}
+          </ErrorPanel>
+          <div>
+            <Button onClick={reset}>Try again</Button>
+          </div>
+        </CardContent>
+      </Card>
+    </main>
   );
 }

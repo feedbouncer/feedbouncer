@@ -92,15 +92,17 @@ These override shadcn's calc-based radius scale with the website's values.
 
 ### Motion
 
-| token                | value                      | website source | Tailwind utility                |
-| -------------------- | -------------------------- | -------------- | ------------------------------- |
-| `--fb-ease-out`      | `cubic-bezier(.16,1,.3,1)` | styles.css:49  | `ease-fb`                       |
-| `--fb-dur-press`     | `150ms`                    | styles.css:209 | `duration-(--fb-dur-press)`     |
-| `--fb-dur-hover`     | `200ms`                    | styles.css:124 | `duration-(--fb-dur-hover)`     |
-| `--fb-dur-underline` | `250ms`                    | styles.css:187 | `duration-(--fb-dur-underline)` |
-| `--fb-dur-glow`      | `300ms`                    | styles.css:480 | `duration-(--fb-dur-glow)`      |
+| token                | value                      | website source | Tailwind utility                   |
+| -------------------- | -------------------------- | -------------- | ---------------------------------- |
+| `--fb-ease-out`      | `cubic-bezier(.16,1,.3,1)` | styles.css:49  | `ease-fb`                          |
+| `--fb-dur-press`     | `150ms`                    | styles.css:209 | `duration-(--fb-dur-press)`        |
+| `--fb-dur-hover`     | `200ms`                    | styles.css:124 | `duration-(--fb-dur-hover)`        |
+| `--fb-dur-underline` | `250ms`                    | styles.css:187 | `duration-(--fb-dur-underline)`    |
+| `--fb-dur-glow`      | `300ms`                    | styles.css:480 | `duration-(--fb-dur-glow)`         |
+| `--fb-scale-press`   | `0.97`                     | styles.css:217 | `scale-(--fb-scale-press)`         |
+| `--fb-blur-header`   | `10px`                     | styles.css:139 | `backdrop-blur-(--fb-blur-header)` |
 
-Rules: button hover is `translateY(-2px)` and active is `scale(.97)` (styles.css:213, 217). Every transform transition is written with `motion-safe:`. The reduced-motion block is copied from styles.css:28-38.
+Rules: button hover is `translateY(-2px)` and active is `scale(.97)` (styles.css:213, 217), held in `--fb-scale-press`. Every transform transition is written with `motion-safe:`. The reduced-motion block is copied from styles.css:28-38.
 
 ## App-only tokens
 
@@ -169,9 +171,9 @@ Headings use `--fb-leading-heading` (1.2) and the display family.
 
 ## Keeping in sync
 
-0. `themeColor: '#0b0e14'` in the `viewport` export of `src/app/layout.tsx` is the one hex outside `globals.css`. It is copied from `--fb-bg` and must change with it.
+1. `themeColor: '#0b0e14'` in the `viewport` export of `src/app/layout.tsx` is the one hex outside `globals.css`. It is copied from `--fb-bg` and must change with it.
 
-1. Re-diff `feedbouncer-website/styles.css:1-18` against the "Copied from feedbouncer-website" tables.
-2. Update the `:root` block in `src/app/globals.css` and this document in the same change. `src/app/design-doc.test.ts` fails if a token or its value is missing here.
-3. Re-run the tests: `src/app/tokens.test.ts` re-proves every contrast pair above.
-4. Do not add a light theme or a `.dark` override block; the website ships none.
+2. Re-diff `feedbouncer-website/styles.css:1-18` against the "Copied from feedbouncer-website" tables.
+3. Update the `:root` block in `src/app/globals.css` and this document in the same change. `src/app/design-doc.test.ts` fails if a token or its value is missing here.
+4. Re-run the tests: `src/app/tokens.test.ts` re-proves every contrast pair above.
+5. Do not add a light theme or a `.dark` override block; the website ships none.

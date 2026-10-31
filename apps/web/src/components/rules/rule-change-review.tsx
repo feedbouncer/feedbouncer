@@ -1,7 +1,7 @@
 'use client';
-import { TableScroll } from '@/components/states';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { TableScroll } from '../states';
 import { formatUtc } from '../../lib/format';
 import {
   STALE_TEXT,

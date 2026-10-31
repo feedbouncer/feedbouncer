@@ -1,7 +1,4 @@
 @import 'tailwindcss';
-@import 'tw-animate-css';
-
-@custom-variant dark (&:is(.dark *));
 
 /* Design tokens. Values marked as copied come from feedbouncer-website/styles.css; see DESIGN.md. */
 :root {
@@ -85,6 +82,10 @@
   --fb-dur-underline: 250ms;
   --fb-dur-glow: 300ms;
   --fb-dur-reduced: 0.001ms;
+  --fb-scale-press: 0.97;
+
+  /* Glass */
+  --fb-blur-header: 10px;
 
   /* shadcn semantic variables. `accent` is a neutral hover surface, not coral. */
   --background: var(--fb-bg);
@@ -230,6 +231,9 @@
   }
   th {
     @apply bg-elevated px-4.5 py-3.5 text-start text-caption tracking-caption text-faint uppercase;
+  }
+  th[scope='row'] {
+    @apply bg-transparent text-ui font-semibold tracking-normal text-foreground normal-case;
   }
   td {
     @apply border-b border-border px-4.5 py-3.5 align-top;

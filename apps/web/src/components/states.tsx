@@ -2,15 +2,6 @@ import type { ReactNode } from 'react';
 import { CircleAlert } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export function EmptyPanel({ title, children }: { title: string; children?: ReactNode }) {
-  return (
-    <div data-state="empty">
-      <p>{title}</p>
-      {children}
-    </div>
-  );
-}
-
 export function LoadingPanel({ label, rows = 3 }: { label: string; rows?: number }) {
   return (
     <div

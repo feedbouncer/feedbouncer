@@ -1,4 +1,4 @@
-import { TableScroll } from '@/components/states';
+import { TableScroll } from '../states';
 import { POLICY_ACTION_LABEL, previewSummary, type PreviewView } from '../../lib/policies';
 
 export function PolicyPreview({ view }: { view: PreviewView }) {

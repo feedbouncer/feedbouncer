@@ -1,8 +1,8 @@
 'use client';
-import { TableScroll } from '@/components/states';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { TableScroll } from '../states';
 import { apiFetch } from '../../lib/api-client';
 import {
   POLICY_ACTION_LABEL,

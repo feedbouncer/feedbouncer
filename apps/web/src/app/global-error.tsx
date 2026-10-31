@@ -12,7 +12,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
         <main className="mx-auto flex min-h-dvh w-full max-w-form flex-col justify-center gap-4 px-4">
           <ErrorPanel title="Something went wrong">

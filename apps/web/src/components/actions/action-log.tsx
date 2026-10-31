@@ -1,8 +1,8 @@
 'use client';
-import { TableScroll } from '@/components/states';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { TableScroll } from '../states';
 import {
   POLL_LIMIT,
   POLL_MS,

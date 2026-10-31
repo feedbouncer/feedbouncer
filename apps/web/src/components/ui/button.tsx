@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
-import { Slot } from 'radix-ui';
+import { Slot } from '@radix-ui/react-slot';
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-transparent text-ui font-semibold whitespace-nowrap duration-(--fb-dur-hover) ease-fb motion-safe:transition-[color,background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-[.97] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-transparent text-ui font-semibold whitespace-nowrap duration-(--fb-dur-hover) ease-fb motion-safe:transition-[color,background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-(--fb-scale-press) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -43,7 +43,7 @@ function Button({
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean;
   }) {
-  const Comp = asChild ? Slot.Root : 'button';
+  const Comp = asChild ? Slot : 'button';
 
   return (
     <Comp

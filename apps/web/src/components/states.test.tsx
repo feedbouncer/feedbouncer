@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { EmptyPanel, ErrorPanel, LoadingPanel, TableScroll } from './states';
+import { ErrorPanel, LoadingPanel, TableScroll } from './states';
 
 describe('state panels', () => {
   it('LoadingPanel is a polite busy status with skeleton rows', () => {
@@ -28,12 +28,6 @@ describe('state panels', () => {
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain('details');
     expect(html).toContain('Retry');
-  });
-
-  it('EmptyPanel renders the title paragraph with empty state', () => {
-    const html = renderToStaticMarkup(<EmptyPanel title="No rules yet." />);
-    expect(html).toContain('<p>No rules yet.</p>');
-    expect(html).toContain('data-state="empty"');
   });
 
   it('TableScroll scrolls horizontally', () => {

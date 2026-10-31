@@ -10,7 +10,7 @@ export const viewport = { colorScheme: 'dark', themeColor: '#0b0e14' };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={cn('dark', display.variable, body.variable)}>
+    <html lang="en" className={cn(display.variable, body.variable)}>
       <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
         <SkipLink />
         <BetaNotice />

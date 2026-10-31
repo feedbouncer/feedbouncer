@@ -1,4 +1,3 @@
-import { TableScroll } from '@/components/states';
 import {
   NONE_QUALIFY,
   REPORT_HEADINGS,
@@ -6,6 +5,7 @@ import {
   TOP_ADS_EXPLAINER,
   type ReportView,
 } from '@feedbouncer/reports/shared';
+import { TableScroll } from '../states';
 
 const SOURCE_NOTE = {
   snapshot: 'These are the numbers from the weekly email, as computed when the report was created.',

@@ -20,6 +20,7 @@ describe('base layer', () => {
     ['dialog', /\[role=["']?dialog["']?\]/],
     ['empty state', /\[data-state=["']?empty["']?\]/],
     ['autofill', /-webkit-autofill/],
+    ['row header reset', /th\[scope=['"]?row['"]?\]/],
     ['control height', /min-height:\s*40px/],
   ])('has %s', (_name, re) => {
     expect(css).toMatch(re);

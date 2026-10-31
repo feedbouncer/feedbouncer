@@ -1,8 +1,8 @@
 'use client';
-import { TableScroll } from '@/components/states';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { TableScroll } from '../states';
 import { ApiRequestError, apiFetch } from '../../lib/api-client';
 import { messageFor } from '../../lib/messages';
 import { STEP_LABEL } from '../../lib/actions';

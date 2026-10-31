@@ -1,6 +1,6 @@
-import { TableScroll } from '@/components/states';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { TableScroll } from '../../../../../../components/states';
 import { resolutionText, type AdView } from '../../../../../../lib/ads';
 import { formatUtc } from '../../../../../../lib/format';
 import { isUuid } from '../../../../../../lib/ids';

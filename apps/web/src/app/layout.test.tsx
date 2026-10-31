@@ -8,14 +8,13 @@ vi.mock('./globals.css', () => ({}));
 import RootLayout from './layout';
 
 describe('RootLayout', () => {
-  it('renders a dark html element with font variables and its children', () => {
+  it('renders an html element with font variables and its children', () => {
     const html = renderToStaticMarkup(
       <RootLayout>
         <main>hello</main>
       </RootLayout>,
     );
     const tag = /<html[^>]*>/.exec(html)?.[0] ?? '';
-    expect(tag).toMatch(/class="[^"]*\bdark\b/);
     expect(tag).toMatch(/class="[^"]*\bfd\b/);
     expect(tag).toMatch(/class="[^"]*\bfb\b/);
     expect(tag).toContain('lang="en"');

@@ -1,7 +1,7 @@
 'use client';
-import { TableScroll } from '@/components/states';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
+import { TableScroll } from '../states';
 import { apiFetch } from '../../lib/api-client';
 import {
   ACCESS_HELP,

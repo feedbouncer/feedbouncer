@@ -1,6 +1,6 @@
-import { TableScroll } from '@/components/states';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { TableScroll } from '../../../../../../../components/states';
 import { decisionText } from '../../../../../../../components/rules/decision-badge';
 import {
   CATEGORIES,

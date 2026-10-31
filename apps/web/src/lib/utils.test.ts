@@ -1,22 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { cn } from './utils';
+import { readFileSync } from 'node:fs';
+import { cn, FONT_SIZES } from './utils';
 
 describe('cn', () => {
-  it.each([
-    'micro',
-    'caption',
-    'small',
-    'label',
-    'ui',
-    'body',
-    'card-title',
-    'lede',
-    'brand',
-    'section',
-    'page',
-    'hero',
-  ])('keeps custom font size text-%s next to a text colour', (size) => {
+  it.each(FONT_SIZES)('keeps custom font size text-%s next to a text colour', (size) => {
     expect(cn(`text-${size}`, 'text-good')).toBe(`text-${size} text-good`);
+  });
+
+  it('registers exactly the --text-* sizes declared in globals.css', () => {
+    const css = readFileSync('src/app/globals.css', 'utf8');
+    const declared = [...css.matchAll(/^\s*--text-([\w-]+):/gm)]
+      .map((m) => m[1]!)
+      .filter((name) => !name.includes('--'));
+    expect([...FONT_SIZES].sort()).toEqual(declared.sort());
   });
 
   it('still dedupes real conflicts', () => {
