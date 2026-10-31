@@ -105,13 +105,14 @@ Rules: button hover is `translateY(-2px)` and active is `scale(.97)` (styles.css
 
 The website has no equivalent for these.
 
-| token                  | value     | website source                                                                                                | Tailwind utility                |
-| ---------------------- | --------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `--fb-input`           | `#5f6880` | app-only: control borders need at least 3:1 against every surface (WCAG 1.4.11); `--fb-border` is about 1.3:1 | `border-input`                  |
-| `--fb-danger`          | `#f2786a` | app-only: errors and destructive actions; the website has no error state                                      | `text-danger`, `bg-destructive` |
-| `--fb-accent-strong`   | `#f08a75` | app-only: small coral text on the coral tint; plain coral there is about 3.96:1 on a card                     | `text-coral-strong`             |
-| `--fb-leading-heading` | `1.2`     | app-only: the website leaves headings at the inherited 1.6, which is too loose for multi-line app headings    | `leading-heading`               |
-| `--fb-form-maxw`       | `440px`   | app-only: the website has no standalone forms                                                                 | `max-w-form`                    |
+| token                  | value     | website source                                                                                                 | Tailwind utility                |
+| ---------------------- | --------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `--fb-input`           | `#5f6880` | app-only: control borders need at least 3:1 against every surface (WCAG 1.4.11); `--fb-border` is about 1.3:1  | `border-input`                  |
+| `--fb-danger`          | `#f2786a` | app-only: errors and destructive actions; the website has no error state                                       | `text-danger`, `bg-destructive` |
+| `--fb-accent-strong`   | `#f08a75` | app-only: small coral text on the coral tint; plain coral there is about 3.96:1 on a card                      | `text-coral-strong`             |
+| `--fb-leading-heading` | `1.2`     | app-only: the website leaves headings at the inherited 1.6, which is too loose for multi-line app headings     | `leading-heading`               |
+| `--fb-form-maxw`       | `440px`   | app-only: the website has no standalone forms                                                                  | `max-w-form`                    |
+| `--fb-dur-reduced`     | `0.001ms` | app-only: the reduced-motion duration (styles.css:35-36) held in a token so no raw duration sits outside :root | `n/a (base layer)`              |
 
 ## Accessibility deviations
 

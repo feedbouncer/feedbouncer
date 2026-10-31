@@ -83,6 +83,7 @@
   --fb-dur-hover: 200ms;
   --fb-dur-underline: 250ms;
   --fb-dur-glow: 300ms;
+  --fb-dur-reduced: 0.001ms;
 
   /* shadcn semantic variables. `accent` is a neutral hover surface, not coral. */
   --background: var(--fb-bg);
@@ -135,8 +136,8 @@
   --color-good: var(--fb-good);
   --color-danger: var(--fb-danger);
 
-  --font-display: var(--fb-font-display);
-  --font-sans: var(--fb-font-body);
+  --font-display: var(--font-display-face, var(--fb-font-display));
+  --font-sans: var(--font-body-face, var(--fb-font-body));
   --font-mono: var(--fb-font-mono);
 
   --text-micro: var(--fb-text-micro);
@@ -174,4 +175,154 @@
   --ease-fb: var(--fb-ease-out);
   --container-content: var(--fb-maxw);
   --container-form: var(--fb-form-maxw);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scrollbar-color: var(--fb-text-faint) var(--fb-bg-elevated);
+  }
+  body {
+    @apply bg-background font-sans text-body text-foreground antialiased;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+  img,
+  svg {
+    max-width: 100%;
+  }
+
+  h1 {
+    @apply font-display text-page leading-heading font-bold tracking-page;
+    text-wrap: balance;
+  }
+  h2 {
+    @apply font-display text-section font-semibold;
+  }
+  h3 {
+    @apply font-display text-card-title font-semibold;
+  }
+  a {
+    @apply text-coral no-underline hover:underline;
+  }
+  code,
+  pre,
+  kbd {
+    @apply font-mono;
+  }
+  pre {
+    overflow-x: auto;
+    white-space: pre-wrap;
+  }
+  hr {
+    @apply border-border;
+  }
+
+  table {
+    @apply w-full border-collapse text-ui;
+  }
+  th {
+    @apply bg-elevated px-4.5 py-3.5 text-start text-caption tracking-caption text-faint uppercase;
+  }
+  td {
+    @apply border-b border-border px-4.5 py-3.5 align-top;
+  }
+  tr:last-child td {
+    @apply border-b-0;
+  }
+
+  label,
+  legend {
+    @apply text-label font-semibold text-dim;
+  }
+  input:not([type='checkbox'], [type='radio']),
+  select,
+  textarea {
+    @apply max-w-full min-w-0 rounded-md border border-input bg-elevated px-3 py-2.5 text-ui text-foreground;
+    min-height: 40px;
+  }
+  ::placeholder {
+    @apply text-faint;
+  }
+  input:focus {
+    @apply border-coral;
+  }
+  :disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
+  input:-webkit-autofill {
+    -webkit-text-fill-color: var(--fb-text);
+    box-shadow: 0 0 0 1000px var(--fb-bg-elevated) inset;
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--fb-accent);
+    width: 18px;
+    height: 18px;
+  }
+  select option {
+    @apply bg-card;
+  }
+
+  button {
+    @apply rounded-full border border-border bg-elevated px-4.5 py-2.5 text-ui font-semibold;
+    min-height: 40px;
+    transition-property: color, background-color, border-color;
+    transition-duration: var(--fb-dur-hover);
+  }
+  button[type='submit'] {
+    @apply border-coral bg-coral text-on-coral hover:border-coral-hover hover:bg-coral-hover;
+  }
+
+  [aria-invalid='true'] {
+    @apply border-danger;
+  }
+  [role='alert'] {
+    @apply rounded-md p-3 text-danger;
+    background-color: color-mix(in srgb, var(--fb-danger) 12%, var(--fb-bg-card));
+  }
+  [role='status'],
+  [role='note'] {
+    @apply text-dim;
+  }
+  [aria-busy='true'] {
+    cursor: progress;
+  }
+  [role='dialog'] {
+    @apply rounded-lg border border-border bg-card p-6 shadow-overlay;
+    max-width: min(100%, 40rem);
+  }
+  [data-state='empty'] {
+    @apply rounded-lg border border-dashed border-border bg-card p-6 text-center text-dim;
+  }
+  [data-state='empty'] > :is(h2, p):first-child {
+    @apply text-foreground;
+  }
+  fieldset {
+    @apply min-w-0 border-0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--fb-accent);
+    outline-offset: 2px;
+    border-radius: var(--fb-radius-focus);
+  }
+  .flex > *,
+  .grid > * {
+    @apply min-w-0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: var(--fb-dur-reduced) !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: var(--fb-dur-reduced) !important;
+  }
 }

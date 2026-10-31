@@ -7,7 +7,7 @@ export async function BetaNotice() {
   const { feedbackUrl, supportEmail } = readBetaConfig();
   if (!feedbackUrl && !supportEmail) return null;
   return (
-    <p>
+    <p className="border-b border-border bg-elevated px-4 py-2 text-center text-small text-dim">
       FeedBouncer private beta.{' '}
       {feedbackUrl ? (
         <a href={feedbackUrl} rel="noopener noreferrer">
