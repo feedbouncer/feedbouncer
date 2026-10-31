@@ -220,7 +220,7 @@ export function CommentActions(props: {
       {historyError ? <p role="alert">{historyError}</p> : null}
       {history ? (
         history.length === 0 ? (
-          <p>No actions yet.</p>
+          <p data-state="empty">No actions yet.</p>
         ) : (
           <ul>
             {history.map((a) => (

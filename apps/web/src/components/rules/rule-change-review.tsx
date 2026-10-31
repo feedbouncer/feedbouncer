@@ -1,4 +1,5 @@
 'use client';
+import { TableScroll } from '@/components/states';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { formatUtc } from '../../lib/format';
@@ -42,24 +43,26 @@ export function RuleChangeReview(props: {
         {change.status}
       </p>
       {change.isStale || change.status === 'stale' ? <p role="alert">{STALE_TEXT}</p> : null}
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Field</th>
-            <th scope="col">Before</th>
-            <th scope="col">After</th>
-          </tr>
-        </thead>
-        <tbody>
-          {change.diff.map((d) => (
-            <tr key={d.field}>
-              <th scope="row">{d.field}</th>
-              <td>{valueText(d.before)}</td>
-              <td>{valueText(d.after)}</td>
+      <TableScroll>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Field</th>
+              <th scope="col">Before</th>
+              <th scope="col">After</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {change.diff.map((d) => (
+              <tr key={d.field}>
+                <th scope="row">{d.field}</th>
+                <td>{valueText(d.before)}</td>
+                <td>{valueText(d.after)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableScroll>
       {change.warnings.map((w) => (
         <p key={w} role="note">
           {w}

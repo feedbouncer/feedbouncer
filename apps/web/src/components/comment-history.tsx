@@ -24,7 +24,7 @@ export function HistoryRows(props: {
   busy: boolean;
   onUndo: (stepId: string) => void;
 }) {
-  if (props.entries.length === 0) return <p>No actions yet.</p>;
+  if (props.entries.length === 0) return <p data-state="empty">No actions yet.</p>;
   return (
     <ul>
       {props.entries.map((e) => {

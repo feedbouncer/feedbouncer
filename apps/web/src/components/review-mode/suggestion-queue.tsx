@@ -339,7 +339,7 @@ export function SuggestionQueue(props: {
                       }}
                     />
                   ) : null}
-                  <p dir="auto" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                  <p dir="auto" className="whitespace-pre-wrap">
                     {s.commentBody || '(no text: sticker or attachment)'}
                   </p>
                   <small>

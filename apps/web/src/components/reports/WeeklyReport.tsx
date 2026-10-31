@@ -1,3 +1,4 @@
+import { TableScroll } from '@/components/states';
 import {
   NONE_QUALIFY,
   REPORT_HEADINGS,
@@ -53,29 +54,31 @@ export function WeeklyReport({
             <p>{NONE_QUALIFY}</p>
           ) : (
             <>
-              <table>
-                <thead>
-                  <tr>
-                    {TOP_ADS_COLUMNS.map((c, i) => (
-                      <th key={c} scope="col" style={i < 2 ? undefined : numeric}>
-                        {c}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {view.topAds.map((a, i) => (
-                    // Names can repeat, so rows are keyed by rank.
-                    <tr key={i}>
-                      <td>{a.archived ? `${a.ad} (archived)` : a.ad}</td>
-                      <td>{a.platform}</td>
-                      <td style={numeric}>{a.hidden}</td>
-                      <td style={numeric}>{a.total}</td>
-                      <td style={numeric}>{a.share}</td>
+              <TableScroll>
+                <table>
+                  <thead>
+                    <tr>
+                      {TOP_ADS_COLUMNS.map((c, i) => (
+                        <th key={c} scope="col" style={i < 2 ? undefined : numeric}>
+                          {c}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {view.topAds.map((a, i) => (
+                      // Names can repeat, so rows are keyed by rank.
+                      <tr key={i}>
+                        <td>{a.archived ? `${a.ad} (archived)` : a.ad}</td>
+                        <td>{a.platform}</td>
+                        <td style={numeric}>{a.hidden}</td>
+                        <td style={numeric}>{a.total}</td>
+                        <td style={numeric}>{a.share}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableScroll>
               <p>{TOP_ADS_EXPLAINER}</p>
             </>
           )}

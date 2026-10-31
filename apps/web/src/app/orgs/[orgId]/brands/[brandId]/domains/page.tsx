@@ -29,7 +29,7 @@ export default async function OwnDomainsPage({
         Links to these domains and their subdomains are never treated as spam by link rules unless a
         rule turns this off.
       </p>
-      {domains.length === 0 ? <p>No domains yet.</p> : null}
+      {domains.length === 0 ? <p data-state="empty">No domains yet.</p> : null}
       <ul>
         {domains.map((d) => (
           <li key={d.id}>

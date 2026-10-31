@@ -25,7 +25,7 @@ export default async function RuleChangesPage({
       <h1>Rule changes</h1>
       <p>Changes proposed through the API. Nothing applies until a person approves it.</p>
       {changes.length === 0 ? (
-        <p>No rule changes yet.</p>
+        <p data-state="empty">No rule changes yet.</p>
       ) : (
         <ul>
           {changes.map((c) => (

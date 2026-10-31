@@ -1,4 +1,5 @@
 'use client';
+import { TableScroll } from '@/components/states';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { apiFetch } from '../../lib/api-client';
@@ -65,10 +66,10 @@ export function ApiKeyManager({ orgId, items }: { orgId: string; items: ApiKeyDt
   return (
     <>
       <form onSubmit={onCreate}>
-        <label style={{ display: 'block', marginBottom: 8 }}>
+        <label className="mb-2 block">
           Name <input name="name" type="text" maxLength={100} required />
         </label>
-        <label style={{ display: 'block', marginBottom: 8 }}>
+        <label className="mb-2 block">
           Access{' '}
           <select
             name="scope"
@@ -105,40 +106,42 @@ export function ApiKeyManager({ orgId, items }: { orgId: string; items: ApiKeyDt
           {copyNote ? <p>{copyNote}</p> : null}
         </section>
       ) : null}
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Key</th>
-            <th>Access</th>
-            <th>Created</th>
-            <th>Last used</th>
-            <th>Status</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((k) => (
-            <tr key={k.id}>
-              <td>{k.name}</td>
-              <td>
-                <code>{k.prefix}…</code>
-              </td>
-              <td>{accessText(k.scope)}</td>
-              <td>{formatUtc(k.createdAt)}</td>
-              <td>{lastUsedText(k.lastUsedAt)}</td>
-              <td>{statusText(k.status)}</td>
-              <td>
-                {k.status === 'active' ? (
-                  <button type="button" disabled={busy} onClick={() => onRevoke(k)}>
-                    Revoke
-                  </button>
-                ) : null}
-              </td>
+      <TableScroll>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Key</th>
+              <th>Access</th>
+              <th>Created</th>
+              <th>Last used</th>
+              <th>Status</th>
+              <th />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((k) => (
+              <tr key={k.id}>
+                <td>{k.name}</td>
+                <td>
+                  <code>{k.prefix}…</code>
+                </td>
+                <td>{accessText(k.scope)}</td>
+                <td>{formatUtc(k.createdAt)}</td>
+                <td>{lastUsedText(k.lastUsedAt)}</td>
+                <td>{statusText(k.status)}</td>
+                <td>
+                  {k.status === 'active' ? (
+                    <button type="button" disabled={busy} onClick={() => onRevoke(k)}>
+                      Revoke
+                    </button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableScroll>
     </>
   );
 }

@@ -86,7 +86,7 @@ export function ChannelList(props: {
     return (
       <section>
         <h2>{title}</h2>
-        {rows.length === 0 ? <p>Nothing connected yet.</p> : null}
+        {rows.length === 0 ? <p data-state="empty">Nothing connected yet.</p> : null}
         <ul>
           {rows.map((c) => (
             <ChannelRow key={c.id} orgId={props.orgId} channel={c} canManage={props.canManage} />

@@ -1,3 +1,4 @@
+import { TableScroll } from '@/components/states';
 import { AlertsNavLink } from '../../../../../../components/alerts/alerts-nav-link';
 import Link from 'next/link';
 import { Fragment } from 'react';
@@ -163,54 +164,56 @@ export default async function ConnectionsPage({
       {canManage ? (
         <>
           {connections.length > 0 ? (
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Platform</th>
-                  <th scope="col">Account</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Recent comments</th>
-                  <th scope="col">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {connections.map((c) => {
-                  const reason = statusReasonText(c.statusReason);
-                  return (
-                    <tr key={c.id}>
-                      <td>{platformLabel(c.platform)}</td>
-                      <td>
-                        <strong>{c.displayName ?? 'Unnamed account'}</strong>
-                      </td>
-                      <td>
-                        {STATUS_LABEL[c.status]}
-                        {reason ? <p>{reason}</p> : null}
-                        {healthNotes.get(c.id) ? <p>{healthNotes.get(c.id)}</p> : null}
-                      </td>
-                      <td>{backfillText(c.backfill, formatUtc)}</td>
-                      <td>
-                        {c.status === 'needs_reconnect' && isConnectable(c.platform) ? (
-                          <ConnectButton
-                            orgId={orgId}
-                            brandId={brandId}
-                            platform={c.platform}
-                            label="Reconnect"
-                            reconnectConnectionId={c.id}
+            <TableScroll>
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Platform</th>
+                    <th scope="col">Account</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Recent comments</th>
+                    <th scope="col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {connections.map((c) => {
+                    const reason = statusReasonText(c.statusReason);
+                    return (
+                      <tr key={c.id}>
+                        <td>{platformLabel(c.platform)}</td>
+                        <td>
+                          <strong>{c.displayName ?? 'Unnamed account'}</strong>
+                        </td>
+                        <td>
+                          {STATUS_LABEL[c.status]}
+                          {reason ? <p>{reason}</p> : null}
+                          {healthNotes.get(c.id) ? <p>{healthNotes.get(c.id)}</p> : null}
+                        </td>
+                        <td>{backfillText(c.backfill, formatUtc)}</td>
+                        <td>
+                          {c.status === 'needs_reconnect' && isConnectable(c.platform) ? (
+                            <ConnectButton
+                              orgId={orgId}
+                              brandId={brandId}
+                              platform={c.platform}
+                              label="Reconnect"
+                              reconnectConnectionId={c.id}
+                            />
+                          ) : null}
+                          <ApiForm
+                            action={`/api/v1/orgs/${orgId}/brands/${brandId}/connections/${c.id}`}
+                            method="DELETE"
+                            fields={[]}
+                            submitLabel="Disconnect"
+                            refresh
                           />
-                        ) : null}
-                        <ApiForm
-                          action={`/api/v1/orgs/${orgId}/brands/${brandId}/connections/${c.id}`}
-                          method="DELETE"
-                          fields={[]}
-                          submitLabel="Disconnect"
-                          refresh
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableScroll>
           ) : null}
           {connections
             .filter((c) => c.platform === 'youtube')

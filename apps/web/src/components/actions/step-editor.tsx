@@ -77,8 +77,8 @@ export function StepEditor(props: {
         const noteId = `${id}-${type}`;
         const problems = step ? stepIssues(props.issues ?? [], index) : [];
         return (
-          <div key={type} style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block' }}>
+          <div key={type} className="mb-3">
+            <label className="block">
               <input
                 type="checkbox"
                 name={`step-${type}`}
@@ -91,7 +91,7 @@ export function StepEditor(props: {
             </label>
             {step && (step.type === 'delete' || step.type === 'ban') ? (
               // Its own box, unticked when the step is chosen: required before the form submits.
-              <label style={{ display: 'block' }}>
+              <label className="block">
                 <input
                   type="checkbox"
                   name={`confirm-${step.type}`}

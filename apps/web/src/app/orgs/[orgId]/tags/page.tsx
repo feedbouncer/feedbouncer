@@ -18,7 +18,7 @@ export default async function TagsPage({ params }: { params: Promise<{ orgId: st
     <main>
       <h1>Tags</h1>
       {list.length === 0 ? (
-        <p>No tags yet. Add one to a comment on the Comments page.</p>
+        <p data-state="empty">No tags yet. Add one to a comment on the Comments page.</p>
       ) : (
         <ul>
           {list.map((t) => (

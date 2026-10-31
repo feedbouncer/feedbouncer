@@ -28,7 +28,7 @@ export function HiddenList(props: {
   return (
     <>
       {items.length === 0 ? (
-        <section>
+        <section data-state="empty">
           <h2>Nothing hidden today</h2>
           <p>
             When FeedBouncer or someone on your team hides a comment, it appears here so you can

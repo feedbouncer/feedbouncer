@@ -1,4 +1,5 @@
 'use client';
+import { TableScroll } from '@/components/states';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -64,7 +65,7 @@ export function RuleList(props: {
     return (
       <div>
         {pending}
-        <p>No rules yet.</p>
+        <p data-state="empty">No rules yet.</p>
       </div>
     );
   // Trusted-author rules are always checked first, so they are never moved or passed.
@@ -76,106 +77,108 @@ export function RuleList(props: {
     <div>
       {pending}
       {error ? <p role="alert">{error}</p> : null}
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">#</th>
-            <th scope="col">Name</th>
-            <th scope="col">Type</th>
-            <th scope="col">Steps</th>
-            <th scope="col">Mode</th>
-            <th scope="col">Enabled</th>
-            <th scope="col">Order</th>
-            <th scope="col" />
-          </tr>
-        </thead>
-        <tbody>
-          {props.rules.map((r, i) => (
-            <tr key={r.id}>
-              <td>{r.position}</td>
-              <td>
-                <strong>{r.name}</strong>
-                {isTrustedAuthorList(r) ? <div>Always checked first</div> : null}
-                {r.warnings.shadowedBy ? (
-                  <div role="note">{`Never fires: '${r.warnings.shadowedBy.name}' above always matches first`}</div>
-                ) : null}
-                {r.warnings.neverMatches ? (
-                  <div role="note">Never matches: the list is empty</div>
-                ) : null}
-                {r.warnings.invalid ? (
-                  <div role="note">
-                    This rule has an old format and is skipped. Edit and save it to fix it.
-                  </div>
-                ) : null}
-              </td>
-              <td>{r.kind ? KIND_LABEL[r.kind] : 'Unknown'}</td>
-              <td>
-                {r.actions.length > 0
-                  ? r.actions.map((a) => STEP_LABEL[a.type]).join(', ')
-                  : 'Allow'}
-              </td>
-              <td>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void run(`${base}/${r.id}`, {
-                      method: 'PATCH',
-                      body: { mode: r.mode === 'enforce' ? 'suggest' : 'enforce' },
-                    })
-                  }
-                >
-                  {r.mode === 'enforce' ? 'Active' : 'Dry run'}
-                </button>
-              </td>
-              <td>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={r.enabled}
+      <TableScroll>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">Name</th>
+              <th scope="col">Type</th>
+              <th scope="col">Steps</th>
+              <th scope="col">Mode</th>
+              <th scope="col">Enabled</th>
+              <th scope="col">Order</th>
+              <th scope="col" />
+            </tr>
+          </thead>
+          <tbody>
+            {props.rules.map((r, i) => (
+              <tr key={r.id}>
+                <td>{r.position}</td>
+                <td>
+                  <strong>{r.name}</strong>
+                  {isTrustedAuthorList(r) ? <div>Always checked first</div> : null}
+                  {r.warnings.shadowedBy ? (
+                    <div role="note">{`Never fires: '${r.warnings.shadowedBy.name}' above always matches first`}</div>
+                  ) : null}
+                  {r.warnings.neverMatches ? (
+                    <div role="note">Never matches: the list is empty</div>
+                  ) : null}
+                  {r.warnings.invalid ? (
+                    <div role="note">
+                      This rule has an old format and is skipped. Edit and save it to fix it.
+                    </div>
+                  ) : null}
+                </td>
+                <td>{r.kind ? KIND_LABEL[r.kind] : 'Unknown'}</td>
+                <td>
+                  {r.actions.length > 0
+                    ? r.actions.map((a) => STEP_LABEL[a.type]).join(', ')
+                    : 'Allow'}
+                </td>
+                <td>
+                  <button
+                    type="button"
                     disabled={busy}
-                    aria-label={`Enable ${r.name}`}
-                    onChange={() =>
+                    onClick={() =>
                       void run(`${base}/${r.id}`, {
                         method: 'PATCH',
-                        body: { enabled: !r.enabled },
+                        body: { mode: r.mode === 'enforce' ? 'suggest' : 'enforce' },
                       })
                     }
-                  />
-                </label>
-              </td>
-              <td>
-                {movable(i) && movable(i - 1) ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    aria-label={`Move ${r.name} up`}
-                    onClick={() => move(i, -1)}
                   >
-                    ▲
+                    {r.mode === 'enforce' ? 'Active' : 'Dry run'}
                   </button>
-                ) : null}
-                {movable(i) && movable(i + 1) ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    aria-label={`Move ${r.name} down`}
-                    onClick={() => move(i, 1)}
-                  >
-                    ▼
+                </td>
+                <td>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={r.enabled}
+                      disabled={busy}
+                      aria-label={`Enable ${r.name}`}
+                      onChange={() =>
+                        void run(`${base}/${r.id}`, {
+                          method: 'PATCH',
+                          body: { enabled: !r.enabled },
+                        })
+                      }
+                    />
+                  </label>
+                </td>
+                <td>
+                  {movable(i) && movable(i - 1) ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      aria-label={`Move ${r.name} up`}
+                      onClick={() => move(i, -1)}
+                    >
+                      ▲
+                    </button>
+                  ) : null}
+                  {movable(i) && movable(i + 1) ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      aria-label={`Move ${r.name} down`}
+                      onClick={() => move(i, 1)}
+                    >
+                      ▼
+                    </button>
+                  ) : null}
+                </td>
+                <td>
+                  <Link href={`${pages}/${r.id}`}>Edit</Link>{' '}
+                  <button type="button" disabled={busy} onClick={() => remove(r)}>
+                    Delete
                   </button>
-                ) : null}
-              </td>
-              <td>
-                <Link href={`${pages}/${r.id}`}>Edit</Link>{' '}
-                <button type="button" disabled={busy} onClick={() => remove(r)}>
-                  Delete
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableScroll>
     </div>
   );
 }

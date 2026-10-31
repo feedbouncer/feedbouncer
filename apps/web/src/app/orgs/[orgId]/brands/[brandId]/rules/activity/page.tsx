@@ -1,3 +1,4 @@
+import { TableScroll } from '@/components/states';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { decisionText } from '../../../../../../../components/rules/decision-badge';
@@ -147,56 +148,58 @@ export default async function RuleActivityPage({
         </label>{' '}
         <button type="submit">Filter</button>
       </form>
-      {items.length === 0 ? <p>No rule activity yet.</p> : null}
+      {items.length === 0 ? <p data-state="empty">No rule activity yet.</p> : null}
       {items.length > 0 ? (
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Time</th>
-              <th scope="col">Comment</th>
-              <th scope="col">Source</th>
-              <th scope="col">Evidence</th>
-              <th scope="col">Outcome</th>
-              <th scope="col">Mode</th>
-              <th scope="col">Reason</th>
-              <th scope="col">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((d) => (
-              <tr key={d.id}>
-                <td>{formatUtc(d.createdAt)}</td>
-                <td>
-                  <Link href={`/orgs/${orgId}/brands/${brandId}/comments#comment-${d.commentId}`}>
-                    {d.commentExcerpt}
-                  </Link>
-                </td>
-                <td>
-                  {d.actorType === 'classifier'
-                    ? 'Classifier'
-                    : d.actorType === 'policy'
-                      ? `Policy ${d.policy?.name ?? ''}`.trim()
-                      : d.rule
-                        ? d.rule.name
-                        : 'Unknown rule'}
-                </td>
-                <td>
-                  {d.classifier
-                    ? classifierEvidence(d.classifier)
-                    : d.policy
-                      ? `Revision ${d.policy.revision}`
-                      : d.rule?.kind
-                        ? KIND_LABEL[d.rule.kind]
-                        : ''}
-                </td>
-                <td>{ACTION_LABEL[d.outcome]}</td>
-                <td>{d.mode === 'suggest' ? 'Dry run' : 'Enforced'}</td>
-                <td>{d.reason}</td>
-                <td>{d.fallback ? decisionText(d) : (d.action?.status ?? '')}</td>
+        <TableScroll>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Time</th>
+                <th scope="col">Comment</th>
+                <th scope="col">Source</th>
+                <th scope="col">Evidence</th>
+                <th scope="col">Outcome</th>
+                <th scope="col">Mode</th>
+                <th scope="col">Reason</th>
+                <th scope="col">Action</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((d) => (
+                <tr key={d.id}>
+                  <td>{formatUtc(d.createdAt)}</td>
+                  <td>
+                    <Link href={`/orgs/${orgId}/brands/${brandId}/comments#comment-${d.commentId}`}>
+                      {d.commentExcerpt}
+                    </Link>
+                  </td>
+                  <td>
+                    {d.actorType === 'classifier'
+                      ? 'Classifier'
+                      : d.actorType === 'policy'
+                        ? `Policy ${d.policy?.name ?? ''}`.trim()
+                        : d.rule
+                          ? d.rule.name
+                          : 'Unknown rule'}
+                  </td>
+                  <td>
+                    {d.classifier
+                      ? classifierEvidence(d.classifier)
+                      : d.policy
+                        ? `Revision ${d.policy.revision}`
+                        : d.rule?.kind
+                          ? KIND_LABEL[d.rule.kind]
+                          : ''}
+                  </td>
+                  <td>{ACTION_LABEL[d.outcome]}</td>
+                  <td>{d.mode === 'suggest' ? 'Dry run' : 'Enforced'}</td>
+                  <td>{d.reason}</td>
+                  <td>{d.fallback ? decisionText(d) : (d.action?.status ?? '')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableScroll>
       ) : null}
       {nextCursor ? (
         <p>

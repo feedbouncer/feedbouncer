@@ -66,8 +66,8 @@ function Problems({ issues }: { issues: RuleIssue[] }) {
 
 function Field(props: { label: string; issues: RuleIssue[]; hint?: string; children: ReactNode }) {
   return (
-    <div style={{ marginBottom: 12 }}>
-      <label style={{ display: 'block' }}>
+    <div className="mb-3">
+      <label className="block">
         {props.label} {props.children}
       </label>
       {props.hint ? <small>{props.hint}</small> : null}
@@ -293,7 +293,7 @@ export function RuleEditor(props: {
               onChange={(e) => set('linkDomains', e.target.value)}
             />
           </Field>
-          <label style={{ display: 'block' }}>
+          <label className="block">
             <input
               type="checkbox"
               name="exemptOwnDomains"
@@ -302,7 +302,7 @@ export function RuleEditor(props: {
             />{' '}
             Never match your own domains
           </label>
-          <label style={{ display: 'block' }}>
+          <label className="block">
             <input
               type="checkbox"
               name="matchShorteners"
@@ -311,7 +311,7 @@ export function RuleEditor(props: {
             />{' '}
             Match link shorteners
           </label>
-          <label style={{ display: 'block' }}>
+          <label className="block">
             <input
               type="checkbox"
               name="matchLookalikes"
@@ -427,7 +427,7 @@ export function RuleEditor(props: {
           {...(kind === 'author' && { onlyPlatform: form.authorPlatform })}
         />
       )}
-      <label style={{ display: 'block', marginBottom: 12 }}>
+      <label className="mb-3 block">
         <input
           type="checkbox"
           name="dryRun"

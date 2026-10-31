@@ -105,7 +105,7 @@ export default async function CommentsPage({
         </label>{' '}
         <button type="submit">Filter</button>
       </form>
-      {comments.length === 0 ? <p>No comments yet.</p> : null}
+      {comments.length === 0 ? <p data-state="empty">No comments yet.</p> : null}
       <ul>
         {comments.map((c) => (
           <li key={c.id} id={`comment-${c.id}`}>

@@ -49,7 +49,7 @@ export function DecisionHistory(props: { orgId: string; brandId: string; comment
       ) : null}
       {decisions ? (
         decisions.length === 0 ? (
-          <p>No decisions yet.</p>
+          <p data-state="empty">No decisions yet.</p>
         ) : (
           <ul>
             {decisions.map((d) => (

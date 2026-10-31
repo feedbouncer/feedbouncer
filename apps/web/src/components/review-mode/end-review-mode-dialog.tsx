@@ -51,7 +51,7 @@ export function EndReviewModeDialog(props: {
             End review mode now? What should happen to the waiting suggestions?
           </legend>
           {END_CHOICES.map((c) => (
-            <label key={c.value} style={{ display: 'block' }}>
+            <label key={c.value} className="block">
               <input
                 type="radio"
                 name="pending"
@@ -62,7 +62,7 @@ export function EndReviewModeDialog(props: {
               {c.label}
             </label>
           ))}
-          <label style={{ display: 'block' }}>
+          <label className="block">
             <input
               type="checkbox"
               checked={confirmed}

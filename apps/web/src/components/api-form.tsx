@@ -55,9 +55,9 @@ export function ApiForm(props: {
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form onSubmit={onSubmit} className="flex max-w-form flex-col gap-(--fb-form-gap)">
       {props.fields.map((f) => (
-        <label key={f.name} style={{ display: 'block', marginBottom: 8 }}>
+        <label key={f.name} className="flex flex-col gap-(--fb-field-gap)">
           {f.label}{' '}
           {f.type === 'select' ? (
             <select name={f.name} defaultValue={f.defaultValue}>

@@ -1,3 +1,4 @@
+import { TableScroll } from '@/components/states';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { resolutionText, type AdView } from '../../../../../../lib/ads';
@@ -46,35 +47,37 @@ export default async function AdsPage({
           connected. <Link href={connections}>Connect an Instagram account</Link>
         </p>
       ) : null}
-      {ads.length === 0 ? <p>No ads found yet.</p> : null}
+      {ads.length === 0 ? <p data-state="empty">No ads found yet.</p> : null}
       {ads.length > 0 ? (
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Ad</th>
-              <th scope="col">Account</th>
-              <th scope="col">Status</th>
-              <th scope="col">Facebook</th>
-              <th scope="col">Instagram</th>
-              <th scope="col">Last checked</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ads.map((a) => (
-              <tr key={a.adId + a.adAccountId}>
-                <td>{a.adId}</td>
-                <td>{a.adAccountId}</td>
-                <td>{a.active ? 'Active' : 'Inactive'}</td>
-                <td>{resolutionText(a.facebook.resolution)}</td>
-                <td>{resolutionText(a.instagram.resolution)}</td>
-                <td>
-                  {a.lastPolledAt ? formatUtc(a.lastPolledAt) : 'Not yet'}
-                  {a.postUnavailable ? <p>Post unavailable — retrying later</p> : null}
-                </td>
+        <TableScroll>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Ad</th>
+                <th scope="col">Account</th>
+                <th scope="col">Status</th>
+                <th scope="col">Facebook</th>
+                <th scope="col">Instagram</th>
+                <th scope="col">Last checked</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {ads.map((a) => (
+                <tr key={a.adId + a.adAccountId}>
+                  <td>{a.adId}</td>
+                  <td>{a.adAccountId}</td>
+                  <td>{a.active ? 'Active' : 'Inactive'}</td>
+                  <td>{resolutionText(a.facebook.resolution)}</td>
+                  <td>{resolutionText(a.instagram.resolution)}</td>
+                  <td>
+                    {a.lastPolledAt ? formatUtc(a.lastPolledAt) : 'Not yet'}
+                    {a.postUnavailable ? <p>Post unavailable — retrying later</p> : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableScroll>
       ) : null}
       {nextCursor ? (
         <p>

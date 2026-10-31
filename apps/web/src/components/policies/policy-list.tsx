@@ -1,4 +1,5 @@
 'use client';
+import { TableScroll } from '@/components/states';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -66,59 +67,61 @@ export function PolicyList(props: {
       ) : null}
       {error ? <p role="alert">{error}</p> : null}
       {policies.length === 0 ? (
-        <p>No policies yet.</p>
+        <p data-state="empty">No policies yet.</p>
       ) : (
         <>
           <p>Up to {limits.maxEnabled} policies can be enabled at once.</p>
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Policy</th>
-                <th scope="col">Action</th>
-                <th scope="col">Enabled</th>
-                <th scope="col" />
-              </tr>
-            </thead>
-            <tbody>
-              {policies.map((p) => (
-                <tr key={p.id}>
-                  <td>
-                    <strong>{p.name}</strong>
-                  </td>
-                  <td>{excerpt(p.text)}</td>
-                  <td>{POLICY_ACTION_LABEL[p.action]}</td>
-                  <td>
-                    <button
-                      type="button"
-                      aria-pressed={p.enabled}
-                      aria-label={`${p.enabled ? 'Disable' : 'Enable'} ${p.name}`}
-                      disabled={busy || !props.canEdit}
-                      onClick={() =>
-                        void run(`${base}/${p.id}`, {
-                          method: 'PATCH',
-                          body: { enabled: !p.enabled },
-                        })
-                      }
-                    >
-                      {p.enabled ? 'On' : 'Off'}
-                    </button>
-                  </td>
-                  <td>
-                    <Link href={`${pages}/${p.id}`}>{props.canEdit ? 'Edit' : 'View'}</Link>
-                    {props.canEdit ? (
-                      <>
-                        {' '}
-                        <button type="button" disabled={busy} onClick={() => remove(p)}>
-                          Delete
-                        </button>
-                      </>
-                    ) : null}
-                  </td>
+          <TableScroll>
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Policy</th>
+                  <th scope="col">Action</th>
+                  <th scope="col">Enabled</th>
+                  <th scope="col" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {policies.map((p) => (
+                  <tr key={p.id}>
+                    <td>
+                      <strong>{p.name}</strong>
+                    </td>
+                    <td>{excerpt(p.text)}</td>
+                    <td>{POLICY_ACTION_LABEL[p.action]}</td>
+                    <td>
+                      <button
+                        type="button"
+                        aria-pressed={p.enabled}
+                        aria-label={`${p.enabled ? 'Disable' : 'Enable'} ${p.name}`}
+                        disabled={busy || !props.canEdit}
+                        onClick={() =>
+                          void run(`${base}/${p.id}`, {
+                            method: 'PATCH',
+                            body: { enabled: !p.enabled },
+                          })
+                        }
+                      >
+                        {p.enabled ? 'On' : 'Off'}
+                      </button>
+                    </td>
+                    <td>
+                      <Link href={`${pages}/${p.id}`}>{props.canEdit ? 'Edit' : 'View'}</Link>
+                      {props.canEdit ? (
+                        <>
+                          {' '}
+                          <button type="button" disabled={busy} onClick={() => remove(p)}>
+                            Delete
+                          </button>
+                        </>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
         </>
       )}
     </div>

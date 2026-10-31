@@ -18,7 +18,7 @@ export function RecentAlerts({
   return (
     <section>
       <h2>Recent alerts</h2>
-      {events.length === 0 ? <p>No alerts yet.</p> : null}
+      {events.length === 0 ? <p data-state="empty">No alerts yet.</p> : null}
       <ul>
         {events.map((e) => (
           <li key={e.id}>

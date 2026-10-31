@@ -1,3 +1,4 @@
+import { TableScroll } from '@/components/states';
 import type { ScanFailure, ScanResultV1 } from '@feedbouncer/scan/contract';
 import { CATEGORY_LABEL, NOTICE_COPY, TAG_LABEL, errorCopy } from './copy';
 
@@ -82,28 +83,30 @@ function Details({ result, mode }: { result: ScanResultV1; mode: 'owner' | 'shar
         hidden, not counted: {totals.hiddenExcluded}
       </p>
       <h3>By ad</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Ad</th>
-            <th>Platform</th>
-            <th>Comments</th>
-            <th>Scam or spam</th>
-            <th>Uncertain</th>
-          </tr>
-        </thead>
-        <tbody>
-          {result.perAd.map((a) => (
-            <tr key={a.ordinal}>
-              <td>{mode === 'shared' || !a.label ? `Ad ${a.ordinal}` : a.label}</td>
-              <td>{a.platform === 'instagram' ? 'Instagram' : 'Facebook'}</td>
-              <td>{a.scanned}</td>
-              <td>{a.scamSpam}</td>
-              <td>{a.uncertain}</td>
+      <TableScroll>
+        <table>
+          <thead>
+            <tr>
+              <th>Ad</th>
+              <th>Platform</th>
+              <th>Comments</th>
+              <th>Scam or spam</th>
+              <th>Uncertain</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {result.perAd.map((a) => (
+              <tr key={a.ordinal}>
+                <td>{mode === 'shared' || !a.label ? `Ad ${a.ordinal}` : a.label}</td>
+                <td>{a.platform === 'instagram' ? 'Instagram' : 'Facebook'}</td>
+                <td>{a.scanned}</td>
+                <td>{a.scamSpam}</td>
+                <td>{a.uncertain}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableScroll>
       {result.examples.length > 0 ? <h3>Examples</h3> : null}
       <ul>
         {result.examples.map((e, i) => (

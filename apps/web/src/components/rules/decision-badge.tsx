@@ -1,3 +1,5 @@
+import { Ban, Check, FlaskConical, Flag, Undo2, type LucideIcon } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { classifierEvidence } from '../../lib/classifier';
 import { actorTypeText, outcomeText } from '../../lib/messages';
 import { policyDecisionText } from '../../lib/policies';
@@ -41,20 +43,28 @@ export function decisionText(d: DecisionView): string {
   return `${OUTCOME_DONE[d.outcome]} by ${who}`;
 }
 
+type BadgeLook = { variant: 'danger' | 'coral' | 'secondary' | 'good'; Icon: LucideIcon };
+
+function badgeLook(d: DecisionView): BadgeLook {
+  if (d.fallback || reviewReasonText(d.reason)) return { variant: 'coral', Icon: Flag };
+  if (d.classifier?.reversal) return { variant: 'good', Icon: Undo2 };
+  if (d.mode === 'suggest') return { variant: 'secondary', Icon: FlaskConical };
+  if (d.outcome === 'flag') return { variant: 'coral', Icon: Flag };
+  if (d.outcome === 'approve') return { variant: 'good', Icon: Check };
+  return { variant: 'danger', Icon: Ban };
+}
+
 export function DecisionBadge({ decision }: { decision: DecisionView | null }) {
   if (!decision) return null;
+  const { variant, Icon } = badgeLook(decision);
   return (
-    <span
+    <Badge
+      variant={variant}
       title={ACTION_LABEL[decision.outcome]}
-      style={{
-        display: 'inline-block',
-        padding: '0 6px',
-        border: '1px solid #999',
-        borderRadius: 4,
-        fontSize: '0.85em',
-      }}
+      className="h-auto max-w-full whitespace-normal"
     >
+      <Icon aria-hidden="true" />
       {decisionText(decision)}
-    </span>
+    </Badge>
   );
 }

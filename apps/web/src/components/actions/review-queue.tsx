@@ -91,14 +91,14 @@ export function ReviewQueue(props: {
   }
 
   const items = props.items.filter((i) => !resolved.has(i.id));
-  if (items.length === 0 && !props.next) return <p>Nothing to review.</p>;
+  if (items.length === 0 && !props.next) return <p data-state="empty">Nothing to review.</p>;
   return (
     <div>
       {error ? <p role="alert">{error}</p> : null}
       <ul>
         {items.map((i) => (
           <li key={i.id}>
-            <p dir="auto" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+            <p dir="auto" className="whitespace-pre-wrap">
               {i.commentBody || '(no text: sticker or attachment)'}
             </p>
             <small>

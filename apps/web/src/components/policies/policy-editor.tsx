@@ -81,8 +81,8 @@ export function PolicyEditor(props: Props) {
     <div>
       <form onSubmit={onSubmit}>
         {error ? <p role="alert">{error}</p> : null}
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block' }}>
+        <div className="mb-3">
+          <label className="block">
             Name{' '}
             <input
               name="name"
@@ -94,8 +94,8 @@ export function PolicyEditor(props: Props) {
           </label>
           <Problems issues={issues.filter((i) => i.path === 'name')} />
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block' }}>
+        <div className="mb-3">
+          <label className="block">
             Policy{' '}
             <textarea
               name="text"
@@ -118,7 +118,7 @@ export function PolicyEditor(props: Props) {
             </ul>
           ) : null}
         </div>
-        <div style={{ marginBottom: 12 }}>
+        <div className="mb-3">
           <label>
             Action{' '}
             <select
