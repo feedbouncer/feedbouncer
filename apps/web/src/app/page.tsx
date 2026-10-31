@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { StandaloneShell } from '../components/shell/standalone-shell';
 import { apiInternalUrl } from '../lib/api-url';
 
 export const dynamic = 'force-dynamic';
@@ -22,15 +23,17 @@ async function apiStatus(): Promise<ApiStatus> {
 export default async function Home() {
   const status = await apiStatus();
   return (
-    <main>
-      <h1>FeedBouncer</h1>
-      <p>
-        Local development stack. API: <strong data-testid="api-status">{status}</strong>
-      </p>
-      <nav>
-        <Link href="/login">Log in</Link> · <Link href="/sign-up">Sign up</Link> ·{' '}
-        <Link href="/orgs">My organizations</Link>
-      </nav>
-    </main>
+    <StandaloneShell>
+      <main>
+        <h1>FeedBouncer</h1>
+        <p>
+          Local development stack. API: <strong data-testid="api-status">{status}</strong>
+        </p>
+        <nav>
+          <Link href="/login">Log in</Link> · <Link href="/sign-up">Sign up</Link> ·{' '}
+          <Link href="/orgs">My organizations</Link>
+        </nav>
+      </main>
+    </StandaloneShell>
   );
 }
