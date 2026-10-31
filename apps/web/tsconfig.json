@@ -12,6 +12,7 @@
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "types": ["node"],
+    "paths": { "@/*": ["./src/*"] },
     "plugins": [{ "name": "next" }]
   },
   "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".next/types/**/*.ts"],
