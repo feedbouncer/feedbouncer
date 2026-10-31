@@ -60,6 +60,7 @@
   --fb-field-gap: 6px;
   --fb-maxw: 1120px;
   --fb-form-maxw: 440px;
+  --fb-lede-maxw: 620px;
 
   /* Radius */
   --fb-radius-chip: 6px;
@@ -175,6 +176,7 @@
   --ease-fb: var(--fb-ease-out);
   --container-content: var(--fb-maxw);
   --container-form: var(--fb-form-maxw);
+  --container-lede: var(--fb-lede-maxw);
 }
 
 @layer base {
@@ -313,6 +315,43 @@
   }
 }
 
+/* Scan-page decoration, copied from the website's .hero::before/::after and body::after. */
+.scan-glow-accent {
+  position: absolute;
+  top: -220px;
+  inset-inline-start: 38%;
+  width: 760px;
+  height: 520px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, var(--fb-accent-dim), transparent 70%);
+  pointer-events: none;
+}
+
+.scan-glow-good {
+  position: absolute;
+  top: -80px;
+  inset-inline-end: -120px;
+  width: 460px;
+  height: 420px;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--fb-good) 13%, transparent),
+    transparent 72%
+  );
+  pointer-events: none;
+}
+
+.scan-grain::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -324,5 +363,11 @@
     animation-duration: var(--fb-dur-reduced) !important;
     animation-iteration-count: 1 !important;
     transition-duration: var(--fb-dur-reduced) !important;
+  }
+
+  .scan-glow-accent,
+  .scan-glow-good,
+  .scan-grain::after {
+    display: none;
   }
 }

@@ -2,6 +2,8 @@
 import type { ScanPageOption } from '@feedbouncer/scan/contract';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { ApiRequestError, apiFetch } from '../../../lib/api-client';
 
 export function PagePicker({ grantId, pages }: { grantId: string; pages: ScanPageOption[] }) {
@@ -39,30 +41,32 @@ export function PagePicker({ grantId, pages }: { grantId: string; pages: ScanPag
   }
 
   return (
-    <>
-      <fieldset>
-        <legend>Pick a Page to scan</legend>
-        {pages.map((p) => (
-          <label key={p.pageId}>
-            <input
-              type="radio"
-              name="page"
-              value={p.pageId}
-              disabled={!p.eligible}
-              checked={pageId === p.pageId}
-              onChange={() => setPageId(p.pageId)}
-            />{' '}
-            {p.name}
-            {p.igUsername ? ` (Instagram @${p.igUsername})` : null}
-            {p.eligible ? null : ' - your role on this Page cannot read its ads'}
-            <br />
-          </label>
-        ))}
-      </fieldset>
-      <button type="button" onClick={start} disabled={busy || !pageId}>
-        Scan this Page
-      </button>
-      {error ? <p role="alert">{error}</p> : null}
-    </>
+    <Card>
+      <CardContent className="flex flex-col items-start gap-4">
+        <fieldset className="flex w-full flex-col gap-3">
+          <legend className="mb-2">Pick a Page to scan</legend>
+          {pages.map((p) => (
+            <label key={p.pageId} className="flex items-start gap-2">
+              <input
+                type="radio"
+                name="page"
+                value={p.pageId}
+                disabled={!p.eligible}
+                checked={pageId === p.pageId}
+                onChange={() => setPageId(p.pageId)}
+              />{' '}
+              {p.name}
+              {p.igUsername ? ` (Instagram @${p.igUsername})` : null}
+              {p.eligible ? null : ' - your role on this Page cannot read its ads'}
+              <br />
+            </label>
+          ))}
+        </fieldset>
+        <Button type="button" size="lg" onClick={start} disabled={busy || !pageId}>
+          Scan this Page
+        </Button>
+        {error ? <p role="alert">{error}</p> : null}
+      </CardContent>
+    </Card>
   );
 }

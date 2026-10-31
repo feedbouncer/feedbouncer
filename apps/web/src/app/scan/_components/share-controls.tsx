@@ -1,6 +1,8 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { apiFetch } from '../../../lib/api-client';
 import { SHARE_LINK_NOTE } from './copy';
 
@@ -43,24 +45,31 @@ export function ShareControls({ scanId, shared }: { scanId: string; shared: bool
 
   return (
     <section>
-      <h2>Share or delete</h2>
-      <button type="button" onClick={share}>
-        {isShared ? 'Create a new link' : 'Create a share link'}
-      </button>{' '}
-      {isShared ? (
-        <button type="button" onClick={unshare}>
-          Stop sharing
-        </button>
-      ) : null}{' '}
-      <button type="button" onClick={remove}>
-        Delete this result
-      </button>
-      {url ? (
-        <p>
-          {SHARE_LINK_NOTE} <input readOnly value={url} aria-label="Share link" size={60} />
-        </p>
-      ) : null}
-      {error ? <p role="alert">{error}</p> : null}
+      <Card className="bg-elevated">
+        <CardContent className="flex flex-col items-start gap-4">
+          <h2>Share or delete</h2>
+          <div className="flex flex-wrap gap-3">
+            <Button type="button" onClick={share}>
+              {isShared ? 'Create a new link' : 'Create a share link'}
+            </Button>
+            {isShared ? (
+              <Button type="button" variant="outline" onClick={unshare}>
+                Stop sharing
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" onClick={remove}>
+              Delete this result
+            </Button>
+          </div>
+          {url ? (
+            <p className="w-full">
+              {SHARE_LINK_NOTE}{' '}
+              <input readOnly value={url} aria-label="Share link" size={60} className="w-full" />
+            </p>
+          ) : null}
+          {error ? <p role="alert">{error}</p> : null}
+        </CardContent>
+      </Card>
     </section>
   );
 }

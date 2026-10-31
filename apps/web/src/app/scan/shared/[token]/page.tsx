@@ -16,7 +16,7 @@ export default async function SharedScanPage({ params }: { params: Promise<{ tok
     'shared result',
   );
   return (
-    <main>
+    <main className="flex flex-col gap-6">
       <ResultView result={shared.result} pageName={shared.pageName} mode="shared" />
     </main>
   );

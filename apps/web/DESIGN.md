@@ -65,6 +65,7 @@ Tailwind's default `--spacing: 0.25rem` stays. The named layout tokens are:
 | `--fb-form-gap`  | `16px`   | styles.css:653 | `gap-(--fb-form-gap)`  |
 | `--fb-field-gap` | `6px`    | styles.css:659 | `gap-(--fb-field-gap)` |
 | `--fb-maxw`      | `1120px` | styles.css:14  | `max-w-content`        |
+| `--fb-lede-maxw` | `620px`  | styles.css:306 | `max-w-lede`           |
 
 ### Radius
 

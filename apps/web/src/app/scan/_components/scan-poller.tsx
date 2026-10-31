@@ -35,10 +35,10 @@ export function ScanPoller({ scanId }: { scanId: string }) {
   }, [scanId, router]);
 
   return (
-    <>
+    <div className="flex flex-col gap-4">
       <h1>Scanning your ads</h1>
       <p role="status">You can leave this page. Your result will be here when you come back.</p>
       {gaveUp ? <p>This is taking longer than expected. Reload the page to check again.</p> : null}
-    </>
+    </div>
   );
 }

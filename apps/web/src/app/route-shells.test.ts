@@ -18,6 +18,7 @@ const expected: Record<string, RegExp> = {
       /StandaloneShell/,
     ]),
   ),
+  'scan/layout.tsx': /ScanShell/,
   'orgs/page.tsx': /AppShell/,
   'page.tsx': /StandaloneShell/,
 };

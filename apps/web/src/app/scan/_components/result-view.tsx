@@ -19,8 +19,10 @@ export function ResultView({
   const hasShare = !result.empty && result.sharePct !== null;
   const ads = totals.adsCovered === 1 ? 'ad' : `${totals.adsCovered} ads`;
   return (
-    <>
-      <h1>{pageName}</h1>
+    <div className="flex flex-col gap-6">
+      <h1 className="min-w-0 truncate" title={pageName}>
+        {pageName}
+      </h1>
       <h2>
         {hasShare
           ? `${pct(result.sharePct ?? 0)} of comments on your last ${ads} look like scam or spam`
@@ -36,7 +38,7 @@ export function ResultView({
         </p>
       ) : null}
       {result.notices.length > 0 ? (
-        <ul>
+        <ul className="ms-5 list-disc text-dim">
           {result.notices.map((n) => (
             <li key={n}>{NOTICE_COPY[n]}</li>
           ))}
@@ -55,7 +57,7 @@ export function ResultView({
       <p>
         <a href="/api/v1/scan/cta">FeedBouncer can hide comments like these automatically</a>
       </p>
-    </>
+    </div>
   );
 }
 
@@ -119,7 +121,9 @@ function Details({ result, mode }: { result: ScanResultV1; mode: 'owner' | 'shar
               `On Ad ${e.adOrdinal}`
             )}
             {e.repeatCount > 1 ? ` (posted ×${e.repeatCount})` : null}
-            <blockquote>{e.text}</blockquote>
+            <blockquote className="my-2 border-s-2 border-border ps-3 text-dim">
+              {e.text}
+            </blockquote>
             <small>{e.reason}</small>
           </li>
         ))}
