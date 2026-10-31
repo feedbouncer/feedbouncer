@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { readCssVars } from '@/test/css';
+import { readCssVars } from '../test/css';
 
 const vars = readCssVars('src/app/globals.css');
 const doc = readFileSync('DESIGN.md', 'utf8');

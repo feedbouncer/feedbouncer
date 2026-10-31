@@ -1,7 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button } from '../../../components/ui/button';
 import { apiFetch } from '../../../lib/api-client';
 
 export function DeleteDataButton() {

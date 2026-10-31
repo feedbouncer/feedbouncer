@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { contrastRatio, flatten, mix } from '@/test/contrast';
-import { readCssVars } from '@/test/css';
+import { contrastRatio, flatten, mix } from '../test/contrast';
+import { readCssVars } from '../test/css';
 
 const v = readCssVars('src/app/globals.css');
 const SURFACES = ['--fb-bg', '--fb-bg-elevated', '--fb-bg-card'];

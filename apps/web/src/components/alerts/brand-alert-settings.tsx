@@ -100,7 +100,7 @@ export function BrandAlertSettings(props: {
           <p>Spike alerts start after 7 days of comment history for this brand.</p>
         ) : null}
         {shown.length === 0 ? (
-          <p>
+          <p data-state="empty">
             No channels yet. Connect Slack or add an email recipient on the workspace Alerts page.
           </p>
         ) : (

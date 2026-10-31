@@ -1,8 +1,8 @@
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { AppShell } from '@/components/shell/app-shell';
-import { isUuid } from '@/lib/ids';
-import { orgNav } from '@/lib/nav';
+import { AppShell } from '../../../components/shell/app-shell';
+import { isUuid } from '../../../lib/ids';
+import { orgNav } from '../../../lib/nav';
 
 export default async function OrgLayout({
   children,

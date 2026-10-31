@@ -1,26 +1,14 @@
 'use client';
 
-import { ErrorPanel } from '@/components/states';
-import { Button } from '@/components/ui/button';
+import { ErrorFallback } from '../components/states';
 import './globals.css';
 
-export default function GlobalError({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string };
-  reset: () => void;
-}) {
+export default function GlobalError(props: Parameters<typeof ErrorFallback>[0]) {
   return (
     <html lang="en">
       <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
-        <main className="mx-auto flex min-h-dvh w-full max-w-form flex-col justify-center gap-4 px-4">
-          <ErrorPanel title="Something went wrong">
-            {error.digest ? <p className="text-small text-dim">Reference: {error.digest}</p> : null}
-          </ErrorPanel>
-          <div>
-            <Button onClick={reset}>Try again</Button>
-          </div>
+        <main className="grid min-h-dvh place-items-center px-4">
+          <ErrorFallback {...props} />
         </main>
       </body>
     </html>

@@ -1,5 +1,5 @@
 import { Ban, Check, FlaskConical, Flag, Undo2, type LucideIcon } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '../ui/badge';
 import { classifierEvidence } from '../../lib/classifier';
 import { actorTypeText, outcomeText } from '../../lib/messages';
 import { policyDecisionText } from '../../lib/policies';

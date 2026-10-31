@@ -49,7 +49,7 @@ export function WeeklyReport({
         <section>
           <h2>{REPORT_HEADINGS.topAds}</h2>
           {view.topAds === 'none_qualify' ? (
-            <p>{NONE_QUALIFY}</p>
+            <p data-state="empty">{NONE_QUALIFY}</p>
           ) : (
             <>
               <TableScroll>

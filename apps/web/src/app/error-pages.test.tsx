@@ -40,6 +40,7 @@ describe('NotFound', () => {
     const html = renderToStaticMarkup(<NotFound />);
     expect(html).toContain('Page not found');
     expect(html).toContain('href="/"');
+    expect(html).toContain('<main');
   });
 });
 

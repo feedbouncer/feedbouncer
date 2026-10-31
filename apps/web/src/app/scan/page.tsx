@@ -4,8 +4,8 @@ import { serverGet } from '../../lib/server-api';
 import { ConnectButton } from './_components/connect-button';
 import { errorCopy, scopeLabel } from './_components/copy';
 import { DeleteDataButton } from './_components/delete-data-button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { Card, CardContent } from '../../components/ui/card';
 
 export const dynamic = 'force-dynamic';
 

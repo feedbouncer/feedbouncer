@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import { isActive, type NavItem } from '@/lib/nav';
+import { cn } from '../../lib/utils';
+import { isActive, type NavItem } from '../../lib/nav';
 
 export function NavLinks({ items, label }: { items: NavItem[]; label: string }) {
   const pathname = usePathname();

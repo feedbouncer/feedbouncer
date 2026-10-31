@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { ErrorPanel, LoadingPanel, TableScroll } from './states';
+import { ErrorFallback, ErrorPanel, LoadingPanel, TableScroll } from './states';
 
 describe('state panels', () => {
   it('LoadingPanel is a polite busy status with skeleton rows', () => {
@@ -34,5 +34,19 @@ describe('state panels', () => {
     const html = renderToStaticMarkup(<TableScroll>x</TableScroll>);
     expect(html).toContain('overflow-x-auto');
     expect(html).toContain('data-table-scroll');
+  });
+
+  it('ErrorFallback shows the digest and a retry button, never the message', () => {
+    const boom = Object.assign(new Error('db password=hunter2'), { digest: 'abc' });
+    const html = renderToStaticMarkup(<ErrorFallback error={boom} reset={() => {}} />);
+    expect(html).toContain('Something went wrong');
+    expect(html).toContain('Reference: abc');
+    expect(html).toContain('Try again');
+    expect(html).not.toContain('hunter2');
+  });
+
+  it('ErrorFallback omits the reference without a digest', () => {
+    const html = renderToStaticMarkup(<ErrorFallback error={new Error('x')} reset={() => {}} />);
+    expect(html).not.toContain('Reference:');
   });
 });

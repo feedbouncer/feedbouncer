@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { orgNav } from '@/lib/nav';
+import { orgNav } from '../../lib/nav';
 import { AppShell, BrandSubNav } from './app-shell';
 import { AuthShell } from './auth-shell';
 import { StandaloneShell } from './standalone-shell';

@@ -62,7 +62,7 @@ describe('style guard', () => {
   it('(g) marks every empty message with data-state="empty"', () => {
     const allow = ['No changes to save.', 'No steps:'];
     const bad = offenders((line, lines, i) => {
-      if (!/>\s*(No |Nothing )/.test(line)) return false;
+      if (!/(>|^)\s*(No |Nothing )\S|\{NONE_\w+\}/.test(line)) return false;
       if (allow.some((a) => line.includes(a))) return false;
       const near = [line, lines[i - 1] ?? ''];
       return !near.some((l) => l.includes('data-state="empty"'));

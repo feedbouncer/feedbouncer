@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { brandNav, type NavItem } from '@/lib/nav';
+import { brandNav, type NavItem } from '../../lib/nav';
 import { NavLinks } from './nav-links';
 import { Wordmark } from './wordmark';
 

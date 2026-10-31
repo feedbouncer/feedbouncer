@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { BrandSubNav } from '@/components/shell/app-shell';
-import { isUuid } from '@/lib/ids';
+import { BrandSubNav } from '../../../../../components/shell/app-shell';
+import { isUuid } from '../../../../../lib/ids';
 
 export default async function BrandLayout({
   children,

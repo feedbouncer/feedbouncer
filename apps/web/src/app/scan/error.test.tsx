@@ -13,5 +13,6 @@ describe('scan error page', () => {
     expect(html).toContain('abc');
     expect(html).not.toContain('hunter2');
     expect(html).not.toContain('data-shell');
+    expect(html).toContain('<main');
   });
 });

@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { CircleAlert } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from './ui/button';
+import { Card, CardContent } from './ui/card';
+import { Skeleton } from './ui/skeleton';
 
 export function LoadingPanel({ label, rows = 3 }: { label: string; rows?: number }) {
   return (
@@ -45,5 +47,26 @@ export function TableScroll({ children }: { children: ReactNode }) {
     <div data-table-scroll className="w-full overflow-x-auto rounded-lg border border-border">
       {children}
     </div>
+  );
+}
+
+export function ErrorFallback({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  return (
+    <Card className="mx-auto max-w-form">
+      <CardContent className="flex flex-col gap-4">
+        <ErrorPanel title="Something went wrong">
+          {error.digest ? <p className="text-small text-dim">Reference: {error.digest}</p> : null}
+        </ErrorPanel>
+        <div>
+          <Button onClick={reset}>Try again</Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

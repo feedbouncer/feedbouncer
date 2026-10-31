@@ -1,4 +1,4 @@
-import { isUuid } from '@/lib/ids';
+import { isUuid } from './ids';
 
 export interface NavItem {
   href: string;

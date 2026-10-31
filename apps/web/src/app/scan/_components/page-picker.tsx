@@ -2,8 +2,8 @@
 import type { ScanPageOption } from '@feedbouncer/scan/contract';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '../../../components/ui/button';
+import { Card, CardContent } from '../../../components/ui/card';
 import { ApiRequestError, apiFetch } from '../../../lib/api-client';
 
 export function PagePicker({ grantId, pages }: { grantId: string; pages: ScanPageOption[] }) {
@@ -54,11 +54,10 @@ export function PagePicker({ grantId, pages }: { grantId: string; pages: ScanPag
                 disabled={!p.eligible}
                 checked={pageId === p.pageId}
                 onChange={() => setPageId(p.pageId)}
-              />{' '}
+              />
               {p.name}
               {p.igUsername ? ` (Instagram @${p.igUsername})` : null}
               {p.eligible ? null : ' - your role on this Page cannot read its ads'}
-              <br />
             </label>
           ))}
         </fieldset>

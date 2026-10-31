@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { walk } from '@/test/walk';
+import { walk } from '../test/walk';
 
 const expected: Record<string, RegExp> = {
   'orgs/[orgId]/layout.tsx': /AppShell/,
@@ -25,7 +25,7 @@ const expected: Record<string, RegExp> = {
 
 function coveredByShell(page: string, listed: Record<string, RegExp>): boolean {
   const rel = relative('src/app', page);
-  if (rel in listed || rel.startsWith('scan/')) return true;
+  if (rel in listed) return true;
   let dir = dirname(rel);
   while (dir !== '.') {
     if (`${dir}/layout.tsx` in listed) return true;
