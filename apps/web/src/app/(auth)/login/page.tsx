@@ -24,13 +24,13 @@ export default async function LoginPage({
         ]}
         submitLabel="Log in"
         redirectTo={safeNextPath(typeof next === 'string' ? next : null)}
+        variant="primary"
+        fullWidthSubmit
       />
-      <p>
+      <div className="flex flex-col gap-2 text-small">
         <Link href="/forgot-password">Forgot your password?</Link>
-      </p>
-      <p>
         <Link href="/sign-up">Create an account</Link>
-      </p>
+      </div>
     </main>
   );
 }

@@ -14,6 +14,7 @@ import { BulkBar } from './bulk-bar';
 import { CommentRow } from './comment-row';
 import { ReplyComposer } from './reply-composer';
 import { RowTriage } from './row-triage';
+import { ListPanel } from '../ui/list';
 
 type Summary = { headline: string; failures: string[] } | { error: string };
 
@@ -96,18 +97,18 @@ export function CommentList({
               </div>
             )
           ) : null}
-          <label>
+          <label className="flex items-center gap-2 font-normal text-foreground">
             <input
               type="checkbox"
               checked={allChosen}
               disabled={busy || items.length === 0}
               onChange={(e) => select(new Set(e.target.checked ? items.map((c) => c.id) : []))}
-            />{' '}
+            />
             Select all on this page
           </label>
         </>
       ) : null}
-      <ul>
+      <ListPanel>
         {items.map((c) => (
           <CommentRow
             key={c.id}
@@ -137,7 +138,7 @@ export function CommentList({
             />
           </CommentRow>
         ))}
-      </ul>
+      </ListPanel>
     </>
   );
 }

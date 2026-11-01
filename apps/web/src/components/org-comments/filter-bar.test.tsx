@@ -104,7 +104,7 @@ describe('FilterBar', () => {
     expect(applied).toContain('<option value="t2" selected="">');
     expect(applied).toContain('<option value="t1">Urgent</option>');
     expect(applied).toContain('Clear filters');
-    expect(html).toContain('<a href="/orgs/o1/tags">Manage tags</a>');
+    expect(html).toContain('href="/orgs/o1/tags">Manage tags</a>');
     // With no tags in the workspace there is nothing to pick, but tags can still be managed.
     const empty = render({ ...options, tags: [] });
     expect(empty).not.toContain('name="tag"');

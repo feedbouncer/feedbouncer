@@ -10,6 +10,8 @@ export function AddEmailForm({ orgId }: { orgId: string }) {
       successMessage="Added. A confirmation email was sent."
       resetOnSuccess
       refresh
+      layout="inline"
+      variant="primary"
     />
   );
 }

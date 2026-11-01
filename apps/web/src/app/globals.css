@@ -194,6 +194,16 @@
     max-width: 100%;
   }
 
+  /* Vertical rhythm: a page is a stack of distinct blocks (heading, cards, sections, lists),
+     spaced consistently, rather than touching elements with ad-hoc gaps. Pages that need a
+     different rhythm (the public /scan tool) set their own gap-* utility, which wins over this. */
+  main {
+    @apply flex flex-col gap-8;
+  }
+  section {
+    @apply flex flex-col gap-4;
+  }
+
   h1,
   h2,
   h3 {
@@ -274,14 +284,30 @@
     @apply bg-card;
   }
 
+  /* A bare <button> (one not built from the Button primitive) defaults to a content-sized,
+     neutral secondary action: most buttons in the app are not the primary call to action on
+     their page. Add .btn-primary, .btn-destructive or .btn-ghost to change that, and .btn-sm
+     for a compact button inside a table row or list item. */
   button {
-    @apply rounded-full border border-border bg-elevated px-4.5 py-2.5 text-ui font-semibold;
+    @apply inline-flex w-fit shrink-0 items-center justify-center gap-2 self-start rounded-md
+      border border-border bg-elevated px-4.5 py-2.5 text-ui font-semibold text-foreground
+      hover:bg-accent;
     min-height: 40px;
-    transition-property: color, background-color, border-color;
+    transition-property: color, background-color, border-color, transform;
     transition-duration: var(--fb-dur-hover);
   }
-  button[type='submit'] {
-    @apply border-coral bg-coral text-on-coral hover:border-coral-hover hover:bg-coral-hover;
+  .btn-primary {
+    @apply rounded-full border-coral bg-coral text-on-coral hover:border-coral-hover hover:bg-coral-hover;
+  }
+  .btn-destructive {
+    @apply border-danger/40 bg-danger/12 text-danger hover:bg-danger/20;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent hover:bg-accent;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-small;
+    min-height: 32px;
   }
 
   [aria-invalid='true'] {

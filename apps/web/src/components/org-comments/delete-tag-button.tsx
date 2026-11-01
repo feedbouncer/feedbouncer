@@ -38,6 +38,7 @@ export function DeleteTagButton({ orgId, tag }: { orgId: string; tag: TagDto }) 
     <>
       <button
         type="button"
+        className="btn-destructive btn-sm"
         aria-label={`Delete tag ${tag.name}`}
         disabled={busy}
         onClick={() => void onClick()}

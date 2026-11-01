@@ -75,7 +75,7 @@ function Invite() {
       <p>
         Join {view.invite.organizationName} as {view.invite.role}
       </p>
-      <button type="button" onClick={accept}>
+      <button type="button" className="btn-primary" onClick={accept}>
         Accept
       </button>
       {error ? <p role="alert">{error}</p> : null}

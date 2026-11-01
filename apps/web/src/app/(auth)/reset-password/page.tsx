@@ -32,6 +32,8 @@ export default async function ResetPasswordPage({
         extraBody={{ token }}
         submitLabel="Set password"
         redirectTo="/login"
+        variant="primary"
+        fullWidthSubmit
       />
     </main>
   );

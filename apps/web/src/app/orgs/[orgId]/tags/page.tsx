@@ -1,6 +1,7 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { DeleteTagButton } from '../../../../components/org-comments/delete-tag-button';
+import { ListPanel, ListRow } from '../../../../components/ui/list';
+import { PageHeader } from '../../../../components/ui/page-header';
 import { isUuid } from '../../../../lib/ids';
 import { totalText, type TagDto } from '../../../../lib/org-comments';
 import { dataOrThrow, requireMe, serverGet } from '../../../../lib/server-api';
@@ -16,27 +17,24 @@ export default async function TagsPage({ params }: { params: Promise<{ orgId: st
   );
   return (
     <main>
-      <h1>Tags</h1>
+      <PageHeader title="Tags" />
       {list.length === 0 ? (
         <p data-state="empty">No tags yet. Add one to a comment on the Comments page.</p>
       ) : (
-        <ul>
+        <ListPanel>
           {list.map((t) => (
-            <li key={t.id}>
-              <span dir="auto">{t.name}</span> · {totalText(t.commentCount)}
-              {canManage ? (
-                <>
-                  {' '}
-                  <DeleteTagButton orgId={orgId} tag={t} />
-                </>
-              ) : null}
-            </li>
+            <ListRow key={t.id}>
+              <div className="flex items-baseline gap-2">
+                <span dir="auto" className="font-semibold text-foreground">
+                  {t.name}
+                </span>
+                <span className="text-small text-dim">{totalText(t.commentCount)}</span>
+              </div>
+              {canManage ? <DeleteTagButton orgId={orgId} tag={t} /> : null}
+            </ListRow>
           ))}
-        </ul>
+        </ListPanel>
       )}
-      <p>
-        <Link href={`/orgs/${orgId}/comments`}>Back to comments</Link>
-      </p>
     </main>
   );
 }

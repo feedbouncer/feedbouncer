@@ -53,4 +53,14 @@ function CardContent({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-export { Card, CardHeader, CardTitle, CardDescription, CardContent };
+function CardFooter({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="card-footer"
+      className={cn('flex items-center gap-3 px-(--fb-card-pad) [.border-t]:pt-(--fb-card-pad)', className)}
+      {...props}
+    />
+  );
+}
+
+export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter };

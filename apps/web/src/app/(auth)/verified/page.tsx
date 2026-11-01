@@ -25,6 +25,8 @@ export default async function VerifiedPage({
         fields={[{ name: 'email', label: 'Email', type: 'email', autoComplete: 'email' }]}
         submitLabel="Send a new link"
         successMessage="If an account needs confirmation, we sent a new link."
+        variant="primary"
+        fullWidthSubmit
       />
     </main>
   );

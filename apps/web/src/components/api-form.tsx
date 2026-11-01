@@ -3,6 +3,8 @@ import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { ApiRequestError, apiFetch } from '../lib/api-client';
 import { messageFor } from '../lib/messages';
+import { Button } from './ui/button';
+import { cn } from '../lib/utils';
 
 export interface Field {
   name: string;
@@ -27,9 +29,28 @@ export function ApiForm(props: {
   refresh?: boolean;
   /** Clear the inputs after a successful submit (for secrets such as webhook URLs). */
   resetOnSuccess?: boolean;
+  /**
+   * The button's weight: `primary` for the one main action on the page or card, `secondary`
+   * (the default) for an everyday settings action, `destructive` for something dangerous or
+   * irreversible (archive, remove, leave, revoke).
+   */
+  variant?: 'primary' | 'secondary' | 'destructive';
+  /**
+   * `stacked` (the default) puts each field on its own line with the button below, for forms
+   * with more than one field. `inline` puts a single field and its button side by side, so
+   * e.g. a rename field and its submit read as one unit instead of two full-width blocks.
+   */
+  layout?: 'stacked' | 'inline';
+  /** A compact button, for a row inside a list or table. */
+  size?: 'sm' | 'default';
+  /** Stretch the submit button to the form's width (only for a narrow standalone form). */
+  fullWidthSubmit?: boolean;
+  className?: string;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
+  const layout = props.layout ?? 'stacked';
+  const variant = props.variant ?? 'secondary';
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -54,36 +75,85 @@ export function ApiForm(props: {
     }
   }
 
+  const submit = (
+    <Button
+      type="submit"
+      variant={variant === 'primary' ? 'default' : variant}
+      size={props.size ?? 'default'}
+      disabled={status.kind === 'busy'}
+      className={props.fullWidthSubmit ? 'w-full' : undefined}
+    >
+      {props.submitLabel}
+    </Button>
+  );
+
   return (
-    <form onSubmit={onSubmit} className="flex max-w-form flex-col gap-(--fb-form-gap)">
-      {props.fields.map((f) => (
-        <label key={f.name} className="flex flex-col gap-(--fb-field-gap)">
-          {f.label}{' '}
-          {f.type === 'select' ? (
-            <select name={f.name} defaultValue={f.defaultValue}>
-              {(f.options ?? []).map((o) => {
-                const opt = typeof o === 'string' ? { value: o, label: o } : o;
-                return (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                );
-              })}
-            </select>
-          ) : (
-            <input
-              name={f.name}
-              type={f.type}
-              autoComplete={f.autoComplete}
-              defaultValue={f.defaultValue}
-              required
-            />
-          )}
-        </label>
-      ))}
-      <button type="submit" disabled={status.kind === 'busy'}>
-        {props.submitLabel}
-      </button>
+    <form
+      onSubmit={onSubmit}
+      className={cn(
+        layout === 'inline' && props.fields.length === 1
+          ? 'flex flex-col gap-(--fb-field-gap)'
+          : 'flex max-w-form flex-col gap-(--fb-form-gap)',
+        props.className,
+      )}
+    >
+      {layout === 'inline' && props.fields.length === 1
+        ? props.fields.map((f) => (
+            <div key={f.name} className="flex flex-col gap-(--fb-field-gap)">
+              <label htmlFor={f.name}>{f.label}</label>
+              <div className="flex items-center gap-2">
+                {f.type === 'select' ? (
+                  <select name={f.name} id={f.name} defaultValue={f.defaultValue} className="flex-1">
+                    {(f.options ?? []).map((o) => {
+                      const opt = typeof o === 'string' ? { value: o, label: o } : o;
+                      return (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                ) : (
+                  <input
+                    name={f.name}
+                    id={f.name}
+                    type={f.type}
+                    autoComplete={f.autoComplete}
+                    defaultValue={f.defaultValue}
+                    required
+                    className="flex-1"
+                  />
+                )}
+                {submit}
+              </div>
+            </div>
+          ))
+        : props.fields.map((f) => (
+            <label key={f.name} className="flex flex-col gap-(--fb-field-gap)">
+              {f.label}
+              {f.type === 'select' ? (
+                <select name={f.name} defaultValue={f.defaultValue}>
+                  {(f.options ?? []).map((o) => {
+                    const opt = typeof o === 'string' ? { value: o, label: o } : o;
+                    return (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    );
+                  })}
+                </select>
+              ) : (
+                <input
+                  name={f.name}
+                  type={f.type}
+                  autoComplete={f.autoComplete}
+                  defaultValue={f.defaultValue}
+                  required
+                />
+              )}
+            </label>
+          ))}
+      {layout === 'inline' && props.fields.length === 1 ? null : submit}
       {status.text ? (
         <p role={status.kind === 'error' ? 'alert' : 'status'}>{status.text}</p>
       ) : null}

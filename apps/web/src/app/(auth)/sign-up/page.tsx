@@ -19,8 +19,10 @@ export default function SignUpPage() {
         ]}
         submitLabel="Sign up"
         successMessage="Check your inbox for a confirmation link."
+        variant="primary"
+        fullWidthSubmit
       />
-      <p>
+      <p className="text-small">
         Already have an account? <Link href="/login">Log in</Link>
       </p>
     </main>

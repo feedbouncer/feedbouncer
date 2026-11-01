@@ -3,6 +3,7 @@ import { CircleAlert } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Skeleton } from './ui/skeleton';
+import { cn } from '../lib/utils';
 
 export function LoadingPanel({ label, rows = 3 }: { label: string; rows?: number }) {
   return (
@@ -27,9 +28,12 @@ export function ErrorPanel({ title, children }: { title: string; children?: Reac
   );
 }
 
-export function TableScroll({ children }: { children: ReactNode }) {
+export function TableScroll({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div data-table-scroll className="w-full overflow-x-auto rounded-lg border border-border">
+    <div
+      data-table-scroll
+      className={cn('w-full overflow-x-auto rounded-lg border border-border', className)}
+    >
       {children}
     </div>
   );

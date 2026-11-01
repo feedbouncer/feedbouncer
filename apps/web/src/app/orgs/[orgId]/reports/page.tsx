@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { WeekPicker } from '../../../../components/reports/WeekPicker';
 import { WeeklyReport } from '../../../../components/reports/WeeklyReport';
+import { PageHeader } from '../../../../components/ui/page-header';
 import { isUuid } from '../../../../lib/ids';
 import { messageFor } from '../../../../lib/messages';
 import { fetchWeeklyReport, parseWeekParam } from '../../../../lib/reports';
@@ -24,17 +25,11 @@ export default async function WeeklyReportPage({
   );
   if (!orgResponse.data) notFound();
   const org = orgResponse.data;
-  const back = (
-    <p>
-      <Link href={`/orgs/${orgId}`}>Back to organization</Link>
-    </p>
-  );
   if (!can(org.role, 'report.read'))
     return (
       <main>
-        <h1>Weekly report</h1>
+        <PageHeader title="Weekly report" />
         <p>Only owners and admins can see the weekly report.</p>
-        {back}
       </main>
     );
   const { week } = await searchParams;
@@ -42,21 +37,17 @@ export default async function WeeklyReportPage({
   const report = await fetchWeeklyReport(orgId, parseWeekParam(week));
   return (
     <main>
-      <h1>Weekly report</h1>
+      <PageHeader
+        title="Weekly report"
+        actions={report ? <WeekPicker orgId={orgId} current={report.weekStart} weeks={report.weeks} /> : null}
+      />
       {report ? (
-        <>
-          <WeekPicker orgId={orgId} current={report.weekStart} weeks={report.weeks} />
-          <WeeklyReport
-            view={buildView(report.stats, org.organization.name)}
-            source={report.source}
-          />
-        </>
+        <WeeklyReport view={buildView(report.stats, org.organization.name)} source={report.source} />
       ) : (
         <p role="alert">
-          {messageFor('invalid_week')} <Link href={`/orgs/${orgId}/reports`}>Latest week</Link>
+          {messageFor('invalid_week')} <Link href={`/orgs/${orgId}/reports`}>Show the latest week</Link>
         </p>
       )}
-      {back}
     </main>
   );
 }

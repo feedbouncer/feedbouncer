@@ -9,6 +9,8 @@ export default function ForgotPasswordPage() {
         fields={[{ name: 'email', label: 'Email', type: 'email', autoComplete: 'email' }]}
         submitLabel="Send reset link"
         successMessage="If an account exists for that address, we sent a reset link."
+        variant="primary"
+        fullWidthSubmit
       />
     </main>
   );

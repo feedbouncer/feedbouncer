@@ -10,9 +10,9 @@ export function WeekPicker(props: { orgId: string; current: string; weeks: strin
   // YYYY-MM-DD keys sort by date as strings.
   const weeks = [...new Set([props.current, ...props.weeks])].sort().reverse();
   return (
-    <form action={`/orgs/${props.orgId}/reports`} method="get">
-      <label>
-        Week{' '}
+    <form action={`/orgs/${props.orgId}/reports`} method="get" className="flex items-end gap-2">
+      <label className="flex flex-col gap-(--fb-field-gap)">
+        <span className="sr-only">Week</span>
         <select name="week" defaultValue={props.current}>
           {weeks.map((w) => (
             <option key={w} value={w}>
@@ -20,8 +20,10 @@ export function WeekPicker(props: { orgId: string; current: string; weeks: strin
             </option>
           ))}
         </select>
-      </label>{' '}
-      <button type="submit">Show</button>
+      </label>
+      <button type="submit" className="btn-primary">
+        Show
+      </button>
     </form>
   );
 }
