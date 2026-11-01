@@ -169,6 +169,42 @@ Headings use `--fb-leading-heading` (1.2) and the display family.
 3. Never write raw values. Colours, font sizes, radii, shadows and durations come from the utilities above. If a value is missing, add it to `:root` and this document together.
 4. Use logical utilities (`ps-`, `pe-`, `ms-`, `me-`, `text-start`, `text-end`, `start-`, `end-`), never the physical left and right ones, so right-to-left comment content lays out correctly.
 
+## Layout and component conventions
+
+Added while fixing the first pass's flat, single-weight pages (giant pill buttons everywhere,
+no cards, link lists duplicating the nav). These are conventions, not new tokens — they compose
+the tables above.
+
+- **Page structure.** `<main>` and `<section>` default to `flex flex-col` with a gap (`gap-8` /
+  `gap-4`) in the base layer of `globals.css`, so a page's top-level blocks get real vertical
+  rhythm for free. A page that genuinely needs a different rhythm (the public `/scan` tool) sets
+  its own `gap-*` utility, which wins over the default.
+- **`PageHeader`** (`src/components/ui/page-header.tsx`) renders the `h1`, an optional dim
+  description and optional right-aligned actions. Use it instead of a bare `<h1>` on every
+  authenticated page.
+- **`StatCard` / `StatGrid`** (`src/components/ui/stat.tsx`) give a headline metric (comments
+  processed, time saved, …) a tile with a large numeral, not plain paragraph text.
+- **`ListPanel` / `ListRow`** (`src/components/ui/list.tsx`) turn a bare `<ul>` of rows (members,
+  brands, tags, domains, …) into a bordered, card-backed panel with a hairline between rows.
+- **`BackLink`** (`src/components/ui/back-link.tsx`) is a small breadcrumb for a page one level
+  below where the top nav reaches (editing one rule, a rule change). It goes above the title, not
+  as a "Back to X" paragraph after the content. Don't add a back link, or any other link, to a
+  destination the org or brand sub-nav already reaches — the header shows both at once on a brand
+  page, so most cross-links between sections are redundant.
+- **Buttons.** `Button` (`src/components/ui/button.tsx`) has `default` (the coral pill — the one
+  primary action on a page or card), `secondary`, `outline`, `destructive` and `ghost` variants,
+  and `sm` / `default` / `lg` sizes. Prefer it in new code. For a raw `<button>` (most existing
+  moderation/table-row actions), the base layer in `globals.css` defaults to a neutral,
+  content-sized secondary look; add `.btn-primary`, `.btn-destructive` or `.btn-ghost` to change
+  the weight, and `.btn-sm` for a compact button inside a table row or list item. Never leave a
+  button at the default pill/coral look unless it really is the page's one primary action —
+  that treatment doesn't scale to a page with several buttons.
+- **`ApiForm`** (`src/components/api-form.tsx`), the shared one-off CRUD form, takes `variant`
+  (`primary` / `secondary` / `destructive`) and `layout` (`stacked` / `inline`). Use `inline` for
+  a single field whose label, input and submit should read as one unit (e.g. a rename field and
+  its save button), `stacked` for a multi-field form. `fullWidthSubmit` is only for a narrow
+  standalone form (auth pages).
+
 ## Keeping in sync
 
 1. `themeColor: '#0b0e14'` in the `viewport` export of `src/app/layout.tsx` is the one hex outside `globals.css`. It is copied from `--fb-bg` and must change with it.
