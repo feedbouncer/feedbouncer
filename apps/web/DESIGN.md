@@ -2,9 +2,9 @@
 
 The web app is dark-only and shares its visual language with the public FeedBouncer website. Every value lives once, in the `:root` block of `src/app/globals.css`, as a `--fb-*` custom property. `@theme inline` in the same file maps those properties to Tailwind utilities and to shadcn's semantic variables. Components use utilities and never write raw colours, pixel font sizes or durations.
 
-Website sources cite `feedbouncer-website/styles.css` as `styles.css:<line>`.
+Website sources cite the marketing site's stylesheet as `styles.css:<line>`.
 
-## Copied from feedbouncer-website
+## Copied from the marketing site
 
 ### Colour
 
@@ -172,7 +172,7 @@ Headings use `--fb-leading-heading` (1.2) and the display family.
 ## Keeping in sync
 
 1. `themeColor: '#0b0e14'` in the `viewport` export of `src/app/layout.tsx` is the one hex outside `globals.css`. It is copied from `--fb-bg` and must change with it.
-2. Re-diff `feedbouncer-website/styles.css:1-18` against the "Copied from feedbouncer-website" tables.
+2. Re-diff the marketing site's `styles.css:1-18` against the "Copied from the marketing site" tables.
 3. Update the `:root` block in `src/app/globals.css` and this document in the same change. `src/app/design-doc.test.ts` fails if a token or its value is missing here.
 4. Re-run the tests: `src/app/tokens.test.ts` re-proves every contrast pair above.
 5. Do not add a light theme or a `.dark` override block; the website ships none.

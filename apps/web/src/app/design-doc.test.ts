@@ -26,7 +26,7 @@ describe('DESIGN.md', () => {
   );
 
   it.each([
-    'Copied from feedbouncer-website',
+    'Copied from the marketing site',
     'App-only tokens',
     'Accessibility deviations',
     'Keeping in sync',

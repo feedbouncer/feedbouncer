@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 
-/* Design tokens. Values marked as copied come from feedbouncer-website/styles.css; see DESIGN.md. */
+/* Design tokens. Values marked as copied come from the marketing site's styles.css; see DESIGN.md. */
 :root {
   color-scheme: dark;
 
