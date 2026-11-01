@@ -17,7 +17,9 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between', className)}>
+    <div
+      className={cn('flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between', className)}
+    >
       <div className="flex flex-col gap-1.5">
         <h1>{title}</h1>
         {description ? <p className="text-dim">{description}</p> : null}

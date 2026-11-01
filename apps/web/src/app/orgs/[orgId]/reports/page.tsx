@@ -39,13 +39,21 @@ export default async function WeeklyReportPage({
     <main>
       <PageHeader
         title="Weekly report"
-        actions={report ? <WeekPicker orgId={orgId} current={report.weekStart} weeks={report.weeks} /> : null}
+        actions={
+          report ? (
+            <WeekPicker orgId={orgId} current={report.weekStart} weeks={report.weeks} />
+          ) : null
+        }
       />
       {report ? (
-        <WeeklyReport view={buildView(report.stats, org.organization.name)} source={report.source} />
+        <WeeklyReport
+          view={buildView(report.stats, org.organization.name)}
+          source={report.source}
+        />
       ) : (
         <p role="alert">
-          {messageFor('invalid_week')} <Link href={`/orgs/${orgId}/reports`}>Show the latest week</Link>
+          {messageFor('invalid_week')}{' '}
+          <Link href={`/orgs/${orgId}/reports`}>Show the latest week</Link>
         </p>
       )}
     </main>

@@ -90,7 +90,9 @@ export function ApiKeyManager({ orgId, items }: { orgId: string; items: ApiKeyDt
                 ))}
               </select>
             </label>
-            {ACCESS_HELP[scope] ? <p className="text-small text-dim">{ACCESS_HELP[scope]}</p> : null}
+            {ACCESS_HELP[scope] ? (
+              <p className="text-small text-dim">{ACCESS_HELP[scope]}</p>
+            ) : null}
             <button type="submit" className="btn-primary" disabled={busy}>
               Create key
             </button>

@@ -203,7 +203,7 @@ export function AccountPicker(props: {
         })}
       </ul>
       <ReviewModeChoice {...reviewMode} onChange={setReviewMode} />
-      <button type="submit" disabled={busy || !canConnect(reviewMode)}>
+      <button type="submit" className="btn-primary" disabled={busy || !canConnect(reviewMode)}>
         {SUBMIT_LABEL[props.platform]}
       </button>
       {error ? <p role="alert">{error}</p> : null}

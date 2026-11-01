@@ -40,7 +40,11 @@ export function WeeklyReport({
           value={leadingNumber(view.processedLine)}
           note={view.changeLine}
         />
-        <StatCard label={REPORT_HEADINGS.timeSaved} value={view.timeSaved} note={view.timeSavedNote} />
+        <StatCard
+          label={REPORT_HEADINGS.timeSaved}
+          value={view.timeSaved}
+          note={view.timeSavedNote}
+        />
       </StatGrid>
       {view.categories ? (
         <section>

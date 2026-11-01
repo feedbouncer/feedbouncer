@@ -170,7 +170,9 @@ export function FilterBar({
               Manage tags
             </Link>
           </div>
-          {options.adsTruncated ? <p className="text-small text-dim">Showing the first 500 ads.</p> : null}
+          {options.adsTruncated ? (
+            <p className="text-small text-dim">Showing the first 500 ads.</p>
+          ) : null}
         </form>
       </CardContent>
     </Card>

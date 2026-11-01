@@ -71,7 +71,12 @@ export function ConfirmApprove(props: {
         This runs every suggested action, including deletes and bans.
       </p>
       <div className="flex gap-2">
-        <button type="button" className="btn-primary btn-sm" disabled={props.busy} onClick={props.onConfirm}>
+        <button
+          type="button"
+          className="btn-primary btn-sm"
+          disabled={props.busy}
+          onClick={props.onConfirm}
+        >
           Approve and run
         </button>
         <button type="button" className="btn-sm" onClick={props.onCancel}>

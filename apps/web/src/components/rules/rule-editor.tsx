@@ -83,15 +83,17 @@ export function SaveWarnings(props: {
   ruleHref: string;
 }) {
   return (
-    <section role="status">
-      <p>Rule saved. Some steps will not run everywhere:</p>
-      <ul>
+    <section role="status" className="rounded-lg border border-border bg-card p-(--fb-card-pad)">
+      <p className="font-semibold text-foreground">
+        Rule saved. Some steps will not run everywhere:
+      </p>
+      <ul className="list-disc ps-5 text-dim">
         {props.warnings.map((w, n) => (
           <li key={n}>{warningText(w)}</li>
         ))}
       </ul>
-      <p>
-        <Link href={props.ruleHref}>Edit the rule</Link> ·{' '}
+      <p className="flex gap-3 text-small">
+        <Link href={props.ruleHref}>Edit the rule</Link>
         <Link href={props.rulesHref}>Back to rules</Link>
       </p>
     </section>
@@ -178,7 +180,10 @@ export function RuleEditor(props: {
     );
 
   return (
-    <form onSubmit={onSubmit}>
+    <form
+      onSubmit={onSubmit}
+      className="max-w-2xl rounded-lg border border-border bg-card p-(--fb-card-pad)"
+    >
       {error ? <p role="alert">{error}</p> : null}
       <Problems issues={general} />
       <Field label="Name" issues={[]}>
@@ -436,7 +441,7 @@ export function RuleEditor(props: {
         />{' '}
         Dry run (log matches only)
       </label>
-      <button type="submit" disabled={busy}>
+      <button type="submit" className="btn-primary" disabled={busy}>
         {rule ? 'Save rule' : 'Create rule'}
       </button>
     </form>

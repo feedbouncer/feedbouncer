@@ -1,7 +1,8 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ActionCapabilitiesDto } from '../../../../../../../lib/actions';
 import { RuleEditor } from '../../../../../../../components/rules/rule-editor';
+import { BackLink } from '../../../../../../../components/ui/back-link';
+import { PageHeader } from '../../../../../../../components/ui/page-header';
 import { isUuid } from '../../../../../../../lib/ids';
 import type { RuleView } from '../../../../../../../lib/rules';
 import { dataOrThrow, requireMe, serverGet } from '../../../../../../../lib/server-api';
@@ -26,11 +27,9 @@ export default async function EditRulePage({
   );
   return (
     <main>
-      <h1>Edit rule</h1>
+      <BackLink href={`/orgs/${orgId}/brands/${brandId}/rules`}>Back to rules</BackLink>
+      <PageHeader title="Edit rule" />
       <RuleEditor orgId={orgId} brandId={brandId} capabilities={capabilities} rule={rule} />
-      <p>
-        <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Back to rules</Link>
-      </p>
     </main>
   );
 }

@@ -45,15 +45,15 @@ export default async function OrgsPage({
           {me.memberships.map((m) => (
             <ListRow key={m.organizationId}>
               <div className="flex flex-col gap-0.5">
-                <Link href={`/orgs/${m.organizationId}`} className="font-display text-card-title font-semibold">
+                <Link
+                  href={`/orgs/${m.organizationId}`}
+                  className="font-display text-card-title font-semibold"
+                >
                   {m.organizationName}
                 </Link>
                 <span className="text-small text-dim capitalize">{m.role}</span>
               </div>
-              <Link
-                href={`/orgs/${m.organizationId}/comments`}
-                className="text-small font-medium"
-              >
+              <Link href={`/orgs/${m.organizationId}/comments`} className="text-small font-medium">
                 All comments
               </Link>
             </ListRow>

@@ -7,7 +7,10 @@ import { cn } from '../../lib/utils';
 function ListPanel({ className, ...props }: React.ComponentProps<'ul'>) {
   return (
     <ul
-      className={cn('flex flex-col divide-y divide-border rounded-lg border border-border bg-card', className)}
+      className={cn(
+        'flex flex-col divide-y divide-border rounded-lg border border-border bg-card',
+        className,
+      )}
       {...props}
     />
   );
@@ -16,7 +19,10 @@ function ListPanel({ className, ...props }: React.ComponentProps<'ul'>) {
 function ListRow({ className, ...props }: React.ComponentProps<'li'>) {
   return (
     <li
-      className={cn('flex flex-wrap items-center justify-between gap-3 p-(--fb-card-pad)', className)}
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-3 p-(--fb-card-pad)',
+        className,
+      )}
       {...props}
     />
   );

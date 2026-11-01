@@ -1,6 +1,7 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { RuleChangeReview } from '../../../../../../../../components/rules/rule-change-review';
+import { BackLink } from '../../../../../../../../components/ui/back-link';
+import { PageHeader } from '../../../../../../../../components/ui/page-header';
 import { isUuid } from '../../../../../../../../lib/ids';
 import type { RuleChangeView } from '../../../../../../../../lib/rule-changes';
 import {
@@ -28,16 +29,14 @@ export default async function RuleChangePage({
   );
   return (
     <main>
-      <h1>Review rule change</h1>
+      <BackLink href={`${rules}/changes`}>Back to rule changes</BackLink>
+      <PageHeader title="Review rule change" />
       <RuleChangeReview
         orgId={orgId}
         brandId={brandId}
         change={change}
         canDecide={org.role !== 'member'}
       />
-      <p>
-        <Link href={`${rules}/changes`}>Back to rule changes</Link>
-      </p>
     </main>
   );
 }

@@ -1,7 +1,8 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ActionCapabilitiesDto } from '../../../../../../../lib/actions';
 import { RuleEditor } from '../../../../../../../components/rules/rule-editor';
+import { BackLink } from '../../../../../../../components/ui/back-link';
+import { PageHeader } from '../../../../../../../components/ui/page-header';
 import { isUuid } from '../../../../../../../lib/ids';
 import { dataOrThrow, requireMe, serverGet } from '../../../../../../../lib/server-api';
 
@@ -21,11 +22,9 @@ export default async function NewRulePage({
   );
   return (
     <main>
-      <h1>New rule</h1>
+      <BackLink href={`/orgs/${orgId}/brands/${brandId}/rules`}>Back to rules</BackLink>
+      <PageHeader title="New rule" />
       <RuleEditor orgId={orgId} brandId={brandId} capabilities={capabilities} />
-      <p>
-        <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Back to rules</Link>
-      </p>
     </main>
   );
 }

@@ -103,7 +103,12 @@ export function ApiForm(props: {
               <label htmlFor={f.name}>{f.label}</label>
               <div className="flex items-center gap-2">
                 {f.type === 'select' ? (
-                  <select name={f.name} id={f.name} defaultValue={f.defaultValue} className="flex-1">
+                  <select
+                    name={f.name}
+                    id={f.name}
+                    defaultValue={f.defaultValue}
+                    className="flex-1"
+                  >
                     {(f.options ?? []).map((o) => {
                       const opt = typeof o === 'string' ? { value: o, label: o } : o;
                       return (

@@ -148,7 +148,12 @@ export function ThresholdTable(props: {
             Save thresholds
           </button>
           {props.onPreview ? (
-            <button type="button" className="btn-sm" disabled={busy} onClick={() => void submit(props.onPreview!)}>
+            <button
+              type="button"
+              className="btn-sm"
+              disabled={busy}
+              onClick={() => void submit(props.onPreview!)}
+            >
               Preview
             </button>
           ) : null}

@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { TableScroll } from '../../../../../../../components/states';
 import { decisionText } from '../../../../../../../components/rules/decision-badge';
+import { BackLink } from '../../../../../../../components/ui/back-link';
+import { PageHeader } from '../../../../../../../components/ui/page-header';
 import {
   CATEGORIES,
   CATEGORY_LABEL,
@@ -72,82 +74,87 @@ export default async function RuleActivityPage({
   if (nextCursor) more.set('cursor', nextCursor);
   return (
     <main>
-      <h1>Rule activity</h1>
-      <form method="get">
-        <label>
-          Rule{' '}
-          <select name="ruleId" defaultValue={ruleId ?? ''}>
-            <option value="">All</option>
-            {rules.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        <label>
-          Type{' '}
-          <select name="kind" defaultValue={kind ?? ''}>
-            <option value="">All</option>
-            {RULE_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {KIND_LABEL[k]}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        <label>
-          Outcome{' '}
-          <select name="outcome" defaultValue={outcome ?? ''}>
-            <option value="">All</option>
-            {RULE_ACTIONS.map((a) => (
-              <option key={a} value={a}>
-                {ACTION_LABEL[a]}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        <label>
-          Mode{' '}
-          <select name="mode" defaultValue={mode ?? ''}>
-            <option value="">All</option>
-            <option value="enforce">Enforced</option>
-            <option value="suggest">Dry run</option>
-          </select>
-        </label>{' '}
-        <label>
-          Source{' '}
-          <select name="source" defaultValue={source ?? ''}>
-            <option value="">All</option>
-            <option value="rule">Rules</option>
-            <option value="classifier">Classifier</option>
-            <option value="policy">Policies</option>
-          </select>
-        </label>{' '}
-        <label>
-          Policy{' '}
-          <select name="policyId" defaultValue={policyId ?? ''}>
-            <option value="">All</option>
-            {policies.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        <label>
-          Category{' '}
-          <select name="category" defaultValue={category ?? ''}>
-            <option value="">All</option>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {CATEGORY_LABEL[c]}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        <button type="submit">Filter</button>
-      </form>
+      <BackLink href={`/orgs/${orgId}/brands/${brandId}/rules`}>Back to rules</BackLink>
+      <PageHeader title="Rule activity" />
+      <div className="rounded-lg border border-border bg-card p-(--fb-card-pad)">
+        <form method="get" className="flex flex-wrap items-end gap-4">
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Rule
+            <select name="ruleId" defaultValue={ruleId ?? ''}>
+              <option value="">All</option>
+              {rules.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Type
+            <select name="kind" defaultValue={kind ?? ''}>
+              <option value="">All</option>
+              {RULE_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {KIND_LABEL[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Outcome
+            <select name="outcome" defaultValue={outcome ?? ''}>
+              <option value="">All</option>
+              {RULE_ACTIONS.map((a) => (
+                <option key={a} value={a}>
+                  {ACTION_LABEL[a]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Mode
+            <select name="mode" defaultValue={mode ?? ''}>
+              <option value="">All</option>
+              <option value="enforce">Enforced</option>
+              <option value="suggest">Dry run</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Source
+            <select name="source" defaultValue={source ?? ''}>
+              <option value="">All</option>
+              <option value="rule">Rules</option>
+              <option value="classifier">Classifier</option>
+              <option value="policy">Policies</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Policy
+            <select name="policyId" defaultValue={policyId ?? ''}>
+              <option value="">All</option>
+              {policies.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Category
+            <select name="category" defaultValue={category ?? ''}>
+              <option value="">All</option>
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {CATEGORY_LABEL[c]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="btn-primary btn-sm">
+            Filter
+          </button>
+        </form>
+      </div>
       {items.length === 0 ? <p data-state="empty">No rule activity yet.</p> : null}
       {items.length > 0 ? (
         <TableScroll>
@@ -202,13 +209,10 @@ export default async function RuleActivityPage({
         </TableScroll>
       ) : null}
       {nextCursor ? (
-        <p>
-          <Link href={`${page}?${more.toString()}`}>Load more</Link>
-        </p>
+        <Link href={`${page}?${more.toString()}`} className="self-start text-small font-medium">
+          Load more
+        </Link>
       ) : null}
-      <p>
-        <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Back to rules</Link>
-      </p>
     </main>
   );
 }

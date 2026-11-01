@@ -26,10 +26,20 @@ export function BulkBar({
       className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card p-4"
     >
       <span className="font-semibold text-foreground">{`${count} selected`}</span>
-      <button type="button" className="btn-sm" disabled={busy} onClick={() => onRun({ type: 'done' })}>
+      <button
+        type="button"
+        className="btn-sm"
+        disabled={busy}
+        onClick={() => onRun({ type: 'done' })}
+      >
         Mark done
       </button>
-      <button type="button" className="btn-sm" disabled={busy} onClick={() => onRun({ type: 'reopen' })}>
+      <button
+        type="button"
+        className="btn-sm"
+        disabled={busy}
+        onClick={() => onRun({ type: 'reopen' })}
+      >
         Reopen
       </button>
       {tags.length > 0 ? (
