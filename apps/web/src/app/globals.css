@@ -187,7 +187,6 @@
   }
   body {
     @apply bg-background font-sans text-body text-foreground antialiased;
-    line-height: var(--fb-leading-body);
     overflow-wrap: anywhere;
   }
   img,

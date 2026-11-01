@@ -6,13 +6,7 @@ import { Skeleton } from './ui/skeleton';
 
 export function LoadingPanel({ label, rows = 3 }: { label: string; rows?: number }) {
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      aria-busy="true"
-      data-state="loading"
-      className="flex flex-col gap-3"
-    >
+    <div role="status" aria-busy="true" data-state="loading" className="flex flex-col gap-3">
       <span className="sr-only">{label}</span>
       {Array.from({ length: rows }, (_, i) => (
         <Skeleton key={i} className="h-4 w-full" />

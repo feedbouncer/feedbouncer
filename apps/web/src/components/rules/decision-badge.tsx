@@ -47,11 +47,9 @@ type BadgeLook = { variant: 'danger' | 'coral' | 'secondary' | 'good'; Icon: Luc
 
 function badgeLook(d: DecisionView): BadgeLook {
   if (d.fallback) return { variant: 'coral', Icon: Flag };
-  if (d.actorType === 'classifier' && d.classifier) {
-    if (d.classifier.reversal) return { variant: 'good', Icon: Undo2 };
-  } else if (d.mode === 'suggest') {
-    return { variant: 'secondary', Icon: FlaskConical };
-  }
+  const byClassifier = d.actorType === 'classifier' && d.classifier;
+  if (byClassifier && d.classifier?.reversal) return { variant: 'good', Icon: Undo2 };
+  if (!byClassifier && d.mode === 'suggest') return { variant: 'secondary', Icon: FlaskConical };
   if (d.outcome === 'flag') return { variant: 'coral', Icon: Flag };
   if (d.outcome === 'approve') return { variant: 'good', Icon: Check };
   return { variant: 'danger', Icon: Ban };

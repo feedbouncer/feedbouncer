@@ -4,7 +4,7 @@ import { Wordmark } from './wordmark';
 export function StandaloneShell({ children }: { children: ReactNode }) {
   return (
     <>
-      <header data-shell="standalone" className="border-b">
+      <header data-shell="standalone" className="border-b border-border">
         <div className="mx-auto flex min-h-(--fb-header-h) w-full max-w-content items-center px-(--fb-gutter)">
           <Wordmark href="/" />
         </div>

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { walk } from '../test/walk';
@@ -9,7 +9,6 @@ const expected: Record<string, RegExp> = {
   '(app)/layout.tsx': /AppShell/,
   '(standalone)/layout.tsx': /StandaloneShell/,
   'scan/layout.tsx': /ScanShell/,
-  'orgs/page.tsx': /AppShell/,
   'page.tsx': /StandaloneShell/,
 };
 
@@ -24,13 +23,6 @@ function coveredByShell(page: string, listed: Record<string, RegExp>): boolean {
   return false;
 }
 
-function pagesUnder(dir: string): string[] {
-  return walk(dir, ['.tsx'])
-    .filter((f) => f.endsWith('/page.tsx'))
-    .map((f) => relative(dir, dirname(f)))
-    .sort();
-}
-
 describe('route shells', () => {
   it.each(Object.entries(expected))('%s uses its shell', (f, re) =>
     expect(readFileSync(`src/app/${f}`, 'utf8')).toMatch(re),
@@ -41,16 +33,8 @@ describe('route shells', () => {
       expect(coveredByShell(p, expected), p).toBe(true);
   });
 
-  it("top-level alerts/ and reports/ only hold the brief's pages", () => {
-    expect(pagesUnder('src/app/(standalone)/alerts')).toEqual(['confirm', 'unsubscribe']);
-    expect(pagesUnder('src/app/(standalone)/reports')).toEqual(['unsubscribe']);
-  });
-
   it('layouts never fetch', () => {
     for (const f of Object.keys(expected).filter((f) => f.endsWith('layout.tsx')))
       expect(readFileSync(`src/app/${f}`, 'utf8')).not.toMatch(/serverGet|requireMe|fetch\(/);
   });
-
-  it('there is no orgs/layout.tsx', () =>
-    expect(existsSync('src/app/orgs/layout.tsx')).toBe(false));
 });

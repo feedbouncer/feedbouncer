@@ -172,7 +172,6 @@ Headings use `--fb-leading-heading` (1.2) and the display family.
 ## Keeping in sync
 
 1. `themeColor: '#0b0e14'` in the `viewport` export of `src/app/layout.tsx` is the one hex outside `globals.css`. It is copied from `--fb-bg` and must change with it.
-
 2. Re-diff `feedbouncer-website/styles.css:1-18` against the "Copied from feedbouncer-website" tables.
 3. Update the `:root` block in `src/app/globals.css` and this document in the same change. `src/app/design-doc.test.ts` fails if a token or its value is missing here.
 4. Re-run the tests: `src/app/tokens.test.ts` re-proves every contrast pair above.

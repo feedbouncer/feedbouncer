@@ -10,7 +10,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
           id="content"
           tabIndex={-1}
           data-shell="auth"
-          className="w-full rounded-xl border bg-card p-(--fb-card-pad) shadow-panel"
+          className="w-full rounded-xl border border-border bg-card p-(--fb-card-pad) shadow-panel"
         >
           {children}
         </div>
