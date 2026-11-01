@@ -1,5 +1,4 @@
 import { TableScroll } from '../../../../../../components/states';
-import { Fragment } from 'react';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { ApiForm } from '../../../../../../components/api-form';
 import { ConnectButton } from '../../../../../../components/connect-button';
@@ -231,21 +230,29 @@ export default async function ConnectionsPage({
                 />
               </section>
             ))}
-          {CONNECTABLE.map((p) => (
-            <Fragment key={p}>
-              <ConnectPermissions permissions={permissions.get(p) ?? []} />
-              <ConnectButton
-                orgId={orgId}
-                brandId={brandId}
-                platform={p}
-                label={PLATFORM_COPY[p].connectLabel}
-              />
-            </Fragment>
-          ))}
-          {hasPageOrInstagram && !hasAdAccount ? (
-            <p>Connect your ad account to moderate comments on your ads.</p>
-          ) : null}
-          <ConnectChecklist />
+          <section>
+            <h2>Connect a platform</h2>
+            {hasPageOrInstagram && !hasAdAccount ? (
+              <p className="text-dim">Connect your ad account to moderate comments on your ads.</p>
+            ) : null}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {CONNECTABLE.map((p) => (
+                <div
+                  key={p}
+                  className="flex flex-col items-start gap-3 rounded-lg border border-border bg-card p-(--fb-card-pad)"
+                >
+                  <ConnectPermissions permissions={permissions.get(p) ?? []} />
+                  <ConnectButton
+                    orgId={orgId}
+                    brandId={brandId}
+                    platform={p}
+                    label={PLATFORM_COPY[p].connectLabel}
+                  />
+                </div>
+              ))}
+            </div>
+            <ConnectChecklist />
+          </section>
         </>
       ) : (
         <p>Only owners and admins can view and manage connections.</p>

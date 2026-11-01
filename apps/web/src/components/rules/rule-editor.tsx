@@ -66,11 +66,12 @@ function Problems({ issues }: { issues: RuleIssue[] }) {
 
 function Field(props: { label: string; issues: RuleIssue[]; hint?: string; children: ReactNode }) {
   return (
-    <div className="mb-3">
-      <label className="block">
-        {props.label} {props.children}
+    <div className="mb-4 flex flex-col gap-(--fb-field-gap)">
+      <label className="flex flex-col gap-(--fb-field-gap)">
+        {props.label}
+        {props.children}
       </label>
-      {props.hint ? <small>{props.hint}</small> : null}
+      {props.hint ? <small className="text-dim">{props.hint}</small> : null}
       <Problems issues={props.issues} />
     </div>
   );
