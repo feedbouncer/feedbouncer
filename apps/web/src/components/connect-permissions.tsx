@@ -9,14 +9,18 @@ export interface ConnectPermission {
 export function ConnectPermissions(props: { permissions: readonly ConnectPermission[] }) {
   if (props.permissions.length === 0) return null;
   return (
-    <section aria-label="Permissions">
-      <p>FeedBouncer will ask for these permissions:</p>
-      <ul>
+    <section
+      aria-label="Permissions"
+      className="rounded-lg border border-border bg-card p-(--fb-card-pad) text-small"
+    >
+      <p className="font-semibold text-foreground">FeedBouncer will ask for these permissions:</p>
+      <ul className="flex flex-col gap-2">
         {props.permissions.map((p) => (
           <li key={p.scope}>
-            <code>{p.scope}</code> <small>{p.required ? 'Required' : 'Optional'}</small>
+            <code>{p.scope}</code>{' '}
+            <small className="text-dim">{p.required ? 'Required' : 'Optional'}</small>
             <br />
-            {p.purpose}
+            <span className="text-dim">{p.purpose}</span>
           </li>
         ))}
       </ul>

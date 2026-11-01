@@ -10,6 +10,7 @@ import {
   type YouTubeBudgetStatus,
 } from '../lib/youtube-budget';
 import { LocalTime, TextWithTimes } from './local-time';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
 type Props = { orgId: string; brandId: string; connectionId: string; canManage: boolean };
 
@@ -79,8 +80,11 @@ export function YouTubeBudgetView(props: Props & { initial: YouTubeBudgetStatus 
     ['Publish', backlog.publish],
   ];
   return (
-    <section aria-label="YouTube quota budget">
-      <h3>YouTube quota budget</h3>
+    <Card aria-label="YouTube quota budget">
+      <CardHeader>
+        <CardTitle>YouTube quota budget</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
       {today.mode !== 'active' ? (
         <p role="status">
           <TextWithTimes build={(fmt) => bannerText(status, fmt) ?? ''} />
@@ -150,7 +154,7 @@ export function YouTubeBudgetView(props: Props & { initial: YouTubeBudgetStatus 
             </label>
           </p>
           {error ? <p role="alert">{error}</p> : null}
-          <button type="submit" disabled={busy}>
+          <button type="submit" className="btn-primary btn-sm" disabled={busy}>
             Save
           </button>
         </form>
@@ -161,6 +165,7 @@ export function YouTubeBudgetView(props: Props & { initial: YouTubeBudgetStatus 
           ))}
         </ul>
       ) : null}
-    </section>
+      </CardContent>
+    </Card>
   );
 }

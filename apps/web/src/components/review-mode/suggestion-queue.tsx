@@ -60,15 +60,24 @@ export function ConfirmApprove(props: {
   onCancel: () => void;
 }) {
   return (
-    <div role="dialog" aria-modal="true" aria-label={props.title}>
-      <p>{props.title}</p>
-      <p role="note">This runs every suggested action, including deletes and bans.</p>
-      <button type="button" disabled={props.busy} onClick={props.onConfirm}>
-        Approve and run
-      </button>{' '}
-      <button type="button" onClick={props.onCancel}>
-        Cancel
-      </button>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={props.title}
+      className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4"
+    >
+      <p className="font-semibold text-foreground">{props.title}</p>
+      <p role="note" className="text-small text-dim">
+        This runs every suggested action, including deletes and bans.
+      </p>
+      <div className="flex gap-2">
+        <button type="button" className="btn-primary btn-sm" disabled={props.busy} onClick={props.onConfirm}>
+          Approve and run
+        </button>
+        <button type="button" className="btn-sm" onClick={props.onCancel}>
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
@@ -188,55 +197,55 @@ export function SuggestionQueue(props: {
     });
 
   return (
-    <div>
-      <form method="get">
-        <label>
-          Account{' '}
-          <select name="connectionId" defaultValue={filter.connectionId ?? ''}>
-            <option value="">All</option>
-            {props.connections.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        <label>
-          Rule{' '}
-          <select name="ruleId" defaultValue={filter.ruleId ?? ''}>
-            <option value="">All</option>
-            {props.rules.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        <label>
-          Proposed action{' '}
-          <select name="stepType" defaultValue={filter.stepType ?? ''}>
-            <option value="">All</option>
-            {GATED_STEP_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {STEP_LABEL[t]}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        <label>
-          Status{' '}
-          <select name="status" defaultValue={filter.status ?? 'pending'}>
-            {[...SUGGESTION_STATUSES, 'all' as const].map((s) => (
-              <option key={s} value={s}>
-                {STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        {filter.connectionId ? (
-          <>
-            <label>
-              Author{' '}
+    <div className="flex flex-col gap-4">
+      <div className="rounded-lg border border-border bg-card p-(--fb-card-pad)">
+        <form method="get" className="flex flex-wrap items-end gap-4">
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Account
+            <select name="connectionId" defaultValue={filter.connectionId ?? ''}>
+              <option value="">All</option>
+              {props.connections.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Rule
+            <select name="ruleId" defaultValue={filter.ruleId ?? ''}>
+              <option value="">All</option>
+              {props.rules.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Proposed action
+            <select name="stepType" defaultValue={filter.stepType ?? ''}>
+              <option value="">All</option>
+              {GATED_STEP_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {STEP_LABEL[t]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Status
+            <select name="status" defaultValue={filter.status ?? 'pending'}>
+              {[...SUGGESTION_STATUSES, 'all' as const].map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {filter.connectionId ? (
+            <label className="flex flex-col gap-(--fb-field-gap)">
+              Author
               <select name="authorId" defaultValue={filter.authorId ?? ''}>
                 <option value="">All</option>
                 {props.authors.map((a) => (
@@ -245,30 +254,34 @@ export function SuggestionQueue(props: {
                   </option>
                 ))}
               </select>
-            </label>{' '}
-          </>
-        ) : null}
-        <button type="submit">Filter</button>
-      </form>
+            </label>
+          ) : null}
+          <button type="submit" className="btn-primary btn-sm">
+            Filter
+          </button>
+        </form>
+      </div>
       {error ? <p role="alert">{error}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
       {authorScope ? (
-        <p>
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
+            className="btn-sm"
             disabled={busy}
             onClick={() => setDialog({ kind: 'author', requestKey: crypto.randomUUID() })}
           >
             Approve all from this author
-          </button>{' '}
+          </button>
           <button
             type="button"
+            className="btn-sm"
             disabled={busy}
             onClick={() => void decideAuthor('dismiss', crypto.randomUUID())}
           >
             Dismiss all from this author
           </button>
-        </p>
+        </div>
       ) : null}
       {dialog?.kind === 'author' ? (
         <ConfirmApprove
@@ -283,32 +296,34 @@ export function SuggestionQueue(props: {
       ) : (
         <>
           {pendingIds.length > 0 ? (
-            <p>
-              <label>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 font-normal text-foreground">
                 <input
                   type="checkbox"
                   checked={allSelected}
                   onChange={(e) =>
                     setSelected(e.currentTarget.checked ? new Set(pendingIds) : new Set())
                   }
-                />{' '}
+                />
                 Select all on this page
-              </label>{' '}
+              </label>
               <button
                 type="button"
+                className="btn-primary btn-sm"
                 disabled={busy || selected.size === 0}
                 onClick={() => chooseSelected('approve')}
               >
                 Approve selected
-              </button>{' '}
+              </button>
               <button
                 type="button"
+                className="btn-sm"
                 disabled={busy || selected.size === 0}
                 onClick={() => chooseSelected('dismiss')}
               >
                 Dismiss selected
               </button>
-            </p>
+            </div>
           ) : null}
           {dialog?.kind === 'ids' ? (
             <ConfirmApprove
@@ -318,11 +333,11 @@ export function SuggestionQueue(props: {
               onCancel={() => setDialog(null)}
             />
           ) : null}
-          <ul>
+          <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
             {items.map((s) => {
               const handledBy = handled.get(s.id);
               return (
-                <li key={s.id}>
+                <li key={s.id} className="flex flex-col gap-3 p-(--fb-card-pad)">
                   {s.status === 'pending' && !handledBy ? (
                     <input
                       type="checkbox"
@@ -394,11 +409,21 @@ export function SuggestionQueue(props: {
                     <TextWithTimes build={handledBy ?? ((fmt) => suggestionStatusText(s, fmt))} />
                   </p>
                   {s.status === 'pending' && !handledBy ? (
-                    <div>
-                      <button type="button" disabled={busy} onClick={() => choose(s, 'approve')}>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="btn-primary btn-sm"
+                        disabled={busy}
+                        onClick={() => choose(s, 'approve')}
+                      >
                         Approve
-                      </button>{' '}
-                      <button type="button" disabled={busy} onClick={() => choose(s, 'dismiss')}>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-sm"
+                        disabled={busy}
+                        onClick={() => choose(s, 'dismiss')}
+                      >
                         Dismiss
                       </button>
                     </div>
@@ -418,11 +443,12 @@ export function SuggestionQueue(props: {
         </>
       )}
       {props.next ? (
-        <p>
-          <Link href={queueHref(props.orgId, props.brandId, { ...filter, before: props.next })}>
-            Load more
-          </Link>
-        </p>
+        <Link
+          href={queueHref(props.orgId, props.brandId, { ...filter, before: props.next })}
+          className="self-start text-small font-medium"
+        >
+          Load more
+        </Link>
       ) : null}
     </div>
   );

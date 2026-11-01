@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PolicyList } from '../../../../../../components/policies/policy-list';
+import { PageHeader } from '../../../../../../components/ui/page-header';
 import { isUuid } from '../../../../../../lib/ids';
 import type { PolicyListDto } from '../../../../../../lib/policies';
 import { dataOrThrow, requireMe, serverGet, type Role } from '../../../../../../lib/server-api';
@@ -21,17 +22,16 @@ export default async function PoliciesPage({
   const brand = `/orgs/${orgId}/brands/${brandId}`;
   return (
     <main>
-      <h1>Policies</h1>
-      <p>
-        Describe what to catch in plain language. Policies check comments that no rule has decided.
-      </p>
+      <PageHeader
+        title="Policies"
+        description="Describe what to catch in plain language. Policies check comments that no rule has decided."
+        actions={
+          <Link href={`${brand}/rules/activity?source=policy`} className="text-small font-medium">
+            Policy activity
+          </Link>
+        }
+      />
       <PolicyList orgId={orgId} brandId={brandId} list={list} canEdit={org.role !== 'member'} />
-      <p>
-        <Link href={`${brand}/rules`}>Rules</Link> ·{' '}
-        <Link href={`${brand}/rules/activity?source=policy`}>Policy activity</Link> ·{' '}
-        <Link href={`${brand}/classifier`}>Classifier</Link> ·{' '}
-        <Link href={`/orgs/${orgId}`}>Back to organization</Link>
-      </p>
     </main>
   );
 }

@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { RuleList } from '../../../../../../components/rules/rule-list';
+import { buttonVariants } from '../../../../../../components/ui/button';
+import { PageHeader } from '../../../../../../components/ui/page-header';
 import { isUuid } from '../../../../../../lib/ids';
 import type { RuleChangeView } from '../../../../../../lib/rule-changes';
 import type { RuleView } from '../../../../../../lib/rules';
@@ -27,24 +29,21 @@ export default async function RulesPage({
   const brand = `/orgs/${orgId}/brands/${brandId}`;
   return (
     <main>
-      <h1>Rules</h1>
-      <p>
-        Rules run top to bottom; the first match decides. Trusted authors are always checked first.
-      </p>
-      <p>
-        <Link href={`${brand}/rules/new`}>New rule</Link> ·{' '}
-        <Link href={`${brand}/rules/activity`}>Rule activity</Link> ·{' '}
-        <Link href={`${brand}/actions`}>Action log</Link> ·{' '}
-        <Link href={`${brand}/review`}>Review queue</Link> ·{' '}
-        <Link href={`${brand}/policies`}>Policies</Link> ·{' '}
-        <Link href={`${brand}/classifier`}>Classifier</Link> ·{' '}
-        <Link href={`${brand}/domains`}>Own domains</Link>
-      </p>
+      <PageHeader
+        title="Rules"
+        description="Rules run top to bottom; the first match decides. Trusted authors are always checked first."
+        actions={
+          <>
+            <Link href={`${brand}/rules/activity`} className="text-small font-medium">
+              Rule activity
+            </Link>
+            <Link href={`${brand}/rules/new`} className={buttonVariants()}>
+              New rule
+            </Link>
+          </>
+        }
+      />
       <RuleList orgId={orgId} brandId={brandId} rules={rules} pendingChanges={changes.length} />
-      <p>
-        <Link href={`${brand}/comments`}>Comments</Link> ·{' '}
-        <Link href={`/orgs/${orgId}`}>Back to organization</Link>
-      </p>
     </main>
   );
 }

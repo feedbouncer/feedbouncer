@@ -119,6 +119,7 @@ export function RuleList(props: {
                 <td>
                   <button
                     type="button"
+                    className="btn-sm"
                     disabled={busy}
                     onClick={() =>
                       void run(`${base}/${r.id}`, {
@@ -147,32 +148,45 @@ export function RuleList(props: {
                   </label>
                 </td>
                 <td>
-                  {movable(i) && movable(i - 1) ? (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      aria-label={`Move ${r.name} up`}
-                      onClick={() => move(i, -1)}
-                    >
-                      ▲
-                    </button>
-                  ) : null}
-                  {movable(i) && movable(i + 1) ? (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      aria-label={`Move ${r.name} down`}
-                      onClick={() => move(i, 1)}
-                    >
-                      ▼
-                    </button>
-                  ) : null}
+                  <div className="flex gap-1">
+                    {movable(i) && movable(i - 1) ? (
+                      <button
+                        type="button"
+                        className="btn-ghost btn-sm"
+                        disabled={busy}
+                        aria-label={`Move ${r.name} up`}
+                        onClick={() => move(i, -1)}
+                      >
+                        ▲
+                      </button>
+                    ) : null}
+                    {movable(i) && movable(i + 1) ? (
+                      <button
+                        type="button"
+                        className="btn-ghost btn-sm"
+                        disabled={busy}
+                        aria-label={`Move ${r.name} down`}
+                        onClick={() => move(i, 1)}
+                      >
+                        ▼
+                      </button>
+                    ) : null}
+                  </div>
                 </td>
                 <td>
-                  <Link href={`${pages}/${r.id}`}>Edit</Link>{' '}
-                  <button type="button" disabled={busy} onClick={() => remove(r)}>
-                    Delete
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <Link href={`${pages}/${r.id}`} className="text-small font-medium">
+                      Edit
+                    </Link>
+                    <button
+                      type="button"
+                      className="btn-destructive btn-sm"
+                      disabled={busy}
+                      onClick={() => remove(r)}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

@@ -1,6 +1,4 @@
 import { TableScroll } from '../../../../../../components/states';
-import { AlertsNavLink } from '../../../../../../components/alerts/alerts-nav-link';
-import Link from 'next/link';
 import { Fragment } from 'react';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { ApiForm } from '../../../../../../components/api-form';
@@ -12,6 +10,7 @@ import {
 import { ConnectChecklist } from '../../../../../../components/connect-checklist';
 import { YouTubeBudgetPanel } from '../../../../../../components/youtube-budget-panel';
 import { ReviewModeBanner } from '../../../../../../components/review-mode/review-mode-banner';
+import { PageHeader } from '../../../../../../components/ui/page-header';
 import { backfillText, type BackfillViewDto } from '../../../../../../lib/backfill-text';
 import { healthText } from '../../../../../../lib/health-text';
 import { formatUtc } from '../../../../../../lib/format';
@@ -139,7 +138,7 @@ export default async function ConnectionsPage({
   const hasAdAccount = connections.some((c) => c.platform === 'meta_ads');
   return (
     <main>
-      <h1>Connections</h1>
+      <PageHeader title="Connections" />
       {review.connections.map((s) => (
         <ReviewModeBanner
           key={s.connectionId}
@@ -191,22 +190,26 @@ export default async function ConnectionsPage({
                         </td>
                         <td>{backfillText(c.backfill, formatUtc)}</td>
                         <td>
-                          {c.status === 'needs_reconnect' && isConnectable(c.platform) ? (
-                            <ConnectButton
-                              orgId={orgId}
-                              brandId={brandId}
-                              platform={c.platform}
-                              label="Reconnect"
-                              reconnectConnectionId={c.id}
+                          <div className="flex flex-wrap items-start gap-2">
+                            {c.status === 'needs_reconnect' && isConnectable(c.platform) ? (
+                              <ConnectButton
+                                orgId={orgId}
+                                brandId={brandId}
+                                platform={c.platform}
+                                label="Reconnect"
+                                reconnectConnectionId={c.id}
+                              />
+                            ) : null}
+                            <ApiForm
+                              action={`/api/v1/orgs/${orgId}/brands/${brandId}/connections/${c.id}`}
+                              method="DELETE"
+                              fields={[]}
+                              submitLabel="Disconnect"
+                              variant="destructive"
+                              size="sm"
+                              refresh
                             />
-                          ) : null}
-                          <ApiForm
-                            action={`/api/v1/orgs/${orgId}/brands/${brandId}/connections/${c.id}`}
-                            method="DELETE"
-                            fields={[]}
-                            submitLabel="Disconnect"
-                            refresh
-                          />
+                          </div>
                         </td>
                       </tr>
                     );
@@ -247,23 +250,6 @@ export default async function ConnectionsPage({
       ) : (
         <p>Only owners and admins can view and manage connections.</p>
       )}
-      <p>
-        <Link href={`/orgs/${orgId}/brands/${brandId}/comments`}>Comments</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/suggestions`}>
-          {`Suggestions (${review.pendingTotal})`}
-        </Link>{' '}
-        · <Link href={`/orgs/${orgId}/brands/${brandId}/ads`}>Ads</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Rules</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/policies`}>Policies</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/classifier`}>Classifier</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/domains`}>Own domains</Link> ·{' '}
-        {canManage ? (
-          <>
-            <AlertsNavLink role={org.role} href={`/orgs/${orgId}/brands/${brandId}/alerts`} /> ·{' '}
-          </>
-        ) : null}
-        <Link href={`/orgs/${orgId}`}>Back to organization</Link>
-      </p>
     </main>
   );
 }

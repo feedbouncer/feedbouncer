@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { TableScroll } from '../states';
+import { buttonVariants } from '../ui/button';
 import { apiFetch } from '../../lib/api-client';
 import {
   POLICY_ACTION_LABEL,
@@ -51,26 +52,30 @@ export function PolicyList(props: {
   }
 
   return (
-    <div>
+    <div className="flex flex-col gap-4">
       {evaluatorConfigured ? null : (
         <p role="note">Policy checks are turned off in this deployment.</p>
       )}
-      <p>{usageText(usage)}</p>
-      {props.canEdit ? (
-        <p>
-          {policies.length >= limits.maxPolicies ? (
-            <span>Limit reached ({limits.maxPolicies})</span>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-small text-dim">{usageText(usage)}</p>
+        {props.canEdit ? (
+          policies.length >= limits.maxPolicies ? (
+            <span className="text-small text-dim">Limit reached ({limits.maxPolicies})</span>
           ) : (
-            <Link href={`${pages}/new`}>New policy</Link>
-          )}
-        </p>
-      ) : null}
+            <Link href={`${pages}/new`} className={buttonVariants({ size: 'sm' })}>
+              New policy
+            </Link>
+          )
+        ) : null}
+      </div>
       {error ? <p role="alert">{error}</p> : null}
       {policies.length === 0 ? (
         <p data-state="empty">No policies yet.</p>
       ) : (
         <>
-          <p>Up to {limits.maxEnabled} policies can be enabled at once.</p>
+          <p className="text-small text-dim">
+            Up to {limits.maxEnabled} policies can be enabled at once.
+          </p>
           <TableScroll>
             <table>
               <thead>
@@ -93,6 +98,7 @@ export function PolicyList(props: {
                     <td>
                       <button
                         type="button"
+                        className="btn-sm"
                         aria-pressed={p.enabled}
                         aria-label={`${p.enabled ? 'Disable' : 'Enable'} ${p.name}`}
                         disabled={busy || !props.canEdit}
@@ -107,15 +113,21 @@ export function PolicyList(props: {
                       </button>
                     </td>
                     <td>
-                      <Link href={`${pages}/${p.id}`}>{props.canEdit ? 'Edit' : 'View'}</Link>
-                      {props.canEdit ? (
-                        <>
-                          {' '}
-                          <button type="button" disabled={busy} onClick={() => remove(p)}>
+                      <div className="flex items-center gap-2">
+                        <Link href={`${pages}/${p.id}`} className="text-small font-medium">
+                          {props.canEdit ? 'Edit' : 'View'}
+                        </Link>
+                        {props.canEdit ? (
+                          <button
+                            type="button"
+                            className="btn-destructive btn-sm"
+                            disabled={busy}
+                            onClick={() => remove(p)}
+                          >
                             Delete
                           </button>
-                        </>
-                      ) : null}
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
