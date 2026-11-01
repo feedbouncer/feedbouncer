@@ -1,6 +1,6 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ActionLog, type LogFilters } from '../../../../../../components/actions/action-log';
+import { PageHeader } from '../../../../../../components/ui/page-header';
 import {
   STEP_ORDER,
   STEP_STATUSES,
@@ -44,10 +44,9 @@ export default async function ActionLogPage({
     'action log',
   );
   const { rules } = dataOrThrow(await serverGet<{ rules: RuleView[] }>(`${base}/rules`), 'rules');
-  const brand = `/orgs/${orgId}/brands/${brandId}`;
   return (
     <main>
-      <h1>Action log</h1>
+      <PageHeader title="Action log" />
       <ActionLog
         orgId={orgId}
         brandId={brandId}
@@ -56,11 +55,6 @@ export default async function ActionLogPage({
         filters={filters}
         next={log.next}
       />
-      <p>
-        <Link href={`${brand}/review`}>Review queue</Link> ·{' '}
-        <Link href="/hidden-today">Hidden today</Link> ·{' '}
-        <Link href={`${brand}/rules`}>Back to rules</Link>
-      </p>
     </main>
   );
 }

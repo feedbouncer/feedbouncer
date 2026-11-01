@@ -72,43 +72,47 @@ export function ActionLog(props: {
   if (props.next) more.set('before', props.next);
 
   return (
-    <div>
-      <form method="get">
-        <label>
-          Rule{' '}
-          <select name="ruleId" defaultValue={props.filters.ruleId ?? ''}>
-            <option value="">All</option>
-            {props.rules.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        <label>
-          Outcome{' '}
-          <select name="status" defaultValue={props.filters.status ?? ''}>
-            <option value="">All</option>
-            {STEP_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        <label>
-          Step{' '}
-          <select name="type" defaultValue={props.filters.type ?? ''}>
-            <option value="">All</option>
-            {STEP_ORDER.map((t) => (
-              <option key={t} value={t}>
-                {STEP_LABEL[t]}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        <button type="submit">Filter</button>
-      </form>
+    <div className="flex flex-col gap-4">
+      <div className="rounded-lg border border-border bg-card p-(--fb-card-pad)">
+        <form method="get" className="flex flex-wrap items-end gap-4">
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Rule
+            <select name="ruleId" defaultValue={props.filters.ruleId ?? ''}>
+              <option value="">All</option>
+              {props.rules.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Outcome
+            <select name="status" defaultValue={props.filters.status ?? ''}>
+              <option value="">All</option>
+              {STEP_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-(--fb-field-gap)">
+            Step
+            <select name="type" defaultValue={props.filters.type ?? ''}>
+              <option value="">All</option>
+              {STEP_ORDER.map((t) => (
+                <option key={t} value={t}>
+                  {STEP_LABEL[t]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="btn-primary btn-sm">
+            Filter
+          </button>
+        </form>
+      </div>
       {error ? <p role="alert">{error}</p> : null}
       {props.entries.length === 0 ? <p data-state="empty">No actions yet.</p> : null}
       {props.entries.length > 0 ? (
@@ -148,6 +152,7 @@ export function ActionLog(props: {
                       {e.undoable ? (
                         <button
                           type="button"
+                          className="btn-sm"
                           disabled={busy !== null}
                           aria-label={`${undoLabel} ${STEP_LABEL[e.type]}`}
                           onClick={() => void undo(e.id)}
@@ -164,9 +169,9 @@ export function ActionLog(props: {
         </TableScroll>
       ) : null}
       {props.next ? (
-        <p>
-          <Link href={`${page}?${more.toString()}`}>Load more</Link>
-        </p>
+        <Link href={`${page}?${more.toString()}`} className="self-start text-small font-medium">
+          Load more
+        </Link>
       ) : null}
     </div>
   );

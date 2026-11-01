@@ -27,7 +27,7 @@ export function RemoveDomainButton(props: { orgId: string; brandId: string; doma
 
   return (
     <>
-      <button type="button" disabled={busy} onClick={remove}>
+      <button type="button" className="btn-destructive btn-sm" disabled={busy} onClick={remove}>
         Remove
       </button>
       {error ? <span role="alert"> {error}</span> : null}

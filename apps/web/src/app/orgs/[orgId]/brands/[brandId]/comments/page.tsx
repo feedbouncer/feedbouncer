@@ -7,6 +7,8 @@ import { CommentLinks } from '../../../../../../components/comment-links';
 import { DecisionBadge } from '../../../../../../components/rules/decision-badge';
 import { DecisionHistory } from '../../../../../../components/rules/decision-history';
 import { ReviewModeBanner } from '../../../../../../components/review-mode/review-mode-banner';
+import { ListPanel } from '../../../../../../components/ui/list';
+import { PageHeader } from '../../../../../../components/ui/page-header';
 import { adBadgeTitle } from '../../../../../../lib/ads';
 import { formatUtc } from '../../../../../../lib/format';
 import { isUuid } from '../../../../../../lib/ids';
@@ -84,7 +86,7 @@ export default async function CommentsPage({
   const last = comments.at(-1);
   return (
     <main>
-      <h1>Comments</h1>
+      <PageHeader title="Comments" />
       {review.connections.map((s) => (
         <ReviewModeBanner
           key={s.connectionId}
@@ -94,21 +96,23 @@ export default async function CommentsPage({
           canManage={review.canManage}
         />
       ))}
-      <form method="get">
-        <label>
-          Show{' '}
+      <form method="get" className="flex items-end gap-2">
+        <label className="flex flex-col gap-(--fb-field-gap)">
+          Show
           <select name="origin" defaultValue={origin ?? ''}>
             <option value="">All</option>
             <option value="ad">Ads</option>
             <option value="organic">Organic</option>
           </select>
-        </label>{' '}
-        <button type="submit">Filter</button>
+        </label>
+        <button type="submit" className="btn-primary btn-sm">
+          Filter
+        </button>
       </form>
       {comments.length === 0 ? <p data-state="empty">No comments yet.</p> : null}
-      <ul>
+      <ListPanel>
         {comments.map((c) => (
-          <li key={c.id} id={`comment-${c.id}`}>
+          <li key={c.id} id={`comment-${c.id}`} className="flex flex-col gap-3 p-(--fb-card-pad)">
             <p>
               <strong>{c.authorName ?? 'Unknown author'}</strong> · {formatUtc(c.postedAt)} ·{' '}
               <span>{c.state}</span>
@@ -155,28 +159,15 @@ export default async function CommentsPage({
             />
           </li>
         ))}
-      </ul>
+      </ListPanel>
       {last && comments.length === PAGE_SIZE ? (
-        <p>
-          <Link
-            href={`/orgs/${orgId}/brands/${brandId}/comments?before=${encodeURIComponent(last.postedAt)}&beforeId=${last.id}${origin ? `&origin=${origin}` : ''}`}
-          >
-            Older comments
-          </Link>
-        </p>
+        <Link
+          href={`/orgs/${orgId}/brands/${brandId}/comments?before=${encodeURIComponent(last.postedAt)}&beforeId=${last.id}${origin ? `&origin=${origin}` : ''}`}
+          className="self-start text-small font-medium"
+        >
+          Older comments
+        </Link>
       ) : null}
-      <p>
-        <Link href={`/orgs/${orgId}/brands/${brandId}/suggestions`}>
-          {`Suggestions (${review.pendingTotal})`}
-        </Link>{' '}
-        · <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Rules</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/policies`}>Policies</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/classifier`}>Classifier</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/domains`}>Own domains</Link> ·{' '}
-        <Link href="/hidden-today">Hidden today</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/comments`}>All comments in this workspace</Link> ·{' '}
-        <Link href={`/orgs/${orgId}`}>Back to organization</Link>
-      </p>
     </main>
   );
 }

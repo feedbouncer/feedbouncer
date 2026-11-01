@@ -75,7 +75,7 @@ export function ClassifierSettings(props: {
   };
 
   return (
-    <div>
+    <div className="flex flex-col gap-4">
       {error ? <p role="alert">{error}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
       <ThresholdTable
@@ -87,23 +87,23 @@ export function ClassifierSettings(props: {
         onPreview={runPreview}
       />
       {preview ? <PreviewPanel result={preview} /> : null}
-      <label>
-        Window{' '}
-        <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
-          {WINDOWS.map((d) => (
-            <option key={d} value={d}>
-              Last {d} {d === 1 ? 'day' : 'days'}
-            </option>
-          ))}
-        </select>
-      </label>
-      {props.canEdit ? (
-        <p>
-          <button type="button" onClick={rerun}>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-(--fb-field-gap)">
+          Window
+          <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
+            {WINDOWS.map((d) => (
+              <option key={d} value={d}>
+                Last {d} {d === 1 ? 'day' : 'days'}
+              </option>
+            ))}
+          </select>
+        </label>
+        {props.canEdit ? (
+          <button type="button" className="btn-sm" onClick={rerun}>
             Re-run on the last {days} {days === 1 ? 'day' : 'days'}
           </button>
-        </p>
-      ) : null}
+        ) : null}
+      </div>
     </div>
   );
 }

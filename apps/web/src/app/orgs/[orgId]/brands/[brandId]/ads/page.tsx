@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { TableScroll } from '../../../../../../components/states';
+import { PageHeader } from '../../../../../../components/ui/page-header';
 import { resolutionText, type AdView } from '../../../../../../lib/ads';
 import { formatUtc } from '../../../../../../lib/format';
 import { isUuid } from '../../../../../../lib/ids';
@@ -34,7 +35,7 @@ export default async function AdsPage({
   const connections = `/orgs/${orgId}/brands/${brandId}/connections`;
   return (
     <main>
-      <h1>Ads</h1>
+      <PageHeader title="Ads" />
       {hints.pagesNotConnected > 0 ? (
         <p>
           {hints.pagesNotConnected} active ads run on a Facebook Page that is not connected.{' '}
@@ -80,18 +81,13 @@ export default async function AdsPage({
         </TableScroll>
       ) : null}
       {nextCursor ? (
-        <p>
-          <Link
-            href={`/orgs/${orgId}/brands/${brandId}/ads?cursor=${encodeURIComponent(nextCursor)}`}
-          >
-            More ads
-          </Link>
-        </p>
+        <Link
+          href={`/orgs/${orgId}/brands/${brandId}/ads?cursor=${encodeURIComponent(nextCursor)}`}
+          className="self-start text-small font-medium"
+        >
+          More ads
+        </Link>
       ) : null}
-      <p>
-        <Link href={connections}>Connections</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/comments`}>Comments</Link>
-      </p>
     </main>
   );
 }

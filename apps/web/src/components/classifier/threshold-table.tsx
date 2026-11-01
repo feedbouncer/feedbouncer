@@ -136,21 +136,23 @@ export function ThresholdTable(props: {
       {deleting ? (
         <p role="note">Delete cannot be undone: deleted comments are removed from the platform.</p>
       ) : null}
-      {props.canEdit && !dirty ? <p>No changes to save.</p> : null}
+      {props.canEdit && !dirty ? <p className="text-small text-dim">No changes to save.</p> : null}
       {props.canEdit ? (
-        <p>
-          <button type="button" disabled={busy || !dirty} onClick={() => void submit(props.onSave)}>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="btn-primary btn-sm"
+            disabled={busy || !dirty}
+            onClick={() => void submit(props.onSave)}
+          >
             Save thresholds
           </button>
           {props.onPreview ? (
-            <>
-              {' '}
-              <button type="button" disabled={busy} onClick={() => void submit(props.onPreview!)}>
-                Preview
-              </button>
-            </>
+            <button type="button" className="btn-sm" disabled={busy} onClick={() => void submit(props.onPreview!)}>
+              Preview
+            </button>
           ) : null}
-        </p>
+        </div>
       ) : null}
     </div>
   );

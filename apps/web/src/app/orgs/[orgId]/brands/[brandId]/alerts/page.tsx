@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { AlertsUnavailable } from '../../../../../../components/alerts/alerts-unavailable';
 import { BrandAlertSettings } from '../../../../../../components/alerts/brand-alert-settings';
 import { RecentAlerts } from '../../../../../../components/alerts/recent-alerts';
+import { PageHeader } from '../../../../../../components/ui/page-header';
 import { channelName, type BrandAlertsView } from '../../../../../../lib/alerts';
 import { isUuid } from '../../../../../../lib/ids';
 import { dataOrThrow, requireMe, serverGet, type Role } from '../../../../../../lib/server-api';
@@ -26,7 +27,15 @@ export default async function BrandAlertsPage({
   const available = view.availability.slack || view.availability.email;
   return (
     <main>
-      <h1>Alerts</h1>
+      <PageHeader
+        title="Alerts"
+        description={
+          <>
+            Manage shared alert channels on the{' '}
+            <Link href={`/orgs/${orgId}/alerts`}>workspace Alerts page</Link>.
+          </>
+        }
+      />
       {available ? (
         <>
           <BrandAlertSettings
@@ -40,11 +49,6 @@ export default async function BrandAlertsPage({
       ) : (
         <AlertsUnavailable />
       )}
-      <p>
-        <Link href={`/orgs/${orgId}/alerts`}>Workspace alert channels</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/comments`}>Comments</Link> ·{' '}
-        <Link href={`/orgs/${orgId}`}>Back to organization</Link>
-      </p>
     </main>
   );
 }
