@@ -2,8 +2,8 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
-import { ApiRequestError, apiFetch } from '../../lib/api-client';
-import { messageFor } from '../../lib/messages';
+import { ApiRequestError, apiFetch } from '../../../lib/api-client';
+import { messageFor } from '../../../lib/messages';
 
 interface Lookup {
   organizationName: string;

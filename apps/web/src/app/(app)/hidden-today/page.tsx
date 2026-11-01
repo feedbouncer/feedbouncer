@@ -1,9 +1,9 @@
 import { can } from '@feedbouncer/authz';
 import Link from 'next/link';
-import { HiddenList } from '../../components/hidden-today/hidden-list';
-import type { HiddenTodayPage } from '../../lib/hidden-today';
-import { isUuid } from '../../lib/ids';
-import { dataOrThrow, requireMe, serverGet } from '../../lib/server-api';
+import { HiddenList } from '../../../components/hidden-today/hidden-list';
+import type { HiddenTodayPage } from '../../../lib/hidden-today';
+import { isUuid } from '../../../lib/ids';
+import { dataOrThrow, requireMe, serverGet } from '../../../lib/server-api';
 
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/;
 

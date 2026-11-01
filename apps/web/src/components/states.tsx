@@ -21,15 +21,7 @@ export function LoadingPanel({ label, rows = 3 }: { label: string; rows?: number
   );
 }
 
-export function ErrorPanel({
-  title,
-  children,
-  action,
-}: {
-  title: string;
-  children?: ReactNode;
-  action?: ReactNode;
-}) {
+export function ErrorPanel({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div role="alert" data-state="error" className="flex flex-col gap-2">
       <p className="flex items-center gap-2 font-semibold">
@@ -37,7 +29,6 @@ export function ErrorPanel({
         {title}
       </p>
       {children}
-      {action}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ApiForm } from '../../components/api-form';
+import { ApiForm } from '../../../components/api-form';
 
 export default async function VerifiedPage({
   searchParams,

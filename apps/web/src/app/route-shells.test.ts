@@ -5,19 +5,9 @@ import { walk } from '../test/walk';
 
 const expected: Record<string, RegExp> = {
   'orgs/[orgId]/layout.tsx': /AppShell/,
-  'orgs/[orgId]/brands/[brandId]/layout.tsx': /BrandSubNav/,
-  ...Object.fromEntries(
-    ['login', 'sign-up', 'forgot-password', 'reset-password', 'invite', 'verified'].map((r) => [
-      `${r}/layout.tsx`,
-      /AuthShell/,
-    ]),
-  ),
-  ...Object.fromEntries(
-    ['account', 'hidden-today', 'alerts', 'reports'].map((r) => [
-      `${r}/layout.tsx`,
-      /StandaloneShell/,
-    ]),
-  ),
+  '(auth)/layout.tsx': /AuthShell/,
+  '(app)/layout.tsx': /AppShell/,
+  '(standalone)/layout.tsx': /StandaloneShell/,
   'scan/layout.tsx': /ScanShell/,
   'orgs/page.tsx': /AppShell/,
   'page.tsx': /StandaloneShell/,
@@ -52,8 +42,8 @@ describe('route shells', () => {
   });
 
   it("top-level alerts/ and reports/ only hold the brief's pages", () => {
-    expect(pagesUnder('src/app/alerts')).toEqual(['confirm', 'unsubscribe']);
-    expect(pagesUnder('src/app/reports')).toEqual(['unsubscribe']);
+    expect(pagesUnder('src/app/(standalone)/alerts')).toEqual(['confirm', 'unsubscribe']);
+    expect(pagesUnder('src/app/(standalone)/reports')).toEqual(['unsubscribe']);
   });
 
   it('layouts never fetch', () => {

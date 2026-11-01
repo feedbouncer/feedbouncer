@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import ConfirmPage from '../../app/alerts/confirm/page';
-import UnsubscribePage from '../../app/alerts/unsubscribe/page';
+import ConfirmPage from '../../app/(standalone)/alerts/confirm/page';
+import UnsubscribePage from '../../app/(standalone)/alerts/unsubscribe/page';
 import { RecipientAction } from './recipient-action';
 
 const TOKEN = 'A'.repeat(43);

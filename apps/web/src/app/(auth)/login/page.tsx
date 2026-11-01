@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { ApiForm } from '../../components/api-form';
-import { safeNextPath } from '../../lib/safe-next';
+import { ApiForm } from '../../../components/api-form';
+import { safeNextPath } from '../../../lib/safe-next';
 
 export default async function LoginPage({
   searchParams,

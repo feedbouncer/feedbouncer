@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { ApiForm } from '../../components/api-form';
-import { LogoutButton } from '../../components/logout-button';
-import { ReportSubscriptionToggle } from '../../components/reports/ReportSubscriptionToggle';
-import { dataOrThrow, requireMe, serverGet } from '../../lib/server-api';
+import { ApiForm } from '../../../components/api-form';
+import { LogoutButton } from '../../../components/logout-button';
+import { ReportSubscriptionToggle } from '../../../components/reports/ReportSubscriptionToggle';
+import { dataOrThrow, requireMe, serverGet } from '../../../lib/server-api';
 
 interface ReportSubscription {
   organizationId: string;

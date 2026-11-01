@@ -18,16 +18,11 @@ describe('state panels', () => {
   });
 
   it('ErrorPanel is an alert with a hidden icon', () => {
-    const html = renderToStaticMarkup(
-      <ErrorPanel title="Could not load" action={<a href="/x">Retry</a>}>
-        details
-      </ErrorPanel>,
-    );
+    const html = renderToStaticMarkup(<ErrorPanel title="Could not load">details</ErrorPanel>);
     expect(html).toContain('role="alert"');
     expect(html).toContain('Could not load');
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain('details');
-    expect(html).toContain('Retry');
   });
 
   it('TableScroll scrolls horizontally', () => {

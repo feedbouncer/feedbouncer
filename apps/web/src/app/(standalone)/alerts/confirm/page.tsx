@@ -1,5 +1,5 @@
-import { RecipientAction } from '../../../components/alerts/recipient-action';
-import { RECIPIENT_COPY, RECIPIENT_TOKEN } from '../../../lib/alerts';
+import { RecipientAction } from '../../../../components/alerts/recipient-action';
+import { RECIPIENT_COPY, RECIPIENT_TOKEN } from '../../../../lib/alerts';
 
 export const metadata = { referrer: 'no-referrer' };
 

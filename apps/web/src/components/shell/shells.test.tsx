@@ -1,14 +1,15 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { orgNav } from '../../lib/nav';
-import { AppShell, BrandSubNav } from './app-shell';
+import { AppShell } from './app-shell';
 import { AuthShell } from './auth-shell';
 import { StandaloneShell } from './standalone-shell';
 
 const O = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
 
-vi.mock('next/navigation', () => ({ usePathname: () => '/' }));
+const path = vi.hoisted(() => ({ current: '/' }));
+vi.mock('next/navigation', () => ({ usePathname: () => path.current }));
 
 const child = <p>child</p>;
 const cases: [string, string, string][] = [
@@ -40,9 +41,17 @@ describe('shells', () => {
     expect(html).not.toMatch(/https?:\/\//);
   });
 
-  it('BrandSubNav renders the brand nav', () => {
-    const html = renderToStaticMarkup(<BrandSubNav orgId={O} brandId={B} />);
-    expect(html).toContain('aria-label="Brand"');
-    expect(html).not.toMatch(/https?:\/\//);
+  it('AppShell shows the brand nav in the header on brand pages only', () => {
+    path.current = `/orgs/${O}/brands/${B}/rules`;
+    const onBrand = renderToStaticMarkup(<AppShell nav={orgNav(O)}>{child}</AppShell>);
+    expect(onBrand.indexOf('aria-label="Brand"')).toBeLessThan(onBrand.indexOf('id="content"'));
+    path.current = `/orgs/${O}/comments`;
+    expect(renderToStaticMarkup(<AppShell nav={orgNav(O)}>{child}</AppShell>)).not.toContain(
+      'aria-label="Brand"',
+    );
+    path.current = '/orgs/not-a-uuid/brands/also-bad/rules';
+    expect(renderToStaticMarkup(<AppShell nav={orgNav(O)}>{child}</AppShell>)).not.toContain(
+      'aria-label="Brand"',
+    );
   });
 });

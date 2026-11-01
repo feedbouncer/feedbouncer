@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { brandNav, type NavItem } from '../../lib/nav';
+import type { NavItem } from '../../lib/nav';
+import { BrandSubNav } from './brand-sub-nav';
 import { NavLinks } from './nav-links';
 import { Wordmark } from './wordmark';
 
@@ -27,6 +28,7 @@ export function AppShell({ nav, children }: { nav?: NavItem[]; children: ReactNo
             </div>
           </div>
           {nav ? <NavLinks label="Organization" items={nav} /> : null}
+          {nav ? <BrandSubNav /> : null}
         </div>
       </header>
       <div
@@ -37,15 +39,5 @@ export function AppShell({ nav, children }: { nav?: NavItem[]; children: ReactNo
         {children}
       </div>
     </>
-  );
-}
-
-export function BrandSubNav({ orgId, brandId }: { orgId: string; brandId: string }) {
-  return (
-    <div className="border-b bg-elevated">
-      <div className="mx-auto w-full max-w-content px-(--fb-gutter)">
-        <NavLinks label="Brand" items={brandNav(orgId, brandId)} />
-      </div>
-    </div>
   );
 }

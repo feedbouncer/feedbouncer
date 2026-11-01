@@ -1,5 +1,5 @@
 import { REPORT_TOKEN_RE } from '@feedbouncer/reports/shared';
-import { ReportUnsubscribe } from '../../../components/reports/ReportUnsubscribe';
+import { ReportUnsubscribe } from '../../../../components/reports/ReportUnsubscribe';
 
 export const metadata = { referrer: 'no-referrer' };
 

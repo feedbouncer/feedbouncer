@@ -1,4 +1,4 @@
-import { ApiForm } from '../../components/api-form';
+import { ApiForm } from '../../../components/api-form';
 
 export default function ForgotPasswordPage() {
   return (

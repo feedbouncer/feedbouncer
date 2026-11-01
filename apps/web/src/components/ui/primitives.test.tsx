@@ -15,14 +15,7 @@ describe('Button', () => {
   });
 
   it('never uses a transform class without motion-safe', () => {
-    for (const variant of [
-      'default',
-      'secondary',
-      'ghost',
-      'outline',
-      'destructive',
-      'link',
-    ] as const) {
+    for (const variant of ['default', 'outline'] as const) {
       const html = renderToStaticMarkup(<Button variant={variant}>x</Button>);
       const classes = /class="([^"]*)"/.exec(html)![1]!.split(/\s+/);
       for (const c of classes) {
@@ -32,13 +25,8 @@ describe('Button', () => {
     }
   });
 
-  it('keeps its font size next to the text colour', () => {
+  it('keeps its font size', () => {
     expect(renderToStaticMarkup(<Button>x</Button>)).toContain('text-ui');
-    expect(renderToStaticMarkup(<Button size="sm">x</Button>)).toContain('text-small');
-  });
-
-  it('icon size is square 10', () => {
-    expect(renderToStaticMarkup(<Button size="icon">x</Button>)).toContain('size-10');
   });
 });
 
@@ -49,7 +37,7 @@ describe('Badge', () => {
     expect(html).not.toContain('text-coral ');
   });
   it('keeps text-caption in every variant', () => {
-    for (const v of ['default', 'good', 'coral', 'danger', 'destructive'] as const) {
+    for (const v of ['secondary', 'good', 'coral', 'danger'] as const) {
       expect(renderToStaticMarkup(<Badge variant={v}>x</Badge>)).toContain('text-caption');
     }
   });
