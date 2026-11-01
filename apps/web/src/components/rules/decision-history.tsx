@@ -37,7 +37,7 @@ export function DecisionHistory(props: { orgId: string; brandId: string; comment
 
   return (
     <div>
-      <button type="button" onClick={toggle}>
+      <button type="button" className="btn-ghost btn-sm" onClick={toggle}>
         {decisions ? 'Hide reasons' : 'Why?'}
       </button>
       {error ? <p role="alert">{error}</p> : null}

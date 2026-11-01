@@ -38,21 +38,25 @@ export function ApplyRecent(props: { orgId: string; brandId: string; policyId: s
   return (
     <section aria-label="Apply to recent comments">
       <h2>Apply to recent comments</h2>
-      <p>Enabling a policy only affects new comments. Apply it to older ones explicitly.</p>
-      <label>
-        Look back{' '}
-        <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
-          {DAYS.map((d) => (
-            <option key={d} value={d}>
-              {plural(d, 'day')}
-            </option>
-          ))}
-        </select>
-      </label>{' '}
-      <button type="button" disabled={busy} onClick={() => void apply()}>
-        Apply to recent comments
-      </button>
-      <div aria-live="polite">{notice ? <p>{notice}</p> : null}</div>
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-(--fb-card-pad)">
+        <p className="basis-full text-dim">
+          Enabling a policy only affects new comments. Apply it to older ones explicitly.
+        </p>
+        <label className="flex flex-col gap-(--fb-field-gap)">
+          Look back
+          <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
+            {DAYS.map((d) => (
+              <option key={d} value={d}>
+                {plural(d, 'day')}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="button" className="btn-sm" disabled={busy} onClick={() => void apply()}>
+          Apply to recent comments
+        </button>
+      </div>
+      <div aria-live="polite">{notice ? <p className="text-dim">{notice}</p> : null}</div>
       {error ? <p role="alert">{error}</p> : null}
     </section>
   );
