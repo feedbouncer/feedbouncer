@@ -36,20 +36,19 @@ export function TimezoneNotice(props: {
   }
 
   return (
-    <div>
-      <p>
+    <div
+      role="note"
+      className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-small text-dim"
+    >
+      <span>
         {`"Today" for ${props.brandName} uses UTC midnight. Set this brand's timezone`}
-        {props.canManage ? (
-          <>
-            {': '}
-            <button type="button" disabled={busy} onClick={() => void use()}>
-              {`Use ${zone}`}
-            </button>
-          </>
-        ) : (
-          '. Ask an admin to set it.'
-        )}
-      </p>
+        {props.canManage ? null : '. Ask an admin to set it.'}
+      </span>
+      {props.canManage ? (
+        <button type="button" className="btn-sm" disabled={busy} onClick={() => void use()}>
+          {`Use ${zone}`}
+        </button>
+      ) : null}
       {error ? <p role="alert">{error}</p> : null}
     </div>
   );

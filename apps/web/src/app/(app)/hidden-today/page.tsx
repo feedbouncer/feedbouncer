@@ -1,6 +1,6 @@
 import { can } from '@feedbouncer/authz';
-import Link from 'next/link';
 import { HiddenList } from '../../../components/hidden-today/hidden-list';
+import { PageHeader } from '../../../components/ui/page-header';
 import type { HiddenTodayPage } from '../../../lib/hidden-today';
 import { isUuid } from '../../../lib/ids';
 import { dataOrThrow, requireMe, serverGet } from '../../../lib/server-api';
@@ -34,12 +34,11 @@ export default async function HiddenTodayPage({
   );
   return (
     <main>
-      <h1>Hidden today</h1>
-      <p>Comments hidden since midnight. Unhide any we got wrong.</p>
+      <PageHeader
+        title="Hidden today"
+        description="Comments hidden since midnight. Unhide any we got wrong."
+      />
       <HiddenList items={page.items} next={page.next} brands={page.brands} canManage={canManage} />
-      <p>
-        <Link href="/orgs">My organizations</Link>
-      </p>
     </main>
   );
 }

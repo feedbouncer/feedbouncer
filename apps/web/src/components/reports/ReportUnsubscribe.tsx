@@ -46,7 +46,7 @@ export function ReportUnsubscribe({ token }: { token: string | null }) {
   return (
     <form method="post" action={action} onSubmit={onSubmit}>
       <input type="hidden" name="List-Unsubscribe" value="One-Click" />
-      <button type="submit" disabled={state === 'busy'}>
+      <button type="submit" className="btn-destructive" disabled={state === 'busy'}>
         Unsubscribe
       </button>
       {state === 'error' ? <p role="alert">Something went wrong. Try again.</p> : null}

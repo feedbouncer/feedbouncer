@@ -14,23 +14,27 @@ export function ReviewModeBanner(props: {
   const { status } = props;
   if (bannerText(status, (iso) => iso) === null) return null;
   return (
-    <div role="status">
-      <p>
-        <TextWithTimes build={(fmt) => bannerText(status, fmt) ?? ''} />
-      </p>
-      {props.canManage && status.state === 'active' ? (
-        ending ? (
-          <EndReviewModeDialog
-            orgId={props.orgId}
-            brandId={props.brandId}
-            connectionId={status.connectionId}
-            onClose={() => setEnding(false)}
-          />
-        ) : (
-          <button type="button" onClick={() => setEnding(true)}>
+    <div className="flex flex-col gap-3">
+      <div
+        role="status"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-coral/40 bg-coral-dim p-4"
+      >
+        <p className="text-coral-strong">
+          <TextWithTimes build={(fmt) => bannerText(status, fmt) ?? ''} />
+        </p>
+        {props.canManage && status.state === 'active' && !ending ? (
+          <button type="button" className="btn-sm" onClick={() => setEnding(true)}>
             End review mode
           </button>
-        )
+        ) : null}
+      </div>
+      {props.canManage && status.state === 'active' && ending ? (
+        <EndReviewModeDialog
+          orgId={props.orgId}
+          brandId={props.brandId}
+          connectionId={status.connectionId}
+          onClose={() => setEnding(false)}
+        />
       ) : null}
     </div>
   );

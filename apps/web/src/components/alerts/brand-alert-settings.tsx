@@ -94,8 +94,11 @@ export function BrandAlertSettings(props: {
   }
 
   return (
-    <form onSubmit={onSubmit}>
-      <fieldset disabled={!props.canManage}>
+    <form
+      onSubmit={onSubmit}
+      className="flex flex-col gap-4 rounded-lg border border-border bg-card p-(--fb-card-pad)"
+    >
+      <fieldset disabled={!props.canManage} className="flex flex-col gap-4">
         {view.learning ? (
           <p>Spike alerts start after 7 days of comment history for this brand.</p>
         ) : null}
@@ -197,7 +200,11 @@ export function BrandAlertSettings(props: {
           </label>
         </fieldset>
         {props.canManage ? (
-          <button type="submit" disabled={status.kind === 'busy'}>
+          <button
+            type="submit"
+            className="btn-primary self-start"
+            disabled={status.kind === 'busy'}
+          >
             Save alert settings
           </button>
         ) : null}
