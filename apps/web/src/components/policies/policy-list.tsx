@@ -80,10 +80,18 @@ export function PolicyList(props: {
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Name</th>
-                  <th scope="col">Policy</th>
-                  <th scope="col">Action</th>
-                  <th scope="col">Enabled</th>
+                  <th scope="col" className="whitespace-nowrap">
+                    Name
+                  </th>
+                  <th scope="col" className="whitespace-nowrap">
+                    Policy
+                  </th>
+                  <th scope="col" className="whitespace-nowrap">
+                    Action
+                  </th>
+                  <th scope="col" className="whitespace-nowrap">
+                    Enabled
+                  </th>
                   <th scope="col" />
                 </tr>
               </thead>
@@ -94,11 +102,11 @@ export function PolicyList(props: {
                       <strong>{p.name}</strong>
                     </td>
                     <td>{excerpt(p.text)}</td>
-                    <td>{POLICY_ACTION_LABEL[p.action]}</td>
-                    <td>
+                    <td className="whitespace-nowrap">{POLICY_ACTION_LABEL[p.action]}</td>
+                    <td className="whitespace-nowrap">
                       <button
                         type="button"
-                        className="btn-sm"
+                        className="btn-sm whitespace-nowrap"
                         aria-pressed={p.enabled}
                         aria-label={`${p.enabled ? 'Disable' : 'Enable'} ${p.name}`}
                         disabled={busy || !props.canEdit}
@@ -112,15 +120,18 @@ export function PolicyList(props: {
                         {p.enabled ? 'On' : 'Off'}
                       </button>
                     </td>
-                    <td>
+                    <td className="whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <Link href={`${pages}/${p.id}`} className="text-small font-medium">
+                        <Link
+                          href={`${pages}/${p.id}`}
+                          className="text-small font-medium whitespace-nowrap"
+                        >
                           {props.canEdit ? 'Edit' : 'View'}
                         </Link>
                         {props.canEdit ? (
                           <button
                             type="button"
-                            className="btn-destructive btn-sm"
+                            className="btn-destructive btn-sm whitespace-nowrap"
                             disabled={busy}
                             onClick={() => remove(p)}
                           >
