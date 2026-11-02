@@ -81,13 +81,27 @@ export function RuleList(props: {
         <table>
           <thead>
             <tr>
-              <th scope="col">#</th>
-              <th scope="col">Name</th>
-              <th scope="col">Type</th>
-              <th scope="col">Steps</th>
-              <th scope="col">Mode</th>
-              <th scope="col">Enabled</th>
-              <th scope="col">Order</th>
+              <th scope="col" className="whitespace-nowrap">
+                #
+              </th>
+              <th scope="col" className="whitespace-nowrap">
+                Name
+              </th>
+              <th scope="col" className="whitespace-nowrap">
+                Type
+              </th>
+              <th scope="col" className="whitespace-nowrap">
+                Steps
+              </th>
+              <th scope="col" className="whitespace-nowrap">
+                Mode
+              </th>
+              <th scope="col" className="whitespace-nowrap">
+                Enabled
+              </th>
+              <th scope="col" className="whitespace-nowrap">
+                Order
+              </th>
               <th scope="col" />
             </tr>
           </thead>
@@ -97,29 +111,38 @@ export function RuleList(props: {
                 <td>{r.position}</td>
                 <td>
                   <strong>{r.name}</strong>
-                  {isTrustedAuthorList(r) ? <div>Always checked first</div> : null}
-                  {r.warnings.shadowedBy ? (
-                    <div role="note">{`Never fires: '${r.warnings.shadowedBy.name}' above always matches first`}</div>
-                  ) : null}
-                  {r.warnings.neverMatches ? (
-                    <div role="note">Never matches: the list is empty</div>
-                  ) : null}
-                  {r.warnings.invalid ? (
-                    <div role="note">
-                      This rule has an old format and is skipped. Edit and save it to fix it.
+                  {isTrustedAuthorList(r) ||
+                  r.warnings.shadowedBy ||
+                  r.warnings.neverMatches ||
+                  r.warnings.invalid ? (
+                    <div className="mt-1 flex flex-col gap-1">
+                      {isTrustedAuthorList(r) ? (
+                        <div className="text-small text-dim">Always checked first</div>
+                      ) : null}
+                      {r.warnings.shadowedBy ? (
+                        <div role="note">{`Never fires: '${r.warnings.shadowedBy.name}' above always matches first`}</div>
+                      ) : null}
+                      {r.warnings.neverMatches ? (
+                        <div role="note">Never matches: the list is empty</div>
+                      ) : null}
+                      {r.warnings.invalid ? (
+                        <div role="note">
+                          This rule has an old format and is skipped. Edit and save it to fix it.
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </td>
-                <td>{r.kind ? KIND_LABEL[r.kind] : 'Unknown'}</td>
+                <td className="whitespace-nowrap">{r.kind ? KIND_LABEL[r.kind] : 'Unknown'}</td>
                 <td>
                   {r.actions.length > 0
                     ? r.actions.map((a) => STEP_LABEL[a.type]).join(', ')
                     : 'Allow'}
                 </td>
-                <td>
+                <td className="whitespace-nowrap">
                   <button
                     type="button"
-                    className="btn-sm"
+                    className="btn-sm whitespace-nowrap"
                     disabled={busy}
                     onClick={() =>
                       void run(`${base}/${r.id}`, {
@@ -173,14 +196,17 @@ export function RuleList(props: {
                     ) : null}
                   </div>
                 </td>
-                <td>
+                <td className="whitespace-nowrap">
                   <div className="flex items-center gap-2">
-                    <Link href={`${pages}/${r.id}`} className="text-small font-medium">
+                    <Link
+                      href={`${pages}/${r.id}`}
+                      className="text-small font-medium whitespace-nowrap"
+                    >
                       Edit
                     </Link>
                     <button
                       type="button"
-                      className="btn-destructive btn-sm"
+                      className="btn-destructive btn-sm whitespace-nowrap"
                       disabled={busy}
                       onClick={() => remove(r)}
                     >
