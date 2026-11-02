@@ -38,7 +38,7 @@ describe('ClassificationSummary', () => {
     expect(html.match(/<li/g)).toHaveLength(7);
     expect(html).toContain('Spam');
     expect(html).toContain('0.93');
-    expect(html).toContain('<strong>');
+    expect(html).toContain('font-semibold');
     expect(html).toContain('openai');
     expect(html).toContain('gpt-5-mini');
   });

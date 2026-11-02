@@ -37,7 +37,8 @@ const evidence: Evidence = {
 describe('PolicyEvidence', () => {
   it('quotes the policy text and lists the other matches', () => {
     const html = renderToStaticMarkup(<PolicyEvidence policy={evidence} />);
-    expect(html).toContain('<blockquote>Hide comments asking readers to message another account');
+    expect(html).toContain('<blockquote');
+    expect(html).toContain('Hide comments asking readers to message another account');
     expect(html).toContain(
       'Also matched: “No promo” (revision 1, deleted policy) — possible match, flagged for review instead of delete',
     );

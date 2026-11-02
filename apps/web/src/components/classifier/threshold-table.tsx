@@ -49,15 +49,23 @@ export function ThresholdTable(props: {
     (c) => !edits[c.category]?.useDefault && edits[c.category]?.action === 'remove',
   );
   return (
-    <div>
+    <div className="flex flex-col gap-3">
       <TableScroll>
         <table>
           <thead>
             <tr>
-              <th scope="col">Category</th>
-              <th scope="col">Threshold</th>
-              <th scope="col">Action</th>
-              <th scope="col">Source</th>
+              <th scope="col" className="whitespace-nowrap">
+                Category
+              </th>
+              <th scope="col" className="whitespace-nowrap">
+                Threshold
+              </th>
+              <th scope="col" className="whitespace-nowrap">
+                Action
+              </th>
+              <th scope="col" className="whitespace-nowrap">
+                Source
+              </th>
             </tr>
           </thead>
           <tbody>
