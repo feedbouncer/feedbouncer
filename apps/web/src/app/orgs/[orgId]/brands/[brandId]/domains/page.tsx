@@ -1,7 +1,9 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ApiForm } from '../../../../../../components/api-form';
 import { RemoveDomainButton } from '../../../../../../components/rules/remove-domain-button';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../../../../components/ui/card';
+import { ListPanel, ListRow } from '../../../../../../components/ui/list';
+import { PageHeader } from '../../../../../../components/ui/page-header';
 import { isUuid } from '../../../../../../lib/ids';
 import { dataOrThrow, requireMe, serverGet } from '../../../../../../lib/server-api';
 
@@ -24,29 +26,38 @@ export default async function OwnDomainsPage({
   );
   return (
     <main>
-      <h1>Own domains</h1>
-      <p>
-        Links to these domains and their subdomains are never treated as spam by link rules unless a
-        rule turns this off.
-      </p>
-      {domains.length === 0 ? <p>No domains yet.</p> : null}
-      <ul>
-        {domains.map((d) => (
-          <li key={d.id}>
-            {d.displayDomain} <RemoveDomainButton orgId={orgId} brandId={brandId} domainId={d.id} />
-          </li>
-        ))}
-      </ul>
-      <ApiForm
-        action={`/api/v1/orgs/${orgId}/brands/${brandId}/domains`}
-        fields={[{ name: 'domain', label: 'Domain', type: 'text' }]}
-        submitLabel="Add domain"
-        refresh
+      <PageHeader
+        title="Own domains"
+        description="Links to these domains and their subdomains are never treated as spam by link rules unless a rule turns this off."
       />
-      <p>
-        <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Back to rules</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/policies`}>Policies</Link>
-      </p>
+      {domains.length === 0 ? (
+        <p data-state="empty">No domains yet.</p>
+      ) : (
+        <ListPanel>
+          {domains.map((d) => (
+            <ListRow key={d.id}>
+              <span className="font-semibold text-foreground">{d.displayDomain}</span>
+              <RemoveDomainButton orgId={orgId} brandId={brandId} domainId={d.id} />
+            </ListRow>
+          ))}
+        </ListPanel>
+      )}
+      <Card>
+        <CardHeader>
+          <CardTitle>Add a domain</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ApiForm
+            action={`/api/v1/orgs/${orgId}/brands/${brandId}/domains`}
+            fields={[{ name: 'domain', label: 'Domain', type: 'text' }]}
+            submitLabel="Add domain"
+            refresh
+            layout="inline"
+            variant="primary"
+            className="max-w-sm"
+          />
+        </CardContent>
+      </Card>
     </main>
   );
 }

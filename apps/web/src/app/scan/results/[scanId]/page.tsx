@@ -13,7 +13,7 @@ export default async function ScanResultPage({ params }: { params: Promise<{ sca
   if (!isUuid(scanId)) notFound();
   const scan = dataOrThrow(await serverGet<ScanView>(`/api/v1/scan/scans/${scanId}`), 'scan');
   return (
-    <main>
+    <main className="flex flex-col gap-6">
       {scan.status === 'failed' ? (
         <FailedView failureReason={scan.failureReason} />
       ) : scan.status === 'completed' && scan.result ? (

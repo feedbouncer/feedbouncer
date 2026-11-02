@@ -1,6 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
+import { TableScroll } from '../states';
 import {
   ALERT_TYPES,
   COOLDOWNS,
@@ -93,48 +94,53 @@ export function BrandAlertSettings(props: {
   }
 
   return (
-    <form onSubmit={onSubmit}>
-      <fieldset disabled={!props.canManage}>
+    <form
+      onSubmit={onSubmit}
+      className="flex flex-col gap-4 rounded-lg border border-border bg-card p-(--fb-card-pad)"
+    >
+      <fieldset disabled={!props.canManage} className="flex flex-col gap-4">
         {view.learning ? (
           <p>Spike alerts start after 7 days of comment history for this brand.</p>
         ) : null}
         {shown.length === 0 ? (
-          <p>
+          <p data-state="empty">
             No channels yet. Connect Slack or add an email recipient on the workspace Alerts page.
           </p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Alert</th>
-                {shown.map((c) => (
-                  <th key={c.id} scope="col">
-                    {channelName(c)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {ALERT_TYPES.map((t) => (
-                <tr key={t.type}>
-                  <th scope="row">{t.label}</th>
+          <TableScroll>
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Alert</th>
                   {shown.map((c) => (
-                    <td key={c.id}>
-                      <input
-                        type="checkbox"
-                        aria-label={`${t.label} to ${channelName(c)}`}
-                        checked={enabled.has(key(t.type, c.id))}
-                        disabled={!view.availability[c.kind]}
-                        onChange={(e) => toggle(key(t.type, c.id), e.target.checked)}
-                      />
-                    </td>
+                    <th key={c.id} scope="col">
+                      {channelName(c)}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {ALERT_TYPES.map((t) => (
+                  <tr key={t.type}>
+                    <th scope="row">{t.label}</th>
+                    {shown.map((c) => (
+                      <td key={c.id}>
+                        <input
+                          type="checkbox"
+                          aria-label={`${t.label} to ${channelName(c)}`}
+                          checked={enabled.has(key(t.type, c.id))}
+                          disabled={!view.availability[c.kind]}
+                          onChange={(e) => toggle(key(t.type, c.id), e.target.checked)}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
         )}
-        <label style={{ display: 'block', marginBottom: 8 }}>
+        <label className="mb-2 block">
           Spike sensitivity{' '}
           <select
             value={sensitivity}
@@ -148,7 +154,7 @@ export function BrandAlertSettings(props: {
           </select>
         </label>
         <p>Higher sensitivity alerts on smaller rises above this brand&apos;s usual level.</p>
-        <label style={{ display: 'block', marginBottom: 8 }}>
+        <label className="mb-2 block">
           Minimum negative comments in an hour{' '}
           <input
             type="number"
@@ -160,7 +166,7 @@ export function BrandAlertSettings(props: {
             onChange={(e) => setMinCount(e.target.value)}
           />
         </label>
-        <label style={{ display: 'block', marginBottom: 8 }}>
+        <label className="mb-2 block">
           Cooldown after an alert{' '}
           <select value={cooldown} onChange={(e) => setCooldown(e.target.value)}>
             {COOLDOWNS.map((c) => (
@@ -194,7 +200,11 @@ export function BrandAlertSettings(props: {
           </label>
         </fieldset>
         {props.canManage ? (
-          <button type="submit" disabled={status.kind === 'busy'}>
+          <button
+            type="submit"
+            className="btn-primary self-start"
+            disabled={status.kind === 'busy'}
+          >
             Save alert settings
           </button>
         ) : null}

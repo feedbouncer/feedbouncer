@@ -17,6 +17,7 @@ export function AddSlackForm({ orgId }: { orgId: string }) {
       submitLabel="Connect Slack"
       resetOnSuccess
       refresh
+      variant="primary"
     />
   );
 }

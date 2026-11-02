@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { ApplyRecent } from '../../../../../../../components/policies/apply-recent';
 import { PolicyEditor } from '../../../../../../../components/policies/policy-editor';
 import { RevisionHistory } from '../../../../../../../components/policies/revision-history';
+import { BackLink } from '../../../../../../../components/ui/back-link';
+import { PageHeader } from '../../../../../../../components/ui/page-header';
 import { isUuid } from '../../../../../../../lib/ids';
 import { POLICY_ACTION_LABEL, type PolicyDetailDto } from '../../../../../../../lib/policies';
 import { dataOrThrow, requireMe, serverGet, type Role } from '../../../../../../../lib/server-api';
@@ -28,9 +30,12 @@ export default async function PolicyPage({
   const canEdit = org.role !== 'member';
   return (
     <main>
-      <h1>{canEdit ? 'Edit policy' : policy.name}</h1>
+      <BackLink href={`/orgs/${orgId}/brands/${brandId}/policies`}>Back to policies</BackLink>
+      <PageHeader
+        title={canEdit ? 'Edit policy' : policy.name}
+        description={policy.enabled ? 'This policy is enabled.' : 'This policy is disabled.'}
+      />
       {sp.created === '1' ? <p role="status">Policy created. Preview it before enabling.</p> : null}
-      <p>{policy.enabled ? 'This policy is enabled.' : 'This policy is disabled.'}</p>
       {canEdit ? (
         <>
           <PolicyEditor orgId={orgId} brandId={brandId} mode="edit" policy={policy} />
@@ -45,14 +50,12 @@ export default async function PolicyPage({
         </>
       )}
       <RevisionHistory revisions={policy.revisions} />
-      <p>
-        <Link
-          href={`/orgs/${orgId}/brands/${brandId}/rules/activity?source=policy&policyId=${policy.id}`}
-        >
-          Activity for this policy
-        </Link>{' '}
-        · <Link href={`/orgs/${orgId}/brands/${brandId}/policies`}>Back to policies</Link>
-      </p>
+      <Link
+        href={`/orgs/${orgId}/brands/${brandId}/rules/activity?source=policy&policyId=${policy.id}`}
+        className="self-start text-small font-medium"
+      >
+        Activity for this policy
+      </Link>
     </main>
   );
 }

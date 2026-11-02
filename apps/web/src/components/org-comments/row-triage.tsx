@@ -71,9 +71,10 @@ export function RowTriage({
   }
 
   return (
-    <div>
+    <div className="flex flex-wrap items-start gap-2">
       <button
         type="button"
+        className="btn-sm"
         disabled={busy}
         onClick={() => void run(() => triage({ type: comment.done ? 'reopen' : 'done' }))}
       >

@@ -16,7 +16,9 @@ COPY . .
 RUN pnpm install --frozen-lockfile --offline
 
 FROM base AS dev
-ENV NODE_ENV=development
+ENV NODE_ENV=development \
+    NODE_OPTIONS=--conditions=@feedbouncer/source
+RUN pnpm turbo run build --filter='./packages/*'
 WORKDIR /repo/apps/web
 # next dev writes .next/ and next-env.d.ts into the app directory.
 RUN mkdir -p .next && chown node:node . .next

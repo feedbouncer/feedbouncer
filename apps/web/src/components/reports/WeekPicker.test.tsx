@@ -11,7 +11,9 @@ describe('WeekPicker', () => {
         weeks={['2026-09-28', '2026-10-05', '2026-09-14']}
       />,
     );
-    expect(html).toMatch(/<form action="\/orgs\/o1\/reports"( method="get")?>/);
+    expect(html).toContain('<form');
+    expect(html).toContain('action="/orgs/o1/reports"');
+    expect(html).toContain('method="get"');
     expect([...html.matchAll(/<option value="([^"]+)"/g)].map((m) => m[1])).toEqual([
       '2026-10-05',
       '2026-09-28',

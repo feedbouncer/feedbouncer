@@ -4,6 +4,7 @@ import {
   type PickerAccount,
 } from '../../../../../../../../components/account-picker';
 import { ConnectButton } from '../../../../../../../../components/connect-button';
+import { PageHeader } from '../../../../../../../../components/ui/page-header';
 import { messageFor } from '../../../../../../../../lib/messages';
 import { isUuid } from '../../../../../../../../lib/ids';
 import { PLATFORM_COPY, isConnectable } from '../../../../../../../../lib/platforms';
@@ -28,7 +29,7 @@ export default async function SelectAccountsPage({
   if (r.status === 403) {
     return (
       <main>
-        <h1>{title}</h1>
+        <PageHeader title={title} />
         <p role="alert">{messageFor('forbidden')}</p>
       </main>
     );
@@ -36,7 +37,7 @@ export default async function SelectAccountsPage({
   if (r.status === 404 || r.status === 502) {
     return (
       <main>
-        <h1>{title}</h1>
+        <PageHeader title={title} />
         <p role="alert">
           {r.status === 404
             ? 'This sign-in has expired. Connect again.'
@@ -54,7 +55,7 @@ export default async function SelectAccountsPage({
   if (!r.data) throw new Error(`Could not load accounts (status ${r.status})`);
   return (
     <main>
-      <h1>{title}</h1>
+      <PageHeader title={title} />
       <AccountPicker
         orgId={orgId}
         brandId={brandId}

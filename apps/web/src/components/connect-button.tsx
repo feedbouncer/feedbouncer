@@ -40,7 +40,7 @@ export function ConnectButton(props: {
 
   return (
     <>
-      <button type="button" onClick={onClick} disabled={busy}>
+      <button type="button" className="btn-primary" onClick={onClick} disabled={busy}>
         {props.label}
       </button>
       {error ? <p role="alert">{error}</p> : null}

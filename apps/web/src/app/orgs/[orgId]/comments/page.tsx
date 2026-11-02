@@ -5,6 +5,7 @@ import { CommentList } from '../../../../components/org-comments/comment-list';
 import { EmptyState } from '../../../../components/org-comments/empty-state';
 import { FilterBar } from '../../../../components/org-comments/filter-bar';
 import { LocalTime } from '../../../../components/local-time';
+import { PageHeader } from '../../../../components/ui/page-header';
 import { isUuid } from '../../../../lib/ids';
 import {
   adOptionLabels,
@@ -56,16 +57,18 @@ export default async function OrgCommentsPage({
   const { options, accounts, lastSyncedAt, canManageConnections, permissions } = meta.data;
   return (
     <main>
-      <h1>Comments</h1>
-      <p>
-        {lastSyncedAt ? (
-          <>
-            Last synced <LocalTime iso={lastSyncedAt} exactTitle />
-          </>
-        ) : (
-          'Not synced yet'
-        )}
-      </p>
+      <PageHeader
+        title="Comments"
+        description={
+          lastSyncedAt ? (
+            <>
+              Last synced <LocalTime iso={lastSyncedAt} exactTitle />
+            </>
+          ) : (
+            'Not synced yet'
+          )
+        }
+      />
       <AccountNotices orgId={orgId} accounts={accounts} canManage={canManageConnections} />
       {accounts.length === 0 ? (
         <EmptyState kind="no_accounts" orgId={orgId} canManage={canManageConnections} />
@@ -78,7 +81,7 @@ export default async function OrgCommentsPage({
             labels={adOptionLabels(options.ads)}
             brandName={accounts.find((a) => a.brandId === applied.brand)?.brandName ?? null}
           />
-          <p>{totalText(total)}</p>
+          <p className="text-small text-dim">{totalText(total)}</p>
           {items.length === 0 ? (
             <EmptyState
               kind={

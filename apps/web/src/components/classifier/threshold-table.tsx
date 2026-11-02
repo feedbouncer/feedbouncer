@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { TableScroll } from '../states';
 import {
   CATEGORY_LABEL,
   buildThresholdUpdate,
@@ -48,106 +49,123 @@ export function ThresholdTable(props: {
     (c) => !edits[c.category]?.useDefault && edits[c.category]?.action === 'remove',
   );
   return (
-    <div>
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Category</th>
-            <th scope="col">Threshold</th>
-            <th scope="col">Action</th>
-            <th scope="col">Source</th>
-          </tr>
-        </thead>
-        <tbody>
-          {props.categories.map((c) => {
-            const label = CATEGORY_LABEL[c.category];
-            const e = edits[c.category] ?? editOf(c);
-            const error = errors[c.category];
-            return (
-              <tr key={c.category}>
-                <th scope="row">{label}</th>
-                <td>
-                  {props.canEdit ? (
-                    <>
-                      <input
-                        type="number"
-                        min={0}
-                        max={1}
-                        step="any"
-                        aria-label={`${label} threshold`}
-                        aria-invalid={error ? true : undefined}
-                        value={e.threshold}
-                        disabled={e.useDefault}
-                        onChange={(ev) => change(c.category, { threshold: ev.target.value })}
-                      />
-                      {error ? <p role="alert">{error}</p> : null}
-                    </>
-                  ) : (
-                    c.threshold.toFixed(2)
-                  )}
-                </td>
-                <td>
-                  {props.canEdit ? (
-                    <select
-                      aria-label={`${label} action`}
-                      value={e.action}
-                      disabled={e.useDefault}
-                      onChange={(ev) =>
-                        change(c.category, { action: ev.target.value as RuleAction })
-                      }
-                    >
-                      {RULE_ACTIONS.map((a) => (
-                        <option key={a} value={a}>
-                          {ACTION_LABEL[a]}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    ACTION_LABEL[c.action]
-                  )}
-                </td>
-                <td>
-                  {c.source === 'default' ? 'Default' : 'Customized'}
-                  {c.updatedBy || c.updatedAt
-                    ? ` (changed${c.updatedBy ? ` by ${c.updatedBy.name ?? 'a former member'}` : ''}${c.updatedAt ? ` ${formatUtc(c.updatedAt)}` : ''})`
-                    : null}
-                  {props.canEdit && c.source === 'brand' ? (
-                    <>
-                      {' '}
-                      <label>
+    <div className="flex flex-col gap-3">
+      <TableScroll>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col" className="whitespace-nowrap">
+                Category
+              </th>
+              <th scope="col" className="whitespace-nowrap">
+                Threshold
+              </th>
+              <th scope="col" className="whitespace-nowrap">
+                Action
+              </th>
+              <th scope="col" className="whitespace-nowrap">
+                Source
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {props.categories.map((c) => {
+              const label = CATEGORY_LABEL[c.category];
+              const e = edits[c.category] ?? editOf(c);
+              const error = errors[c.category];
+              return (
+                <tr key={c.category}>
+                  <th scope="row">{label}</th>
+                  <td>
+                    {props.canEdit ? (
+                      <>
                         <input
-                          type="checkbox"
-                          checked={e.useDefault}
-                          onChange={(ev) => change(c.category, { useDefault: ev.target.checked })}
-                        />{' '}
-                        Use default
-                      </label>
-                    </>
-                  ) : null}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                          type="number"
+                          min={0}
+                          max={1}
+                          step="any"
+                          aria-label={`${label} threshold`}
+                          aria-invalid={error ? true : undefined}
+                          value={e.threshold}
+                          disabled={e.useDefault}
+                          onChange={(ev) => change(c.category, { threshold: ev.target.value })}
+                        />
+                        {error ? <p role="alert">{error}</p> : null}
+                      </>
+                    ) : (
+                      c.threshold.toFixed(2)
+                    )}
+                  </td>
+                  <td>
+                    {props.canEdit ? (
+                      <select
+                        aria-label={`${label} action`}
+                        value={e.action}
+                        disabled={e.useDefault}
+                        onChange={(ev) =>
+                          change(c.category, { action: ev.target.value as RuleAction })
+                        }
+                      >
+                        {RULE_ACTIONS.map((a) => (
+                          <option key={a} value={a}>
+                            {ACTION_LABEL[a]}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      ACTION_LABEL[c.action]
+                    )}
+                  </td>
+                  <td>
+                    {c.source === 'default' ? 'Default' : 'Customized'}
+                    {c.updatedBy || c.updatedAt
+                      ? ` (changed${c.updatedBy ? ` by ${c.updatedBy.name ?? 'a former member'}` : ''}${c.updatedAt ? ` ${formatUtc(c.updatedAt)}` : ''})`
+                      : null}
+                    {props.canEdit && c.source === 'brand' ? (
+                      <>
+                        {' '}
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={e.useDefault}
+                            onChange={(ev) => change(c.category, { useDefault: ev.target.checked })}
+                          />{' '}
+                          Use default
+                        </label>
+                      </>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </TableScroll>
       {deleting ? (
         <p role="note">Delete cannot be undone: deleted comments are removed from the platform.</p>
       ) : null}
-      {props.canEdit && !dirty ? <p>No changes to save.</p> : null}
+      {props.canEdit && !dirty ? <p className="text-small text-dim">No changes to save.</p> : null}
       {props.canEdit ? (
-        <p>
-          <button type="button" disabled={busy || !dirty} onClick={() => void submit(props.onSave)}>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="btn-primary btn-sm"
+            disabled={busy || !dirty}
+            onClick={() => void submit(props.onSave)}
+          >
             Save thresholds
           </button>
           {props.onPreview ? (
-            <>
-              {' '}
-              <button type="button" disabled={busy} onClick={() => void submit(props.onPreview!)}>
-                Preview
-              </button>
-            </>
+            <button
+              type="button"
+              className="btn-sm"
+              disabled={busy}
+              onClick={() => void submit(props.onPreview!)}
+            >
+              Preview
+            </button>
           ) : null}
-        </p>
+        </div>
       ) : null}
     </div>
   );

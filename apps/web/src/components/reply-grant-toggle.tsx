@@ -31,18 +31,20 @@ export function ReplyGrantToggle(props: { orgId: string; granted: boolean; canCh
   }
 
   return (
-    <div>
-      <label>
+    <div className="flex flex-col gap-1">
+      <label className="flex items-center gap-2 font-normal text-foreground">
         <input
           type="checkbox"
           checked={granted}
           disabled={!props.canChange || busy}
           aria-describedby={`${id}-help`}
           onChange={(e) => void onChange(e.target.checked)}
-        />{' '}
+        />
         Members can reply to comments
       </label>
-      <p id={`${id}-help`}>Owners and admins can always reply.</p>
+      <p id={`${id}-help`} className="text-small text-dim">
+        Owners and admins can always reply.
+      </p>
       {error ? <p role="alert">{error}</p> : null}
     </div>
   );

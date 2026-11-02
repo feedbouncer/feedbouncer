@@ -16,15 +16,17 @@ export default async function ScanPagesPage({ params }: { params: Promise<{ gran
     'Pages',
   );
   return (
-    <main>
+    <main className="mx-auto flex w-full max-w-form flex-col gap-6">
       <h1>Choose a Page</h1>
       {pages.length === 0 ? (
-        <p>We found no Pages on this Facebook account.</p>
+        <p className="text-dim">We found no Pages on this Facebook account.</p>
       ) : (
         <PagePicker grantId={grantId} pages={pages} />
       )}
       {instagramGranted ? null : (
-        <p>Instagram comments will not be included: Instagram access was not granted.</p>
+        <p className="text-small text-dim">
+          Instagram comments will not be included: Instagram access was not granted.
+        </p>
       )}
     </main>
   );

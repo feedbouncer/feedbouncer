@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { Button } from '../../../components/ui/button';
 import { apiFetch } from '../../../lib/api-client';
 import { safeAuthorizationUrl } from '../../../lib/oauth';
 
@@ -25,9 +26,9 @@ export function ConnectButton() {
 
   return (
     <>
-      <button type="button" onClick={onClick} disabled={busy}>
+      <Button type="button" size="lg" onClick={onClick} disabled={busy}>
         Connect Facebook and scan
-      </button>
+      </Button>
       {error ? <p role="alert">Could not start the connection. Try again.</p> : null}
     </>
   );

@@ -11,7 +11,7 @@ export function EmptyState({
 }) {
   if (kind === 'no_match')
     return (
-      <section>
+      <section data-state="empty">
         <h2>No comments match these filters</h2>
         <p>
           <Link href={`/orgs/${orgId}/comments`}>Clear filters</Link>
@@ -20,7 +20,7 @@ export function EmptyState({
     );
   if (kind === 'no_open')
     return (
-      <section>
+      <section data-state="empty">
         <h2>No open comments</h2>
         <p>
           <Link href={`/orgs/${orgId}/comments?queue=done`}>Show done comments</Link>
@@ -29,19 +29,19 @@ export function EmptyState({
     );
   if (kind === 'no_done')
     return (
-      <section>
+      <section data-state="empty">
         <h2>No done comments</h2>
       </section>
     );
   if (kind === 'no_comments')
     return (
-      <section>
+      <section data-state="empty">
         <h2>No comments yet</h2>
         <p>New comments on your connected accounts will appear here.</p>
       </section>
     );
   return (
-    <section>
+    <section data-state="empty">
       <h2>Connect an account to see comments</h2>
       <p>FeedBouncer shows comments from the accounts you connect.</p>
       <p>

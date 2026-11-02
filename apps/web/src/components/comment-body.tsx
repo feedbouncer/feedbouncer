@@ -21,7 +21,12 @@ export function CommentBody({ body }: { body: string }) {
         {body || '(no text: sticker or attachment)'}
       </p>
       {collapsible ? (
-        <button type="button" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+        <button
+          type="button"
+          aria-expanded={expanded}
+          className="btn-ghost btn-sm"
+          onClick={() => setExpanded((v) => !v)}
+        >
           {expanded ? 'Show less' : 'Show more'}
         </button>
       ) : null}

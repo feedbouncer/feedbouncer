@@ -1,6 +1,4 @@
-import { AlertsNavLink } from '../../../../../../components/alerts/alerts-nav-link';
-import Link from 'next/link';
-import { Fragment } from 'react';
+import { TableScroll } from '../../../../../../components/states';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { ApiForm } from '../../../../../../components/api-form';
 import { ConnectButton } from '../../../../../../components/connect-button';
@@ -11,6 +9,7 @@ import {
 import { ConnectChecklist } from '../../../../../../components/connect-checklist';
 import { YouTubeBudgetPanel } from '../../../../../../components/youtube-budget-panel';
 import { ReviewModeBanner } from '../../../../../../components/review-mode/review-mode-banner';
+import { PageHeader } from '../../../../../../components/ui/page-header';
 import { backfillText, type BackfillViewDto } from '../../../../../../lib/backfill-text';
 import { healthText } from '../../../../../../lib/health-text';
 import { formatUtc } from '../../../../../../lib/format';
@@ -138,7 +137,7 @@ export default async function ConnectionsPage({
   const hasAdAccount = connections.some((c) => c.platform === 'meta_ads');
   return (
     <main>
-      <h1>Connections</h1>
+      <PageHeader title="Connections" />
       {review.connections.map((s) => (
         <ReviewModeBanner
           key={s.connectionId}
@@ -163,54 +162,60 @@ export default async function ConnectionsPage({
       {canManage ? (
         <>
           {connections.length > 0 ? (
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Platform</th>
-                  <th scope="col">Account</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Recent comments</th>
-                  <th scope="col">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {connections.map((c) => {
-                  const reason = statusReasonText(c.statusReason);
-                  return (
-                    <tr key={c.id}>
-                      <td>{platformLabel(c.platform)}</td>
-                      <td>
-                        <strong>{c.displayName ?? 'Unnamed account'}</strong>
-                      </td>
-                      <td>
-                        {STATUS_LABEL[c.status]}
-                        {reason ? <p>{reason}</p> : null}
-                        {healthNotes.get(c.id) ? <p>{healthNotes.get(c.id)}</p> : null}
-                      </td>
-                      <td>{backfillText(c.backfill, formatUtc)}</td>
-                      <td>
-                        {c.status === 'needs_reconnect' && isConnectable(c.platform) ? (
-                          <ConnectButton
-                            orgId={orgId}
-                            brandId={brandId}
-                            platform={c.platform}
-                            label="Reconnect"
-                            reconnectConnectionId={c.id}
-                          />
-                        ) : null}
-                        <ApiForm
-                          action={`/api/v1/orgs/${orgId}/brands/${brandId}/connections/${c.id}`}
-                          method="DELETE"
-                          fields={[]}
-                          submitLabel="Disconnect"
-                          refresh
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <TableScroll>
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Platform</th>
+                    <th scope="col">Account</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Recent comments</th>
+                    <th scope="col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {connections.map((c) => {
+                    const reason = statusReasonText(c.statusReason);
+                    return (
+                      <tr key={c.id}>
+                        <td>{platformLabel(c.platform)}</td>
+                        <td>
+                          <strong>{c.displayName ?? 'Unnamed account'}</strong>
+                        </td>
+                        <td>
+                          {STATUS_LABEL[c.status]}
+                          {reason ? <p>{reason}</p> : null}
+                          {healthNotes.get(c.id) ? <p>{healthNotes.get(c.id)}</p> : null}
+                        </td>
+                        <td>{backfillText(c.backfill, formatUtc)}</td>
+                        <td>
+                          <div className="flex flex-wrap items-start gap-2">
+                            {c.status === 'needs_reconnect' && isConnectable(c.platform) ? (
+                              <ConnectButton
+                                orgId={orgId}
+                                brandId={brandId}
+                                platform={c.platform}
+                                label="Reconnect"
+                                reconnectConnectionId={c.id}
+                              />
+                            ) : null}
+                            <ApiForm
+                              action={`/api/v1/orgs/${orgId}/brands/${brandId}/connections/${c.id}`}
+                              method="DELETE"
+                              fields={[]}
+                              submitLabel="Disconnect"
+                              variant="destructive"
+                              size="sm"
+                              refresh
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableScroll>
           ) : null}
           {connections
             .filter((c) => c.platform === 'youtube')
@@ -225,42 +230,33 @@ export default async function ConnectionsPage({
                 />
               </section>
             ))}
-          {CONNECTABLE.map((p) => (
-            <Fragment key={p}>
-              <ConnectPermissions permissions={permissions.get(p) ?? []} />
-              <ConnectButton
-                orgId={orgId}
-                brandId={brandId}
-                platform={p}
-                label={PLATFORM_COPY[p].connectLabel}
-              />
-            </Fragment>
-          ))}
-          {hasPageOrInstagram && !hasAdAccount ? (
-            <p>Connect your ad account to moderate comments on your ads.</p>
-          ) : null}
-          <ConnectChecklist />
+          <section>
+            <h2>Connect a platform</h2>
+            {hasPageOrInstagram && !hasAdAccount ? (
+              <p className="text-dim">Connect your ad account to moderate comments on your ads.</p>
+            ) : null}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {CONNECTABLE.map((p) => (
+                <div
+                  key={p}
+                  className="flex flex-col items-start gap-3 rounded-lg border border-border bg-card p-(--fb-card-pad)"
+                >
+                  <ConnectPermissions permissions={permissions.get(p) ?? []} />
+                  <ConnectButton
+                    orgId={orgId}
+                    brandId={brandId}
+                    platform={p}
+                    label={PLATFORM_COPY[p].connectLabel}
+                  />
+                </div>
+              ))}
+            </div>
+            <ConnectChecklist />
+          </section>
         </>
       ) : (
         <p>Only owners and admins can view and manage connections.</p>
       )}
-      <p>
-        <Link href={`/orgs/${orgId}/brands/${brandId}/comments`}>Comments</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/suggestions`}>
-          {`Suggestions (${review.pendingTotal})`}
-        </Link>{' '}
-        · <Link href={`/orgs/${orgId}/brands/${brandId}/ads`}>Ads</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/rules`}>Rules</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/policies`}>Policies</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/classifier`}>Classifier</Link> ·{' '}
-        <Link href={`/orgs/${orgId}/brands/${brandId}/domains`}>Own domains</Link> ·{' '}
-        {canManage ? (
-          <>
-            <AlertsNavLink role={org.role} href={`/orgs/${orgId}/brands/${brandId}/alerts`} /> ·{' '}
-          </>
-        ) : null}
-        <Link href={`/orgs/${orgId}`}>Back to organization</Link>
-      </p>
     </main>
   );
 }

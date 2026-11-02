@@ -32,13 +32,13 @@ export function ReportSubscriptionToggle(props: {
 
   return (
     <div>
-      <label>
+      <label className="flex items-center gap-2 font-normal text-foreground">
         <input
           type="checkbox"
           checked={subscribed}
           disabled={busy}
           onChange={(e) => void onChange(e.target.checked)}
-        />{' '}
+        />
         {`Weekly report for ${props.orgName}`}
       </label>
       {error ? <p role="alert">{error}</p> : null}

@@ -28,7 +28,7 @@ export function HiddenList(props: {
   return (
     <>
       {items.length === 0 ? (
-        <section>
+        <section data-state="empty">
           <h2>Nothing hidden today</h2>
           <p>
             When FeedBouncer or someone on your team hides a comment, it appears here so you can
@@ -40,8 +40,10 @@ export function HiddenList(props: {
         const rows = items.filter((i) => i.brandId === b.brandId);
         return (
           <section key={b.brandId}>
-            <h2>{b.brandName}</h2>
-            <p>{`Since midnight (${b.timezone})`}</p>
+            <div className="flex flex-col gap-1">
+              <h2>{b.brandName}</h2>
+              <p className="text-small text-dim">{`Since midnight (${b.timezone})`}</p>
+            </div>
             {b.timezoneSet ? null : (
               <TimezoneNotice
                 orgId={b.organizationId}
@@ -50,7 +52,7 @@ export function HiddenList(props: {
                 canManage={props.canManage[b.organizationId] === true}
               />
             )}
-            <ul>
+            <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
               {rows.map((i) => (
                 <HiddenRow key={i.hideActionId} item={i} onChange={onChange} />
               ))}
@@ -59,9 +61,9 @@ export function HiddenList(props: {
         );
       })}
       {props.next ? (
-        <p>
-          <Link href={hiddenTodayHref(props.next)}>Load more</Link>
-        </p>
+        <Link href={hiddenTodayHref(props.next)} className="self-start text-small font-medium">
+          Load more
+        </Link>
       ) : null}
     </>
   );

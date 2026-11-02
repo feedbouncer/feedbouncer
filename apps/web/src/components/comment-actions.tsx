@@ -71,21 +71,26 @@ function ReplyForm(props: {
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
-      <button
-        type="submit"
-        disabled={props.busy || !available || !check.canSubmit}
-        aria-describedby={available ? counterId : reasonId}
-      >
-        {REPLY_COPY[kind].submit}
-      </button>{' '}
-      {available ? (
-        <small id={counterId}>
-          {`${check.count} / ${check.max}`}
-          {check.over ? ' Too long for this platform.' : ''}
-        </small>
-      ) : (
-        <small id={reasonId}>{reasonText(reason ?? '', props.platform)}</small>
-      )}
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          className="btn-primary btn-sm"
+          disabled={props.busy || !available || !check.canSubmit}
+          aria-describedby={available ? counterId : reasonId}
+        >
+          {REPLY_COPY[kind].submit}
+        </button>
+        {available ? (
+          <small id={counterId} className="text-dim">
+            {`${check.count} / ${check.max}`}
+            {check.over ? ' Too long for this platform.' : ''}
+          </small>
+        ) : (
+          <small id={reasonId} className="text-dim">
+            {reasonText(reason ?? '', props.platform)}
+          </small>
+        )}
+      </div>
     </form>
   );
 }
@@ -180,29 +185,40 @@ export function CommentActions(props: {
 
   const { buttons, replies } = shownActions(props.state, props.availability);
   const status = progressText(p, props.platform);
+  const buttonStyle: Record<ActionKind, string> = {
+    hide: 'btn-sm',
+    unhide: 'btn-sm',
+    delete: 'btn-destructive btn-sm',
+    ban_author: 'btn-destructive btn-sm',
+    unban_author: 'btn-sm',
+    public_reply: 'btn-sm',
+    private_reply: 'btn-sm',
+  };
   return (
-    <div>
-      {buttons.map((b) => {
-        const reasonId = `${id}-${b.kind}-reason`;
-        return (
-          <span key={b.kind}>
-            <button
-              type="button"
-              disabled={busy || !b.available}
-              aria-describedby={b.available ? undefined : reasonId}
-              onClick={() => onClick(b.kind)}
-            >
-              {actionKindText(b.kind)}
-            </button>
-            {b.available ? null : (
-              <>
-                {' '}
-                <small id={reasonId}>{reasonText(b.reason ?? '', props.platform)}</small>
-              </>
-            )}{' '}
-          </span>
-        );
-      })}
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {buttons.map((b) => {
+          const reasonId = `${id}-${b.kind}-reason`;
+          return (
+            <span key={b.kind} className="inline-flex items-center gap-2">
+              <button
+                type="button"
+                className={buttonStyle[b.kind]}
+                disabled={busy || !b.available}
+                aria-describedby={b.available ? undefined : reasonId}
+                onClick={() => onClick(b.kind)}
+              >
+                {actionKindText(b.kind)}
+              </button>
+              {b.available ? null : (
+                <small id={reasonId} className="text-dim">
+                  {reasonText(b.reason ?? '', props.platform)}
+                </small>
+              )}
+            </span>
+          );
+        })}
+      </div>
       {replies.map((r) => (
         <ReplyForm
           key={r.kind}
@@ -214,15 +230,15 @@ export function CommentActions(props: {
         />
       ))}
       {status ? <p role={status.alert ? 'alert' : 'status'}>{status.text}</p> : null}
-      <button type="button" onClick={toggleHistory}>
+      <button type="button" className="btn-ghost btn-sm self-start" onClick={toggleHistory}>
         {history ? 'Hide history' : 'History'}
       </button>
       {historyError ? <p role="alert">{historyError}</p> : null}
       {history ? (
         history.length === 0 ? (
-          <p>No actions yet.</p>
+          <p data-state="empty">No actions yet.</p>
         ) : (
-          <ul>
+          <ul className="flex flex-col gap-1 text-small text-dim">
             {history.map((a) => (
               <li key={a.id}>
                 {`${actionKindText(a.kind)} by ${actorTypeText(a.actorType)}: ${historyText(a, props.platform)} (${formatUtc(a.createdAt)})`}

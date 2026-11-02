@@ -1,8 +1,8 @@
 import { GATED_STEP_TYPES, SUGGESTION_STATUSES } from '@feedbouncer/actions/shared';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ReviewModeBanner } from '../../../../../../components/review-mode/review-mode-banner';
 import { SuggestionQueue } from '../../../../../../components/review-mode/suggestion-queue';
+import { PageHeader } from '../../../../../../components/ui/page-header';
 import { isUuid } from '../../../../../../lib/ids';
 import type { PendingAuthor, QueueFilter, SuggestionView } from '../../../../../../lib/review-mode';
 import type { RuleView } from '../../../../../../lib/rules';
@@ -56,10 +56,9 @@ export default async function SuggestionsPage({
     : [];
   const { rules } = dataOrThrow(await serverGet<{ rules: RuleView[] }>(`${api}/rules`), 'rules');
   const review = await loadReviewMode(orgId, brandId);
-  const brand = `/orgs/${orgId}/brands/${brandId}`;
   return (
     <main>
-      <h1>Suggestions</h1>
+      <PageHeader title="Suggestions" />
       {review.connections.map((s) => (
         <ReviewModeBanner
           key={s.connectionId}
@@ -82,12 +81,6 @@ export default async function SuggestionsPage({
         }))}
         rules={rules.map((r) => ({ id: r.id, name: r.name }))}
       />
-      <p>
-        <Link href={`${brand}/review`}>Review queue</Link> ·{' '}
-        <Link href={`${brand}/comments`}>Comments</Link> ·{' '}
-        <Link href={`${brand}/connections`}>Connections</Link> ·{' '}
-        <Link href={`${brand}/rules`}>Rules</Link>
-      </p>
     </main>
   );
 }

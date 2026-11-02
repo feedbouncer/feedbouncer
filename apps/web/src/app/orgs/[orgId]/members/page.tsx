@@ -1,8 +1,10 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ApiForm } from '../../../../components/api-form';
 import { InviteForm } from '../../../../components/invite-form';
 import { ReplyGrantToggle } from '../../../../components/reply-grant-toggle';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
+import { ListPanel, ListRow } from '../../../../components/ui/list';
+import { PageHeader } from '../../../../components/ui/page-header';
 import { isUuid } from '../../../../lib/ids';
 import { dataOrThrow, requireMe, serverGet, type Role } from '../../../../lib/server-api';
 
@@ -51,18 +53,21 @@ export default async function MembersPage({ params }: { params: Promise<{ orgId:
   const base = `/api/v1/orgs/${orgId}` as const;
   return (
     <main>
-      <h1>Members</h1>
-      <ul>
+      <PageHeader title="Members" />
+      <ListPanel>
         {memberData.members.map((m) => {
           const editable = manager && (viewer === 'owner' || m.role !== 'owner');
           return (
-            <li key={m.userId}>
-              <span>
-                {m.email}
-                {m.name ? ` (${m.name})` : ''} - {m.role}
-              </span>
+            <ListRow key={m.userId} className="flex-col items-stretch sm:flex-row sm:items-center">
+              <div className="flex flex-col gap-0.5">
+                <span className="font-semibold text-foreground">
+                  {m.email}
+                  {m.name ? ` (${m.name})` : ''}
+                </span>
+                <span className="text-small text-dim capitalize">{m.role}</span>
+              </div>
               {editable ? (
-                <>
+                <div className="flex flex-wrap items-start gap-3">
                   <ApiForm
                     action={`${base}/members/${m.userId}`}
                     method="PATCH"
@@ -75,81 +80,119 @@ export default async function MembersPage({ params }: { params: Promise<{ orgId:
                         defaultValue: m.role,
                       },
                     ]}
-                    submitLabel="Change role"
+                    submitLabel="Save"
+                    layout="inline"
+                    size="sm"
                     refresh
+                    className="w-40"
                   />
                   <ApiForm
                     action={`${base}/members/${m.userId}`}
                     method="DELETE"
                     fields={[]}
                     submitLabel="Remove"
+                    variant="destructive"
+                    size="sm"
                     refresh
+                    className="self-end"
                   />
-                </>
+                </div>
               ) : null}
-            </li>
+            </ListRow>
           );
         })}
-      </ul>
-      <h2>Permissions</h2>
-      <ReplyGrantToggle orgId={orgId} granted={membersReply} canChange={manager} />
-      <h2>Leave organization</h2>
-      <ApiForm
-        action={`${base}/members/${me.user.id}`}
-        method="DELETE"
-        fields={[]}
-        submitLabel="Leave organization"
-        redirectTo="/orgs"
-      />
-      {viewer === 'owner' && candidates.length > 0 ? (
-        <>
-          <h2>Transfer ownership</h2>
-          <ApiForm
-            action={`${base}/transfer-ownership`}
-            fields={[
-              {
-                name: 'userId',
-                label: 'New owner',
-                type: 'select',
-                options: candidates,
-              },
-              {
-                name: 'newRoleForSelf',
-                label: 'Your role afterwards',
-                type: 'select',
-                options: ['admin', 'member'],
-              },
-            ]}
-            submitLabel="Transfer ownership"
-            refresh
-          />
-        </>
-      ) : null}
+      </ListPanel>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Permissions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ReplyGrantToggle orgId={orgId} granted={membersReply} canChange={manager} />
+        </CardContent>
+      </Card>
+
       {manager ? (
-        <>
+        <section>
           <h2>Invitations</h2>
-          <ul>
-            {invitationList.map((i) => (
-              <li key={i.id}>
-                <span>
-                  {i.email} - {i.role}
-                  {i.expired ? ' (expired)' : ''}
-                </span>
-                <ApiForm
-                  action={`${base}/invitations/${i.id}/revoke`}
-                  fields={[]}
-                  submitLabel="Revoke"
-                  refresh
-                />
-              </li>
-            ))}
-          </ul>
-          <InviteForm action={`${base}/invitations`} roles={grantable} />
-        </>
+          {invitationList.length > 0 ? (
+            <ListPanel>
+              {invitationList.map((i) => (
+                <ListRow key={i.id}>
+                  <span>
+                    {i.email} <span className="text-dim capitalize">· {i.role}</span>
+                    {i.expired ? <span className="text-dim"> · expired</span> : null}
+                  </span>
+                  <ApiForm
+                    action={`${base}/invitations/${i.id}/revoke`}
+                    fields={[]}
+                    submitLabel="Revoke"
+                    variant="destructive"
+                    size="sm"
+                    refresh
+                  />
+                </ListRow>
+              ))}
+            </ListPanel>
+          ) : (
+            <p data-state="empty">No pending invitations.</p>
+          )}
+          <Card>
+            <CardHeader>
+              <CardTitle>Invite someone</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <InviteForm action={`${base}/invitations`} roles={grantable} />
+            </CardContent>
+          </Card>
+        </section>
       ) : null}
-      <p>
-        <Link href={`/orgs/${orgId}`}>Back to organization</Link>
-      </p>
+
+      {viewer === 'owner' && candidates.length > 0 ? (
+        <Card className="border-danger/40">
+          <CardHeader>
+            <CardTitle>Transfer ownership</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ApiForm
+              action={`${base}/transfer-ownership`}
+              fields={[
+                {
+                  name: 'userId',
+                  label: 'New owner',
+                  type: 'select',
+                  options: candidates,
+                },
+                {
+                  name: 'newRoleForSelf',
+                  label: 'Your role afterwards',
+                  type: 'select',
+                  options: ['admin', 'member'],
+                },
+              ]}
+              submitLabel="Transfer ownership"
+              variant="destructive"
+              refresh
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card className="border-danger/40">
+        <CardHeader>
+          <CardTitle>Leave organization</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ApiForm
+            action={`${base}/members/${me.user.id}`}
+            method="DELETE"
+            fields={[]}
+            submitLabel="Leave organization"
+            variant="destructive"
+            redirectTo="/orgs"
+          />
+        </CardContent>
+      </Card>
     </main>
   );
 }

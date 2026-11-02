@@ -30,9 +30,11 @@ export function OrgTimezoneForm(props: { orgId: string; timezone: string; timezo
           defaultValue: suggested,
         },
       ]}
-      submitLabel="Set timezone"
+      submitLabel="Save"
       successMessage="Timezone saved."
       refresh
+      layout="inline"
+      className="max-w-sm"
     />
   );
 }

@@ -44,40 +44,47 @@ export function EndReviewModeDialog(props: {
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby={`${id}-title`}>
-      <form onSubmit={onSubmit}>
-        <fieldset>
-          <legend id={`${id}-title`}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={`${id}-title`}
+      className="rounded-lg border border-border bg-card p-(--fb-card-pad)"
+    >
+      <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <fieldset className="flex flex-col gap-2">
+          <legend id={`${id}-title`} className="mb-2">
             End review mode now? What should happen to the waiting suggestions?
           </legend>
           {END_CHOICES.map((c) => (
-            <label key={c.value} style={{ display: 'block' }}>
+            <label key={c.value} className="flex items-center gap-2 font-normal text-foreground">
               <input
                 type="radio"
                 name="pending"
                 value={c.value}
                 checked={choice === c.value}
                 onChange={() => setChoice(c.value)}
-              />{' '}
+              />
               {c.label}
             </label>
           ))}
-          <label style={{ display: 'block' }}>
+          <label className="flex items-center gap-2 font-normal text-foreground">
             <input
               type="checkbox"
               checked={confirmed}
               disabled={choice !== 'approve'}
               onChange={(e) => setConfirmed(e.currentTarget.checked)}
-            />{' '}
+            />
             I understand this runs every suggested action now.
           </label>
         </fieldset>
-        <button type="submit" disabled={busy || body === null}>
-          End review mode
-        </button>{' '}
-        <button type="button" onClick={props.onClose}>
-          Cancel
-        </button>
+        <div className="flex gap-2">
+          <button type="submit" className="btn-primary btn-sm" disabled={busy || body === null}>
+            End review mode
+          </button>
+          <button type="button" className="btn-sm" onClick={props.onClose}>
+            Cancel
+          </button>
+        </div>
         {error ? <p role="alert">{error}</p> : null}
       </form>
     </div>

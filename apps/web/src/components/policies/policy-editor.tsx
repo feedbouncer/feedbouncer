@@ -78,11 +78,14 @@ export function PolicyEditor(props: Props) {
   }
 
   return (
-    <div>
-      <form onSubmit={onSubmit}>
+    <div className="flex flex-col gap-4">
+      <form
+        onSubmit={onSubmit}
+        className="flex max-w-2xl flex-col gap-4 rounded-lg border border-border bg-card p-(--fb-card-pad)"
+      >
         {error ? <p role="alert">{error}</p> : null}
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block' }}>
+        <div className="mb-3">
+          <label className="block">
             Name{' '}
             <input
               name="name"
@@ -94,8 +97,8 @@ export function PolicyEditor(props: Props) {
           </label>
           <Problems issues={issues.filter((i) => i.path === 'name')} />
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block' }}>
+        <div className="mb-3">
+          <label className="block">
             Policy{' '}
             <textarea
               name="text"
@@ -118,7 +121,7 @@ export function PolicyEditor(props: Props) {
             </ul>
           ) : null}
         </div>
-        <div style={{ marginBottom: 12 }}>
+        <div className="mb-3">
           <label>
             Action{' '}
             <select
@@ -145,7 +148,7 @@ export function PolicyEditor(props: Props) {
             their revision.
           </p>
         ) : null}
-        <button type="submit" disabled={busy || !dirty}>
+        <button type="submit" className="btn-primary" disabled={busy || !dirty}>
           {policy ? 'Save policy' : 'Create policy'}
         </button>
       </form>

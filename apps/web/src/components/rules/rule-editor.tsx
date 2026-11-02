@@ -66,11 +66,12 @@ function Problems({ issues }: { issues: RuleIssue[] }) {
 
 function Field(props: { label: string; issues: RuleIssue[]; hint?: string; children: ReactNode }) {
   return (
-    <div style={{ marginBottom: 12 }}>
-      <label style={{ display: 'block' }}>
-        {props.label} {props.children}
+    <div className="mb-4 flex flex-col gap-(--fb-field-gap)">
+      <label className="flex flex-col gap-(--fb-field-gap)">
+        {props.label}
+        {props.children}
       </label>
-      {props.hint ? <small>{props.hint}</small> : null}
+      {props.hint ? <small className="text-dim">{props.hint}</small> : null}
       <Problems issues={props.issues} />
     </div>
   );
@@ -83,15 +84,17 @@ export function SaveWarnings(props: {
   ruleHref: string;
 }) {
   return (
-    <section role="status">
-      <p>Rule saved. Some steps will not run everywhere:</p>
-      <ul>
+    <section role="status" className="rounded-lg border border-border bg-card p-(--fb-card-pad)">
+      <p className="font-semibold text-foreground">
+        Rule saved. Some steps will not run everywhere:
+      </p>
+      <ul className="list-disc ps-5 text-dim">
         {props.warnings.map((w, n) => (
           <li key={n}>{warningText(w)}</li>
         ))}
       </ul>
-      <p>
-        <Link href={props.ruleHref}>Edit the rule</Link> ·{' '}
+      <p className="flex gap-3 text-small">
+        <Link href={props.ruleHref}>Edit the rule</Link>
         <Link href={props.rulesHref}>Back to rules</Link>
       </p>
     </section>
@@ -178,7 +181,10 @@ export function RuleEditor(props: {
     );
 
   return (
-    <form onSubmit={onSubmit}>
+    <form
+      onSubmit={onSubmit}
+      className="max-w-2xl rounded-lg border border-border bg-card p-(--fb-card-pad)"
+    >
       {error ? <p role="alert">{error}</p> : null}
       <Problems issues={general} />
       <Field label="Name" issues={[]}>
@@ -293,7 +299,7 @@ export function RuleEditor(props: {
               onChange={(e) => set('linkDomains', e.target.value)}
             />
           </Field>
-          <label style={{ display: 'block' }}>
+          <label className="block">
             <input
               type="checkbox"
               name="exemptOwnDomains"
@@ -302,7 +308,7 @@ export function RuleEditor(props: {
             />{' '}
             Never match your own domains
           </label>
-          <label style={{ display: 'block' }}>
+          <label className="block">
             <input
               type="checkbox"
               name="matchShorteners"
@@ -311,7 +317,7 @@ export function RuleEditor(props: {
             />{' '}
             Match link shorteners
           </label>
-          <label style={{ display: 'block' }}>
+          <label className="block">
             <input
               type="checkbox"
               name="matchLookalikes"
@@ -427,7 +433,7 @@ export function RuleEditor(props: {
           {...(kind === 'author' && { onlyPlatform: form.authorPlatform })}
         />
       )}
-      <label style={{ display: 'block', marginBottom: 12 }}>
+      <label className="mb-3 block">
         <input
           type="checkbox"
           name="dryRun"
@@ -436,7 +442,7 @@ export function RuleEditor(props: {
         />{' '}
         Dry run (log matches only)
       </label>
-      <button type="submit" disabled={busy}>
+      <button type="submit" className="btn-primary" disabled={busy}>
         {rule ? 'Save rule' : 'Create rule'}
       </button>
     </form>

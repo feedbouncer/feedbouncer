@@ -9,6 +9,8 @@ import {
   type ChannelKind,
 } from '../../lib/alerts';
 import { ApiForm } from '../api-form';
+import { Card, CardContent } from '../ui/card';
+import { ListPanel, ListRow } from '../ui/list';
 import { AddEmailForm } from './add-email-form';
 import { AddSlackForm } from './add-slack-form';
 
@@ -23,20 +25,23 @@ function ChannelRow({
 }) {
   const base = `/api/v1/orgs/${orgId}/alert-channels/${c.id}` as const;
   return (
-    <li>
-      <span>
-        {channelName(c)}
-        {c.hint ? ` (${c.hint})` : ''}
-      </span>{' '}
-      <strong>{healthText(c)}</strong>
+    <ListRow className="flex-col items-stretch sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-0.5">
+        <span className="font-semibold text-foreground">
+          {channelName(c)}
+          {c.hint ? ` (${c.hint})` : ''}
+        </span>
+        <span className="text-small text-dim">{healthText(c)}</span>
+      </div>
       {canManage ? (
-        <>
+        <div className="flex flex-wrap items-start gap-3">
           {c.kind === 'email' && c.health === 'pending_confirmation' ? (
             <ApiForm
               action={`${base}/resend-confirmation`}
               fields={[]}
               submitLabel="Resend"
               successMessage="Confirmation sent."
+              size="sm"
             />
           ) : null}
           {c.health === 'disconnected' && c.kind === 'slack' ? (
@@ -54,6 +59,9 @@ function ChannelRow({
               submitLabel="Reconnect"
               resetOnSuccess
               refresh
+              layout="inline"
+              size="sm"
+              className="w-64"
             />
           ) : null}
           <ApiForm
@@ -65,11 +73,20 @@ function ChannelRow({
               return r.ok ? 'Test sent.' : `Test failed: ${errorCodeText(r.code ?? null)}`;
             }}
             refresh
+            size="sm"
           />
-          <ApiForm action={base} method="DELETE" fields={[]} submitLabel="Remove" refresh />
-        </>
+          <ApiForm
+            action={base}
+            method="DELETE"
+            fields={[]}
+            submitLabel="Remove"
+            variant="destructive"
+            size="sm"
+            refresh
+          />
+        </div>
       ) : null}
-    </li>
+    </ListRow>
   );
 }
 
@@ -86,15 +103,24 @@ export function ChannelList(props: {
     return (
       <section>
         <h2>{title}</h2>
-        {rows.length === 0 ? <p>Nothing connected yet.</p> : null}
-        <ul>
-          {rows.map((c) => (
-            <ChannelRow key={c.id} orgId={props.orgId} channel={c} canManage={props.canManage} />
-          ))}
-        </ul>
-        {open && helper ? <p>{helper}</p> : null}
-        {open && kind === 'slack' ? <AddSlackForm orgId={props.orgId} /> : null}
-        {open && kind === 'email' ? <AddEmailForm orgId={props.orgId} /> : null}
+        {rows.length === 0 ? (
+          <p data-state="empty">Nothing connected yet.</p>
+        ) : (
+          <ListPanel>
+            {rows.map((c) => (
+              <ChannelRow key={c.id} orgId={props.orgId} channel={c} canManage={props.canManage} />
+            ))}
+          </ListPanel>
+        )}
+        {open && (helper || kind === 'slack' || kind === 'email') ? (
+          <Card>
+            <CardContent className="flex flex-col gap-3">
+              {helper ? <p className="text-small text-dim">{helper}</p> : null}
+              {kind === 'slack' ? <AddSlackForm orgId={props.orgId} /> : null}
+              {kind === 'email' ? <AddEmailForm orgId={props.orgId} /> : null}
+            </CardContent>
+          </Card>
+        ) : null}
       </section>
     );
   };

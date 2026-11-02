@@ -5,6 +5,10 @@ import { AlertsNavLink } from '../../../components/alerts/alerts-nav-link';
 import { ApiForm } from '../../../components/api-form';
 import { CreateBrandForm } from '../../../components/create-brand-form';
 import { OrgTimezoneForm } from '../../../components/org-timezone-form';
+import { Badge } from '../../../components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
+import { ListPanel, ListRow } from '../../../components/ui/list';
+import { PageHeader } from '../../../components/ui/page-header';
 import { isUuid } from '../../../lib/ids';
 import { dataOrThrow, requireMe, serverGet, type Role } from '../../../lib/server-api';
 
@@ -32,91 +36,111 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
   const canEdit = role !== 'member';
   return (
     <main>
-      <h1>{org.data.organization.name}</h1>
-      <p>Your role: {org.data.role}</p>
+      <PageHeader
+        title={org.data.organization.name}
+        actions={<Badge className="capitalize">{role}</Badge>}
+      />
       {can(role, 'org.update') ? (
-        <OrgTimezoneForm
-          orgId={orgId}
-          timezone={org.data.organization.timezone}
-          timezoneSet={org.data.organization.timezoneSet}
-        />
+        <Card>
+          <CardHeader>
+            <CardTitle>Workspace settings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <OrgTimezoneForm
+              orgId={orgId}
+              timezone={org.data.organization.timezone}
+              timezoneSet={org.data.organization.timezoneSet}
+            />
+          </CardContent>
+        </Card>
       ) : null}
-      <p>
-        <Link href={`/orgs/${orgId}/comments`}>All comments</Link>
-        {can(role, 'report.read') ? (
-          <>
-            {' · '}
-            <Link href={`/orgs/${orgId}/reports`}>Reports</Link>
-          </>
-        ) : null}
-      </p>
-      <h2>Brands</h2>
-      <ul>
-        {brandList.map((b) => (
-          <li key={b.id}>
-            <span>{b.name}</span>{' '}
-            <Link href={`/orgs/${orgId}/brands/${b.id}/comments`}>Comments</Link>
-            {canEdit ? (
-              <>
-                {' '}
-                <Link href={`/orgs/${orgId}/brands/${b.id}/connections`}>Connections</Link>
-              </>
-            ) : null}{' '}
-            <AlertsNavLink role={role} href={`/orgs/${orgId}/brands/${b.id}/alerts`} />
-            {canEdit ? (
-              <>
-                <ApiForm
-                  action={`/api/v1/orgs/${orgId}/brands/${b.id}`}
-                  method="PATCH"
-                  fields={[{ name: 'name', label: 'New name', type: 'text', defaultValue: b.name }]}
-                  submitLabel="Rename"
-                  refresh
-                />
-                <ApiForm
-                  action={`/api/v1/orgs/${orgId}/brands/${b.id}`}
-                  method="PATCH"
-                  fields={[
-                    {
-                      name: 'timezone',
-                      label: `Timezone${b.timezoneSet ? '' : ' (not set, using UTC)'}`,
-                      type: 'text',
-                      defaultValue: b.timezone,
-                    },
-                  ]}
-                  submitLabel="Set timezone"
-                  refresh
-                />
-                <ApiForm
-                  action={`/api/v1/orgs/${orgId}/brands/${b.id}/archive`}
-                  fields={[]}
-                  submitLabel="Archive"
-                  refresh
-                />
-              </>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-      {canEdit ? (
-        <>
-          <h3>Add a brand</h3>
-          <CreateBrandForm orgId={orgId} />
-        </>
-      ) : null}
-      <p>
-        <Link href={`/orgs/${orgId}/members`}>Members</Link> ·{' '}
+      <section>
+        <h2>Brands</h2>
+        {brandList.length > 0 ? (
+          <ListPanel>
+            {brandList.map((b) => (
+              <ListRow
+                key={b.id}
+                className="flex-col items-stretch gap-4 sm:flex-row sm:items-start sm:justify-between"
+              >
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  <Link
+                    href={`/orgs/${orgId}/brands/${b.id}/comments`}
+                    className="font-display text-card-title font-semibold tracking-normal"
+                  >
+                    {b.name}
+                  </Link>
+                  <div className="flex flex-wrap gap-3 text-small">
+                    {canEdit ? (
+                      <Link href={`/orgs/${orgId}/brands/${b.id}/connections`}>Connections</Link>
+                    ) : null}
+                    <AlertsNavLink role={role} href={`/orgs/${orgId}/brands/${b.id}/alerts`} />
+                  </div>
+                </div>
+                {canEdit ? (
+                  <div className="flex flex-wrap items-start gap-4">
+                    <ApiForm
+                      action={`/api/v1/orgs/${orgId}/brands/${b.id}`}
+                      method="PATCH"
+                      fields={[
+                        {
+                          name: 'name',
+                          label: 'Rename',
+                          type: 'text',
+                          defaultValue: b.name,
+                        },
+                      ]}
+                      submitLabel="Save"
+                      layout="inline"
+                      size="sm"
+                      refresh
+                      className="w-44"
+                    />
+                    <ApiForm
+                      action={`/api/v1/orgs/${orgId}/brands/${b.id}`}
+                      method="PATCH"
+                      fields={[
+                        {
+                          name: 'timezone',
+                          label: `Timezone${b.timezoneSet ? '' : ' (using UTC)'}`,
+                          type: 'text',
+                          defaultValue: b.timezone,
+                        },
+                      ]}
+                      submitLabel="Save"
+                      layout="inline"
+                      size="sm"
+                      refresh
+                      className="w-52"
+                    />
+                    <ApiForm
+                      action={`/api/v1/orgs/${orgId}/brands/${b.id}/archive`}
+                      fields={[]}
+                      submitLabel="Archive"
+                      variant="destructive"
+                      size="sm"
+                      refresh
+                      className="self-end"
+                    />
+                  </div>
+                ) : null}
+              </ListRow>
+            ))}
+          </ListPanel>
+        ) : (
+          <p data-state="empty">No brands yet.</p>
+        )}
         {canEdit ? (
-          <>
-            <AlertsNavLink role={role} href={`/orgs/${orgId}/alerts`} /> ·{' '}
-          </>
+          <Card>
+            <CardHeader>
+              <CardTitle>Add a brand</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CreateBrandForm orgId={orgId} />
+            </CardContent>
+          </Card>
         ) : null}
-        {can(role, 'api_key.manage') ? (
-          <>
-            <Link href={`/orgs/${orgId}/api-keys`}>API keys</Link> ·{' '}
-          </>
-        ) : null}
-        <Link href="/hidden-today">Hidden today</Link> · <Link href="/account">Account</Link>
-      </p>
+      </section>
     </main>
   );
 }

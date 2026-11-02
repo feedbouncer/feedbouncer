@@ -24,7 +24,7 @@ export function HistoryRows(props: {
   busy: boolean;
   onUndo: (stepId: string) => void;
 }) {
-  if (props.entries.length === 0) return <p>No actions yet.</p>;
+  if (props.entries.length === 0) return <p data-state="empty">No actions yet.</p>;
   return (
     <ul>
       {props.entries.map((e) => {
@@ -46,6 +46,7 @@ export function HistoryRows(props: {
             {canUndo(e) ? (
               <button
                 type="button"
+                className="btn-sm"
                 disabled={props.busy}
                 aria-label={`Undo ${STEP_LABEL[e.type]}`}
                 onClick={() => props.onUndo(e.id)}
@@ -99,7 +100,11 @@ export function CommentHistory(props: {
 
   return (
     <div>
-      <button type="button" onClick={() => (entries ? setEntries(null) : void load())}>
+      <button
+        type="button"
+        className="btn-ghost btn-sm"
+        onClick={() => (entries ? setEntries(null) : void load())}
+      >
         {entries ? 'Hide history' : 'History'}
       </button>
       {error ? <p role="alert">{error}</p> : null}

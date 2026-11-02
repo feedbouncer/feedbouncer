@@ -10,6 +10,7 @@ import {
   type YouTubeBudgetStatus,
 } from '../lib/youtube-budget';
 import { LocalTime, TextWithTimes } from './local-time';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
 type Props = { orgId: string; brandId: string; connectionId: string; canManage: boolean };
 
@@ -79,88 +80,92 @@ export function YouTubeBudgetView(props: Props & { initial: YouTubeBudgetStatus 
     ['Publish', backlog.publish],
   ];
   return (
-    <section aria-label="YouTube quota budget">
-      <h3>YouTube quota budget</h3>
-      {today.mode !== 'active' ? (
-        <p role="status">
-          <TextWithTimes build={(fmt) => bannerText(status, fmt) ?? ''} />
-        </p>
-      ) : null}
-      {settings.dryRun ? <p role="status">{DRY_RUN_BADGE}</p> : null}
-      <p>
-        {today.spentUnits} / {today.budgetUnits} units used
-      </p>
-      <ul>
-        <li>Reads: {today.readsSpentUnits}</li>
-        <li>Writes: {today.writesSpentUnits}</li>
-        <li>Read reserve: {today.readReserveUnits}</li>
-        <li>Remaining: {today.remainingUnits}</li>
-      </ul>
-      <p>
-        Resets at <LocalTime iso={today.resetAt} /> (midnight Pacific)
-      </p>
-      <p>Actions waiting:</p>
-      <ul>
-        {tiers.map(([label, n]) => (
-          <li key={label}>
-            {label}: {n}
-          </li>
-        ))}
-      </ul>
-      {backlog.skippedOverflowToday > 0 ? (
+    <Card aria-label="YouTube quota budget">
+      <CardHeader>
+        <CardTitle>YouTube quota budget</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {today.mode !== 'active' ? (
+          <p role="status">
+            <TextWithTimes build={(fmt) => bannerText(status, fmt) ?? ''} />
+          </p>
+        ) : null}
+        {settings.dryRun ? <p role="status">{DRY_RUN_BADGE}</p> : null}
         <p>
-          {backlog.skippedOverflowToday} actions were skipped today because the backlog is full.
+          {today.spentUnits} / {today.budgetUnits} units used
         </p>
-      ) : null}
-      <p id={`${id}-help`}>{PROTECTED_HELP}</p>
-      {props.canManage ? (
-        <form onSubmit={(e) => void onSubmit(e)}>
-          <p>
-            <label>
-              Daily budget (units, up to {limits.maxBudgetUnits}){' '}
-              <input
-                type="number"
-                min={0}
-                max={limits.maxBudgetUnits}
-                step={1}
-                value={budget}
-                onChange={(e) => setBudget(e.target.value)}
-              />
-            </label>
-          </p>
-          <p>
-            <label>
-              <input
-                type="checkbox"
-                checked={dryRun}
-                onChange={(e) => setDryRun(e.target.checked)}
-              />{' '}
-              Dry run
-            </label>
-          </p>
-          <p>
-            <label>
-              Protected channel ids (one per line){' '}
-              <textarea
-                rows={4}
-                value={protectedIds}
-                aria-describedby={`${id}-help`}
-                onChange={(e) => setProtectedIds(e.target.value)}
-              />
-            </label>
-          </p>
-          {error ? <p role="alert">{error}</p> : null}
-          <button type="submit" disabled={busy}>
-            Save
-          </button>
-        </form>
-      ) : settings.protectedAuthorIds.length > 0 ? (
-        <ul aria-label="Protected channels">
-          {settings.protectedAuthorIds.map((p) => (
-            <li key={p}>{p}</li>
+        <ul>
+          <li>Reads: {today.readsSpentUnits}</li>
+          <li>Writes: {today.writesSpentUnits}</li>
+          <li>Read reserve: {today.readReserveUnits}</li>
+          <li>Remaining: {today.remainingUnits}</li>
+        </ul>
+        <p>
+          Resets at <LocalTime iso={today.resetAt} /> (midnight Pacific)
+        </p>
+        <p>Actions waiting:</p>
+        <ul>
+          {tiers.map(([label, n]) => (
+            <li key={label}>
+              {label}: {n}
+            </li>
           ))}
         </ul>
-      ) : null}
-    </section>
+        {backlog.skippedOverflowToday > 0 ? (
+          <p>
+            {backlog.skippedOverflowToday} actions were skipped today because the backlog is full.
+          </p>
+        ) : null}
+        <p id={`${id}-help`}>{PROTECTED_HELP}</p>
+        {props.canManage ? (
+          <form onSubmit={(e) => void onSubmit(e)}>
+            <p>
+              <label>
+                Daily budget (units, up to {limits.maxBudgetUnits}){' '}
+                <input
+                  type="number"
+                  min={0}
+                  max={limits.maxBudgetUnits}
+                  step={1}
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                />
+              </label>
+            </p>
+            <p>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={dryRun}
+                  onChange={(e) => setDryRun(e.target.checked)}
+                />{' '}
+                Dry run
+              </label>
+            </p>
+            <p>
+              <label>
+                Protected channel ids (one per line){' '}
+                <textarea
+                  rows={4}
+                  value={protectedIds}
+                  aria-describedby={`${id}-help`}
+                  onChange={(e) => setProtectedIds(e.target.value)}
+                />
+              </label>
+            </p>
+            {error ? <p role="alert">{error}</p> : null}
+            <button type="submit" className="btn-primary btn-sm" disabled={busy}>
+              Save
+            </button>
+          </form>
+        ) : settings.protectedAuthorIds.length > 0 ? (
+          <ul aria-label="Protected channels">
+            {settings.protectedAuthorIds.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

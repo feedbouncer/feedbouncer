@@ -21,6 +21,7 @@ export function InviteForm(props: { action: `/api/${string}`; roles: readonly Ro
       submitLabel="Invite"
       successMessage={inviteMessage}
       refresh
+      variant="primary"
     />
   );
 }

@@ -138,7 +138,7 @@ export function ReplyComposer({
         value={d.text}
         onChange={(e) => dispatch({ type: 'edit', text: e.target.value })}
       />
-      <button type="submit" disabled={!canSend}>
+      <button type="submit" className="btn-primary btn-sm" disabled={!canSend}>
         Send reply
       </button>{' '}
       {reply.available ? (
@@ -163,7 +163,7 @@ export function ReplyComposer({
           {status.retry && canSend ? (
             <>
               {' '}
-              <button type="button" onClick={() => void send()}>
+              <button type="button" className="btn-sm" onClick={() => void send()}>
                 Try again
               </button>
             </>

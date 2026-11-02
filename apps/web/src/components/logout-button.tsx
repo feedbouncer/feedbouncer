@@ -18,7 +18,7 @@ export function LogoutButton() {
   }
   return (
     <>
-      <button type="button" onClick={logout}>
+      <button type="button" className="btn-sm" onClick={logout}>
         Log out
       </button>
       {error ? <p role="alert">Could not log out. Try again.</p> : null}

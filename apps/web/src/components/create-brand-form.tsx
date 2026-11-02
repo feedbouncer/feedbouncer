@@ -11,6 +11,9 @@ export function CreateBrandForm({ orgId }: { orgId: string }) {
       submitLabel="Create brand"
       extraBody={() => ({ timezone: browserTimezone() })}
       refresh
+      layout="inline"
+      variant="primary"
+      className="max-w-sm"
     />
   );
 }

@@ -1,5 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { BackLink } from '../../../../../../../components/ui/back-link';
+import { ListPanel, ListRow } from '../../../../../../../components/ui/list';
+import { PageHeader } from '../../../../../../../components/ui/page-header';
 import { formatUtc } from '../../../../../../../lib/format';
 import { isUuid } from '../../../../../../../lib/ids';
 import type { RuleChangeView } from '../../../../../../../lib/rule-changes';
@@ -22,25 +25,27 @@ export default async function RuleChangesPage({
   );
   return (
     <main>
-      <h1>Rule changes</h1>
-      <p>Changes proposed through the API. Nothing applies until a person approves it.</p>
+      <BackLink href={rules}>Back to rules</BackLink>
+      <PageHeader
+        title="Rule changes"
+        description="Changes proposed through the API. Nothing applies until a person approves it."
+      />
       {changes.length === 0 ? (
-        <p>No rule changes yet.</p>
+        <p data-state="empty">No rule changes yet.</p>
       ) : (
-        <ul>
+        <ListPanel>
           {changes.map((c) => (
-            <li key={c.id}>
-              <Link href={`${rules}/changes/${c.id}`}>
+            <ListRow key={c.id}>
+              <Link href={`${rules}/changes/${c.id}`} className="font-medium">
                 {c.operation} by {c.proposedBy.apiKeyName}
-              </Link>{' '}
-              · {c.isStale ? 'stale' : c.status} · expires {formatUtc(c.expiresAt)}
-            </li>
+              </Link>
+              <span className="text-small text-dim">
+                {c.isStale ? 'stale' : c.status} · expires {formatUtc(c.expiresAt)}
+              </span>
+            </ListRow>
           ))}
-        </ul>
+        </ListPanel>
       )}
-      <p>
-        <Link href={rules}>Back to rules</Link>
-      </p>
     </main>
   );
 }

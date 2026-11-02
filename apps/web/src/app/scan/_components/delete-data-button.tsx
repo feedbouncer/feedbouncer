@@ -1,6 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Button } from '../../../components/ui/button';
 import { apiFetch } from '../../../lib/api-client';
 
 export function DeleteDataButton() {
@@ -20,9 +21,9 @@ export function DeleteDataButton() {
 
   return (
     <>
-      <button type="button" onClick={onClick}>
+      <Button type="button" variant="outline" onClick={onClick}>
         Delete my data
-      </button>
+      </Button>
       {error ? <p role="alert">Could not delete your data. Try again.</p> : null}
     </>
   );

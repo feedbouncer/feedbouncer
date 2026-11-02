@@ -47,30 +47,35 @@ const render = (s: WeeklyStats, source: 'snapshot' | 'live' = 'snapshot') =>
 const headings = (html: string) => [...html.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1]);
 
 describe('WeeklyReport', () => {
-  it('renders the five sections from a ReportView fixture', () => {
+  it('renders the two headline stats as tiles and the three detail sections as headed cards', () => {
     const html = render(stats());
+    // The two headline numbers read as stat tiles (plain text, not <h2>); the rest stay headings.
     expect(headings(html)).toEqual([
-      'Comments processed',
       'Hidden by category',
       'Ads with the highest share of hidden comments',
-      'Estimated time saved',
       'By brand',
     ]);
     for (const s of [
       'Oct 5 – Oct 11, 2026 (Europe/Berlin)',
-      '12,345 comments processed',
+      'Comments processed',
+      '12,345',
       '+1,000 (+8.8%) vs. the week before',
-      'Spam — 300 (75.0%)',
-      'Your rules — 100 (25.0%)',
+      '<span>Spam</span>',
+      '300 (75.0%)',
+      '<span>Your rules</span>',
+      '100 (25.0%)',
       'Total hidden: 400',
       'Spring sale · #123456',
       'Spring sale · #000002 (archived)',
       '33.3%',
       'Hidden share = hidden comments ÷ all comments on the ad this week. Ads with fewer than 10 comments are not ranked.',
+      'Estimated time saved',
       '3 h 20 min',
       'Estimate based on about 30 seconds of manual review per hidden comment.',
-      'Shop — 12,000 processed, 390 hidden',
-      'Outlet (archived) — 345 processed, 10 hidden',
+      '<span>Shop</span>',
+      '12,000 processed, 390 hidden',
+      '<span>Outlet (archived)</span>',
+      '345 processed, 10 hidden',
     ])
       expect(html).toContain(s);
     for (const c of ['Ad', 'Platform', 'Hidden', 'Comments', 'Hidden share'])
@@ -81,7 +86,7 @@ describe('WeeklyReport', () => {
 
   it('nothing hidden hides categories and ads', () => {
     const html = render(stats({ hidden: 0, buckets: [], ads: [], brands: [], brandCount: 0 }));
-    expect(headings(html)).toEqual(['Comments processed', 'Estimated time saved']);
+    expect(headings(html)).toEqual([]);
     expect(html).toContain('0 min');
     expect(html).not.toContain('Total hidden');
     expect(html).not.toContain('<table');
@@ -104,7 +109,7 @@ describe('WeeklyReport', () => {
   });
 
   it('a capped brand list ends with how many brands are not shown', () => {
-    expect(render(stats({ brandCount: 4 }))).toContain('<li>+2 more brands</li>');
+    expect(render(stats({ brandCount: 4 }))).toContain('+2 more brands</li>');
     expect(render(stats())).not.toContain('more brands');
   });
 

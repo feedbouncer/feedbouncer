@@ -72,24 +72,32 @@ export function HiddenRow({
 
   const state = stateText(item);
   return (
-    <li>
-      <p>
-        <strong>{item.authorName ?? 'Unknown author'}</strong> · {platformLabel(item.platform)}{' '}
-        {item.connectionName} · {item.brandName} · <LocalTime iso={item.hiddenAt} />
+    <li className="flex flex-col gap-3 p-(--fb-card-pad)">
+      <p className="text-small text-dim">
+        <strong className="text-foreground">{item.authorName ?? 'Unknown author'}</strong> ·{' '}
+        {platformLabel(item.platform)} {item.connectionName} · {item.brandName} ·{' '}
+        <LocalTime iso={item.hiddenAt} />
       </p>
       <CommentBody body={item.commentBody} />
-      <p>{sourceText(item.source)}</p>
+      <p className="text-small text-dim">{sourceText(item.source)}</p>
       {reasonLines(item).map((line, i) => (
-        <p key={i}>{line}</p>
+        <p key={i} className="text-small text-dim">
+          {line}
+        </p>
       ))}
       {state ? (
         <p role="status">
-          <strong>{state.label}</strong>
+          <strong className="text-foreground">{state.label}</strong>
           {state.detail ? ` ${state.detail}` : ''}
         </p>
       ) : null}
       {item.canUnhide ? (
-        <button type="button" disabled={busy} onClick={() => void onClick()}>
+        <button
+          type="button"
+          className="btn-primary btn-sm self-start"
+          disabled={busy}
+          onClick={() => void onClick()}
+        >
           {busy ? 'Unhiding…' : 'Unhide'}
         </button>
       ) : null}
@@ -105,8 +113,8 @@ export function HiddenRow({
         </p>
       ) : null}
       <details>
-        <summary>History</summary>
-        <ul>
+        <summary className="cursor-pointer text-small font-medium">History</summary>
+        <ul className="flex flex-col gap-1 pt-2 text-small text-dim">
           {item.history.map((h, i) => (
             <li key={i}>
               <LocalTime iso={h.at} /> {h.kind === 'hide' ? 'Hidden' : 'Unhidden'}

@@ -55,20 +55,29 @@ export function PreviewRunner(props: {
   return (
     <section aria-label="Preview this policy">
       <h2>Preview</h2>
-      <p>Check the draft above against recent comments before enabling it.</p>
-      <label>
-        Look back{' '}
-        <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
-          {DAYS.map((d) => (
-            <option key={d} value={d}>
-              {plural(d, 'day')}
-            </option>
-          ))}
-        </select>
-      </label>{' '}
-      <button type="button" disabled={busy || running} onClick={() => void start()}>
-        Run preview
-      </button>
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-(--fb-card-pad)">
+        <p className="basis-full text-dim">
+          Check the draft above against recent comments before enabling it.
+        </p>
+        <label className="flex flex-col gap-(--fb-field-gap)">
+          Look back
+          <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
+            {DAYS.map((d) => (
+              <option key={d} value={d}>
+                {plural(d, 'day')}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="btn-primary btn-sm"
+          disabled={busy || running}
+          onClick={() => void start()}
+        >
+          Run preview
+        </button>
+      </div>
       {error ? <p role="alert">{error}</p> : null}
       <div aria-live="polite">{view ? <PolicyPreview view={view} /> : null}</div>
     </section>

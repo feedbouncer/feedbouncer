@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ReviewQueue } from '../../../../../../components/actions/review-queue';
 import { ReviewModeBanner } from '../../../../../../components/review-mode/review-mode-banner';
+import { PageHeader } from '../../../../../../components/ui/page-header';
 import {
   stepAvailability,
   type ActionCapabilitiesDto,
@@ -42,10 +42,9 @@ export default async function ReviewQueuePage({
     ),
     'action capabilities',
   );
-  const brand = `/orgs/${orgId}/brands/${brandId}`;
   return (
     <main>
-      <h1>Review queue</h1>
+      <PageHeader title="Review queue" />
       {review.connections.map((s) => (
         <ReviewModeBanner
           key={s.connectionId}
@@ -62,11 +61,6 @@ export default async function ReviewQueuePage({
         next={page.next}
         canBan={stepAvailability(caps).ban.available}
       />
-      <p>
-        <Link href={`${brand}/suggestions`}>{`Suggestions (${review.pendingTotal})`}</Link> ·{' '}
-        <Link href={`${brand}/actions`}>Action log</Link> ·{' '}
-        <Link href={`${brand}/rules`}>Back to rules</Link>
-      </p>
     </main>
   );
 }

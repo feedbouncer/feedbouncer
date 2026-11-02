@@ -49,6 +49,7 @@ export function TagPicker({
               {t.name}{' '}
               <button
                 type="button"
+                className="btn-ghost btn-sm"
                 aria-label={`Remove tag ${t.name}`}
                 disabled={busy}
                 onClick={() => onRemove(t.id)}
@@ -75,7 +76,12 @@ export function TagPicker({
               </option>
             ))}
           </select>{' '}
-          <button type="button" disabled={busy || !chosen} onClick={() => onAdd(chosen)}>
+          <button
+            type="button"
+            className="btn-sm"
+            disabled={busy || !chosen}
+            onClick={() => onAdd(chosen)}
+          >
             Add tag
           </button>{' '}
         </>
@@ -94,7 +100,7 @@ export function TagPicker({
             if (nameError) setNameError(tagNameError(e.target.value));
           }}
         />{' '}
-        <button type="submit" disabled={busy}>
+        <button type="submit" className="btn-sm" disabled={busy}>
           Create
         </button>
         {nameError ? (

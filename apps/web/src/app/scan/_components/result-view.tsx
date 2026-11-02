@@ -1,4 +1,5 @@
 import type { ScanFailure, ScanResultV1 } from '@feedbouncer/scan/contract';
+import { TableScroll } from '../../../components/states';
 import { CATEGORY_LABEL, NOTICE_COPY, TAG_LABEL, errorCopy } from './copy';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -18,8 +19,8 @@ export function ResultView({
   const hasShare = !result.empty && result.sharePct !== null;
   const ads = totals.adsCovered === 1 ? 'ad' : `${totals.adsCovered} ads`;
   return (
-    <>
-      <h1>{pageName}</h1>
+    <div className="flex flex-col gap-6">
+      <h1 className="min-w-0 break-words">{pageName}</h1>
       <h2>
         {hasShare
           ? `${pct(result.sharePct ?? 0)} of comments on your last ${ads} look like scam or spam`
@@ -35,7 +36,7 @@ export function ResultView({
         </p>
       ) : null}
       {result.notices.length > 0 ? (
-        <ul>
+        <ul className="ms-5 list-disc text-dim">
           {result.notices.map((n) => (
             <li key={n}>{NOTICE_COPY[n]}</li>
           ))}
@@ -54,7 +55,7 @@ export function ResultView({
       <p>
         <a href="/api/v1/scan/cta">FeedBouncer can hide comments like these automatically</a>
       </p>
-    </>
+    </div>
   );
 }
 
@@ -82,28 +83,30 @@ function Details({ result, mode }: { result: ScanResultV1; mode: 'owner' | 'shar
         hidden, not counted: {totals.hiddenExcluded}
       </p>
       <h3>By ad</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Ad</th>
-            <th>Platform</th>
-            <th>Comments</th>
-            <th>Scam or spam</th>
-            <th>Uncertain</th>
-          </tr>
-        </thead>
-        <tbody>
-          {result.perAd.map((a) => (
-            <tr key={a.ordinal}>
-              <td>{mode === 'shared' || !a.label ? `Ad ${a.ordinal}` : a.label}</td>
-              <td>{a.platform === 'instagram' ? 'Instagram' : 'Facebook'}</td>
-              <td>{a.scanned}</td>
-              <td>{a.scamSpam}</td>
-              <td>{a.uncertain}</td>
+      <TableScroll>
+        <table>
+          <thead>
+            <tr>
+              <th>Ad</th>
+              <th>Platform</th>
+              <th>Comments</th>
+              <th>Scam or spam</th>
+              <th>Uncertain</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {result.perAd.map((a) => (
+              <tr key={a.ordinal}>
+                <td>{mode === 'shared' || !a.label ? `Ad ${a.ordinal}` : a.label}</td>
+                <td>{a.platform === 'instagram' ? 'Instagram' : 'Facebook'}</td>
+                <td>{a.scanned}</td>
+                <td>{a.scamSpam}</td>
+                <td>{a.uncertain}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableScroll>
       {result.examples.length > 0 ? <h3>Examples</h3> : null}
       <ul>
         {result.examples.map((e, i) => (
@@ -116,7 +119,9 @@ function Details({ result, mode }: { result: ScanResultV1; mode: 'owner' | 'shar
               `On Ad ${e.adOrdinal}`
             )}
             {e.repeatCount > 1 ? ` (posted ×${e.repeatCount})` : null}
-            <blockquote>{e.text}</blockquote>
+            <blockquote className="my-2 border-s-2 border-border ps-3 text-dim">
+              {e.text}
+            </blockquote>
             <small>{e.reason}</small>
           </li>
         ))}

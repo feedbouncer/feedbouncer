@@ -37,7 +37,7 @@ export function RecipientAction({ kind, token }: { kind: RecipientKind; token: s
       {kind === 'unsubscribe' ? (
         <input type="hidden" name="List-Unsubscribe" value="One-Click" />
       ) : null}
-      <button type="submit" disabled={state === 'busy'}>
+      <button type="submit" className="btn-primary" disabled={state === 'busy'}>
         {copy.button}
       </button>
       {state === 'error' ? <p role="alert">Something went wrong. Try again.</p> : null}

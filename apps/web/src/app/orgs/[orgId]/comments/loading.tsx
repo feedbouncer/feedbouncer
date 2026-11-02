@@ -1,7 +1,9 @@
+import { LoadingPanel } from '../../../../components/states';
+
 export default function Loading() {
   return (
     <main>
-      <p role="status">Loading comments…</p>
+      <LoadingPanel label="Loading comments…" rows={6} />
     </main>
   );
 }

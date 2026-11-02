@@ -37,15 +37,29 @@ export function ConfirmResolve(props: {
 }) {
   const copy = CONFIRM_COPY[props.dialog.resolution];
   return (
-    <div role="dialog" aria-modal="true" aria-label={copy.title}>
-      <p>{copy.title}</p>
-      <p role="note">{REVERSIBILITY_LABEL[props.dialog.resolution]}</p>
-      <button type="button" disabled={props.busy} onClick={props.onConfirm}>
-        {copy.button}
-      </button>{' '}
-      <button type="button" onClick={props.onCancel}>
-        Cancel
-      </button>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={copy.title}
+      className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4"
+    >
+      <p className="font-semibold text-foreground">{copy.title}</p>
+      <p role="note" className="text-small text-dim">
+        {REVERSIBILITY_LABEL[props.dialog.resolution]}
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          className="btn-destructive btn-sm"
+          disabled={props.busy}
+          onClick={props.onConfirm}
+        >
+          {copy.button}
+        </button>
+        <button type="button" className="btn-sm" onClick={props.onCancel}>
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
@@ -91,25 +105,32 @@ export function ReviewQueue(props: {
   }
 
   const items = props.items.filter((i) => !resolved.has(i.id));
-  if (items.length === 0 && !props.next) return <p>Nothing to review.</p>;
+  if (items.length === 0 && !props.next) return <p data-state="empty">Nothing to review.</p>;
+  const buttonStyle: Record<Resolution, string> = {
+    approve: 'btn-sm',
+    hide: 'btn-sm',
+    delete: 'btn-destructive btn-sm',
+    ban: 'btn-destructive btn-sm',
+  };
   return (
-    <div>
+    <div className="flex flex-col gap-4">
       {error ? <p role="alert">{error}</p> : null}
-      <ul>
+      <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
         {items.map((i) => (
-          <li key={i.id}>
-            <p dir="auto" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+          <li key={i.id} className="flex flex-col gap-3 p-(--fb-card-pad)">
+            <p dir="auto" className="whitespace-pre-wrap">
               {i.commentBody || '(no text: sticker or attachment)'}
             </p>
-            <small>
+            <small className="text-dim">
               {i.authorName ? `${i.authorName} · ` : ''}
               {sourceText(i.source, i.ruleName)}
             </small>
-            <div>
+            <div className="flex flex-wrap gap-2">
               {BUTTONS.filter((b) => b.resolution !== 'ban' || props.canBan !== false).map((b) => (
                 <button
                   key={b.resolution}
                   type="button"
+                  className={buttonStyle[b.resolution]}
                   disabled={busy}
                   onClick={() => choose(i.id, b.resolution)}
                 >
@@ -129,13 +150,12 @@ export function ReviewQueue(props: {
         ))}
       </ul>
       {props.next ? (
-        <p>
-          <Link
-            href={`/orgs/${props.orgId}/brands/${props.brandId}/review?before=${encodeURIComponent(props.next)}`}
-          >
-            Load more
-          </Link>
-        </p>
+        <Link
+          href={`/orgs/${props.orgId}/brands/${props.brandId}/review?before=${encodeURIComponent(props.next)}`}
+          className="self-start text-small font-medium"
+        >
+          Load more
+        </Link>
       ) : null}
     </div>
   );
