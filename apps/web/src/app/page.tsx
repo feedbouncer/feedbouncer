@@ -1,6 +1,9 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { StandaloneShell } from '../components/shell/standalone-shell';
+import { buttonVariants } from '../components/ui/button';
 import { apiInternalUrl } from '../lib/api-url';
+import { serverGet, type Me } from '../lib/server-api';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,18 +24,30 @@ async function apiStatus(): Promise<ApiStatus> {
 }
 
 export default async function Home() {
-  const status = await apiStatus();
+  const [status, me] = await Promise.all([apiStatus(), serverGet<Me>('/api/v1/me')]);
+  if (me.status === 200 && me.data) redirect('/orgs');
+
   return (
     <StandaloneShell>
       <main>
-        <h1>FeedBouncer</h1>
-        <p>
-          Local development stack. API: <strong data-testid="api-status">{status}</strong>
+        <div className="flex flex-col gap-3">
+          <h1>FeedBouncer</h1>
+          <p className="text-dim max-w-prose">
+            Automatic comment moderation for your social accounts &mdash; review, hide and reply
+            without digging through every post yourself.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/sign-up" className={buttonVariants()}>
+            Sign up
+          </Link>
+          <Link href="/login" className={buttonVariants({ variant: 'secondary' })}>
+            Log in
+          </Link>
+        </div>
+        <p className="text-small text-faint">
+          API: <strong data-testid="api-status">{status}</strong>
         </p>
-        <nav>
-          <Link href="/login">Log in</Link> · <Link href="/sign-up">Sign up</Link> ·{' '}
-          <Link href="/orgs">My organizations</Link>
-        </nav>
       </main>
     </StandaloneShell>
   );
