@@ -61,7 +61,10 @@ try {
     redis,
     mailer,
     log,
-    redisKeyPrefix: 'fb:',
+    // Must share JOB_QUEUE_PREFIX with the worker's queues: a deployment's Redis ACL
+    // (ElastiCache RBAC) scopes key access to that one prefix, so any other value gets
+    // NOPERM on every keyed command the rate limiters issue.
+    redisKeyPrefix: `${env.jobs.prefix}:`,
     metrics,
     health: new PgHealthReader(pool, env.health),
     connectors: platforms?.connectors ?? null,
