@@ -26,7 +26,7 @@ const unauthenticated = () =>
   });
 
 /**
- * Authenticates the bearer key, requires an active organization, then rate limits it, then checks its scope.
+ * Authenticates the bearer key, rate limits it (suspended organizations included), then requires an active organization, then checks its scope.
  * Never reads cookies: the public API is a separate namespace from the dashboard.
  */
 @Injectable()
