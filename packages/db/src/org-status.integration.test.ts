@@ -20,14 +20,16 @@ describe('organization.status', () => {
   });
 
   it('rejects unknown statuses', async () => {
-    await expect(ctx.c.query(`UPDATE organization SET status = 'paused'`)).rejects.toMatchObject({
-      constraint: 'organization_status_check',
-    });
+    const t = await seedTenant(ctx.c, 'status-unknown');
+    await expect(
+      ctx.c.query(`UPDATE organization SET status = 'paused' WHERE id = $1`, [t.organizationId]),
+    ).rejects.toMatchObject({ constraint: 'organization_status_check' });
   });
 
   it('rejects null', async () => {
-    await expect(ctx.c.query('UPDATE organization SET status = NULL')).rejects.toMatchObject({
-      code: '23502',
-    });
+    const t = await seedTenant(ctx.c, 'status-null');
+    await expect(
+      ctx.c.query('UPDATE organization SET status = NULL WHERE id = $1', [t.organizationId]),
+    ).rejects.toMatchObject({ code: '23502' });
   });
 });

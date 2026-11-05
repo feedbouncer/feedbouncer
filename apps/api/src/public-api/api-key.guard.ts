@@ -52,6 +52,10 @@ export class ApiKeyGuard implements CanActivate {
       await this.limits.consumeAuthFailure(req.ip);
       throw unauthenticated();
     }
+    const { limit, remaining } = await this.limits.consumeKey(apiKey.apiKeyId);
+    const reply = http.getResponse<FastifyReply>();
+    void reply.header('x-ratelimit-limit', String(limit));
+    void reply.header('x-ratelimit-remaining', String(remaining));
     enforceOrgActive(this.deps.log, {
       organizationId: apiKey.organizationId,
       rawStatus: apiKey.organizationStatus,
@@ -59,10 +63,6 @@ export class ApiKeyGuard implements CanActivate {
       route: `${req.method} ${req.routeOptions.url ?? ''}`,
       apiKeyId: apiKey.apiKeyId,
     });
-    const { limit, remaining } = await this.limits.consumeKey(apiKey.apiKeyId);
-    const reply = http.getResponse<FastifyReply>();
-    void reply.header('x-ratelimit-limit', String(limit));
-    void reply.header('x-ratelimit-remaining', String(remaining));
     if (!scopeAllows(apiKey.scope, need)) throw new ApiError(403, 'insufficient_scope');
     req.apiKey = {
       organizationId: apiKey.organizationId,

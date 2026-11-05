@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   ApiKeyLimitError,
-  OrganizationSuspendedError,
   ApiKeyNameTakenError,
+  OrganizationSuspendedError,
   PgApiKeys,
   type ApiKeyScope,
 } from '@feedbouncer/public-api';
@@ -29,8 +29,9 @@ export class ApiKeysService {
       return { key: toApiKeyDto(key), token: token.reveal() };
     } catch (err) {
       if (err instanceof ApiKeyLimitError) throw new ApiError(409, 'api_key_limit_reached');
-      if (err instanceof OrganizationSuspendedError) throw new ApiError(403, 'organization_suspended');
       if (err instanceof ApiKeyNameTakenError) throw new ApiError(409, 'api_key_name_taken');
+      if (err instanceof OrganizationSuspendedError)
+        throw new ApiError(403, 'organization_suspended');
       throw err;
     }
   }
