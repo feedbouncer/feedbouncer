@@ -8,6 +8,7 @@ import { parseUuidOr404 } from '../http/validation.js';
 import { DEPS } from '../tokens.js';
 import { CAPABILITY } from './capability.decorator.js';
 import { findMembership } from './memberships.repo.js';
+import { enforceOrgActive } from './org-status.js';
 
 export interface OrgContext {
   organizationId: string;
@@ -40,6 +41,13 @@ export class OrgAccessGuard implements CanActivate {
     const organizationId = parseUuidOr404(params.orgId);
     const m = await findMembership(this.deps.pool, organizationId, req.user.id);
     if (!m) throw notFound();
+    enforceOrgActive(this.deps.log, {
+      organizationId,
+      rawStatus: m.organizationStatus,
+      via: 'session',
+      route: `${req.method} ${req.routeOptions.url ?? ''}`,
+      userId: req.user.id,
+    });
     req.org = { organizationId, actorUserId: req.user.id, role: m.role, grants: m.grants };
     if (!can(m.role, cap, m.grants)) {
       await this.onDenied(req.org, cap, `${req.method} ${req.routeOptions.url ?? ''}`);
