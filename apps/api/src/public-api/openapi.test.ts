@@ -185,6 +185,15 @@ describe('buildOpenApiDocument', () => {
     }
   });
 
+  it('every /v1 operation documents key_owner_inactive', () => {
+    expect(PUBLIC_ERROR_STATUS.key_owner_inactive).toBe(403);
+    for (const spec of PUBLIC_ROUTE_SPECS.filter((s) => s.path !== '/v1/openapi.json')) {
+      const op = real.paths[spec.path]![spec.method.toLowerCase()]!;
+      const forbidden = (op.responses as Record<string, { description: string }>)['403']!;
+      expect(forbidden.description).toContain('`key_owner_inactive`');
+    }
+  });
+
   it('gives every operation one curl sample that runs against $FEEDBOUNCER_URL', () => {
     for (const spec of PUBLIC_ROUTE_SPECS) {
       const op = real.paths[spec.path]![spec.method.toLowerCase()]!;

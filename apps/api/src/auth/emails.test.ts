@@ -62,4 +62,25 @@ describe('createAuthEmails', () => {
     expect(lines[0]).not.toContain('SECRET1');
     expect(lines[0]).not.toContain('b@x.test');
   });
+
+  it('accountSetup resolves once sent, and rejects and logs without the link when sending fails', async () => {
+    const mailer = new MemoryMailer();
+    await setup(mailer).emails.accountSetup('e@x.test', `${WEB}/reset-password?token=s1`);
+    const m = mailer.lastTo('e@x.test')!;
+    expect(m.subject).toBe('Set up your FeedBouncer account');
+    expect(m.text).toContain(`${WEB}/reset-password?token=s1`);
+
+    const { emails, lines } = setup({ send: () => Promise.reject(new Error('smtp down')) });
+    await expect(
+      emails.accountSetup('e@x.test', `${WEB}/reset-password?token=SECRET2`),
+    ).rejects.toThrow('smtp down');
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]!)).toMatchObject({
+      level: 'warn',
+      msg: 'email send failed',
+      kind: 'account_setup',
+    });
+    expect(lines[0]).not.toContain('SECRET2');
+    expect(lines[0]).not.toContain('e@x.test');
+  });
 });

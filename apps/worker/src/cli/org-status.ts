@@ -1,5 +1,11 @@
 import { parseArgs } from 'node:util';
-import { isOrgStatus, recordAuditEvent, withTransaction, type OrgStatus } from '@feedbouncer/db';
+import {
+  changeOrganizationStatus,
+  isOrgStatus,
+  SUSPENSION_REASONS,
+  withTransaction,
+  type OrgStatus,
+} from '@feedbouncer/db';
 import { UsageError } from '@feedbouncer/jobs';
 import type { OpsCommand } from './ops-context.js';
 
@@ -9,8 +15,6 @@ export const ORG_STATUS_USAGE = [
   'usage: pnpm ops org-status show <orgId>',
   '       pnpm ops org-status set <orgId> <active|suspended> --actor <userId> --reason <abuse|non_payment|customer_request|other>',
 ].join('\n');
-
-export const SUSPENSION_REASONS = ['abuse', 'non_payment', 'customer_request', 'other'] as const;
 
 type OrgStatusErrorCode = 'org_not_found' | 'actor_not_found';
 
@@ -77,33 +81,32 @@ export const orgStatusCommand: OpsCommand = async (argv, ctx) => {
     throw new UsageError('status must be active or suspended');
   const to: OrgStatus = statusArg;
   const actorUserId = uuid(actor, '--actor');
-  if (reason === undefined || !(SUSPENSION_REASONS as readonly string[]).includes(reason))
+  const suspensionReason = SUSPENSION_REASONS.find((r) => r === reason);
+  if (suspensionReason === undefined)
     throw new UsageError(`--reason must be one of: ${SUSPENSION_REASONS.join(', ')}`);
 
-  const from = await withTransaction(pool, async (c) => {
-    const org = await c.query<{ status: string }>(
-      'SELECT status FROM organization WHERE id = $1 FOR UPDATE',
-      [organizationId],
+  const change = await withTransaction(pool, async (c) => {
+    const found = await c.query<{ org: boolean; actor: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM organization WHERE id = $1) AS org,
+              EXISTS (SELECT 1 FROM app_user WHERE id = $2) AS actor`,
+      [organizationId, actorUserId],
     );
-    if (!org.rows[0]) throw new OrgStatusError('org_not_found');
-    const user = await c.query('SELECT 1 FROM app_user WHERE id = $1', [actorUserId]);
-    if (user.rowCount === 0) throw new OrgStatusError('actor_not_found');
-    const current = org.rows[0].status;
-    if (current === to) return undefined;
-    await c.query('UPDATE organization SET status = $2 WHERE id = $1', [organizationId, to]);
-    await recordAuditEvent(c, {
+    if (!found.rows[0]!.org) throw new OrgStatusError('org_not_found');
+    if (!found.rows[0]!.actor) throw new OrgStatusError('actor_not_found');
+    const result = await changeOrganizationStatus(c, {
       organizationId,
-      actorType: 'system',
+      to,
+      reason: suspensionReason,
+      via: 'ops_cli',
       actorUserId,
-      action: to === 'suspended' ? 'organization.suspended' : 'organization.reactivated',
-      subjectType: 'organization',
-      subjectId: organizationId,
-      details: { from: current, to, reason, via: 'ops_cli' },
     });
-    return current;
+    if (!result) throw new OrgStatusError('org_not_found');
+    return result;
   });
   ctx.out(
-    from === undefined ? `unchanged ${organizationId} ${to}` : `${organizationId} ${from} -> ${to}`,
+    change.changed
+      ? `${organizationId} ${change.from} -> ${to}`
+      : `unchanged ${organizationId} ${to}`,
   );
   return 0;
 };

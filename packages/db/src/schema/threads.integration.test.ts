@@ -139,6 +139,10 @@ describe('threads schema', () => {
     expect(await hasColumns()).toBe('3');
     expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({
       status: 'rolled_back',
+      migration: '20261106000100_provisioning',
+    });
+    expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({
+      status: 'rolled_back',
       migration: '20261105000100_organization_status',
     });
     expect(await rollbackLatest(c, DEFAULT_MIGRATIONS_DIR)).toEqual({

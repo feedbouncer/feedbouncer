@@ -29,6 +29,7 @@ const COMMON_ERRORS: readonly PublicErrorCode[] = [
   'unauthenticated',
   'insufficient_scope',
   'organization_suspended',
+  'key_owner_inactive',
   'rate_limited',
   'temporarily_unavailable',
   'internal_error',

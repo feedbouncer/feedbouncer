@@ -7,11 +7,12 @@ export interface UserRow {
   email: string;
   name: string | null;
   emailVerified: boolean;
+  status: unknown;
 }
 
 export async function findUserById(db: Queryable, id: string): Promise<UserRow | null> {
   const { rows } = await db.query<UserRow>(
-    'SELECT id, email, display_name AS name, email_verified AS "emailVerified" FROM app_user WHERE id = $1',
+    'SELECT id, email, display_name AS name, email_verified AS "emailVerified", status FROM app_user WHERE id = $1',
     [id],
   );
   return rows[0] ?? null;

@@ -43,6 +43,8 @@ function messageFor(e: ApiCallError): string {
       return `Rule rejected (${str(d.reason) ?? 'unknown reason'}): ${e.message}`;
     case 'organization_suspended':
       return 'This organization is suspended, so its API keys are disabled. Contact support to restore access.';
+    case 'key_owner_inactive':
+      return 'The user who created this API key is deactivated, so the key is disabled. Ask an administrator for a new key.';
     case 'unauthenticated':
       return 'The API key was rejected.';
     case 'already_deleted':

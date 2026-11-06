@@ -26,6 +26,10 @@ import { PublicModerationService } from './public-api/moderation.service.js';
 import { PublicWebhookEndpointsController } from './public-api/webhook-endpoints.controller.js';
 import { OpenApiController } from './public-api/openapi.controller.js';
 import { createPublicApiLimits } from './public-api/rate-limit.js';
+import { ProvisioningController } from './provisioning/provisioning.controller.js';
+import { ProvisioningGuard } from './provisioning/provisioning.guard.js';
+import { ProvisioningService } from './provisioning/provisioning.service.js';
+import { createProvisioningLimits } from './provisioning/rate-limit.js';
 import { SessionGuard } from './auth/session.guard.js';
 import { SignUpController } from './auth/sign-up.controller.js';
 import { ActionsController } from './actions/actions.controller.js';
@@ -112,6 +116,7 @@ import {
   MODERATION_CHECK_CLIENT,
   PRIVACY_QUEUE_CLIENT,
   PRIVACY_REQUESTS,
+  PROVISIONING_LIMITS,
   PUBLIC_API_LIMITS,
   RATE_LIMITS,
   SCAN_LIMITS,
@@ -180,6 +185,7 @@ export class AppModule {
         PublicRulesController,
         PublicWebhookEndpointsController,
         ScanController,
+        ProvisioningController,
       ],
       providers: [
         Reflector,
@@ -217,6 +223,8 @@ export class AppModule {
         ScanEnabledGuard,
         ScanOAuthService,
         ScanService,
+        ProvisioningGuard,
+        ProvisioningService,
         { provide: DEPS, useValue: deps },
         // Null when Facebook is not configured; the services answer 404 then.
         { provide: CONNECTOR_STACK, useValue: deps.connectors?.stack ?? null },
@@ -277,6 +285,11 @@ export class AppModule {
           inject: [DEPS],
           useFactory: (d: AppDeps) =>
             createPublicApiLimits(d.redis, d.redisKeyPrefix, d.env.publicApiRateLimitPerMinute),
+        },
+        {
+          provide: PROVISIONING_LIMITS,
+          inject: [DEPS],
+          useFactory: (d: AppDeps) => createProvisioningLimits(d.redis, d.redisKeyPrefix),
         },
         {
           // Started and stopped by Nest (onModuleInit / onModuleDestroy).

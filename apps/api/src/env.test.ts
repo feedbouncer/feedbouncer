@@ -597,6 +597,27 @@ describe('secrets configuration', () => {
     });
   });
 
+  describe('provisioning credential', () => {
+    const HEX = 'ab'.repeat(32);
+    it('is null by default and for blank values', () => {
+      expect(load(base).provisioning).toBeNull();
+      expect(load({ ...base, PROVISIONING_CREDENTIAL_SHA256: '  ' }).provisioning).toBeNull();
+    });
+    it('parses digests and summarizes without them', () => {
+      const env = load({ ...base, PROVISIONING_CREDENTIAL_SHA256: HEX });
+      expect(env.provisioning?.credentialDigests).toHaveLength(1);
+      const json = JSON.stringify(env);
+      expect(json).toContain('"provisioningEnabled":true');
+      expect(json).toContain('"provisioningCredentialCount":1');
+      expect(json).not.toContain(HEX);
+      expect(inspect(env)).not.toContain(HEX);
+    });
+    it('rejects a malformed value without echoing it', () => {
+      const msg = messageOf(() => load({ ...base, PROVISIONING_CREDENTIAL_SHA256: 'nothex' }));
+      expect(msg).not.toContain('nothex');
+    });
+  });
+
   describe('beta support email', () => {
     it('is null when unset and normalized when set', () => {
       expect(load(base).betaSupportEmail).toBeNull();

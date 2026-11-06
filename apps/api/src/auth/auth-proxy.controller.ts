@@ -7,6 +7,8 @@ import { CLIENT_IP_HEADER, runAccountDeletion, type Auth } from './auth.js';
 import { normalizeEmail } from './email.js';
 import { assertPassword } from './password-policy.js';
 import type { AuthRateLimits } from './rate-limit.js';
+import { findUserById } from './users.repo.js';
+import { denyInactiveUser } from './user-status.js';
 
 // Only these Better Auth endpoints are reachable, and each gets a rebuilt body
 // with only the fields we accept: nothing the client adds (callback URLs,
@@ -101,6 +103,17 @@ export class AuthProxyController {
       case 'delete-user': {
         const session = await this.auth.api.getSession({ headers: toHeaders(req) });
         if (!session) throw new ApiError(401, 'unauthenticated');
+        const user = await findUserById(this.deps.pool, session.user.id);
+        if (
+          !user ||
+          denyInactiveUser(this.deps.log, {
+            userId: user.id,
+            rawStatus: user.status,
+            via: 'session',
+          })
+        ) {
+          throw new ApiError(401, 'unauthenticated');
+        }
         email = session.user.email;
         const current = credential(kind === 'delete-user' ? input.password : input.currentPassword);
         if (kind === 'delete-user') {

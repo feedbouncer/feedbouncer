@@ -48,6 +48,8 @@ const IMMUTABLE_ROW_TABLES = [
   'scan_oauth_state',
   // Insert-only: one row per Pacific day, keeps paused_at.
   'youtube_quota_pause',
+  // Append-only trail of platform provisioning calls: one created_at, never edited.
+  'provisioning_audit_event',
 ];
 const GLOBAL_TABLES = [
   'organization',
@@ -69,6 +71,8 @@ const GLOBAL_TABLES = [
   // connection goes away, and the pause row is shared by every tenant.
   'youtube_quota_ledger',
   'youtube_quota_pause',
+  // Platform-level provisioning trail: targets may be unknown or deleted, so no tenant key.
+  'provisioning_audit_event',
 ];
 
 // Credential-like columns that are allowed on purpose. Each one holds a hash,
@@ -84,6 +88,8 @@ const ALLOWED_CREDENTIAL_COLUMNS: Record<string, string> = {
   'policy_evaluation.input_tokens': 'LLM token count, not a credential',
   'policy_evaluation.output_tokens': 'LLM token count, not a credential',
   'policy_evaluation.cache_read_tokens': 'LLM token count, not a credential',
+  'provisioning_audit_event.credential_fingerprint':
+    'First 12 hex chars of the SHA-256 digest of the provisioning credential; not usable to authenticate',
   'api_key.secret_sha256':
     'SHA-256 digest of a 256-bit random key secret; the plaintext is shown once at creation',
   'moderation_action.actor_api_key_id':

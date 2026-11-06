@@ -45,6 +45,17 @@ export function renderPasswordReset(url: string): Body {
   };
 }
 
+export function renderAccountSetup(url: string): Body {
+  const intro = 'An account was created for you. Choose a password to sign in:';
+  const expiry =
+    'This link expires in 1 hour; after that use "Forgot password" on the sign-in page.';
+  return {
+    subject: 'Set up your FeedBouncer account',
+    text: `${intro}\n\n${url}\n\n${expiry}\n`,
+    html: page('Set up your account', [intro, expiry], { label: 'Choose a password', url }),
+  };
+}
+
 export function renderAccountExists(loginUrl: string, resetUrl: string): Body {
   const intro =
     'Someone tried to create a FeedBouncer account with this email, but you already have one. Log in, or reset your password if you forgot it.';

@@ -299,6 +299,7 @@ describe('Better Auth on our schema', () => {
       email: 'c14@x.test',
       name: 'Ana',
       emailVerified: false,
+      status: 'active',
     });
     expect(await findUserIdByEmail(api.pool, 'nobody@x.test')).toBeNull();
     expect(await findUserById(api.pool, '00000000-0000-0000-0000-000000000000')).toBeNull();

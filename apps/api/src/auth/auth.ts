@@ -9,6 +9,7 @@ import { errorFields } from '@feedbouncer/service-runtime';
 import type { AppDeps } from '../deps.js';
 import type { AuthEmails } from './emails.js';
 import { withSessionTokenDigests } from './session-token-digest.js';
+import { denyInactiveUser } from './user-status.js';
 
 /** Thrown by AuthHooks.beforeDeleteUser to deny a deletion on purpose. */
 export class UserDeletionBlockedError extends Error {
@@ -89,10 +90,36 @@ const approvedSignUp = new AsyncLocalStorage<true>();
 /**
  * Marks the Better Auth calls made by fn as an approved account creation. While
  * sign-up is disabled, creating a user anywhere else is refused. Server-side
- * provisioning (for example an admin endpoint) must run inside this.
+ * account creation through Better Auth must run inside this. The provisioning
+ * API inserts users directly, not through Better Auth, so it is not subject to
+ * the sign-up toggle.
  */
 export const runApprovedSignUp = <T>(fn: () => Promise<T>): Promise<T> =>
   approvedSignUp.run(true, fn);
+
+const setupEmailSends = new AsyncLocalStorage<Promise<void>[]>();
+
+/**
+ * Runs fn, a Better Auth call that may send reset emails, and waits for the
+ * account setup emails it sent. Returns how many were sent; rejects when one
+ * failed. Better Auth swallows errors of its email callbacks, so this is the
+ * only way to see a failure. Elsewhere setup emails are fire-and-forget, so a
+ * public request's outcome and timing never depend on the mailer.
+ */
+export async function deliverSetupEmails(fn: () => Promise<unknown>): Promise<number> {
+  const sends: Promise<void>[] = [];
+  await setupEmailSends.run(sends, fn);
+  await Promise.all(sends);
+  return sends.length;
+}
+
+const hasPassword = async (pool: pg.Pool, userId: string): Promise<boolean> =>
+  (
+    await pool.query(
+      "SELECT 1 FROM auth_account WHERE user_id = $1 AND provider_id = 'credential'",
+      [userId],
+    )
+  ).rowCount !== 0;
 
 /**
  * Backstop for beforeDeleteUser: if the last-owner trigger refuses the user
@@ -177,6 +204,28 @@ export function createAuth(deps: AppDeps, emails: AuthEmails, hooks: AuthHooks) 
           },
         },
       },
+      session: {
+        create: {
+          before: async (session) => {
+            const { rows } = await deps.pool.query<{ status: unknown }>(
+              'SELECT status FROM app_user WHERE id = $1',
+              [session.userId],
+            );
+            const row = rows[0];
+            if (
+              !row ||
+              denyInactiveUser(deps.log, {
+                userId: session.userId,
+                rawStatus: row.status,
+                via: 'sign_in',
+              })
+            ) {
+              throw new APIError('FORBIDDEN', { message: 'account_inactive' });
+            }
+            return { data: session };
+          },
+        },
+      },
     },
     user: {
       modelName: 'app_user',
@@ -237,11 +286,14 @@ export function createAuth(deps: AppDeps, emails: AuthEmails, hooks: AuthHooks) 
       // Better Auth's own `url` is its GET /api/auth/reset-password/<token>
       // redirect endpoint, which the proxy does not expose. Link straight to
       // the web page that posts the token to POST /api/auth/reset-password.
-      sendResetPassword: async ({ user, token }) =>
-        emails.passwordReset(
-          user.email,
-          `${web}/reset-password?${new URLSearchParams({ token }).toString()}`,
-        ),
+      // A user without a password (provisioned, never set up) gets the setup email.
+      sendResetPassword: async ({ user, token }) => {
+        const url = `${web}/reset-password?${new URLSearchParams({ token }).toString()}`;
+        if (await hasPassword(deps.pool, user.id)) return emails.passwordReset(user.email, url);
+        const sent = emails.accountSetup(user.email, url);
+        sent.catch(() => {}); // logged by accountSetup
+        setupEmailSends.getStore()?.push(sent);
+      },
     },
     emailVerification: {
       sendOnSignUp: true,

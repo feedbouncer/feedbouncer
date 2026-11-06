@@ -4,6 +4,7 @@ import type { AppDeps } from '../deps.js';
 import { ApiError } from '../http/errors.js';
 import { AUTH, DEPS } from '../tokens.js';
 import type { Auth } from './auth.js';
+import { denyInactiveUser } from './user-status.js';
 import { findUserById, type UserRow } from './users.repo.js';
 
 export type AuthedUser = UserRow;
@@ -24,9 +25,14 @@ export class SessionGuard implements CanActivate {
     if (!cookie) throw new ApiError(401, 'unauthenticated');
     const session = await this.auth.api.getSession({ headers: new Headers({ cookie }) });
     if (!session) throw new ApiError(401, 'unauthenticated');
-    // Re-read the user row: email_verified may have changed since the session was issued.
+    // Re-read the user row: email_verified and status may have changed since the session was issued.
     const user = await findUserById(this.deps.pool, session.user.id);
     if (!user) throw new ApiError(401, 'unauthenticated');
+    if (
+      denyInactiveUser(this.deps.log, { userId: user.id, rawStatus: user.status, via: 'session' })
+    ) {
+      throw new ApiError(401, 'unauthenticated');
+    }
     req.user = user;
     return true;
   }

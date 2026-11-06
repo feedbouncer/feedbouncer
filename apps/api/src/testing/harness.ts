@@ -21,10 +21,17 @@ import {
   loadTelemetryConfig,
 } from '@feedbouncer/observability';
 import { Secret, createLogger } from '@feedbouncer/service-runtime';
+import { generateProvisioningCredential } from '../provisioning/credential.js';
 import { buildApp } from '../app.factory.js';
 import type { AppDeps } from '../deps.js';
 import type { ApiEnv } from '../env.js';
 import { buildConnectorDeps, type ConnectorDeps } from '../connector-deps.js';
+
+/** A freshly generated platform provisioning credential, for tests. */
+export function provisioningCredential(): { token: string; digestHex: string } {
+  const { token, digestHex } = generateProvisioningCredential();
+  return { token: token.reveal(), digestHex };
+}
 
 export const WEB = 'http://localhost:3000';
 
@@ -117,6 +124,7 @@ export async function startTestApi(
     mailFrom: 'FeedBouncer <no-reply@localhost>',
     signupAllowlist: null,
     signupEnabled: true,
+    provisioning: null,
     betaSupportEmail: null,
     trustProxyHops: 0,
     encryption: testKeyring(),

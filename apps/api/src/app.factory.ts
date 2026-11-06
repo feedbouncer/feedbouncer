@@ -38,12 +38,14 @@ export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
   fastify.removeContentTypeParser('text/plain');
   registerStrictJsonParser(fastify);
 
-  // The /v1 routes authenticate by bearer key and never read cookies, so the
-  // browser Origin check does not apply. Marked here, before Nest registers any
-  // route, so a new controller cannot forget it.
+  // The /v1 routes (bearer key) and the /provisioning/v1 routes (bearer service
+  // credential) never read cookies, so the browser Origin check does not apply.
+  // Marked here, before Nest registers any route, so a new controller cannot forget it.
   fastify.addHook('onRoute', (opts) => {
-    if (!opts.url.startsWith('/v1/')) return;
-    opts.config = { ...opts.config, publicApi: true };
+    if (opts.url.startsWith('/v1/')) opts.config = { ...opts.config, publicApi: true };
+    if (opts.url.startsWith('/provisioning/v1/')) {
+      opts.config = { ...opts.config, provisioningApi: true };
+    }
   });
 
   const webOrigin = deps.env.publicWebUrl.origin;
@@ -52,10 +54,16 @@ export async function buildApp(deps: AppDeps): Promise<NestFastifyApplication> {
     // "/api"), so matching the raw URL would be bypassable. Safe methods pass.
     // Routing runs before onRequest, so routeOptions.config is the matched
     // route's own. Only signature-verified webhook routes, the token-authenticated
-    // alert recipient and report unsubscribe routes and the bearer-key /v1 routes
-    // opt out of the check.
+    // alert recipient and report unsubscribe routes, the bearer-key /v1 routes and
+    // the bearer-credential /provisioning/v1 routes opt out of the check.
     const config = req.routeOptions.config;
-    if (config?.publicWebhook === true || config?.publicApi === true) return;
+    if (
+      config?.publicWebhook === true ||
+      config?.publicApi === true ||
+      config?.provisioningApi === true
+    ) {
+      return;
+    }
     if (!isTrustedOrigin(req.method, req.headers, webOrigin)) {
       const e = new ApiError(403, 'invalid_origin');
       return reply.status(e.status).header('cache-control', 'no-store').send(errorBody(e));

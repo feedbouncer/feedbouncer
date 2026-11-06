@@ -31,6 +31,8 @@ Public sign-up is on by default. To turn it off, set `SIGNUP_ENABLED` on the API
 With sign-up off and no accounts, nobody can get in. Either create the first account through your own provisioning system, or start with sign-up on, create the admin account, then set `SIGNUP_ENABLED=false` and restart.
 :::
 
+Accounts can also be created by another system you run, through the [provisioning API](./provisioning-api.md). It is off until you set a credential, and it works with `SIGNUP_ENABLED=false`.
+
 ## Your public address
 
 Set `PUBLIC_WEB_URL` to the public origin of your instance. The API is reachable at that origin under `/v1`. In the API and MCP examples in these docs, `FEEDBOUNCER_URL` is your `PUBLIC_WEB_URL` origin, for example `https://feedbouncer.example.com`.

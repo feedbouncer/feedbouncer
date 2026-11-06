@@ -21,7 +21,8 @@
     "typecheck": "tsc --noEmit --tsBuildInfoFile node_modules/.cache/typecheck.tsbuildinfo",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "openapi:write": "tsx scripts/write-openapi.ts"
+    "openapi:write": "tsx scripts/write-openapi.ts",
+    "provisioning:credential": "tsx scripts/provisioning-credential.ts"
   },
   "dependencies": {
     "@feedbouncer/actions": "workspace:*",

@@ -30,3 +30,5 @@ export const SCAN_STORE = Symbol('SCAN_STORE');
 export const SCAN_LIMITS = Symbol('SCAN_LIMITS');
 /** Puts scan ids on the queue the worker's scan consumer reads. */
 export const SCAN_QUEUE_CLIENT = Symbol('SCAN_QUEUE_CLIENT');
+/** The provisioning API's per-address failed-authentication limit. */
+export const PROVISIONING_LIMITS = Symbol('PROVISIONING_LIMITS');
