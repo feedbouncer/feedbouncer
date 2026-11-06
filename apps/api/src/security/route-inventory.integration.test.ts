@@ -13,6 +13,7 @@ import {
   SCAN_ROUTES,
   TOKEN_CASES,
 } from './isolation-cases.js';
+import { PROVISIONING_ROUTES } from './provisioning-cases.js';
 
 const FACEBOOK = {
   appId: '1112223334',
@@ -96,16 +97,19 @@ describe('route inventory', () => {
       });
       if (r.body?.error?.code !== 'invalid_origin') exempt.push(route);
     }
-    // The /v1 routes authenticate by bearer key and never read cookies, so they
-    // skip the check too; they are pinned separately to the registered /v1 routes.
-    expect(exempt.filter((r) => !r.includes(' /v1/')).sort()).toEqual(
+    // The /v1 and /provisioning/v1 routes authenticate by bearer credential and never
+    // read cookies, so they skip the check too; each is pinned to its registered routes.
+    const bearer = (r: string) => r.includes(' /v1/') || r.includes(' /provisioning/v1/');
+    expect(exempt.filter((r) => !bearer(r)).sort()).toEqual(
       PUBLIC_ROUTES.filter((r) => r.startsWith('POST ') && !SCAN_ROUTES.includes(r)).sort(),
     );
-    expect(exempt.filter((r) => r.includes(' /v1/')).sort()).toEqual(
-      registered()
-        .filter((r) => r.includes(' /v1/') && !r.startsWith('GET '))
-        .sort(),
-    );
+    for (const prefix of [' /v1/', ' /provisioning/v1/']) {
+      expect(exempt.filter((r) => r.includes(prefix)).sort()).toEqual(
+        registered()
+          .filter((r) => r.includes(prefix) && !r.startsWith('GET '))
+          .sort(),
+      );
+    }
   });
 
   it('every invitation token route has a cross-organization case', () => {
@@ -131,11 +135,20 @@ describe('route inventory', () => {
     expect(Object.keys(ROUTES).sort()).toEqual([...PROXY_ROUTES].sort());
   });
 
-  it('nothing is registered outside /api/v1 and /v1 except health and the catch-all that serves the proxy', () => {
+  it('nothing is registered outside /api/v1, /v1 and /provisioning/v1 except health and the catch-all that serves the proxy', () => {
     const other = registered().filter(
-      (r) => !r.includes(' /api/v1/') && !r.includes(' /v1/') && !r.endsWith(' *'),
+      (r) =>
+        !r.includes(' /api/v1/') &&
+        !r.includes(' /v1/') &&
+        !r.includes(' /provisioning/v1/') &&
+        !r.endsWith(' *'),
     );
     expect(other.sort()).toEqual(['GET /healthz', 'GET /livez']);
+  });
+
+  it('the /provisioning/v1 routes are exactly the provisioning route list', () => {
+    const provisioning = registered().filter((r) => r.includes(' /provisioning/v1/'));
+    expect(provisioning.sort()).toEqual([...PROVISIONING_ROUTES].sort());
   });
 
   it('other Better Auth endpoints are not reachable through the proxy', async () => {

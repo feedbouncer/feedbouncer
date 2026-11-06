@@ -18,6 +18,8 @@ declare module 'fastify' {
     publicWebhook?: boolean;
     /** Marks a /v1 route, which authenticates by API key and so skips the Origin check. */
     publicApi?: boolean;
+    /** Marks a /provisioning/v1 route, which authenticates by service credential and so skips the Origin check. */
+    provisioningApi?: boolean;
   }
 }
 

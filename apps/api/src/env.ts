@@ -139,9 +139,9 @@ export interface ApiEnv {
   readonly scan: ScanSettings;
   readonly telemetry: TelemetryConfig;
   readonly health: HealthPolicy;
-  /** Which alert channels this deployment offers and the per-workspace hourly alert cap. */
   /** Null unless PROVISIONING_CREDENTIAL_SHA256 is set; then the provisioning API is enabled. */
   readonly provisioning: { readonly credentialDigests: readonly Buffer[] } | null;
+  /** Which alert channels this deployment offers and the per-workspace hourly alert cap. */
   readonly alerts: {
     readonly slack: boolean;
     readonly email: boolean;
