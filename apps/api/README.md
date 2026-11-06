@@ -53,18 +53,19 @@ All bodies are JSON. State-changing requests must carry the web origin (`Origin`
 
 ### Account (no session unless noted)
 
-| Method and path                          | Notes                                                                                                                                                                          |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `POST /api/v1/auth/sign-up`              | `{ email, password, name }` -> `202`. Same response for new and existing addresses.                                                                                            |
-| `POST /api/auth/sign-in/email`           | `{ email, password }` -> `200 { status: "ok" }` and a session cookie                                                                                                           |
-| `POST /api/auth/sign-out`                | `200`                                                                                                                                                                          |
-| `GET /api/auth/verify-email?token=`      | Redirects to `/verified` (or `/verified?error=invalid_token`)                                                                                                                  |
-| `POST /api/auth/send-verification-email` | `{ email }` -> always `200`                                                                                                                                                    |
-| `POST /api/auth/request-password-reset`  | `{ email }` -> always `200`                                                                                                                                                    |
-| `POST /api/auth/reset-password`          | `{ token, newPassword }`; revokes all sessions                                                                                                                                 |
-| `POST /api/auth/change-password`         | session; `{ currentPassword, newPassword }`; revokes other sessions                                                                                                            |
-| `POST /api/auth/delete-user`             | session; `{ password }`; `409 sole_owner` if the user is the only owner of an organization; `503 temporarily_unavailable` on a database lock conflict (nothing deleted, retry) |
-| `GET /api/v1/me`                         | session; `{ user, memberships }`                                                                                                                                               |
+| Method and path                          | Notes                                                                                                                                                                                                                      |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/auth/sign-up`               | `{ enabled }`: whether `SIGNUP_ENABLED` allows sign-up. Public, `no-store`.                                                                                                                                                |
+| `POST /api/v1/auth/sign-up`              | `{ email, password, name, invitationToken? }` -> `202`. Same response for new and existing addresses. `403 signup_disabled` when `SIGNUP_ENABLED` is off, unless `invitationToken` is a pending invitation for that email. |
+| `POST /api/auth/sign-in/email`           | `{ email, password }` -> `200 { status: "ok" }` and a session cookie                                                                                                                                                       |
+| `POST /api/auth/sign-out`                | `200`                                                                                                                                                                                                                      |
+| `GET /api/auth/verify-email?token=`      | Redirects to `/verified` (or `/verified?error=invalid_token`)                                                                                                                                                              |
+| `POST /api/auth/send-verification-email` | `{ email }` -> always `200`                                                                                                                                                                                                |
+| `POST /api/auth/request-password-reset`  | `{ email }` -> always `200`                                                                                                                                                                                                |
+| `POST /api/auth/reset-password`          | `{ token, newPassword }`; revokes all sessions                                                                                                                                                                             |
+| `POST /api/auth/change-password`         | session; `{ currentPassword, newPassword }`; revokes other sessions                                                                                                                                                        |
+| `POST /api/auth/delete-user`             | session; `{ password }`; `409 sole_owner` if the user is the only owner of an organization; `503 temporarily_unavailable` on a database lock conflict (nothing deleted, retry)                                             |
+| `GET /api/v1/me`                         | session; `{ user, memberships }`                                                                                                                                                                                           |
 
 Only these `/api/auth/*` paths are reachable; everything else under it is `404`.
 
