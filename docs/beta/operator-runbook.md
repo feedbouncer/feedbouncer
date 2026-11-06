@@ -4,13 +4,14 @@ For the Beta operator. Partners read [the partner guide](partner-guide.md).
 
 ## Configuration
 
-| Variable                      | Meaning                                                                                                                                          |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SIGNUP_ALLOWED_EMAILS`       | Comma-separated emails (at most 200) allowed to sign up. Unset or empty and anyone can. Others get a private beta email.                         |
-| `SIGNUP_ENABLED`              | Unset or true: open sign-up (default). false/0/no/off: no public sign-up; invitation links still work; `SIGNUP_ALLOWED_EMAILS` is ignored.       |
-| `BETA_SUPPORT_EMAIL`          | The contact address shown in that email and in the in-app beta notice.                                                                           |
-| `BETA_FEEDBACK_URL`           | An https link to your feedback form. With the support email it shows the beta notice in the web app.                                             |
-| `INSTAGRAM_CONNECTOR_ENABLED` | `true` turns on the Instagram connector. Set it on the API and the worker. See [instagram.md](../connectors/instagram.md#environment-variables). |
+| Variable                         | Meaning                                                                                                                                                                |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SIGNUP_ALLOWED_EMAILS`          | Comma-separated emails (at most 200) allowed to sign up. Unset or empty and anyone can. Others get a private beta email.                                               |
+| `SIGNUP_ENABLED`                 | Unset or true: open sign-up (default). false/0/no/off: no public sign-up; invitation links still work; `SIGNUP_ALLOWED_EMAILS` is ignored.                             |
+| `PROVISIONING_CREDENTIAL_SHA256` | SHA-256 digest (two while rotating) of the platform provisioning credential. Unset: the provisioning API is off. See [provisioning.md](../operations/provisioning.md). |
+| `BETA_SUPPORT_EMAIL`             | The contact address shown in that email and in the in-app beta notice.                                                                                                 |
+| `BETA_FEEDBACK_URL`              | An https link to your feedback form. With the support email it shows the beta notice in the web app.                                                                   |
+| `INSTAGRAM_CONNECTOR_ENABLED`    | `true` turns on the Instagram connector. Set it on the API and the worker. See [instagram.md](../connectors/instagram.md#environment-variables).                       |
 
 ## Invite flow
 

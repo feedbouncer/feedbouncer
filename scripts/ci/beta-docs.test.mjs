@@ -167,6 +167,7 @@ test('runbook covers invites, daily status, the DLQ and offboarding', () => {
   for (const needle of [
     'SIGNUP_ALLOWED_EMAILS',
     'SIGNUP_ENABLED',
+    'PROVISIONING_CREDENTIAL_SHA256',
     'Tester',
     'pnpm ops beta-status',
     'exit code 2',
