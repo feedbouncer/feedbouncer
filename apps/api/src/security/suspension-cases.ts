@@ -18,6 +18,7 @@ export type SuspensionDisposition =
 
 export const ACCOUNT_ROUTE_SUSPENSION: Readonly<Record<string, SuspensionDisposition>> = {
   'POST /api/v1/auth/sign-up': 'unaffected',
+  'GET /api/v1/auth/sign-up': 'unaffected',
   'POST /api/v1/orgs': 'unaffected',
   'GET /api/v1/me': 'lists_status',
   'GET /api/v1/orgs': 'lists_status',

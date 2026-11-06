@@ -116,6 +116,7 @@ export async function startTestApi(
     smtpUrl: new URL('smtp://127.0.0.1:1'),
     mailFrom: 'FeedBouncer <no-reply@localhost>',
     signupAllowlist: null,
+    signupEnabled: true,
     betaSupportEmail: null,
     trustProxyHops: 0,
     encryption: testKeyring(),

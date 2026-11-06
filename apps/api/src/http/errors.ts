@@ -31,6 +31,7 @@ export type ErrorCode =
   | 'brand_archived'
   | 'invitation_email_mismatch'
   | 'invitation_not_pending'
+  | 'signup_disabled'
   | 'rate_limited'
   | 'temporarily_unavailable'
   | 'platform_not_configured'
@@ -130,6 +131,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   brand_archived: 'Archived brands cannot be changed.',
   invitation_email_mismatch: 'This invitation was sent to a different email address.',
   invitation_not_pending: 'This invitation is no longer pending.',
+  signup_disabled: 'Sign-up is disabled on this deployment.',
   rate_limited: 'Too many attempts. Try again later.',
   temporarily_unavailable: 'Temporarily unavailable. Try again shortly.',
   platform_not_configured: 'This platform is not available.',

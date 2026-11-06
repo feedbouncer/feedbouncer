@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ApiForm } from '../../../components/api-form';
 import { safeNextPath } from '../../../lib/safe-next';
+import { invitationTokenFromNext, loadSignupEnabled } from '../../../lib/signup';
 
 export default async function LoginPage({
   searchParams,
@@ -8,6 +9,9 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string | string[] }>;
 }) {
   const { next } = await searchParams;
+  const nextPath = safeNextPath(typeof next === 'string' ? next : null);
+  const signupEnabled = await loadSignupEnabled();
+  const invitationToken = signupEnabled ? null : invitationTokenFromNext(nextPath);
   return (
     <main>
       <h1>Log in</h1>
@@ -23,13 +27,18 @@ export default async function LoginPage({
           },
         ]}
         submitLabel="Log in"
-        redirectTo={safeNextPath(typeof next === 'string' ? next : null)}
+        redirectTo={nextPath}
         variant="primary"
         fullWidthSubmit
       />
       <div className="flex flex-col gap-2 text-small">
         <Link href="/forgot-password">Forgot your password?</Link>
-        <Link href="/sign-up">Create an account</Link>
+        {signupEnabled && <Link href="/sign-up">Create an account</Link>}
+        {invitationToken && (
+          <Link href={{ pathname: '/sign-up', query: { invitation: invitationToken } }}>
+            Create an account to accept your invitation
+          </Link>
+        )}
       </div>
     </main>
   );

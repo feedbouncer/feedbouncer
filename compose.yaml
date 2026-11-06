@@ -203,6 +203,7 @@ services:
       SMTP_URL: smtp://mailpit:1025
       # The web app's server-side proxy is one hop in front of the API.
       TRUST_PROXY_HOPS: '1'
+      SIGNUP_ENABLED: ${SIGNUP_ENABLED:-}
       PUBLIC_API_RATE_LIMIT_PER_MINUTE: ${PUBLIC_API_RATE_LIMIT_PER_MINUTE:-}
       RULE_PROPOSAL_TTL_HOURS: ${RULE_PROPOSAL_TTL_HOURS:-}
       MODERATION_CHECK_TIMEOUT_MS: ${MODERATION_CHECK_TIMEOUT_MS:-}

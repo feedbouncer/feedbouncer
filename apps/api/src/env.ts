@@ -57,6 +57,7 @@ import {
 } from '@feedbouncer/observability';
 import { parseScanEnv, type ScanSettings } from '@feedbouncer/scan';
 import { ENCRYPTION_FILE_VARS, loadEncryptionKeyring, type Keyring } from '@feedbouncer/secrets';
+import { parseSignupEnabled } from './auth/signup-enabled.js';
 
 export const SMTP_PROTOCOLS = ['smtp:', 'smtps:'] as const;
 export const HTTP_PROTOCOLS = ['http:', 'https:'] as const;
@@ -88,6 +89,8 @@ export interface ApiEnv {
   readonly mailFrom: string;
   /** Null when SIGNUP_ALLOWED_EMAILS is unset: anyone may sign up. Otherwise the normalized addresses allowed to (invited emails always may). */
   readonly signupAllowlist: ReadonlySet<string> | null;
+  /** True unless SIGNUP_ENABLED is a false value. When false, public sign-up is refused (invitation tokens excepted). */
+  readonly signupEnabled: boolean;
   /** Contact address shown in the "private beta" email; null when BETA_SUPPORT_EMAIL is unset. */
   readonly betaSupportEmail: string | null;
   /** Reverse-proxy hops to trust for the client IP (Fastify trustProxy). */
@@ -203,6 +206,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
       pattern: /^[^\r\n]+$/,
     }),
     signupAllowlist: parseEmailList(env.SIGNUP_ALLOWED_EMAILS, 'SIGNUP_ALLOWED_EMAILS'),
+    signupEnabled: parseSignupEnabled(env.SIGNUP_ENABLED, opts.warn),
     betaSupportEmail: env.BETA_SUPPORT_EMAIL?.trim()
       ? parseEmail(env.BETA_SUPPORT_EMAIL, 'BETA_SUPPORT_EMAIL')
       : null,
@@ -253,6 +257,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     logLevel: config.logLevel,
     publicWebUrl: publicWebUrl.origin,
     trustProxyHops: config.trustProxyHops,
+    signupEnabled: config.signupEnabled,
     facebookEnabled: config.facebook !== null,
     instagramEnabled: config.instagram !== null,
     metaAdsEnabled: config.metaAds !== null,

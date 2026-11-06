@@ -84,6 +84,16 @@ const deletingAccount = new AsyncLocalStorage<true>();
 export const runAccountDeletion = <T>(fn: () => Promise<T>): Promise<T> =>
   deletingAccount.run(true, fn);
 
+const approvedSignUp = new AsyncLocalStorage<true>();
+
+/**
+ * Marks the Better Auth calls made by fn as an approved account creation. While
+ * sign-up is disabled, creating a user anywhere else is refused. Server-side
+ * provisioning (for example an admin endpoint) must run inside this.
+ */
+export const runApprovedSignUp = <T>(fn: () => Promise<T>): Promise<T> =>
+  approvedSignUp.run(true, fn);
+
 /**
  * Backstop for beforeDeleteUser: if the last-owner trigger refuses the user
  * delete at commit (a co-owner left after the hook ran), report the same denial
@@ -154,6 +164,19 @@ export function createAuth(deps: AppDeps, emails: AuthEmails, hooks: AuthHooks) 
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
       cookiePrefix: 'fb',
       useSecureCookies: deps.env.publicWebUrl.protocol === 'https:',
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user) => {
+            if (!deps.env.signupEnabled && !approvedSignUp.getStore()) {
+              deps.log.warn('auth.signup_blocked_by_backstop', {});
+              throw new APIError('FORBIDDEN', { message: 'signup_disabled' });
+            }
+            return { data: user };
+          },
+        },
+      },
     },
     user: {
       modelName: 'app_user',

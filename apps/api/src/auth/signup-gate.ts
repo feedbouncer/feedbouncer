@@ -17,3 +17,18 @@ export async function isSignupAllowed(
   );
   return rowCount === 1;
 }
+
+/** Whether this token belongs to a pending, unexpired invitation sent to this normalized address. */
+export async function hasPendingInvitationFor(
+  pool: pg.Pool,
+  tokenHash: Buffer,
+  email: string,
+): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `SELECT 1 FROM invitation
+      WHERE token_hash = $1 AND lower(email) = $2 AND status = 'pending' AND expires_at > now()
+      LIMIT 1`,
+    [tokenHash, email],
+  );
+  return rowCount === 1;
+}
