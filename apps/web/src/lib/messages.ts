@@ -24,6 +24,8 @@ const MESSAGES: Record<string, string> = {
   brand_archived: 'Archived brands cannot be changed.',
   invitation_email_mismatch: 'This invitation was sent to a different email address.',
   invitation_not_pending: 'This invitation is no longer pending.',
+  signup_disabled:
+    'Sign-up is turned off for this FeedBouncer instance. Ask your administrator for an account.',
   rate_limited: 'Too many attempts. Try again later.',
   alerts_unavailable: "Alerts aren't set up on this server.",
   invalid_webhook_url: 'Enter a Slack incoming webhook URL (https://hooks.slack.com/services/...).',

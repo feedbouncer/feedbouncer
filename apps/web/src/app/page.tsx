@@ -4,6 +4,7 @@ import { StandaloneShell } from '../components/shell/standalone-shell';
 import { buttonVariants } from '../components/ui/button';
 import { apiInternalUrl } from '../lib/api-url';
 import { serverGet, type Me } from '../lib/server-api';
+import { loadSignupEnabled } from '../lib/signup';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,11 @@ async function apiStatus(): Promise<ApiStatus> {
 }
 
 export default async function Home() {
-  const [status, me] = await Promise.all([apiStatus(), serverGet<Me>('/api/v1/me')]);
+  const [status, me, signupEnabled] = await Promise.all([
+    apiStatus(),
+    serverGet<Me>('/api/v1/me'),
+    loadSignupEnabled(),
+  ]);
   if (me.status === 200 && me.data) redirect('/orgs');
 
   return (
@@ -38,9 +43,11 @@ export default async function Home() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Link href="/sign-up" className={buttonVariants()}>
-            Sign up
-          </Link>
+          {signupEnabled && (
+            <Link href="/sign-up" className={buttonVariants()}>
+              Sign up
+            </Link>
+          )}
           <Link href="/login" className={buttonVariants({ variant: 'secondary' })}>
             Log in
           </Link>
