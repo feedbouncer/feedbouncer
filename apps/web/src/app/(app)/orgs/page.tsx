@@ -12,11 +12,14 @@ export default async function OrgsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const me = await requireMe('/orgs');
-  const { error } = await searchParams;
+  const { error, notice } = await searchParams;
   return (
     <main>
       <PageHeader title="My organizations" />
       {error === 'oauth_rejected' ? <p role="alert">{messageFor('oauth_rejected')}</p> : null}
+      {notice === 'organization_suspended' ? (
+        <p role="alert">{messageFor('organization_suspended')}</p>
+      ) : null}
       {!me.user.emailVerified ? (
         <Card className="border-coral/40">
           <CardContent className="flex flex-col gap-3">
@@ -42,22 +45,38 @@ export default async function OrgsPage({
       ) : null}
       {me.memberships.length > 0 ? (
         <ListPanel>
-          {me.memberships.map((m) => (
-            <ListRow key={m.organizationId}>
-              <div className="flex flex-col gap-0.5">
+          {me.memberships.map((m) =>
+            m.organizationStatus === 'suspended' ? (
+              <ListRow key={m.organizationId}>
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-display text-card-title font-semibold">
+                    {m.organizationName}
+                  </span>
+                  <span className="text-small text-dim">
+                    <span className="capitalize">{m.role}</span> · Suspended
+                  </span>
+                </div>
+              </ListRow>
+            ) : (
+              <ListRow key={m.organizationId}>
+                <div className="flex flex-col gap-0.5">
+                  <Link
+                    href={`/orgs/${m.organizationId}`}
+                    className="font-display text-card-title font-semibold"
+                  >
+                    {m.organizationName}
+                  </Link>
+                  <span className="text-small text-dim capitalize">{m.role}</span>
+                </div>
                 <Link
-                  href={`/orgs/${m.organizationId}`}
-                  className="font-display text-card-title font-semibold"
+                  href={`/orgs/${m.organizationId}/comments`}
+                  className="text-small font-medium"
                 >
-                  {m.organizationName}
+                  All comments
                 </Link>
-                <span className="text-small text-dim capitalize">{m.role}</span>
-              </div>
-              <Link href={`/orgs/${m.organizationId}/comments`} className="text-small font-medium">
-                All comments
-              </Link>
-            </ListRow>
-          ))}
+              </ListRow>
+            ),
+          )}
         </ListPanel>
       ) : null}
       <Card>

@@ -41,6 +41,8 @@ function messageFor(e: ApiCallError): string {
       return 'Reconnect the account in FeedBouncer.';
     case 'rule_rejected':
       return `Rule rejected (${str(d.reason) ?? 'unknown reason'}): ${e.message}`;
+    case 'organization_suspended':
+      return 'This organization is suspended, so its API keys are disabled. Contact support to restore access.';
     case 'unauthenticated':
       return 'The API key was rejected.';
     case 'already_deleted':

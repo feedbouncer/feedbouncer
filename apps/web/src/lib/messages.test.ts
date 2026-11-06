@@ -150,6 +150,10 @@ describe('instagram and platform-neutral codes', () => {
     ['platform_not_configured', "This platform isn't set up on this FeedBouncer server."],
     ['platform_error', 'The platform could not be reached. Try again.'],
     ['text_too_long', 'Reply is too long for this platform.'],
+    [
+      'organization_suspended',
+      'This organization is suspended. Contact support to restore access.',
+    ],
   ])('message %s has its text', (code, text) => {
     expect(messageFor(code)).toBe(text);
   });
