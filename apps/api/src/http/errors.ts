@@ -21,6 +21,9 @@ export type ErrorCode =
   | 'forbidden'
   | 'organization_suspended'
   | 'key_owner_inactive'
+  | 'external_ref_mismatch'
+  | 'email_in_use'
+  | 'organization_inactive'
   | 'email_not_verified'
   | 'sole_owner'
   | 'last_owner'
@@ -119,6 +122,9 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   forbidden: 'You do not have permission to do this.',
   organization_suspended: 'This organization is suspended.',
   key_owner_inactive: "This API key's creator is deactivated.",
+  external_ref_mismatch: 'This external reference was already used with different values.',
+  email_in_use: 'This email address is already in use.',
+  organization_inactive: 'This organization is inactive.',
   email_not_verified: 'Verify your email address first.',
   sole_owner: 'You are the only owner of an organization. Transfer ownership or delete it first.',
   last_owner: 'An organization needs at least one owner. Make someone else an owner first.',

@@ -3,6 +3,8 @@ import type pg from 'pg';
 export interface ProvisioningAuditDetails {
   errorCode?: string;
   fields?: string;
+  organizationId?: string;
+  role?: 'owner' | 'admin' | 'member';
 }
 
 export interface ProvisioningAuditInput {

@@ -1,12 +1,15 @@
-import { Controller, Get, Inject, Param, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import type { FastifyReply } from 'fastify';
 import { recordProvisioningAudit, type ProvisioningAuditInput } from '@feedbouncer/db';
 import { errorFields } from '@feedbouncer/service-runtime';
 import type { AppDeps } from '../deps.js';
 import { ApiError } from '../http/errors.js';
 import { parseUuidOr404, zUuid } from '../http/validation.js';
 import { DEPS } from '../tokens.js';
+import { CreateOrganizationBody, CreateUserBody } from './dto.js';
 import { ProvisioningGuard, type ProvisioningRequest } from './provisioning.guard.js';
 import { ProvisioningService } from './provisioning.service.js';
+import { parseProvisioningBody } from './validation.js';
 
 const OUTCOMES: Readonly<Record<number, ProvisioningAuditInput['outcome']>> = {
   400: 'invalid',
@@ -22,12 +25,43 @@ export class ProvisioningController {
     @Inject(DEPS) private readonly deps: AppDeps,
   ) {}
 
+  /** 201 when created, 200 when replayed. */
+  @Post('organizations')
+  async createOrganization(
+    @Req() req: ProvisioningRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+    @Body() body: unknown,
+  ) {
+    const fp = req.provisioning.credentialFingerprint;
+    const result = await this.audited(fp, 'organization.create', 'organization', null, () =>
+      this.service.createOrganization(fp, parseProvisioningBody(CreateOrganizationBody, body)),
+    );
+    void reply.status(result.replayed ? 200 : 201);
+    return result;
+  }
+
   @Get('organizations/:organizationId')
   getOrganization(@Req() req: ProvisioningRequest, @Param('organizationId') raw: string) {
     const fp = req.provisioning.credentialFingerprint;
     return this.audited(fp, 'organization.read', 'organization', uuidOrNull(raw), async () => ({
       organization: await this.service.getOrganization(fp, parseUuidOr404(raw)),
     }));
+  }
+
+  /** 201 when created, 200 when replayed. */
+  @Post('organizations/:organizationId/users')
+  async createUser(
+    @Req() req: ProvisioningRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+    @Param('organizationId') raw: string,
+    @Body() body: unknown,
+  ) {
+    const fp = req.provisioning.credentialFingerprint;
+    const result = await this.audited(fp, 'user.create', 'user', null, () =>
+      this.service.createUser(fp, parseUuidOr404(raw), parseProvisioningBody(CreateUserBody, body)),
+    );
+    void reply.status(result.replayed ? 200 : 201);
+    return result;
   }
 
   @Get('users/:userId')

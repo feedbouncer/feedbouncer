@@ -1,5 +1,6 @@
 import {
   renderAccountExists,
+  renderAccountSetup,
   renderInvitation,
   renderPasswordReset,
   renderSignupClosed,
@@ -12,6 +13,8 @@ import { errorFields, type Logger } from '@feedbouncer/service-runtime';
 export interface AuthEmails {
   verify(to: string, url: string): void;
   passwordReset(to: string, url: string): void;
+  /** Waits for the send: rejects (after logging) when it fails. */
+  accountSetup(to: string, url: string): Promise<void>;
   accountExists(to: string): void;
   signupClosed(to: string): void;
   invitation(
@@ -35,6 +38,11 @@ export function createAuthEmails(
       .catch((err: unknown) => log.warn('email send failed', { kind, ...errorFields(err) }));
   };
   return {
+    accountSetup: (to, url) =>
+      mailer.send({ to, ...renderAccountSetup(url) }).catch((err: unknown) => {
+        log.warn('email send failed', { kind: 'account_setup', ...errorFields(err) });
+        throw err;
+      }),
     verify: (to, url) => fire('verify', { to, ...renderVerifyEmail(url) }),
     passwordReset: (to, url) => fire('password_reset', { to, ...renderPasswordReset(url) }),
     accountExists: (to) =>

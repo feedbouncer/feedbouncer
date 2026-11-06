@@ -1,5 +1,39 @@
-import type { Role } from '@feedbouncer/authz';
+import { ROLES, type Role } from '@feedbouncer/authz';
+import { normalizeAddress } from '@feedbouncer/mailer';
+import { z } from 'zod';
+import { zName } from '../http/validation.js';
 import { orgApiStatus, userApiStatus, type ApiStatus } from './status.js';
+
+/** The caller's own id for an account; the key of idempotent creates. */
+export const zExternalRef = z
+  .string()
+  .max(200)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:@-]{0,199}$/);
+
+/** Trimmed and lowercased, as stored in app_user.email. */
+const zEmail = z
+  .string()
+  .max(254)
+  .transform((raw, ctx) => {
+    const email = normalizeAddress(raw);
+    if (email === null) ctx.addIssue({ code: 'custom', message: 'invalid' });
+    return email ?? z.NEVER;
+  });
+
+export const CreateOrganizationBody = z.strictObject({ externalRef: zExternalRef, name: zName });
+export type CreateOrganizationInput = z.infer<typeof CreateOrganizationBody>;
+
+export const CreateUserBody = z.strictObject({
+  externalRef: zExternalRef,
+  email: zEmail,
+  name: zName,
+  role: z.enum(ROLES),
+  allowInactiveOrganization: z.boolean().optional(),
+  sendSetupEmail: z.boolean().optional(),
+});
+export type CreateUserInput = z.infer<typeof CreateUserBody>;
+
+export type SetupEmail = 'sent' | 'skipped' | 'failed';
 
 export interface ProvisionedOrganization {
   id: string;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   escapeHtml,
   headerSafe,
+  renderAccountSetup,
   renderInvitation,
   renderReconnectRequired,
   renderSignupClosed,
@@ -78,6 +79,19 @@ describe('templates', () => {
       expect(n.text).toContain('Acme');
       expect(n.text).not.toContain('null');
     });
+  });
+});
+
+describe('renderAccountSetup', () => {
+  it('invites the user to choose a password and says when the link expires', () => {
+    const url = 'https://app.test/reset-password?token=t&x=1';
+    const m = renderAccountSetup(url);
+    expect(m.subject).toBe('Set up your FeedBouncer account');
+    expect(m.text).toBe(
+      `An account was created for you. Choose a password to sign in:\n\n${url}\n\nThis link expires in 1 hour; after that use "Forgot password" on the sign-in page.\n`,
+    );
+    expect(m.html).toContain('href="https://app.test/reset-password?token=t&amp;x=1"');
+    expect(m.html).toContain('&quot;Forgot password&quot;');
   });
 });
 
