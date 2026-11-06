@@ -8,6 +8,7 @@ import {
   type HiddenCursor,
 } from '@feedbouncer/actions';
 import { systemClock } from '@feedbouncer/connectors';
+import { isOrgActive } from '@feedbouncer/db';
 import type { AppDeps } from '../deps.js';
 import { recordAudit } from '../audit/audit.js';
 import { ApiError, notFound } from '../http/errors.js';
@@ -44,7 +45,7 @@ export class HiddenTodayService {
     q: { before: HiddenCursor | null; limit: number },
   ): Promise<HiddenPageDto> {
     const orgIds = (await this.orgs.listMine(userId))
-      .filter((m) => can(m.role, 'comment.moderate'))
+      .filter((m) => isOrgActive(m.organization.status) && can(m.role, 'comment.moderate'))
       .map((m) => m.organization.id);
     if (orgIds.length === 0) return { items: [], next: null, brands: [] };
     const now = new Date(systemClock.now());

@@ -73,8 +73,8 @@ describe('GET /api/v1/me', () => {
     const a = await org('Alpha', 'owner');
     const first = await api.req('GET', '/api/v1/me', { cookie: u.cookie });
     expect(first.body.memberships).toEqual([
-      { organizationId: a, organizationName: 'Alpha', role: 'owner' },
-      { organizationId: b, organizationName: 'Beta', role: 'member' },
+      { organizationId: a, organizationName: 'Alpha', role: 'owner', organizationStatus: 'active' },
+      { organizationId: b, organizationName: 'Beta', role: 'member', organizationStatus: 'active' },
     ]);
     await api.pool.query('DELETE FROM membership WHERE organization_id = $1 AND user_id = $2', [
       b,
@@ -82,7 +82,7 @@ describe('GET /api/v1/me', () => {
     ]);
     const second = await api.req('GET', '/api/v1/me', { cookie: u.cookie });
     expect(second.body.memberships).toEqual([
-      { organizationId: a, organizationName: 'Alpha', role: 'owner' },
+      { organizationId: a, organizationName: 'Alpha', role: 'owner', organizationStatus: 'active' },
     ]);
   });
 });

@@ -183,7 +183,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -298,7 +298,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -497,7 +497,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -726,7 +726,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -953,7 +953,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1108,7 +1108,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1265,7 +1265,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1400,7 +1400,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1587,7 +1587,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1730,7 +1730,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1910,7 +1910,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2025,7 +2025,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2158,7 +2158,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2291,7 +2291,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2433,7 +2433,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2578,7 +2578,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2740,7 +2740,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2886,7 +2886,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3052,7 +3052,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3248,7 +3248,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3449,7 +3449,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3625,7 +3625,7 @@
             }
           },
           "403": {
-            "description": "Forbidden: `insufficient_scope`.",
+            "description": "Forbidden: `insufficient_scope`, `organization_suspended`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3853,7 +3853,8 @@
                   "reply_not_allowed",
                   "rule_rejected",
                   "rule_limit_reached",
-                  "pending_limit_reached"
+                  "pending_limit_reached",
+                  "organization_suspended"
                 ],
                 "description": "Stable machine-readable code. New codes may be added; none is renamed."
               },

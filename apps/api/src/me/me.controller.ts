@@ -1,4 +1,5 @@
 import { Controller, Get, Inject, Req, UseGuards } from '@nestjs/common';
+import type { OrgStatus } from '@feedbouncer/db';
 import { SessionGuard, type AuthedRequest } from '../auth/session.guard.js';
 import type { AppDeps } from '../deps.js';
 import { DEPS } from '../tokens.js';
@@ -14,8 +15,9 @@ export class MeController {
       organizationId: string;
       organizationName: string;
       role: string;
+      organizationStatus: OrgStatus;
     }>(
-      `SELECT o.id AS "organizationId", o.name AS "organizationName", m.role
+      `SELECT o.id AS "organizationId", o.name AS "organizationName", m.role, o.status AS "organizationStatus"
          FROM membership m JOIN organization o ON o.id = m.organization_id
         WHERE m.user_id = $1 ORDER BY o.name, o.id`,
       [req.user.id],

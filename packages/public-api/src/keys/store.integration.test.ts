@@ -1,7 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pg from 'pg';
 import { migratedDb, seedTenant } from '@feedbouncer/db/testing';
-import { ApiKeyLimitError, ApiKeyNameTakenError, MAX_ACTIVE_KEYS, PgApiKeys } from './store.js';
+import {
+  ApiKeyLimitError,
+  ApiKeyNameTakenError,
+  MAX_ACTIVE_KEYS,
+  OrganizationSuspendedError,
+  PgApiKeys,
+} from './store.js';
 
 let h: Awaited<ReturnType<typeof migratedDb>>;
 let pool: pg.Pool;
@@ -126,6 +132,7 @@ describe('PgApiKeys.authenticate and revoke', () => {
       organizationId: t.organizationId,
       apiKeyId: key.id,
       scope: 'write',
+      organizationStatus: 'active',
     });
     const raw = token.reveal();
     const tampered = `${raw.slice(0, -1)}${raw.endsWith('A') ? 'B' : 'A'}`;
@@ -202,6 +209,71 @@ describe('PgApiKeys.authenticate and revoke', () => {
     const t = await tenant();
     const { token } = await keys.create(t.organizationId, t.userId, { name: 'g', scope: 'read' });
     await h.c.query('DELETE FROM organization WHERE id = $1', [t.organizationId]);
+    await expect(keys.authenticate(token.reveal())).resolves.toBeNull();
+  });
+});
+
+describe('organization status', () => {
+  const setStatus = (org: string, status: string) =>
+    h.c.query('UPDATE organization SET status = $2 WHERE id = $1', [org, status]);
+
+  it('authenticate returns organizationStatus', async () => {
+    const t = await tenant();
+    const { token } = await keys.create(t.organizationId, t.userId, { name: 'a', scope: 'read' });
+    await expect(keys.authenticate(token.reveal())).resolves.toMatchObject({
+      organizationStatus: 'active',
+    });
+  });
+
+  it('authenticate does not bump last_used_at for a suspended org', async () => {
+    const t = await tenant();
+    const { key, token } = await keys.create(t.organizationId, t.userId, {
+      name: 'a',
+      scope: 'read',
+    });
+    await h.c.query("UPDATE api_key SET last_used_at = now() - interval '1 day' WHERE id = $1", [
+      key.id,
+    ]);
+    const before = (await h.c.query('SELECT last_used_at FROM api_key WHERE id = $1', [key.id]))
+      .rows[0].last_used_at;
+    await setStatus(t.organizationId, 'suspended');
+    await expect(keys.authenticate(token.reveal())).resolves.toMatchObject({
+      organizationStatus: 'suspended',
+    });
+    const after = (await h.c.query('SELECT last_used_at FROM api_key WHERE id = $1', [key.id]))
+      .rows[0].last_used_at;
+    expect(after).toEqual(before);
+  });
+
+  it('create refuses a suspended org under the lock', async () => {
+    const t = await tenant();
+    await setStatus(t.organizationId, 'suspended');
+    await expect(
+      keys.create(t.organizationId, t.userId, { name: 'a', scope: 'read' }),
+    ).rejects.toBeInstanceOf(OrganizationSuspendedError);
+    const n = (
+      await h.c.query('SELECT count(*)::int AS n FROM api_key WHERE organization_id = $1', [
+        t.organizationId,
+      ])
+    ).rows[0].n;
+    const audits = (
+      await h.c.query(
+        "SELECT count(*)::int AS n FROM audit_event WHERE organization_id = $1 AND action = 'api_key.created'",
+        [t.organizationId],
+      )
+    ).rows[0].n;
+    expect([n, audits]).toEqual([0, 0]);
+  });
+
+  it('revoked key returns null regardless of org status', async () => {
+    const t = await tenant();
+    const { key, token } = await keys.create(t.organizationId, t.userId, {
+      name: 'a',
+      scope: 'read',
+    });
+    await keys.revoke(t.organizationId, t.userId, key.id);
+    await expect(keys.authenticate(token.reveal())).resolves.toBeNull();
+    await setStatus(t.organizationId, 'suspended');
     await expect(keys.authenticate(token.reveal())).resolves.toBeNull();
   });
 });

@@ -38,6 +38,7 @@ export const PUBLIC_ERROR_CODES = [
   'rule_rejected',
   'rule_limit_reached',
   'pending_limit_reached',
+  'organization_suspended',
 ] as const;
 export type PublicErrorCode = (typeof PUBLIC_ERROR_CODES)[number];
 
@@ -47,6 +48,7 @@ export const PUBLIC_ERROR_STATUS: Readonly<Record<PublicErrorCode, number>> = {
   invalid_idempotency_key: 400,
   unauthenticated: 401,
   insufficient_scope: 403,
+  organization_suspended: 403,
   not_found: 404,
   idempotency_request_in_progress: 409,
   connection_inactive: 409,

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
   PUBLIC_ERROR_CODES,
+  PUBLIC_ERROR_STATUS,
   PUBLIC_ROUTE_SPECS,
   REQUEST_BODY_LIMIT_BYTES,
   type RouteSpec,
@@ -174,6 +175,15 @@ describe('buildOpenApiDocument', () => {
   const real = buildOpenApiDocument() as unknown as {
     paths: Record<string, Record<string, Record<string, unknown>>>;
   };
+
+  it('PUBLIC_ERROR_STATUS.organization_suspended is 403 and every /v1 operation documents it', () => {
+    expect(PUBLIC_ERROR_STATUS.organization_suspended).toBe(403);
+    for (const spec of PUBLIC_ROUTE_SPECS.filter((s) => s.path !== '/v1/openapi.json')) {
+      const op = real.paths[spec.path]![spec.method.toLowerCase()]!;
+      const forbidden = (op.responses as Record<string, { description: string }>)['403']!;
+      expect(forbidden.description).toContain('`organization_suspended`');
+    }
+  });
 
   it('gives every operation one curl sample that runs against $FEEDBOUNCER_URL', () => {
     for (const spec of PUBLIC_ROUTE_SPECS) {

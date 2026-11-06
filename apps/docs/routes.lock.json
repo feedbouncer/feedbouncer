@@ -1,6 +1,7 @@
 [
   "/",
   "/docs/api/authentication/",
+  "/docs/api/changelog/",
   "/docs/api/errors/",
   "/docs/api/idempotency/",
   "/docs/api/moderation-check/",

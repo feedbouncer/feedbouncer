@@ -1,6 +1,6 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type pg from 'pg';
-import { isUniqueViolation, recordAuditEvent, withTransaction } from '@feedbouncer/db';
+import { isOrgActive, isUniqueViolation, recordAuditEvent, withTransaction } from '@feedbouncer/db';
 import type { Secret } from '@feedbouncer/service-runtime';
 import { generateApiKey, parseApiKey, type ApiKeyScope } from './token.js';
 
@@ -14,6 +14,13 @@ export class ApiKeyLimitError extends Error {
   constructor() {
     super(`An organization can have at most ${MAX_ACTIVE_KEYS} active API keys`);
     this.name = 'ApiKeyLimitError';
+  }
+}
+
+export class OrganizationSuspendedError extends Error {
+  constructor() {
+    super('The organization is suspended');
+    this.name = 'OrganizationSuspendedError';
   }
 }
 
@@ -41,6 +48,10 @@ export interface ApiKeyContext {
   readonly organizationId: string;
   readonly apiKeyId: string;
   readonly scope: ApiKeyScope;
+}
+
+export interface AuthenticatedApiKey extends ApiKeyContext {
+  readonly organizationStatus: unknown;
 }
 
 const SELECT = `SELECT k.id, k.organization_id, k.name, k.public_id, k.scope, k.created_at,
@@ -85,7 +96,11 @@ export class PgApiKeys {
     const { publicId, token, secretSha256 } = generateApiKey();
     try {
       const key = await withTransaction(this.pool, async (tx) => {
-        await tx.query('SELECT 1 FROM organization WHERE id = $1 FOR UPDATE', [org]);
+        const locked = await tx.query<{ status: unknown }>(
+          'SELECT status FROM organization WHERE id = $1 FOR UPDATE',
+          [org],
+        );
+        if (!isOrgActive(locked.rows[0]?.status)) throw new OrganizationSuspendedError();
         const active = await tx.query<{ n: number }>(
           'SELECT count(*)::int AS n FROM api_key WHERE organization_id = $1 AND revoked_at IS NULL',
           [org],
@@ -159,7 +174,7 @@ export class PgApiKeys {
     });
   }
 
-  async authenticate(raw: string): Promise<ApiKeyContext | null> {
+  async authenticate(raw: string): Promise<AuthenticatedApiKey | null> {
     const parsed = parseApiKey(raw);
     if (!parsed) return null;
     const { rows } = await this.pool.query<{
@@ -168,8 +183,10 @@ export class PgApiKeys {
       scope: ApiKeyScope;
       secret_sha256: Buffer;
       revoked_at: Date | null;
+      organization_status: unknown;
     }>(
-      `SELECT k.id, k.organization_id, k.scope, k.secret_sha256, k.revoked_at
+      `SELECT k.id, k.organization_id, k.scope, k.secret_sha256, k.revoked_at,
+              o.status AS organization_status
          FROM api_key k JOIN organization o ON o.id = k.organization_id
         WHERE k.public_id = $1`,
       [parsed.publicId],
@@ -177,11 +194,18 @@ export class PgApiKeys {
     const row = rows[0];
     const matches = timingSafeEqual(row?.secret_sha256 ?? DUMMY_HASH, parsed.secretSha256);
     if (!row || !matches || row.revoked_at) return null;
-    await this.pool.query(
-      `UPDATE api_key SET last_used_at = now()
-        WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '${LAST_USED_INTERVAL}')`,
-      [row.id],
-    );
-    return { organizationId: row.organization_id, apiKeyId: row.id, scope: row.scope };
+    if (isOrgActive(row.organization_status)) {
+      await this.pool.query(
+        `UPDATE api_key SET last_used_at = now()
+          WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '${LAST_USED_INTERVAL}')`,
+        [row.id],
+      );
+    }
+    return {
+      organizationId: row.organization_id,
+      apiKeyId: row.id,
+      scope: row.scope,
+      organizationStatus: row.organization_status,
+    };
   }
 }

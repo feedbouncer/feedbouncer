@@ -23,21 +23,23 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
   const { orgId } = await params;
   if (!isUuid(orgId)) notFound();
   await requireMe(`/orgs/${orgId}`);
-  const org = await serverGet<{
-    organization: { id: string; name: string; timezone: string; timezoneSet: boolean };
-    role: Role;
-  }>(`/api/v1/orgs/${orgId}`);
-  if (!org.data) notFound();
+  const org = dataOrThrow(
+    await serverGet<{
+      organization: { id: string; name: string; timezone: string; timezoneSet: boolean };
+      role: Role;
+    }>(`/api/v1/orgs/${orgId}`),
+    'organization',
+  );
   const brandList = dataOrThrow(
     await serverGet<{ brands: Brand[] }>(`/api/v1/orgs/${orgId}/brands`),
     'brands',
   ).brands;
-  const role = org.data.role;
+  const role = org.role;
   const canEdit = role !== 'member';
   return (
     <main>
       <PageHeader
-        title={org.data.organization.name}
+        title={org.organization.name}
         actions={<Badge className="capitalize">{role}</Badge>}
       />
       {can(role, 'org.update') ? (
@@ -48,8 +50,8 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
           <CardContent>
             <OrgTimezoneForm
               orgId={orgId}
-              timezone={org.data.organization.timezone}
-              timezoneSet={org.data.organization.timezoneSet}
+              timezone={org.organization.timezone}
+              timezoneSet={org.organization.timezoneSet}
             />
           </CardContent>
         </Card>

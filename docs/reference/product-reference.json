@@ -434,6 +434,10 @@
       {
         "code": "pending_limit_reached",
         "status": 409
+      },
+      {
+        "code": "organization_suspended",
+        "status": 403
       }
     ],
     "scopes": [

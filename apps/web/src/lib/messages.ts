@@ -2,6 +2,7 @@ const MESSAGES: Record<string, string> = {
   invalid_request: 'Check the details and try again.',
   invalid_origin: 'This request was blocked. Reload the page and try again.',
   not_found: 'Not found.',
+  organization_suspended: 'This organization is suspended. Contact support to restore access.',
   internal_error: 'Something went wrong.',
   invalid_email: 'Enter a valid email address.',
   password_too_short: 'Use at least 12 characters.',

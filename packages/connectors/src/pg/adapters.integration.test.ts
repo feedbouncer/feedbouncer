@@ -258,6 +258,16 @@ describe('tenant isolation (every adapter)', () => {
     expect(await members.roleInBrand(a.organizationId, a.brandId, randomUUID())).toBeNull();
   });
 
+  it('roleInBrand is null for a suspended org and restored on reactivation', async () => {
+    const t = await seedTenant(h.c, 'role-suspended');
+    const status = (s: string) =>
+      h.c.query('UPDATE organization SET status = $2 WHERE id = $1', [t.organizationId, s]);
+    await status('suspended');
+    expect(await members.roleInBrand(t.organizationId, t.brandId, t.userId)).toBeNull();
+    await status('active');
+    expect(await members.roleInBrand(t.organizationId, t.brandId, t.userId)).toBe('owner');
+  });
+
   it('PgWebhookSecrets only resolves active connections of the named platform, by uuid', async () => {
     await store.put(scopeOf(a), 'webhook_secret', new Secret('conn-a-hook'));
     const hit = await hooks.connectionSecret(a.connectionId, 'facebook');

@@ -10,6 +10,7 @@ import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { currentRole, lockedActor, lockOrganization } from '../tenancy/org-lock.js';
+import { enforceOrgActive } from '../tenancy/org-status.js';
 import { AUTH_EMAILS, DEPS, RATE_LIMITS } from '../tokens.js';
 import {
   INVITATION_COLUMNS,
@@ -196,6 +197,17 @@ export class InvitationsService {
         )
       ).rows[0];
       if (!inv) throw notFound();
+      const { rows } = await c.query<{ status: unknown }>(
+        'SELECT status FROM organization WHERE id = $1',
+        [found.organization_id],
+      );
+      enforceOrgActive(this.deps.log, {
+        organizationId: found.organization_id,
+        rawStatus: rows[0]?.status,
+        via: 'session',
+        route: 'POST /api/v1/invitations/accept',
+        userId: user.id,
+      });
       if (inv.email !== user.email) {
         throw new ApiError(403, 'invitation_email_mismatch');
       }

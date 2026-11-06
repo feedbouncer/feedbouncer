@@ -25,6 +25,7 @@ import { ERASE_ORG_USAGE, EraseError, eraseOrgCommand } from './erase-org.js';
 import { EVAL_EXPORT_USAGE, evalExportCommand } from './eval-export.js';
 import { EVAL_REPORT_USAGE, evalReportCommand } from './eval-report.js';
 import type { OpsCommand, OpsContext } from './ops-context.js';
+import { ORG_STATUS_USAGE, OrgStatusError, orgStatusCommand } from './org-status.js';
 import { PRIVACY_USAGE, privacyCommand } from './privacy.js';
 import { RETENTION_USAGE, retentionCommand } from './retention.js';
 
@@ -33,6 +34,7 @@ const COMMANDS: Readonly<Record<string, { run: OpsCommand; usage: string }>> = {
   'erase-org': { run: eraseOrgCommand, usage: ERASE_ORG_USAGE },
   'eval-export': { run: evalExportCommand, usage: EVAL_EXPORT_USAGE },
   'eval-report': { run: evalReportCommand, usage: EVAL_REPORT_USAGE },
+  'org-status': { run: orgStatusCommand, usage: ORG_STATUS_USAGE },
   privacy: { run: privacyCommand, usage: PRIVACY_USAGE },
   retention: { run: retentionCommand, usage: RETENTION_USAGE },
 };
@@ -111,7 +113,7 @@ try {
   if (err instanceof UsageError || err instanceof InputError) {
     process.stderr.write(`ops: ${err.message}\n`);
     process.exitCode = 2;
-  } else if (err instanceof EraseError) {
+  } else if (err instanceof EraseError || err instanceof OrgStatusError) {
     process.stderr.write(`ops: ${err.code}\n`);
     process.exitCode = 1;
   } else {

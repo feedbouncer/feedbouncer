@@ -46,6 +46,10 @@ describe('toToolError', () => {
       new ApiCallError(422, 'rule_rejected', 'Duplicate rule.', { reason: 'duplicate' }),
       'Rule rejected (duplicate): Duplicate rule.',
     ],
+    [
+      new ApiCallError(403, 'organization_suspended', 'x'),
+      'This organization is suspended, so its API keys are disabled. Contact support to restore access.',
+    ],
     [new ApiCallError(401, 'unauthenticated', 'x'), 'The API key was rejected.'],
     [new ApiCallError(422, 'already_deleted', 'x'), 'The comment was deleted on the platform.'],
     [new ApiCallError(422, 'comment_gone', 'x'), 'The comment was deleted on the platform.'],

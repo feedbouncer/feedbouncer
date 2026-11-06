@@ -51,6 +51,7 @@ const sidebars: SidebarsConfig = {
         'api/idempotency',
         'api/webhooks',
         'api/moderation-check',
+        'api/changelog',
         ...apiReference,
       ],
     },

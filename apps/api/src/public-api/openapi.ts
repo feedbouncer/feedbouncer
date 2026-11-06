@@ -28,6 +28,7 @@ export type OpenApiDocument = {
 const COMMON_ERRORS: readonly PublicErrorCode[] = [
   'unauthenticated',
   'insufficient_scope',
+  'organization_suspended',
   'rate_limited',
   'temporarily_unavailable',
   'internal_error',
