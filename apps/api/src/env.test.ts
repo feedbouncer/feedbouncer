@@ -585,6 +585,18 @@ describe('secrets configuration', () => {
     });
   });
 
+  describe('sign-up toggle', () => {
+    it('is on by default and off for a false value', () => {
+      expect(load(base).signupEnabled).toBe(true);
+      expect(load({ ...base, SIGNUP_ENABLED: 'no' }).signupEnabled).toBe(false);
+    });
+    it('appears in the serialized config', () => {
+      expect(JSON.stringify(load({ ...base, SIGNUP_ENABLED: 'off' }))).toContain(
+        '"signupEnabled":false',
+      );
+    });
+  });
+
   describe('beta support email', () => {
     it('is null when unset and normalized when set', () => {
       expect(load(base).betaSupportEmail).toBeNull();
