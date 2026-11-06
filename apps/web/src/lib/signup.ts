@@ -1,8 +1,8 @@
+import { messageFor } from './messages';
 import { safeNextPath } from './safe-next';
 import { serverGet } from './server-api';
 
-export const SIGNUP_DISABLED_TEXT =
-  'Sign-up is turned off for this FeedBouncer instance. Ask your administrator for an account.';
+export const SIGNUP_DISABLED_TEXT = messageFor('signup_disabled');
 
 // Mirrors the API's invitation token format (apps/api/src/invitations/token.ts).
 const INVITATION_TOKEN = /^[A-Za-z0-9_-]{43}$/;
