@@ -920,6 +920,7 @@ export const TOKEN_CASES: TokenCase[] = [
 /** /api/v1 routes that act on the signed-in account or on a token, not on a path organization. */
 export const ACCOUNT_ROUTES = [
   'POST /api/v1/auth/sign-up',
+  'GET /api/v1/auth/sign-up',
   'GET /api/v1/me',
   'GET /api/v1/orgs',
   /** Derives its organizations from the caller's memberships; takes no ids. */
