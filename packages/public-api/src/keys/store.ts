@@ -1,6 +1,12 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type pg from 'pg';
-import { isOrgActive, isUniqueViolation, recordAuditEvent, withTransaction } from '@feedbouncer/db';
+import {
+  isOrgActive,
+  isUniqueViolation,
+  isUserActive,
+  recordAuditEvent,
+  withTransaction,
+} from '@feedbouncer/db';
 import type { Secret } from '@feedbouncer/service-runtime';
 import { generateApiKey, parseApiKey, type ApiKeyScope } from './token.js';
 
@@ -52,6 +58,9 @@ export interface ApiKeyContext {
 
 export interface AuthenticatedApiKey extends ApiKeyContext {
   readonly organizationStatus: unknown;
+  readonly creatorUserId: string | null;
+  /** The creating user's status; null for a key with no creator (an org-owned key). */
+  readonly creatorStatus: unknown | null;
 }
 
 const SELECT = `SELECT k.id, k.organization_id, k.name, k.public_id, k.scope, k.created_at,
@@ -184,17 +193,24 @@ export class PgApiKeys {
       secret_sha256: Buffer;
       revoked_at: Date | null;
       organization_status: unknown;
+      created_by_user_id: string | null;
+      creator_status: unknown;
     }>(
       `SELECT k.id, k.organization_id, k.scope, k.secret_sha256, k.revoked_at,
-              o.status AS organization_status
+              o.status AS organization_status, k.created_by_user_id, u.status AS creator_status
          FROM api_key k JOIN organization o ON o.id = k.organization_id
+         LEFT JOIN app_user u ON u.id = k.created_by_user_id
         WHERE k.public_id = $1`,
       [parsed.publicId],
     );
     const row = rows[0];
     const matches = timingSafeEqual(row?.secret_sha256 ?? DUMMY_HASH, parsed.secretSha256);
     if (!row || !matches || row.revoked_at) return null;
-    if (isOrgActive(row.organization_status)) {
+    const creatorStatus = row.created_by_user_id === null ? null : row.creator_status;
+    if (
+      isOrgActive(row.organization_status) &&
+      (creatorStatus === null || isUserActive(creatorStatus))
+    ) {
       await this.pool.query(
         `UPDATE api_key SET last_used_at = now()
           WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '${LAST_USED_INTERVAL}')`,
@@ -206,6 +222,8 @@ export class PgApiKeys {
       apiKeyId: row.id,
       scope: row.scope,
       organizationStatus: row.organization_status,
+      creatorUserId: row.created_by_user_id,
+      creatorStatus,
     };
   }
 }

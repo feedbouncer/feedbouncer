@@ -48,6 +48,10 @@ A valid key with too low a scope gets `403 insufficient_scope`. See [Errors](./e
 
 An organization is either `active` or `suspended`. Every request made with a key of a suspended organization gets `403 organization_suspended`, whatever the scope, unless the key has exceeded its rate limit, in which case it gets `429 rate_limited`. Creating a key in a suspended organization is refused the same way. Requests with an unknown or revoked key still get `401`. Reactivating the organization takes effect on the next request, and no key needs to change.
 
+## Deactivated key creators
+
+A key belongs to its organization, but it also stops working while the user who created it is deactivated: every request with it gets `403 key_owner_inactive`. A suspended organization is reported first, as `organization_suspended`. Reactivating the user restores the key on the next request. Keys with no recorded creator are not affected.
+
 Repeated failures from one address are limited. See [Rate limits](./rate-limits.mdx#failed-authentication).
 
 ## Storing keys

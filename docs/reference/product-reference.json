@@ -438,6 +438,10 @@
       {
         "code": "organization_suspended",
         "status": 403
+      },
+      {
+        "code": "key_owner_inactive",
+        "status": 403
       }
     ],
     "scopes": [

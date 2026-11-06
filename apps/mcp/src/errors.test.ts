@@ -50,6 +50,10 @@ describe('toToolError', () => {
       new ApiCallError(403, 'organization_suspended', 'x'),
       'This organization is suspended, so its API keys are disabled. Contact support to restore access.',
     ],
+    [
+      new ApiCallError(403, 'key_owner_inactive', 'x'),
+      'The user who created this API key is deactivated, so the key is disabled. Ask an administrator for a new key.',
+    ],
     [new ApiCallError(401, 'unauthenticated', 'x'), 'The API key was rejected.'],
     [new ApiCallError(422, 'already_deleted', 'x'), 'The comment was deleted on the platform.'],
     [new ApiCallError(422, 'comment_gone', 'x'), 'The comment was deleted on the platform.'],

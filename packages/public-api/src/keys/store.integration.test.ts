@@ -133,6 +133,8 @@ describe('PgApiKeys.authenticate and revoke', () => {
       apiKeyId: key.id,
       scope: 'write',
       organizationStatus: 'active',
+      creatorUserId: t.userId,
+      creatorStatus: 'active',
     });
     const raw = token.reveal();
     const tampered = `${raw.slice(0, -1)}${raw.endsWith('A') ? 'B' : 'A'}`;
@@ -275,5 +277,38 @@ describe('organization status', () => {
     await expect(keys.authenticate(token.reveal())).resolves.toBeNull();
     await setStatus(t.organizationId, 'suspended');
     await expect(keys.authenticate(token.reveal())).resolves.toBeNull();
+  });
+});
+
+describe('creator status', () => {
+  const lastUsed = async (id: string) =>
+    (await h.c.query('SELECT last_used_at FROM api_key WHERE id = $1', [id])).rows[0].last_used_at;
+
+  it('authenticate returns creatorStatus', async () => {
+    const t = await tenant();
+    const { key, token } = await keys.create(t.organizationId, t.userId, {
+      name: 'a',
+      scope: 'read',
+    });
+    await expect(keys.authenticate(token.reveal())).resolves.toMatchObject({
+      creatorStatus: 'active',
+    });
+    await h.c.query('UPDATE api_key SET created_by_user_id = NULL WHERE id = $1', [key.id]);
+    await expect(keys.authenticate(token.reveal())).resolves.toMatchObject({
+      creatorStatus: null,
+    });
+  });
+
+  it('last_used_at unchanged for an inactive creator', async () => {
+    const t = await tenant();
+    const { key, token } = await keys.create(t.organizationId, t.userId, {
+      name: 'a',
+      scope: 'read',
+    });
+    await h.c.query("UPDATE app_user SET status = 'suspended' WHERE id = $1", [t.userId]);
+    await expect(keys.authenticate(token.reveal())).resolves.toMatchObject({
+      creatorStatus: 'suspended',
+    });
+    expect(await lastUsed(key.id)).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ import {
 } from '@feedbouncer/public-api';
 import type { AppDeps } from '../deps.js';
 import { ApiError } from '../http/errors.js';
+import { denyInactiveUser } from '../auth/user-status.js';
 import { enforceOrgActive } from '../tenancy/org-status.js';
 import { API_KEYS, DEPS, PUBLIC_API_LIMITS } from '../tokens.js';
 import type { PublicApiLimits } from './rate-limit.js';
@@ -26,7 +27,8 @@ const unauthenticated = () =>
   });
 
 /**
- * Authenticates the bearer key, rate limits it (suspended organizations included), then requires an active organization, then checks its scope.
+ * Authenticates the bearer key, rate limits it (suspended organizations included), then requires an
+ * active organization and an active creator (when the key has one), then checks its scope.
  * Never reads cookies: the public API is a separate namespace from the dashboard.
  */
 @Injectable()
@@ -63,6 +65,17 @@ export class ApiKeyGuard implements CanActivate {
       route: `${req.method} ${req.routeOptions.url ?? ''}`,
       apiKeyId: apiKey.apiKeyId,
     });
+    if (
+      apiKey.creatorUserId !== null &&
+      denyInactiveUser(this.deps.log, {
+        userId: apiKey.creatorUserId,
+        rawStatus: apiKey.creatorStatus,
+        via: 'api_key',
+        apiKeyId: apiKey.apiKeyId,
+      })
+    ) {
+      throw new ApiError(403, 'key_owner_inactive');
+    }
     if (!scopeAllows(apiKey.scope, need)) throw new ApiError(403, 'insufficient_scope');
     req.apiKey = {
       organizationId: apiKey.organizationId,

@@ -9,6 +9,7 @@ import { errorFields } from '@feedbouncer/service-runtime';
 import type { AppDeps } from '../deps.js';
 import type { AuthEmails } from './emails.js';
 import { withSessionTokenDigests } from './session-token-digest.js';
+import { denyInactiveUser } from './user-status.js';
 
 /** Thrown by AuthHooks.beforeDeleteUser to deny a deletion on purpose. */
 export class UserDeletionBlockedError extends Error {
@@ -174,6 +175,28 @@ export function createAuth(deps: AppDeps, emails: AuthEmails, hooks: AuthHooks) 
               throw new APIError('FORBIDDEN', { message: 'signup_disabled' });
             }
             return { data: user };
+          },
+        },
+      },
+      session: {
+        create: {
+          before: async (session) => {
+            const { rows } = await deps.pool.query<{ status: unknown }>(
+              'SELECT status FROM app_user WHERE id = $1',
+              [session.userId],
+            );
+            const row = rows[0];
+            if (
+              !row ||
+              denyInactiveUser(deps.log, {
+                userId: session.userId,
+                rawStatus: row.status,
+                via: 'sign_in',
+              })
+            ) {
+              throw new APIError('FORBIDDEN', { message: 'account_inactive' });
+            }
+            return { data: session };
           },
         },
       },
