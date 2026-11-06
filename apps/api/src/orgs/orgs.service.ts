@@ -63,7 +63,7 @@ export class OrgsService {
 
   async listMine(userId: string): Promise<Array<{ organization: OrgDto; role: Role }>> {
     const { rows } = await this.deps.pool.query<OrgRow & { role: Role }>(
-      `SELECT o.id, o.name, o.timezone, o.timezone_set_at, o.created_at, m.role
+      `SELECT o.id, o.name, o.timezone, o.timezone_set_at, o.status, o.created_at, m.role
          FROM membership m JOIN organization o ON o.id = m.organization_id
         WHERE m.user_id = $1 ORDER BY o.name, o.id`,
       [userId],
