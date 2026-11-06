@@ -60,7 +60,7 @@ export const orgStatusCommand: OpsCommand = async (argv, ctx) => {
       `SELECT action, created_at, actor_user_id, details->>'reason' AS reason
          FROM audit_event
         WHERE organization_id = $1 AND action IN ('organization.suspended', 'organization.reactivated')
-        ORDER BY created_at DESC, id DESC LIMIT 1`,
+        ORDER BY sequence DESC LIMIT 1`,
       [organizationId],
     );
     const row = last.rows[0];

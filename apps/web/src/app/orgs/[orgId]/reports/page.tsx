@@ -8,7 +8,7 @@ import { PageHeader } from '../../../../components/ui/page-header';
 import { isUuid } from '../../../../lib/ids';
 import { messageFor } from '../../../../lib/messages';
 import { fetchWeeklyReport, parseWeekParam } from '../../../../lib/reports';
-import { requireMe, serverGet, type Role } from '../../../../lib/server-api';
+import { dataOrThrow, requireMe, serverGet, type Role } from '../../../../lib/server-api';
 
 export default async function WeeklyReportPage({
   params,
@@ -20,11 +20,10 @@ export default async function WeeklyReportPage({
   const { orgId } = await params;
   if (!isUuid(orgId)) notFound();
   await requireMe(`/orgs/${orgId}/reports`);
-  const orgResponse = await serverGet<{ organization: { name: string }; role: Role }>(
-    `/api/v1/orgs/${orgId}`,
+  const org = dataOrThrow(
+    await serverGet<{ organization: { name: string }; role: Role }>(`/api/v1/orgs/${orgId}`),
+    'organization',
   );
-  if (!orgResponse.data) notFound();
-  const org = orgResponse.data;
   if (!can(org.role, 'report.read'))
     return (
       <main>
