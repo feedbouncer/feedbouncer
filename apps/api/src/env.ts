@@ -58,6 +58,7 @@ import {
 import { parseScanEnv, type ScanSettings } from '@feedbouncer/scan';
 import { ENCRYPTION_FILE_VARS, loadEncryptionKeyring, type Keyring } from '@feedbouncer/secrets';
 import { parseSignupEnabled } from './auth/signup-enabled.js';
+import { parseCredentialDigests } from './provisioning/credential.js';
 
 export const SMTP_PROTOCOLS = ['smtp:', 'smtps:'] as const;
 export const HTTP_PROTOCOLS = ['http:', 'https:'] as const;
@@ -67,6 +68,7 @@ export const API_FILE_VARS = [
   'REDIS_URL',
   'AUTH_SECRET',
   'SMTP_URL',
+  'PROVISIONING_CREDENTIAL_SHA256',
   ...ENCRYPTION_FILE_VARS,
   ...FACEBOOK_FILE_VARS,
   ...TIKTOK_FILE_VARS,
@@ -138,6 +140,8 @@ export interface ApiEnv {
   readonly telemetry: TelemetryConfig;
   readonly health: HealthPolicy;
   /** Which alert channels this deployment offers and the per-workspace hourly alert cap. */
+  /** Null unless PROVISIONING_CREDENTIAL_SHA256 is set; then the provisioning API is enabled. */
+  readonly provisioning: { readonly credentialDigests: readonly Buffer[] } | null;
   readonly alerts: {
     readonly slack: boolean;
     readonly email: boolean;
@@ -191,6 +195,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
   checkNotPlaceholder(appEnv, 'AUTH_SECRET', authSecret, opts.warn);
   const facebook = parseFacebookEnv(env, opts.warn);
   const classifier = describeClassifierProvider(env);
+  const credentialDigests = parseCredentialDigests(env.PROVISIONING_CREDENTIAL_SHA256);
   const config: ApiEnv = {
     appEnv,
     databaseUrl,
@@ -242,6 +247,7 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     scan: parseScanEnv(env, { facebook, classifierProvider: classifier.id }),
     telemetry: loadTelemetryConfig(env, 'api'),
     health: loadHealthPolicy(env),
+    provisioning: credentialDigests ? { credentialDigests } : null,
     alerts: {
       ...parseAlertChannels(env.ALERT_CHANNELS),
       ...readAlertLimits(env),
@@ -258,6 +264,8 @@ export function loadApiEnv(rawEnv: Env, opts: LoadEnvOptions): ApiEnv {
     publicWebUrl: publicWebUrl.origin,
     trustProxyHops: config.trustProxyHops,
     signupEnabled: config.signupEnabled,
+    provisioningEnabled: config.provisioning !== null,
+    provisioningCredentialCount: config.provisioning?.credentialDigests.length ?? 0,
     facebookEnabled: config.facebook !== null,
     instagramEnabled: config.instagram !== null,
     metaAdsEnabled: config.metaAds !== null,
