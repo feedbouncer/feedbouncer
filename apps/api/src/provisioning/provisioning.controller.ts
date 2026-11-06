@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Inject, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Put,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { recordProvisioningAudit, type ProvisioningAuditInput } from '@feedbouncer/db';
 import { errorFields } from '@feedbouncer/service-runtime';
@@ -6,7 +17,7 @@ import type { AppDeps } from '../deps.js';
 import { ApiError } from '../http/errors.js';
 import { parseUuidOr404, zUuid } from '../http/validation.js';
 import { DEPS } from '../tokens.js';
-import { CreateOrganizationBody, CreateUserBody } from './dto.js';
+import { CreateOrganizationBody, CreateUserBody, SetStatusBody } from './dto.js';
 import { ProvisioningGuard, type ProvisioningRequest } from './provisioning.guard.js';
 import { ProvisioningService } from './provisioning.service.js';
 import { parseProvisioningBody } from './validation.js';
@@ -48,6 +59,22 @@ export class ProvisioningController {
     }));
   }
 
+  @Put('organizations/:organizationId/status')
+  setOrganizationStatus(
+    @Req() req: ProvisioningRequest,
+    @Param('organizationId') raw: string,
+    @Body() body: unknown,
+  ) {
+    const fp = req.provisioning.credentialFingerprint;
+    return this.audited(fp, 'organization.set_status', 'organization', uuidOrNull(raw), () =>
+      this.service.setOrganizationStatus(
+        fp,
+        parseUuidOr404(raw),
+        parseProvisioningBody(SetStatusBody, body),
+      ),
+    );
+  }
+
   /** 201 when created, 200 when replayed. */
   @Post('organizations/:organizationId/users')
   async createUser(
@@ -70,6 +97,22 @@ export class ProvisioningController {
     return this.audited(fp, 'user.read', 'user', uuidOrNull(raw), async () => ({
       user: await this.service.getUser(fp, parseUuidOr404(raw)),
     }));
+  }
+
+  @Put('users/:userId/status')
+  setUserStatus(
+    @Req() req: ProvisioningRequest,
+    @Param('userId') raw: string,
+    @Body() body: unknown,
+  ) {
+    const fp = req.provisioning.credentialFingerprint;
+    return this.audited(fp, 'user.set_status', 'user', uuidOrNull(raw), () =>
+      this.service.setUserStatus(
+        fp,
+        parseUuidOr404(raw),
+        parseProvisioningBody(SetStatusBody, body),
+      ),
+    );
   }
 
   /**

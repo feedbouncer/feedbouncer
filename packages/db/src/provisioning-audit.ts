@@ -1,10 +1,16 @@
 import type pg from 'pg';
+import type { SuspensionReason } from './org-status-change.js';
 
 export interface ProvisioningAuditDetails {
   errorCode?: string;
   fields?: string;
   organizationId?: string;
   role?: 'owner' | 'admin' | 'member';
+  from?: 'active' | 'inactive';
+  to?: 'active' | 'inactive';
+  reason?: SuspensionReason;
+  /** On a user status change: the organizations where this user is the only owner. */
+  soleOwnerOfCount?: number;
 }
 
 export interface ProvisioningAuditInput {

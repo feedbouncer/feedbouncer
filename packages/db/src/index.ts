@@ -8,5 +8,6 @@ export * from './audit.js';
 export * from './organization-delete.js';
 export * from './privacy-guards.js';
 export * from './org-status.js';
+export * from './org-status-change.js';
 export * from './user-status.js';
 export * from './provisioning-audit.js';

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type pg from 'pg';
 import {
+  changeOrganizationStatus,
   isOrgActive,
   isUniqueViolation,
   recordAuditEvent,
@@ -11,6 +12,7 @@ import { deliverSetupEmails, type Auth } from '../auth/auth.js';
 import type { AppDeps } from '../deps.js';
 import { ApiError, notFound } from '../http/errors.js';
 import { AUTH, DEPS } from '../tokens.js';
+import { fromApiStatus, orgApiStatus, userApiStatus } from './status.js';
 import {
   ORGANIZATION_COLUMNS,
   USER_COLUMNS,
@@ -22,6 +24,7 @@ import {
   type OrganizationRow,
   type ProvisionedOrganization,
   type ProvisionedUser,
+  type SetStatusInput,
   type SetupEmail,
   type UserRow,
 } from './dto.js';
@@ -49,6 +52,18 @@ const membershipsOf = (c: Queryable, userId: string) =>
       [userId],
     )
     .then((r) => r.rows);
+
+/** The organizations where this user holds the only owner membership. */
+const soleOwnerOfCount = (c: Queryable, userId: string) =>
+  c
+    .query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM membership m
+        WHERE m.user_id = $1 AND m.role = 'owner'
+          AND NOT EXISTS (SELECT 1 FROM membership o WHERE o.organization_id = m.organization_id
+                             AND o.role = 'owner' AND o.user_id <> $1)`,
+      [userId],
+    )
+    .then((r) => r.rows[0]!.n);
 
 /**
  * The provisioning operations. Each success writes its own provisioning audit row
@@ -224,6 +239,86 @@ export class ProvisioningService {
     const setupEmail =
       replayed || body.sendSetupEmail === false ? 'skipped' : await this.sendSetupEmail(user);
     return { user, replayed, setupEmail };
+  }
+
+  /** Sets an organization's status; a no-op is `changed: false` with no audit_event. */
+  setOrganizationStatus(
+    fp: string,
+    id: string,
+    body: SetStatusInput,
+  ): Promise<{ organization: ProvisionedOrganization; changed: boolean }> {
+    const reason = body.reason ?? 'other';
+    return withTransaction(this.deps.pool, async (c) => {
+      const change = await changeOrganizationStatus(c, {
+        organizationId: id,
+        to: fromApiStatus(body.status),
+        reason,
+        ...VIA,
+        actorUserId: null,
+      });
+      if (!change) throw notFound();
+      await recordProvisioningAudit(c, {
+        action: 'organization.set_status',
+        targetType: 'organization',
+        targetId: id,
+        outcome: change.changed ? 'changed' : 'unchanged',
+        credentialFingerprint: fp,
+        ...(change.changed && {
+          details: { from: orgApiStatus(change.from), to: body.status, reason },
+        }),
+      });
+      const org = await c.query<OrganizationRow>(
+        `SELECT ${ORGANIZATION_COLUMNS} FROM organization WHERE id = $1`,
+        [id],
+      );
+      return { organization: toProvisionedOrganization(org.rows[0]!), changed: change.changed };
+    });
+  }
+
+  /**
+   * Sets a user's status. Deactivating also ends their sessions; their keys and
+   * memberships stay, refused while inactive. Deactivating an organization's only
+   * owner is allowed, and counted in the audit row.
+   */
+  setUserStatus(
+    fp: string,
+    id: string,
+    body: SetStatusInput,
+  ): Promise<{ user: ProvisionedUser; changed: boolean }> {
+    const reason = body.reason ?? 'other';
+    const to = fromApiStatus(body.status);
+    return withTransaction(this.deps.pool, async (c) => {
+      const row = (
+        await c.query<UserRow>(`SELECT ${USER_COLUMNS} FROM app_user WHERE id = $1 FOR UPDATE`, [
+          id,
+        ])
+      ).rows[0];
+      if (!row) throw notFound();
+      const changed = row.status !== to;
+      if (changed) {
+        await c.query('UPDATE app_user SET status = $2 WHERE id = $1', [id, to]);
+        if (to !== 'active') await c.query('DELETE FROM auth_session WHERE user_id = $1', [id]);
+      }
+      await recordProvisioningAudit(c, {
+        action: 'user.set_status',
+        targetType: 'user',
+        targetId: id,
+        outcome: changed ? 'changed' : 'unchanged',
+        credentialFingerprint: fp,
+        ...(changed && {
+          details: {
+            from: userApiStatus(row.status),
+            to: body.status,
+            reason,
+            soleOwnerOfCount: await soleOwnerOfCount(c, id),
+          },
+        }),
+      });
+      return {
+        user: toProvisionedUser({ ...row, status: to }, await membershipsOf(c, id)),
+        changed,
+      };
+    });
   }
 
   private async sendSetupEmail(user: ProvisionedUser): Promise<SetupEmail> {

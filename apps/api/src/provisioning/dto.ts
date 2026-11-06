@@ -1,4 +1,5 @@
 import { ROLES, type Role } from '@feedbouncer/authz';
+import { SUSPENSION_REASONS } from '@feedbouncer/db';
 import { normalizeAddress } from '@feedbouncer/mailer';
 import { z } from 'zod';
 import { zName } from '../http/validation.js';
@@ -32,6 +33,12 @@ export const CreateUserBody = z.strictObject({
   sendSetupEmail: z.boolean().optional(),
 });
 export type CreateUserInput = z.infer<typeof CreateUserBody>;
+
+export const SetStatusBody = z.strictObject({
+  status: z.enum(['active', 'inactive']),
+  reason: z.enum(SUSPENSION_REASONS).optional(),
+});
+export type SetStatusInput = z.infer<typeof SetStatusBody>;
 
 export type SetupEmail = 'sent' | 'skipped' | 'failed';
 
