@@ -166,6 +166,7 @@ test('runbook covers invites, daily status, the DLQ and offboarding', () => {
   const text = read(RUNBOOK);
   for (const needle of [
     'SIGNUP_ALLOWED_EMAILS',
+    'SIGNUP_ENABLED',
     'Tester',
     'pnpm ops beta-status',
     'exit code 2',
