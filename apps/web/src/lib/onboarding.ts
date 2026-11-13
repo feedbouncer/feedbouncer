@@ -76,7 +76,7 @@ export interface OnboardingReportDto {
 /** Non-secret cookie that marks an in-progress OAuth round trip as started from the wizard. */
 export const ONBOARDING_RETURN_COOKIE = 'fb_onboarding_return';
 
-/** Where the self-host guide is served by apps/docs (baseUrl + routeBasePath), as a relative path. */
+/** Where the self-host guide is served by apps/docs (baseUrl + routeBasePath), as a published absolute URL. */
 export const SELF_HOST_GUIDE_URL =
   'https://feedbouncer.github.io/feedbouncer/docs/concepts/self-hosting/';
 

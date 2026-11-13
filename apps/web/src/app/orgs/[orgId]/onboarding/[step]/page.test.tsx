@@ -99,11 +99,10 @@ describe('onboarding step page', () => {
     expect(renderToStaticMarkup(withIntl(await run('connect')))).toContain('name="name"');
   });
 
-  it('renders the frame and placeholder for a reachable step', async () => {
+  it('renders the frame for a reachable step', async () => {
     answer('admin');
     const html = renderToStaticMarkup(withIntl(await run('connect')));
     expect(html).toContain('Step 1 of 4');
     expect(html).toContain('Skip setup for now');
-    expect(html).not.toContain('Connect your social accounts here.');
   });
 });

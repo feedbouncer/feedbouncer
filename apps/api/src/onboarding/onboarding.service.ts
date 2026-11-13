@@ -50,7 +50,7 @@ interface StateRow {
 }
 
 /** The mutable part of the row: what a step handler may change. */
-export interface WizardState {
+interface WizardState {
   brandId: string | null;
   run: number;
   steps: StepStatuses;
@@ -64,7 +64,7 @@ interface Audit {
 }
 
 /** What a mutation decided: the next state, and an audit event only when something changed. */
-export interface Mutation {
+interface Mutation {
   next: WizardState;
   audit?: Audit;
 }
