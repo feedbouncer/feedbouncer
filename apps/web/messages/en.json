@@ -25,6 +25,27 @@
       "defaults": "Choose how FeedBouncer handles each kind of comment.",
       "review_mode": "Decide whether to review actions before they happen.",
       "report": "See what FeedBouncer found in your recent comments."
+    },
+    "connect": {
+      "brandLabel": "Brand",
+      "createBrandLabel": "Brand name",
+      "createBrand": "Create brand",
+      "createBrandIntro": "Create a brand first. Accounts and settings belong to a brand.",
+      "noPlatforms": "This server has no platform configured yet, so there is nothing to connect. See docs/self-hosting/README.md in the FeedBouncer repository to set one up, or skip setup for now.",
+      "status": {
+        "connected": "Connected",
+        "expired": "Authorization expired or revoked",
+        "failed": "Couldn't connect",
+        "pending": "Paused"
+      },
+      "tryAgain": "Try again",
+      "continue": "Continue",
+      "needOne": "Connect at least one account that's working to continue.",
+      "addMoreLater": "Add more later in Connections.",
+      "continueFailed": "Could not continue. Try again.",
+      "unnamed": "Unnamed account",
+      "brandChangeFailed": "Could not change the brand. Try again.",
+      "connectionsLabel": "Connected accounts"
     }
   }
 }

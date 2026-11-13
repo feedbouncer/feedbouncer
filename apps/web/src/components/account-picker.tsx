@@ -79,6 +79,10 @@ export function AccountPicker(props: {
   platform: ConnectablePlatform;
   grantId: string;
   accounts: PickerAccount[];
+  /** In the setup wizard: where "back" leads, instead of the connections page. */
+  returnHref?: string;
+  /** In the setup wizard the review-mode question is asked once, in step 3. */
+  hideReviewModeChoice?: boolean;
 }) {
   const id = useId();
   const [busy, setBusy] = useState(false);
@@ -93,7 +97,9 @@ export function AccountPicker(props: {
   const connectionsHref = `/orgs/${props.orgId}/brands/${props.brandId}/connections`;
   const back = (
     <p>
-      <Link href={connectionsHref}>Back to connections</Link>
+      <Link href={props.returnHref ?? connectionsHref}>
+        {props.returnHref ? 'Back to setup' : 'Back to connections'}
+      </Link>
     </p>
   );
 
@@ -202,7 +208,9 @@ export function AccountPicker(props: {
           );
         })}
       </ul>
-      <ReviewModeChoice {...reviewMode} onChange={setReviewMode} />
+      {props.hideReviewModeChoice ? null : (
+        <ReviewModeChoice {...reviewMode} onChange={setReviewMode} />
+      )}
       <button type="submit" className="btn-primary" disabled={busy || !canConnect(reviewMode)}>
         {SUBMIT_LABEL[props.platform]}
       </button>

@@ -1,5 +1,5 @@
 import { TableScroll } from '../../../../../../components/states';
-import { notFound, unstable_rethrow } from 'next/navigation';
+import { notFound, redirect, unstable_rethrow } from 'next/navigation';
 import { ApiForm } from '../../../../../../components/api-form';
 import { ConnectButton } from '../../../../../../components/connect-button';
 import {
@@ -15,6 +15,8 @@ import { healthText } from '../../../../../../lib/health-text';
 import { formatUtc } from '../../../../../../lib/format';
 import { isUuid } from '../../../../../../lib/ids';
 import { messageFor, statusReasonText } from '../../../../../../lib/messages';
+import { onboardingHref, safeErrorCode } from '../../../../../../lib/onboarding';
+import { isWizardReturn } from '../../../../../../lib/onboarding-return';
 import { missingPermissionText } from '../../../../../../lib/oauth';
 import {
   CONNECTABLE,
@@ -113,6 +115,10 @@ export default async function ConnectionsPage({
   const { orgId, brandId } = await params;
   if (!isUuid(orgId) || !isUuid(brandId)) notFound();
   await requireMe(`/orgs/${orgId}/brands/${brandId}/connections`);
+  if (await isWizardReturn(orgId)) {
+    const code = safeErrorCode((await searchParams).error);
+    redirect(onboardingHref(orgId, 'connect') + (code ? `?error=${code}` : ''));
+  }
   const review = await loadReviewMode(orgId, brandId);
   const org = dataOrThrow(await serverGet<{ role: Role }>(`/api/v1/orgs/${orgId}`), 'organization');
   const sp = await searchParams;

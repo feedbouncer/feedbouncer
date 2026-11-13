@@ -7,6 +7,8 @@ import { ConnectButton } from '../../../../../../../../components/connect-button
 import { PageHeader } from '../../../../../../../../components/ui/page-header';
 import { messageFor } from '../../../../../../../../lib/messages';
 import { isUuid } from '../../../../../../../../lib/ids';
+import { onboardingHref } from '../../../../../../../../lib/onboarding';
+import { isWizardReturn } from '../../../../../../../../lib/onboarding-return';
 import { PLATFORM_COPY, isConnectable } from '../../../../../../../../lib/platforms';
 import { requireMe, serverGet } from '../../../../../../../../lib/server-api';
 
@@ -20,6 +22,7 @@ export default async function SelectAccountsPage({
   const { orgId, brandId, platform } = await params;
   const { grant } = await searchParams;
   if (!isConnectable(platform) || !isUuid(orgId) || !isUuid(brandId) || !isUuid(grant)) notFound();
+  const wizard = await isWizardReturn(orgId);
   const copy = PLATFORM_COPY[platform];
   const title = copy.pickerTitle;
   await requireMe(`/orgs/${orgId}/brands/${brandId}/connections/${platform}/select?grant=${grant}`);
@@ -62,6 +65,9 @@ export default async function SelectAccountsPage({
         platform={platform}
         grantId={grant}
         accounts={r.data.accounts}
+        {...(wizard
+          ? { returnHref: onboardingHref(orgId, 'connect'), hideReviewModeChoice: true }
+          : {})}
       />
     </main>
   );

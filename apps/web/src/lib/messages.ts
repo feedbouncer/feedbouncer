@@ -35,6 +35,13 @@ const MESSAGES: Record<string, string> = {
   confirmation_send_failed: "The confirmation email couldn't be sent. Try Resend.",
   temporarily_unavailable: 'Temporarily unavailable. Try again shortly.',
   platform_not_configured: "This platform isn't set up on this FeedBouncer server.",
+  onboarding_no_working_connection:
+    "Connect at least one account that's working before you continue.",
+  onboarding_step_locked: 'Finish the earlier steps first.',
+  onboarding_defaults_stale:
+    "Someone else changed these settings a moment ago. We've loaded their version. Check it and save again.",
+  onboarding_no_brand: 'Create a brand first. Accounts and settings belong to a brand.',
+  onboarding_rerun_unconfirmed: 'Confirm that you want to run setup again.',
   platform_error: 'The platform could not be reached. Try again.',
   connection_needs_reconnect: 'This connection needs to be reconnected first.',
   connection_inactive: 'This connection is not active. Reconnect it and try again.',

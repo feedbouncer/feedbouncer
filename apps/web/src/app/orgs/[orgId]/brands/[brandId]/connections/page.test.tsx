@@ -10,6 +10,8 @@ const YT = '00000000-0000-4000-8000-000000000004';
 const responses = new Map<string, unknown>();
 const requestedPaths: string[] = [];
 
+// No OAuth round trip from the wizard is in progress.
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
 vi.mock('next/navigation', () => ({
   notFound: () => {
     throw new Error('not found');

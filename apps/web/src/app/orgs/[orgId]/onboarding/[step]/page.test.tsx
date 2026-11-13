@@ -51,7 +51,8 @@ const answer = (role: string, s = state()) =>
   serverGet.mockImplementation(async (p: string) =>
     p.endsWith('/onboarding') ? { status: 200, data: s } : { status: 200, data: { role } },
   );
-const run = (step: string, orgId = OID) => Page({ params: Promise.resolve({ orgId, step }) });
+const run = (step: string, orgId = OID) =>
+  Page({ params: Promise.resolve({ orgId, step }), searchParams: Promise.resolve({}) });
 
 beforeEach(() => {
   serverGet.mockReset();
@@ -93,11 +94,16 @@ describe('onboarding step page', () => {
     expect(serverGet).not.toHaveBeenCalledWith(expect.stringMatching(/onboarding$/));
   });
 
+  it('renders the real connect step', async () => {
+    answer('admin');
+    expect(renderToStaticMarkup(withIntl(await run('connect')))).toContain('name="name"');
+  });
+
   it('renders the frame and placeholder for a reachable step', async () => {
     answer('admin');
     const html = renderToStaticMarkup(withIntl(await run('connect')));
     expect(html).toContain('Step 1 of 4');
     expect(html).toContain('Skip setup for now');
-    expect(html).toContain('Connect your social accounts here.');
+    expect(html).not.toContain('Connect your social accounts here.');
   });
 });

@@ -1,17 +1,20 @@
 import { can } from '@feedbouncer/authz';
 import { getTranslations } from 'next-intl/server';
 import { notFound, redirect } from 'next/navigation';
+import { StepConnect } from '../../../../../components/onboarding/step-connect';
 import { WizardFrame } from '../../../../../components/onboarding/wizard-frame';
 import { PageHeader } from '../../../../../components/ui/page-header';
 import { isUuid } from '../../../../../lib/ids';
-import { onboardingHref, parseStep } from '../../../../../lib/onboarding';
+import { onboardingHref, parseStep, safeErrorCode } from '../../../../../lib/onboarding';
 import { loadOnboarding } from '../../../../../lib/onboarding-server';
 import { dataOrThrow, requireMe, serverGet, type Role } from '../../../../../lib/server-api';
 
 export default async function OnboardingStepPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orgId: string; step: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { orgId, step: rawStep } = await params;
   const step = parseStep(rawStep);
@@ -37,8 +40,16 @@ export default async function OnboardingStepPage({
     <main className="flex flex-col gap-6">
       <PageHeader title={t('title')} />
       <WizardFrame orgId={orgId} state={state} step={step}>
-        {/* Tasks 9 and 10 replace this placeholder with the real step components. */}
-        <p>{t(`placeholder.${step}`)}</p>
+        {step === 'connect' ? (
+          <StepConnect
+            orgId={orgId}
+            state={state}
+            error={safeErrorCode((await searchParams).error)}
+          />
+        ) : (
+          // Task 10 replaces this placeholder with the real step components.
+          <p>{t(`placeholder.${step}`)}</p>
+        )}
       </WizardFrame>
     </main>
   );
