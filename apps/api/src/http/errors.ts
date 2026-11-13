@@ -267,6 +267,8 @@ export class ApiError extends Error {
       readonly maxLength?: number;
       /** The caller's own running scan of the Page, for a 409 scan_in_progress. */
       readonly scanId?: string;
+      /** The current settings, for 409 onboarding_defaults_stale. */
+      readonly categories?: readonly unknown[];
     },
     /** Response headers to send with the error (Retry-After, WWW-Authenticate). */
     readonly headers?: Readonly<Record<string, string>>,
@@ -293,6 +295,7 @@ export function errorBody(e: ApiError): {
     problem?: string;
     maxLength?: number;
     scanId?: string;
+    categories?: readonly unknown[];
   };
 } {
   return { error: { ...e.details, code: e.code, message: e.message } };

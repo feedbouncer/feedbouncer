@@ -1,18 +1,27 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { can } from '@feedbouncer/authz';
+import { CATEGORIES, type Category } from '@feedbouncer/classifier';
 import { systemClock } from '@feedbouncer/connectors';
 import { withTransaction } from '@feedbouncer/db';
 import type pg from 'pg';
 import { recordAudit, type AuditAction } from '../audit/audit.js';
 import { connectablePlatforms } from '../connections/connectable-platforms.js';
+import { ClassifierService } from '../classifier/classifier.service.js';
 import { ConnectionsService } from '../connections/connections.service.js';
 import type { AppDeps } from '../deps.js';
 import { ApiError } from '../http/errors.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
-import type { OrgContext } from '../tenancy/org-access.guard.js';
+import { orgCan, type OrgContext } from '../tenancy/org-access.guard.js';
 import { lockedActor } from '../tenancy/org-lock.js';
 import { DEPS } from '../tokens.js';
-import { toOnboardingConnection, type OnboardingStateDto } from './dto.js';
+import {
+  toOnboardingConnection,
+  type DefaultAction,
+  type DefaultCategoryDto,
+  type OnboardingDefaultsDto,
+  type OnboardingStateDto,
+} from './dto.js';
 import {
   STEPS,
   isComplete,
@@ -75,11 +84,23 @@ const stateOf = (r: StateRow): WizardState => ({
   dismissed: r.dismissed_at !== null,
 });
 
+/** sha256 hex of the rows sorted by category, joined as `category:action:threshold`. */
+export function defaultsFingerprint(
+  rows: readonly { category: string; action: string; threshold: number }[],
+): string {
+  const text = [...rows]
+    .sort((a, b) => (a.category < b.category ? -1 : a.category > b.category ? 1 : 0))
+    .map((r) => `${r.category}:${r.action}:${r.threshold}`)
+    .join(',');
+  return createHash('sha256').update(text).digest('hex');
+}
+
 @Injectable()
 export class OnboardingService {
   constructor(
     @Inject(DEPS) private readonly deps: AppDeps,
     @Inject(ConnectionsService) private readonly connections: ConnectionsService,
+    @Inject(ClassifierService) private readonly classifier: ClassifierService,
   ) {}
 
   /** Never writes. */
@@ -122,6 +143,90 @@ export class OnboardingService {
         },
       };
     });
+  }
+
+  /** Never writes. Needs a live brand; the step order is enforced on the write only. */
+  async defaults(org: OrgContext): Promise<OnboardingDefaultsDto> {
+    const row = await this.#row(this.deps.pool, org.organizationId);
+    const brandId = await this.#targetBrand(
+      this.deps.pool,
+      org.organizationId,
+      row?.brand_id ?? null,
+    );
+    if (!brandId) throw new ApiError(409, 'onboarding_no_brand');
+    return this.#defaultsView({ organizationId: org.organizationId, brandId });
+  }
+
+  /**
+   * Saves the moderation defaults. `choices` is exactly the categories whose current action is
+   * not `remove` (those are left alone); only the ones that differ are written, each keeping its
+   * current threshold. The fingerprint is checked under the row and brand locks.
+   */
+  async saveDefaults(
+    org: OrgContext,
+    input: { choices: { category: Category; action: DefaultAction }[]; basedOn: string },
+  ): Promise<OnboardingStateDto> {
+    return this.#mutate(org, async (c, cur) => {
+      if (!isReachable(cur.steps, 'defaults')) throw new ApiError(409, 'onboarding_step_locked');
+      if (!cur.brandId) throw new ApiError(409, 'onboarding_no_brand');
+      if (!orgCan(org, 'rule.write')) throw new ApiError(403, 'forbidden');
+      const scope = { organizationId: org.organizationId, brandId: cur.brandId };
+      // Blocks concurrent classifier writers so the view read below cannot go stale before we write.
+      await c.query('SELECT 1 FROM brand WHERE organization_id = $1 AND id = $2 FOR UPDATE', [
+        scope.organizationId,
+        scope.brandId,
+      ]);
+      const view = await this.#defaultsView(scope);
+      if (view.basedOn !== input.basedOn)
+        throw new ApiError(409, 'onboarding_defaults_stale', undefined, {
+          categories: view.categories,
+        });
+      const current = new Map(view.categories.map((x) => [x.category, x]));
+      const sent = new Set(input.choices.map((x) => x.category));
+      const expected = CATEGORIES.filter((x) => current.get(x)?.action !== 'remove');
+      if (
+        sent.size !== input.choices.length ||
+        expected.some((x) => !sent.has(x)) ||
+        sent.size !== expected.length
+      )
+        throw new ApiError(400, 'invalid_request');
+      const changes = input.choices.filter((x) => current.get(x.category)?.action !== x.action);
+      if (changes.length > 0) {
+        await this.classifier.updateWithin(
+          c,
+          org,
+          scope,
+          changes.map((x) => ({
+            category: x.category,
+            action: x.action,
+            threshold: current.get(x.category)!.threshold,
+          })),
+        );
+      }
+      const { next } = markDone(cur.steps, 'defaults');
+      return {
+        next: { ...cur, steps: next },
+        audit: {
+          action: 'onboarding.defaults_saved',
+          // Audit details are scalars only, so the categories are comma-joined.
+          details: { changed: changes.map((x) => x.category).join(',') },
+        },
+      };
+    });
+  }
+
+  async #defaultsView(scope: {
+    organizationId: string;
+    brandId: string;
+  }): Promise<OnboardingDefaultsDto> {
+    const s = await this.classifier.settings(scope);
+    const categories: DefaultCategoryDto[] = s.categories.map((x) => ({
+      category: x.category,
+      action: x.action as DefaultCategoryDto['action'],
+      threshold: x.threshold,
+      source: x.source,
+    }));
+    return { aiEnabled: s.provider.enabled, categories, basedOn: defaultsFingerprint(categories) };
   }
 
   async dismiss(org: OrgContext): Promise<OnboardingStateDto> {

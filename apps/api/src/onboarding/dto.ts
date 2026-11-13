@@ -60,3 +60,19 @@ export function toOnboardingConnection(c: ConnectionView): OnboardingConnectionD
     backfill: c.backfill && { status: c.backfill.status, importedCount: c.backfill.importedCount },
   };
 }
+
+export type DefaultAction = 'hide' | 'flag' | 'approve';
+
+export interface DefaultCategoryDto {
+  category: string;
+  action: 'hide' | 'flag' | 'approve' | 'remove';
+  threshold: number;
+  source: 'default' | 'brand';
+}
+
+export interface OnboardingDefaultsDto {
+  aiEnabled: boolean;
+  categories: DefaultCategoryDto[];
+  /** Fingerprint of `categories`; PUT must echo it so a stale view cannot overwrite newer settings. */
+  basedOn: string;
+}
