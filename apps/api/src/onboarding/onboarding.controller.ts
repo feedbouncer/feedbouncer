@@ -17,6 +17,10 @@ const DefaultsBody = z.strictObject({
     .max(CATEGORIES.length),
   basedOn: z.string().regex(/^[0-9a-f]{64}$/),
 });
+const ReviewModeBody = z.discriminatedUnion('choice', [
+  z.strictObject({ choice: z.literal('review') }),
+  z.strictObject({ choice: z.literal('automatic'), acknowledgeRisk: z.literal(true) }),
+]);
 const BrandBody = z.strictObject({ brandId: zUuid });
 
 @Controller('api/v1/orgs/:orgId/onboarding')
@@ -62,6 +66,20 @@ export class OnboardingController {
   @RequireCapability('org.update')
   saveDefaults(@Req() req: OrgRequest, @Body() body: unknown) {
     return this.svc.saveDefaults(req.org, parseBody(DefaultsBody, body));
+  }
+
+  @Put('review-mode')
+  @RequireCapability('org.update')
+  reviewMode(@Req() req: OrgRequest, @Body() body: unknown) {
+    const r = ReviewModeBody.safeParse(body);
+    if (!r.success) {
+      // Same refusal as the connect flow when the risk was not acknowledged.
+      const b = body as { choice?: unknown; acknowledgeRisk?: unknown } | null;
+      if (b?.choice === 'automatic' && b.acknowledgeRisk !== true)
+        throw new ApiError(422, 'risk_not_acknowledged');
+      parseBody(ReviewModeBody, body);
+    }
+    return this.svc.chooseReviewMode(req.org, r.data!.choice);
   }
 
   @Post('dismiss')

@@ -8,6 +8,7 @@ import {
   bulkDecide,
   dismissSuggestion,
   endReviewModeEarly,
+  endReviewModeEarlyWithin,
   loadBrandName,
   loadConnectionInfo,
   requestBulkByFilter,
@@ -17,6 +18,7 @@ import {
   type SuggestionStatus,
 } from '@feedbouncer/actions';
 import { systemClock } from '@feedbouncer/connectors';
+import type pg from 'pg';
 import type { AppDeps } from '../deps.js';
 import { recordAudit } from '../audit/audit.js';
 import { ConnectionsService } from '../connections/connections.service.js';
@@ -24,6 +26,7 @@ import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
 import { requireBrand, type BrandScope } from '../tenancy/brand-scope.js';
 import { orgCan, type OrgContext } from '../tenancy/org-access.guard.js';
 import { DEPS } from '../tokens.js';
+import type { ConnectionScope } from '@feedbouncer/secrets';
 import {
   toDecisionDto,
   toHandledDetails,
@@ -171,6 +174,23 @@ export class ReviewModeService {
     });
     if (r.status === 'refused') throw refusal(r.code);
     return r;
+  }
+
+  /**
+   * `end` with `pending: 'leave'` inside the caller's transaction, for callers that already hold
+   * the organization lock. The connection must belong to the brand; true when it was ended,
+   * false when its window was not active.
+   */
+  async endLeavingPendingWithin(
+    c: pg.PoolClient,
+    org: OrgContext,
+    scope: ConnectionScope,
+  ): Promise<boolean> {
+    const n = await endReviewModeEarlyWithin({ clock: systemClock, audit: recordAudit }, c, scope, {
+      userId: org.actorUserId,
+      pending: 'leave',
+    });
+    return n !== null;
   }
 
   async list(

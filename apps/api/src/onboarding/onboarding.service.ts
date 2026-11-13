@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { can } from '@feedbouncer/authz';
 import { CATEGORIES, type Category } from '@feedbouncer/classifier';
-import { systemClock } from '@feedbouncer/connectors';
+import { reviewModeState, systemClock } from '@feedbouncer/connectors';
 import { withTransaction } from '@feedbouncer/db';
 import type pg from 'pg';
 import { recordAudit, type AuditAction } from '../audit/audit.js';
@@ -11,6 +11,7 @@ import { ClassifierService } from '../classifier/classifier.service.js';
 import { ConnectionsService } from '../connections/connections.service.js';
 import type { AppDeps } from '../deps.js';
 import { ApiError } from '../http/errors.js';
+import { ReviewModeService } from '../review-mode/review-mode.service.js';
 import { requireBrand } from '../tenancy/brand-scope.js';
 import { orgCan, type OrgContext } from '../tenancy/org-access.guard.js';
 import { lockedActor } from '../tenancy/org-lock.js';
@@ -101,6 +102,7 @@ export class OnboardingService {
     @Inject(DEPS) private readonly deps: AppDeps,
     @Inject(ConnectionsService) private readonly connections: ConnectionsService,
     @Inject(ClassifierService) private readonly classifier: ClassifierService,
+    @Inject(ReviewModeService) private readonly reviewMode: ReviewModeService,
   ) {}
 
   /** Never writes. */
@@ -210,6 +212,75 @@ export class OnboardingService {
           action: 'onboarding.defaults_saved',
           // Audit details are scalars only, so the categories are comma-joined.
           details: { changed: changes.map((x) => x.category).join(',') },
+        },
+      };
+    });
+  }
+
+  /**
+   * Step 3. `review` changes nothing; `automatic` ends every active review window of the target
+   * brand, leaving queued suggestions for a human. Retry-safe: ended windows are skipped and an
+   * unchanged outcome writes no audit event.
+   */
+  async chooseReviewMode(
+    org: OrgContext,
+    choice: 'review' | 'automatic',
+  ): Promise<OnboardingStateDto> {
+    return this.#mutate(org, async (c, cur) => {
+      if (!isReachable(cur.steps, 'review_mode')) throw new ApiError(409, 'onboarding_step_locked');
+      if (!cur.brandId) throw new ApiError(409, 'onboarding_no_brand');
+      const rows = (
+        await c.query<{
+          id: string;
+          review_mode: 'legacy' | 'on' | 'opted_out';
+          review_mode_started_at: Date | null;
+          review_mode_ends_at: Date | null;
+          review_mode_ended_at: Date | null;
+        }>(
+          `SELECT id, review_mode, review_mode_started_at, review_mode_ends_at, review_mode_ended_at
+             FROM connection WHERE organization_id = $1 AND brand_id = $2
+            ORDER BY created_at, id FOR UPDATE`,
+          [org.organizationId, cur.brandId],
+        )
+      ).rows;
+      const now = new Date(systemClock.now());
+      const states = rows.map((r) => ({
+        id: r.id,
+        state: reviewModeState(
+          {
+            mode: r.review_mode,
+            startedAt: r.review_mode_started_at,
+            endsAt: r.review_mode_ends_at,
+            endedAt: r.review_mode_ended_at,
+          },
+          now,
+        ),
+      }));
+      const active = states.filter((s) => s.state === 'active');
+      const endedIds: string[] = [];
+      if (choice === 'review') {
+        if (active.length === 0 && states.some((s) => s.state !== 'off'))
+          throw new ApiError(409, 'onboarding_step_locked');
+      } else {
+        if (!orgCan(org, 'connection.manage')) throw new ApiError(403, 'forbidden');
+        for (const s of active) {
+          const scope = {
+            organizationId: org.organizationId,
+            brandId: cur.brandId,
+            connectionId: s.id,
+          };
+          if (await this.reviewMode.endLeavingPendingWithin(c, org, scope)) endedIds.push(s.id);
+        }
+      }
+      const { next, changed } = markDone(cur.steps, 'review_mode');
+      if (!changed && cur.reviewModeChoice === choice && endedIds.length === 0)
+        return { next: cur };
+      return {
+        next: { ...cur, steps: next, reviewModeChoice: choice },
+        audit: {
+          action: 'onboarding.review_mode_chosen',
+          // Audit details are scalars only, so the ids are comma-joined.
+          details: { choice, endedConnectionIds: endedIds.join(',') },
         },
       };
     });

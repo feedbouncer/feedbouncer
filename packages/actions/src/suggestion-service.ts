@@ -389,6 +389,72 @@ export function suggestionBulkJob(d: Deps): JobDefinition<SuggestionBulkPayload>
   };
 }
 
+/**
+ * The early end inside the caller's transaction: the new pending count, or null when the window
+ * is not active (already ended, opted out, legacy or not started). The caller owns confirm and,
+ * for `approve`, the enqueue that follows.
+ */
+export async function endReviewModeEarlyWithin(
+  d: Pick<Deps, 'clock' | 'audit'>,
+  tx: pg.PoolClient,
+  scope: ConnectionScope,
+  i: { userId: string; pending: 'leave' | 'dismiss' | 'approve' },
+): Promise<number | null> {
+  const now = new Date(d.clock.now());
+  const ended = await tx.query(
+    `UPDATE connection SET review_mode_ended_at = GREATEST($4, review_mode_started_at), review_mode_ended_by_user_id = $5,
+            review_mode_ended_pending = $6
+      WHERE organization_id = $1 AND brand_id = $2 AND id = $3
+        AND review_mode = 'on' AND review_mode_started_at IS NOT NULL
+        AND review_mode_ended_at IS NULL AND (review_mode_ends_at IS NULL OR review_mode_ends_at > $4)`,
+    [scope.organizationId, scope.brandId, scope.connectionId, now, i.userId, i.pending],
+  );
+  if (ended.rowCount !== 1) return null;
+  const scopeArgs = [scope.organizationId, scope.brandId, scope.connectionId];
+  if (i.pending === 'dismiss')
+    await tx.query(
+      `UPDATE action_suggestion s
+          SET status = 'not_applicable', decided_at = now(),
+              status_reason = CASE WHEN c.platform_state = 'deleted' THEN 'comment_gone'
+                                   ELSE 'comment_edited' END
+         FROM comment c
+        WHERE s.organization_id = $1 AND s.brand_id = $2 AND s.connection_id = $3
+          AND s.status = 'pending'
+          AND c.organization_id = s.organization_id AND c.brand_id = s.brand_id
+          AND c.id = s.comment_id
+          AND (c.platform_state = 'deleted'
+               OR sha256(convert_to(c.body, 'UTF8')) <> s.body_sha256)`,
+      scopeArgs,
+    );
+  const count =
+    i.pending === 'dismiss'
+      ? ((
+          await tx.query(
+            `UPDATE action_suggestion
+                SET status = 'dismissed', status_reason = 'review_mode_ended', decided_by_user_id = $4,
+                    decided_at = now()
+              WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND status = 'pending'`,
+            [...scopeArgs, i.userId],
+          )
+        ).rowCount ?? 0)
+      : (
+          await tx.query<{ n: number }>(
+            `SELECT count(*)::int AS n FROM action_suggestion
+              WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND status = 'pending'`,
+            scopeArgs,
+          )
+        ).rows[0]!.n;
+  await d.audit(tx, {
+    ...scope,
+    actorUserId: i.userId,
+    action: 'review_mode.ended_early',
+    subjectType: 'connection',
+    subjectId: scope.connectionId,
+    details: { pending: i.pending, pendingCount: count },
+  });
+  return count;
+}
+
 export async function endReviewModeEarly(
   d: Deps,
   scope: ConnectionScope,
@@ -404,61 +470,9 @@ export async function endReviewModeEarly(
 > {
   if (i.pending === 'approve' && !i.confirm)
     return { status: 'refused', code: 'confirmation_required' };
-  const now = new Date(d.clock.now());
-  const pendingCount = await withTransaction(d.pool, async (tx) => {
-    const ended = await tx.query(
-      `UPDATE connection SET review_mode_ended_at = GREATEST($4, review_mode_started_at), review_mode_ended_by_user_id = $5,
-              review_mode_ended_pending = $6
-        WHERE organization_id = $1 AND brand_id = $2 AND id = $3
-          AND review_mode = 'on' AND review_mode_started_at IS NOT NULL
-          AND review_mode_ended_at IS NULL AND (review_mode_ends_at IS NULL OR review_mode_ends_at > $4)`,
-      [scope.organizationId, scope.brandId, scope.connectionId, now, i.userId, i.pending],
-    );
-    if (ended.rowCount !== 1) return null;
-    const scopeArgs = [scope.organizationId, scope.brandId, scope.connectionId];
-    if (i.pending === 'dismiss')
-      await tx.query(
-        `UPDATE action_suggestion s
-            SET status = 'not_applicable', decided_at = now(),
-                status_reason = CASE WHEN c.platform_state = 'deleted' THEN 'comment_gone'
-                                     ELSE 'comment_edited' END
-           FROM comment c
-          WHERE s.organization_id = $1 AND s.brand_id = $2 AND s.connection_id = $3
-            AND s.status = 'pending'
-            AND c.organization_id = s.organization_id AND c.brand_id = s.brand_id
-            AND c.id = s.comment_id
-            AND (c.platform_state = 'deleted'
-                 OR sha256(convert_to(c.body, 'UTF8')) <> s.body_sha256)`,
-        scopeArgs,
-      );
-    const count =
-      i.pending === 'dismiss'
-        ? ((
-            await tx.query(
-              `UPDATE action_suggestion
-                  SET status = 'dismissed', status_reason = 'review_mode_ended', decided_by_user_id = $4,
-                      decided_at = now()
-                WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND status = 'pending'`,
-              [...scopeArgs, i.userId],
-            )
-          ).rowCount ?? 0)
-        : (
-            await tx.query<{ n: number }>(
-              `SELECT count(*)::int AS n FROM action_suggestion
-                WHERE organization_id = $1 AND brand_id = $2 AND connection_id = $3 AND status = 'pending'`,
-              scopeArgs,
-            )
-          ).rows[0]!.n;
-    await d.audit(tx, {
-      ...scope,
-      actorUserId: i.userId,
-      action: 'review_mode.ended_early',
-      subjectType: 'connection',
-      subjectId: scope.connectionId,
-      details: { pending: i.pending, pendingCount: count },
-    });
-    return count;
-  });
+  const pendingCount = await withTransaction(d.pool, (tx) =>
+    endReviewModeEarlyWithin(d, tx, scope, i),
+  );
   const approveAll = () =>
     requestBulkByFilter(d, scope, {
       action: 'approve',
