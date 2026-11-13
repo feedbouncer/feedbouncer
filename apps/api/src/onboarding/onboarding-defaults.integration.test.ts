@@ -130,6 +130,17 @@ describe('PUT /defaults', () => {
     expect(await audits(f.orgId, 'onboarding.defaults_saved')).toBe(1);
   });
 
+  it('a repeated identical PUT on a done step writes no extra audit row', async () => {
+    const f = await connected();
+    const g = (await call('GET', url(f, '/defaults'), f.owner)).body;
+    const body = { choices: choicesFrom(g.categories), basedOn: g.basedOn };
+    expect((await call('PUT', url(f, '/defaults'), f.owner, body)).status).toBe(200);
+    const again = await call('PUT', url(f, '/defaults'), f.owner, body);
+    expect(again.status).toBe(200);
+    expect(again.body.steps.defaults).toBe('done');
+    expect(await audits(f.orgId, 'onboarding.defaults_saved')).toBe(1);
+  });
+
   it('spam=hide writes exactly one row keeping threshold 0.8', async () => {
     const f = await connected();
     const g = (await call('GET', url(f, '/defaults'), f.owner)).body;

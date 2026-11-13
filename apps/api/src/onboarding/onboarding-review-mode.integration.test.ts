@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PgSuggestionStore } from '@feedbouncer/actions';
+import { Secret } from '@feedbouncer/service-runtime';
 import {
   orgWithRoles,
   startTestApi,
@@ -238,5 +239,65 @@ describe('PUT /review-mode', () => {
     const c = await conn(id);
     expect(c.review_mode).toBe('on');
     expect(c.review_mode_ended_at).toBeNull();
+  });
+});
+
+describe('lock order with the review-mode end endpoint', () => {
+  let fbApi: TestApi;
+  beforeAll(async () => {
+    const FACEBOOK = {
+      appId: '1112223334',
+      appSecret: new Secret('fb-app-secret-0123456789abcdef'),
+      graphVersion: 'v26.0',
+      webhookVerifyToken: new Secret('verify-token-0123456789'),
+    };
+    fbApi = await startTestApi({ facebook: FACEBOOK, instagram: { meta: FACEBOOK } });
+  });
+  afterAll(() => fbApi.close());
+
+  it('ending review mode waits for the organization lock instead of deadlocking with a holder that then locks the connection', async () => {
+    const f = await orgWithRoles(fbApi, `onbl${++seq}`);
+    const { scope } = await fbApi.seedConnection(f, {
+      platform: 'facebook',
+      externalAccountId: `l${++seq}`,
+    });
+    const id = scope.connectionId;
+    await fbApi.pool.query(
+      `UPDATE connection SET review_mode = 'on', review_mode_started_at = now() - interval '1 hour',
+              review_mode_ends_at = now() + interval '167 hours' WHERE id = $1`,
+      [id],
+    );
+    const holder = await fbApi.pool.connect();
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT 1 FROM organization WHERE id = $1 FOR UPDATE', [f.orgId]);
+      const ending = fbApi.req(
+        'POST',
+        `/api/v1/orgs/${f.orgId}/brands/${f.brandId}/connections/${id}/review-mode/end`,
+        { cookie: f.owner.cookie, body: { pending: 'leave' } },
+      );
+      // Wait until the request is blocked on a lock (the organization row, or with the old order
+      // the audit insert after it already held the connection row).
+      for (let i = 0; i < 100; i++) {
+        const w = await fbApi.pool.query(
+          `SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND pid <> $1`,
+          [(await holder.query('SELECT pg_backend_pid() AS pid')).rows[0].pid],
+        );
+        if (w.rowCount) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      // Same order as PUT /review-mode: the organization lock is already held, then the connection.
+      await holder.query('SELECT 1 FROM connection WHERE id = $1 FOR UPDATE', [id]);
+      await holder.query('COMMIT');
+      const done = await ending;
+      expect(done.body, JSON.stringify(done.body)).toMatchObject({ status: 'ended' });
+    } finally {
+      holder.release();
+    }
+    const ended = await fbApi.pool.query(
+      'SELECT review_mode_ended_at FROM connection WHERE id = $1',
+      [id],
+    );
+    expect(ended.rows[0].review_mode_ended_at).not.toBeNull();
   });
 });

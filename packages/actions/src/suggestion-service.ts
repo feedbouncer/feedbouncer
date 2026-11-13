@@ -470,9 +470,13 @@ export async function endReviewModeEarly(
 > {
   if (i.pending === 'approve' && !i.confirm)
     return { status: 'refused', code: 'confirmation_required' };
-  const pendingCount = await withTransaction(d.pool, (tx) =>
-    endReviewModeEarlyWithin(d, tx, scope, i),
-  );
+  const pendingCount = await withTransaction(d.pool, async (tx) => {
+    // Lock order is organization first, then connection (the same as the API's organization-locked
+    // writers, e.g. onboarding's review-mode step), so the audit insert below can never wait on an
+    // organization lock held by a transaction that is waiting for this connection row.
+    await tx.query('SELECT 1 FROM organization WHERE id = $1 FOR UPDATE', [scope.organizationId]);
+    return endReviewModeEarlyWithin(d, tx, scope, i);
+  });
   const approveAll = () =>
     requestBulkByFilter(d, scope, {
       action: 'approve',

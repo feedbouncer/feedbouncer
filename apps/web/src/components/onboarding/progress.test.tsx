@@ -40,6 +40,16 @@ describe('Progress', () => {
     expect(html.match(/Not available yet/g)).toHaveLength(2);
   });
 
+  it('names every item as Step N of 4 with its name, plus the status text', () => {
+    for (const [n, name] of [
+      [1, 'Connect accounts'],
+      [2, 'Pick defaults'],
+      [3, 'Review mode'],
+      [4, 'First report'],
+    ] as const)
+      expect(html).toContain(`Step ${n} of 4: ${name}`);
+  });
+
   it('uses the server reachable map, not the step statuses', () => {
     const out = renderToStaticMarkup(
       withIntl(

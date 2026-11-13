@@ -95,6 +95,52 @@ describe('read', () => {
     expect(r.body).toMatchObject({ preconfigured: true, autoStart: false });
   });
 
+  it('a rule-only org is preconfigured', async () => {
+    const f = await fresh();
+    await api.pool.query(
+      `INSERT INTO rule (organization_id, brand_id, name, conditions, action)
+       VALUES ($1, $2, 'r', '{}'::jsonb, 'hide')`,
+      [f.orgId, f.brandId],
+    );
+    const r = await call('GET', url(f), f.owner);
+    expect(r.body).toMatchObject({ preconfigured: true, autoStart: false });
+  });
+
+  it('an org whose only rule is archived is not preconfigured', async () => {
+    const f = await fresh();
+    await api.pool.query(
+      `INSERT INTO rule (organization_id, brand_id, name, conditions, action, archived_at)
+       VALUES ($1, $2, 'r', '{}'::jsonb, 'hide', now())`,
+      [f.orgId, f.brandId],
+    );
+    const r = await call('GET', url(f), f.owner);
+    expect(r.body).toMatchObject({ preconfigured: false, autoStart: true });
+  });
+
+  it.each([
+    ['reconnect_required', null, true],
+    ['paused', null, true],
+    ['reconnect_required', 'oauth_pending', false],
+  ])('an org with only a %s (%s) connection: preconfigured=%s', async (status, reason, want) => {
+    const f = await fresh();
+    await api.pool.query(
+      `INSERT INTO connection (organization_id, brand_id, platform, external_account_id, status, status_reason)
+       VALUES ($1, $2, 'facebook', $3, $4, $5)`,
+      [f.orgId, f.brandId, `st${seq}`, status, reason],
+    );
+    const r = await call('GET', url(f), f.owner);
+    expect(r.body).toMatchObject({ preconfigured: want, autoStart: !want });
+  });
+
+  it('autoStart is only for managers, and only while no wizard row exists', async () => {
+    const f = await fresh();
+    expect((await call('GET', url(f), f.member)).status).toBe(403);
+    expect((await call('GET', url(f), f.admin)).body.autoStart).toBe(true);
+    await call('POST', url(f, '/start'), f.owner, {});
+    const r = await call('GET', url(f), f.owner);
+    expect(r.body).toMatchObject({ started: true, autoStart: false });
+  });
+
   it('an org without a live brand has brand=null', async () => {
     const f = await fresh();
     await api.pool.query('UPDATE brand SET archived_at = now() WHERE id = $1', [f.brandId]);
@@ -288,7 +334,7 @@ describe('dismiss and rerun', () => {
 
   it('rerun without confirm is 422', async () => {
     const f = await fresh();
-    for (const body of [{}, { confirm: false }, { confirm: 'yes' }]) {
+    for (const body of [{}, { confirm: false }, { confirm: 'yes' }, { confirm: true, extra: 1 }]) {
       const r = await call('POST', url(f, '/rerun'), f.owner, body);
       expect(r.status).toBe(422);
       expect(r.body.error.code).toBe('onboarding_rerun_unconfirmed');

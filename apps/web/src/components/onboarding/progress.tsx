@@ -23,7 +23,11 @@ export function Progress({
       </p>
       <ol aria-label={t('progress.label')} className="flex flex-wrap gap-x-4 gap-y-1">
         {STEPS.map((step) => {
-          const label = t(`steps.${step}`);
+          const label = t('progress.item', {
+            current: STEPS.indexOf(step) + 1,
+            total: STEPS.length,
+            name: t(`steps.${step}`),
+          });
           const isCurrent = step === current;
           const linkable = !isCurrent && reachable[step];
           const status = isCurrent

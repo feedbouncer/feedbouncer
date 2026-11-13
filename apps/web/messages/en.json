@@ -9,6 +9,7 @@
     "progress": {
       "label": "Setup progress",
       "stepOf": "Step {current} of {total}",
+      "item": "Step {current} of {total}: {name}",
       "done": "Done",
       "current": "Current step",
       "todo": "Not started",

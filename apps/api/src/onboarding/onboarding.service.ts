@@ -175,7 +175,8 @@ export class OnboardingService {
       if (!cur.brandId) throw new ApiError(409, 'onboarding_no_brand');
       if (!orgCan(org, 'rule.write')) throw new ApiError(403, 'forbidden');
       const scope = { organizationId: org.organizationId, brandId: cur.brandId };
-      // Blocks concurrent classifier writers so the view read below cannot go stale before we write.
+      // Keeps the threshold reads below consistent with the fingerprint check within this
+      // transaction. The organization lock taken by #mutate is what serializes classifier writers.
       await c.query('SELECT 1 FROM brand WHERE organization_id = $1 AND id = $2 FOR UPDATE', [
         scope.organizationId,
         scope.brandId,
@@ -207,6 +208,8 @@ export class OnboardingService {
           })),
         );
       }
+      // A repeat of an identical save on a finished step has nothing to record.
+      if (changes.length === 0 && cur.steps.defaults === 'done') return { next: cur };
       const { next } = markDone(cur.steps, 'defaults');
       return {
         next: { ...cur, steps: next },
@@ -507,14 +510,23 @@ export class OnboardingService {
     return r.rows[0]?.id ?? null;
   }
 
+  /**
+   * True when the org already has something set up: any connection other than one still waiting
+   * for its OAuth grant, any classifier threshold, or any rule that is not archived.
+   */
   async #preconfigured(db: Pick<pg.Pool, 'query'>, organizationId: string): Promise<boolean> {
     const r = await db.query(
-      `SELECT 1 FROM classifier_threshold WHERE organization_id = $1
-       UNION ALL
-       SELECT 1 FROM connection WHERE organization_id = $1 AND status = 'active' LIMIT 1`,
+      `SELECT EXISTS (
+         SELECT 1 FROM connection WHERE organization_id = $1
+            AND NOT (status = 'reconnect_required' AND status_reason IS NOT DISTINCT FROM 'oauth_pending')
+       ) OR EXISTS (
+         SELECT 1 FROM classifier_threshold WHERE organization_id = $1
+       ) OR EXISTS (
+         SELECT 1 FROM rule WHERE organization_id = $1 AND archived_at IS NULL
+       ) AS configured`,
       [organizationId],
     );
-    return (r.rowCount ?? 0) > 0;
+    return r.rows[0]?.configured === true;
   }
 
   async #dto(
@@ -539,7 +551,7 @@ export class OnboardingService {
     const connections = brand ? await this.connections.list(org, brand.id) : [];
     return {
       started: row !== null,
-      autoStart: !preconfigured && !dismissed && !complete,
+      autoStart: row === null && !preconfigured && orgCan(org, 'org.update'),
       preconfigured,
       dismissed,
       complete,

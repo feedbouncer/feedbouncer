@@ -21,6 +21,7 @@ const ReviewModeBody = z.discriminatedUnion('choice', [
   z.strictObject({ choice: z.literal('review') }),
   z.strictObject({ choice: z.literal('automatic'), acknowledgeRisk: z.literal(true) }),
 ]);
+const RerunBody = z.strictObject({ confirm: z.literal(true) });
 const BrandBody = z.strictObject({ brandId: zUuid });
 
 @Controller('api/v1/orgs/:orgId/onboarding')
@@ -109,8 +110,7 @@ export class OnboardingController {
   @RequireCapability('org.update')
   rerun(@Req() req: OrgRequest, @Body() body: unknown) {
     // Anything but confirm === true is unconfirmed (422), including a malformed body.
-    if ((body as { confirm?: unknown } | null)?.confirm !== true)
-      throw new ApiError(422, 'onboarding_rerun_unconfirmed');
+    if (!RerunBody.safeParse(body).success) throw new ApiError(422, 'onboarding_rerun_unconfirmed');
     return this.svc.rerun(req.org);
   }
 }
