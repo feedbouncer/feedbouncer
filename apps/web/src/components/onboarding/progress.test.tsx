@@ -10,7 +10,14 @@ const steps = {
   report: 'pending',
 } as const;
 const html = renderToStaticMarkup(
-  withIntl(<Progress steps={steps} current="defaults" orgId="o1" />),
+  withIntl(
+    <Progress
+      steps={steps}
+      reachable={{ connect: true, defaults: true, review_mode: false, report: false }}
+      current="defaults"
+      orgId="o1"
+    />,
+  ),
 );
 
 describe('Progress', () => {
@@ -25,5 +32,25 @@ describe('Progress', () => {
     expect(html).not.toContain('onboarding/review_mode"');
     expect(html).not.toContain('onboarding/report"');
     expect(html.match(/aria-disabled="true"/g)).toHaveLength(2);
+  });
+
+  it('shows status text for every step, never colour alone', () => {
+    expect(html).toContain('Done');
+    expect(html).toContain('Current step');
+    expect(html.match(/Not available yet/g)).toHaveLength(2);
+  });
+
+  it('uses the server reachable map, not the step statuses', () => {
+    const out = renderToStaticMarkup(
+      withIntl(
+        <Progress
+          steps={steps}
+          reachable={{ connect: true, defaults: true, review_mode: true, report: false }}
+          current="connect"
+          orgId="o1"
+        />,
+      ),
+    );
+    expect(out).toContain('href="/orgs/o1/onboarding/review_mode"');
   });
 });

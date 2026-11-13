@@ -27,7 +27,12 @@ export default async function OnboardingStepPage({
     );
   }
   const state = await loadOnboarding(orgId);
-  if (!state.reachable[step]) redirect(onboardingHref(orgId, state.resumeStep ?? 'report'));
+  if (!state.reachable[step]) {
+    const target = state.resumeStep ?? 'report';
+    // Redirecting to the requested step itself would loop.
+    if (target === step) notFound();
+    redirect(onboardingHref(orgId, target));
+  }
   return (
     <main className="flex flex-col gap-6">
       <PageHeader title={t('title')} />

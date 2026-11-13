@@ -21,6 +21,7 @@ export function WizardFrame({
 }) {
   const t = useTranslations('onboarding');
   const router = useRouter();
+  const [skipping, setSkipping] = useState(false);
   const [skipFailed, setSkipFailed] = useState(false);
   const [startFailed, setStartFailed] = useState(false);
   const started = useRef(false);
@@ -37,11 +38,14 @@ export function WizardFrame({
   }, [state.started, orgId, router]);
 
   async function skip() {
+    if (skipping) return;
+    setSkipping(true);
     setSkipFailed(false);
     try {
       await apiFetch(`/api/v1/orgs/${orgId}/onboarding/dismiss`, { method: 'POST' });
     } catch {
       setSkipFailed(true);
+      setSkipping(false);
       return;
     }
     router.push(`/orgs/${orgId}`);
@@ -50,11 +54,11 @@ export function WizardFrame({
   return (
     <div className="flex flex-col gap-6">
       {previous ? <BackLink href={onboardingHref(orgId, previous)}>{t('back')}</BackLink> : null}
-      <Progress steps={state.steps} current={step} orgId={orgId} />
+      <Progress steps={state.steps} reachable={state.reachable} current={step} orgId={orgId} />
       {startFailed ? <p role="alert">{t('startFailed')}</p> : null}
       {children}
       <div className="flex items-center gap-3">
-        <Button type="button" variant="ghost" size="sm" onClick={skip}>
+        <Button type="button" variant="ghost" size="sm" disabled={skipping} onClick={skip}>
           {t('skip')}
         </Button>
         {skipFailed ? <p role="alert">{t('skipFailed')}</p> : null}

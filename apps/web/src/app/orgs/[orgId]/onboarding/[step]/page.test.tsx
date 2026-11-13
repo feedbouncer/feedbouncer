@@ -66,6 +66,18 @@ describe('onboarding step page', () => {
     expect(redirect).toHaveBeenCalledWith(`/orgs/${OID}/onboarding/connect`);
   });
 
+  it('an unreachable step that is also the resume step is notFound, not a redirect loop', async () => {
+    answer(
+      'owner',
+      state({
+        resumeStep: null,
+        reachable: { connect: false, defaults: false, review_mode: false, report: false },
+      }),
+    );
+    await expect(run('report')).rejects.toThrow('NOTFOUND');
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
   it('unknown step or bad org id is notFound', async () => {
     answer('owner');
     await expect(run('nope')).rejects.toThrow('NOTFOUND');

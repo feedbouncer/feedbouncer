@@ -1,20 +1,17 @@
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { cn } from '../../lib/utils';
-import {
-  isReachable,
-  onboardingHref,
-  STEPS,
-  type Step,
-  type StepStatuses,
-} from '../../lib/onboarding';
+import { onboardingHref, STEPS, type Step, type StepStatuses } from '../../lib/onboarding';
 
 export function Progress({
   steps,
+  reachable,
   current,
   orgId,
 }: {
   steps: StepStatuses;
+  /** The server's reachability map. */
+  reachable: Record<Step, boolean>;
   current: Step;
   orgId: string;
 }) {
@@ -28,7 +25,14 @@ export function Progress({
         {STEPS.map((step) => {
           const label = t(`steps.${step}`);
           const isCurrent = step === current;
-          const linkable = !isCurrent && isReachable(steps, step);
+          const linkable = !isCurrent && reachable[step];
+          const status = isCurrent
+            ? t('progress.current')
+            : steps[step] === 'done'
+              ? t('progress.done')
+              : reachable[step]
+                ? t('progress.todo')
+                : t('progress.unavailable');
           const cls = cn(
             'text-small',
             isCurrent ? 'font-semibold text-foreground' : 'text-dim',
@@ -42,6 +46,7 @@ export function Progress({
                   className={cn(cls, 'hover:text-foreground')}
                 >
                   {label}
+                  <span className="block text-caption">{status}</span>
                 </Link>
               ) : (
                 <span
@@ -49,6 +54,7 @@ export function Progress({
                   {...(isCurrent ? { 'aria-current': 'step' as const } : { 'aria-disabled': true })}
                 >
                   {label}
+                  <span className="block">{status}</span>
                 </span>
               )}
             </li>

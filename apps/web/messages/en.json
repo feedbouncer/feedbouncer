@@ -8,7 +8,11 @@
     "back": "Back",
     "progress": {
       "label": "Setup progress",
-      "stepOf": "Step {current} of {total}"
+      "stepOf": "Step {current} of {total}",
+      "done": "Done",
+      "current": "Current step",
+      "todo": "Not started",
+      "unavailable": "Not available yet"
     },
     "steps": {
       "connect": "Connect accounts",
