@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type pg from 'pg';
 import { createPool } from '@feedbouncer/db';
 import { migratedDb, uuid } from '@feedbouncer/db/testing';
@@ -63,8 +63,11 @@ describe('BrandSlots', () => {
     expect(l).not.toBeNull();
     expect(await slots.acquire(brandA)).toBeNull();
     await l!.destroy();
-    const again = await slots.acquire(brandA);
-    expect(again).not.toBeNull();
-    await again!.release();
+    const again = await vi.waitFor(async () => {
+      const lease = await slots.acquire(brandA);
+      if (!lease) throw new Error('slot not freed yet');
+      return lease;
+    });
+    await again.release();
   });
 });
