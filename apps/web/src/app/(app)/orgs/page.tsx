@@ -1,3 +1,4 @@
+import { can } from '@feedbouncer/authz';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ApiForm } from '../../../components/api-form';
@@ -18,7 +19,7 @@ export default async function OrgsPage({
   const { error, notice } = await searchParams;
   // A manager of exactly one workspace that still needs setup goes straight to the wizard.
   const only = me.memberships.length === 1 ? me.memberships[0] : undefined;
-  if (only && only.role !== 'member' && only.organizationStatus === 'active') {
+  if (only && can(only.role, 'org.update') && only.organizationStatus === 'active') {
     const state = await loadOnboardingOrNull(only.organizationId);
     if (state?.autoStart) redirect(onboardingHref(only.organizationId));
   }

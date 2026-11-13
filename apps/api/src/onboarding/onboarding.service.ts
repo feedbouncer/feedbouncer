@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
-import { can } from '@feedbouncer/authz';
+import { can, type Role } from '@feedbouncer/authz';
 import { CATEGORIES, PgThresholdStore, type Category } from '@feedbouncer/classifier';
 import { reviewModeState, systemClock } from '@feedbouncer/connectors';
 import { withTransaction } from '@feedbouncer/db';
@@ -114,7 +114,7 @@ export class OnboardingService {
   }
 
   async start(org: OrgContext): Promise<OnboardingStateDto> {
-    return this.#mutate(org, async (c, cur, created) => ({
+    return this.#mutate(org, async (_c, cur, created) => ({
       next: cur,
       ...(created && { audit: { action: 'onboarding.started' as const } }),
     }));
@@ -173,10 +173,10 @@ export class OnboardingService {
     org: OrgContext,
     input: { choices: { category: Category; action: DefaultAction }[]; basedOn: string },
   ): Promise<OnboardingStateDto> {
-    return this.#mutate(org, async (c, cur) => {
+    return this.#mutate(org, async (c, cur, _created, role) => {
       if (!isReachable(cur.steps, 'defaults')) throw new ApiError(409, 'onboarding_step_locked');
       if (!cur.brandId) throw new ApiError(409, 'onboarding_no_brand');
-      if (!orgCan(org, 'rule.write')) throw new ApiError(403, 'forbidden');
+      if (!can(role, 'rule.write', org.grants)) throw new ApiError(403, 'forbidden');
       const scope = { organizationId: org.organizationId, brandId: cur.brandId };
       // The organization lock taken by #mutate serializes classifier writers.
       const view = await this.#defaultsView(c, scope);
@@ -432,7 +432,7 @@ export class OnboardingService {
    */
   async #mutate(
     org: OrgContext,
-    fn: (c: pg.PoolClient, cur: WizardState, created: boolean) => Promise<Mutation>,
+    fn: (c: pg.PoolClient, cur: WizardState, created: boolean, role: Role) => Promise<Mutation>,
   ): Promise<OnboardingStateDto> {
     const row = await withTransaction(this.deps.pool, async (c) => {
       const role = await lockedActor(c, org);
@@ -447,7 +447,7 @@ export class OnboardingService {
       const cur = (await this.#row(c, org.organizationId, true))!;
       const state = stateOf(cur);
       state.brandId = await this.#targetBrand(c, org.organizationId, cur.brand_id);
-      const { next, audit } = await fn(c, state, created);
+      const { next, audit } = await fn(c, state, created, role);
       const done = isComplete(next.steps);
       const upd = await c.query<StateRow>(
         `UPDATE onboarding_state SET brand_id = $2, run = $3, connect_status = $4,

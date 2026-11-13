@@ -77,7 +77,8 @@ export interface OnboardingReportDto {
 export const ONBOARDING_RETURN_COOKIE = 'fb_onboarding_return';
 
 /** Where the self-host guide is served by apps/docs (baseUrl + routeBasePath), as a relative path. */
-export const SELF_HOST_GUIDE_PATH = '/feedbouncer/docs/concepts/self-hosting/';
+export const SELF_HOST_GUIDE_URL =
+  'https://feedbouncer.github.io/feedbouncer/docs/concepts/self-hosting/';
 
 /** 30 minutes covers an OAuth round trip. */
 const ONBOARDING_RETURN_MAX_AGE_SECONDS = 1800;

@@ -10,7 +10,7 @@ For the first 7 days after an account is connected, FeedBouncer only **suggests*
 
 <Term id="review-mode">Review mode</Term> is on by default for every newly connected account. The connect screen shows **Start in review mode (recommended)**, ticked. While the window is open, the brand shows a banner with the end time and the number of suggestions waiting.
 
-The [setup wizard](../getting-started/setup-wizard.md) lets you choose between review first and acting automatically when you first connect accounts.
+The [setup wizard](./setup-wizard.md) lets you choose between review first and acting automatically when you first connect accounts.
 
 ## What is suggested and what still runs
 

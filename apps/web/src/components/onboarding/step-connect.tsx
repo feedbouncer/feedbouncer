@@ -8,7 +8,7 @@ import {
   onboardingHref,
   ONBOARDING_RETURN_COOKIE,
   safeErrorCode,
-  SELF_HOST_GUIDE_PATH,
+  SELF_HOST_GUIDE_URL,
   type OnboardingConnectionDto,
   type OnboardingStateDto,
 } from '../../lib/onboarding';
@@ -141,7 +141,7 @@ export function StepConnect(props: {
       {state.configuredPlatforms.length === 0 ? (
         <p>
           {t.rich('noPlatforms', {
-            guide: (chunks) => <a href={SELF_HOST_GUIDE_PATH}>{chunks}</a>,
+            guide: (chunks) => <a href={SELF_HOST_GUIDE_URL}>{chunks}</a>,
           })}
         </p>
       ) : (

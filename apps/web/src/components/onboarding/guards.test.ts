@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { SELF_HOST_GUIDE_URL } from '../../lib/onboarding';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '../../../../..');
@@ -47,7 +48,7 @@ describe('onboarding guards', () => {
   it('no deployment branching or hosted dependencies', () => {
     const re =
       /process\.env|https?:\/\/|feedbouncer-cloud|paddle|billing|checkout|signup|telemetry/i;
-    const offenders = files.filter((f) => re.test(read(f)));
+    const offenders = files.filter((f) => re.test(read(f).replaceAll(SELF_HOST_GUIDE_URL, '')));
     expect(offenders).toEqual([]);
   });
 

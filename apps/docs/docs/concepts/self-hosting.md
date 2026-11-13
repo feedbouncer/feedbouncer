@@ -35,7 +35,7 @@ Accounts can also be created by another system you run, through the [provisionin
 
 ## First-run setup wizard
 
-The first time an owner or admin opens a new organization, the web app starts the [setup wizard](../getting-started/setup-wizard.md): connect accounts, pick defaults, choose a review mode and see a first report. It runs on your server with no outbound access needed. If no platform is configured yet, the connect step says so and links to this page. Configure at least one platform, then run setup again from the organization overview.
+The first time an owner or admin opens a new organization, the web app starts the [setup wizard](./setup-wizard.md): connect accounts, pick defaults, choose a review mode and see a first report. It runs on your server with no outbound access needed. If no platform is configured yet, the connect step says so and links to this page. Configure at least one platform, then run setup again from the organization overview.
 
 ## Your public address
 
