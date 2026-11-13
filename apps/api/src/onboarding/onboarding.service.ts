@@ -7,7 +7,8 @@ import { recordAudit, type AuditAction } from '../audit/audit.js';
 import { connectablePlatforms } from '../connections/connectable-platforms.js';
 import { ConnectionsService } from '../connections/connections.service.js';
 import type { AppDeps } from '../deps.js';
-import { ApiError, notFound } from '../http/errors.js';
+import { ApiError } from '../http/errors.js';
+import { requireBrand } from '../tenancy/brand-scope.js';
 import type { OrgContext } from '../tenancy/org-access.guard.js';
 import { lockedActor } from '../tenancy/org-lock.js';
 import { DEPS } from '../tokens.js';
@@ -96,11 +97,7 @@ export class OnboardingService {
 
   async setBrand(org: OrgContext, brandId: string): Promise<OnboardingStateDto> {
     return this.#mutate(org, async (c, cur) => {
-      const r = await c.query(
-        'SELECT 1 FROM brand WHERE id = $2 AND organization_id = $1 AND archived_at IS NULL',
-        [org.organizationId, brandId],
-      );
-      if (r.rowCount === 0) throw notFound();
+      await requireBrand(c, org, brandId);
       if (cur.brandId === brandId) return { next: cur };
       return {
         next: { ...cur, brandId },
@@ -119,7 +116,10 @@ export class OnboardingService {
       if (!changed) return { next: cur };
       return {
         next: { ...cur, steps: next },
-        audit: { action: 'onboarding.connect_completed', details: { brandId: cur.brandId } },
+        audit: {
+          action: 'onboarding.step_completed',
+          details: { step: 'connect', brandId: cur.brandId },
+        },
       };
     });
   }

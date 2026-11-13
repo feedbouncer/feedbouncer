@@ -212,9 +212,9 @@ describe('connect/complete', () => {
       'connected',
       'failed',
     ]);
-    expect(await audits(f.orgId, 'onboarding.connect_completed')).toBe(1);
+    expect(await audits(f.orgId, 'onboarding.step_completed')).toBe(1);
     await call('POST', url(f, '/connect/complete'), f.owner, {});
-    expect(await audits(f.orgId, 'onboarding.connect_completed')).toBe(1);
+    expect(await audits(f.orgId, 'onboarding.step_completed')).toBe(1);
   });
 
   it('resumes at defaults after a restart', async () => {
@@ -263,8 +263,8 @@ describe('dismiss and rerun', () => {
 
   it('rerun without confirm is 422', async () => {
     const f = await fresh();
-    {
-      const r = await call('POST', url(f, '/rerun'), f.owner, {});
+    for (const body of [{}, { confirm: false }, { confirm: 'yes' }]) {
+      const r = await call('POST', url(f, '/rerun'), f.owner, body);
       expect(r.status).toBe(422);
       expect(r.body.error.code).toBe('onboarding_rerun_unconfirmed');
       expect(r.body.error.message).toBe('Confirm that you want to run setup again.');

@@ -68,7 +68,9 @@ export type AuditAction =
   | 'retention.confirmed'
   | 'onboarding.started'
   | 'onboarding.brand_selected'
-  | 'onboarding.connect_completed'
+  | 'onboarding.step_completed'
+  | 'onboarding.defaults_saved'
+  | 'onboarding.review_mode_chosen'
   | 'onboarding.dismissed'
   | 'onboarding.rerun';
 
