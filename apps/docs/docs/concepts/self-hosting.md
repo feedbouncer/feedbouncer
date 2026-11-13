@@ -33,6 +33,10 @@ With sign-up off and no accounts, nobody can get in. Either create the first acc
 
 Accounts can also be created by another system you run, through the [provisioning API](./provisioning-api.md). It is off until you set a credential, and it works with `SIGNUP_ENABLED=false`.
 
+## First-run setup wizard
+
+The first time an owner or admin opens a new organization, the web app starts the [setup wizard](../getting-started/setup-wizard.md): connect accounts, pick defaults, choose a review mode and see a first report. It runs on your server with no outbound access needed. If no platform is configured yet, the connect step says so and links to this page. Configure at least one platform, then run setup again from the organization overview.
+
 ## Your public address
 
 Set `PUBLIC_WEB_URL` to the public origin of your instance. The API is reachable at that origin under `/v1`. In the API and MCP examples in these docs, `FEEDBOUNCER_URL` is your `PUBLIC_WEB_URL` origin, for example `https://feedbouncer.example.com`.
