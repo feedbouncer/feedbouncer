@@ -4,6 +4,7 @@ import { can } from '@feedbouncer/authz';
 import { CATEGORIES, type Category } from '@feedbouncer/classifier';
 import { reviewModeState, systemClock } from '@feedbouncer/connectors';
 import { withTransaction } from '@feedbouncer/db';
+import { computeAccountBreakdown, computePeriodSummary } from '@feedbouncer/reports';
 import type pg from 'pg';
 import { recordAudit, type AuditAction } from '../audit/audit.js';
 import { connectablePlatforms } from '../connections/connectable-platforms.js';
@@ -21,6 +22,7 @@ import {
   type DefaultAction,
   type DefaultCategoryDto,
   type OnboardingDefaultsDto,
+  type OnboardingReportDto,
   type OnboardingStateDto,
 } from './dto.js';
 import {
@@ -295,6 +297,87 @@ export class OnboardingService {
             endedConnectionIds: endedIds.join(','),
             skippedConnectionIds: skippedIds.join(','),
           },
+        },
+      };
+    });
+  }
+
+  /**
+   * Step 4 read: the last 30 days of the target brand, from one repeatable-read read-only
+   * snapshot. Comment text is never selected (no notable threads).
+   */
+  async report(org: OrgContext): Promise<OnboardingReportDto> {
+    const row = await this.#row(this.deps.pool, org.organizationId);
+    const brandId = await this.#targetBrand(
+      this.deps.pool,
+      org.organizationId,
+      row?.brand_id ?? null,
+    );
+    if (!brandId) throw new ApiError(409, 'onboarding_no_brand');
+    const [connections, view] = await Promise.all([
+      this.connections.list(org, brandId),
+      this.#defaultsView({ organizationId: org.organizationId, brandId }),
+    ]);
+    const to = new Date(systemClock.now());
+    const from = new Date(to.getTime() - 30 * 86_400_000);
+    const { summary, breakdown } = await withTransaction(
+      this.deps.pool,
+      async (c) => {
+        await c.query('SET TRANSACTION READ ONLY');
+        const q = { from, to, brandId };
+        return {
+          summary: await computePeriodSummary(c, org.organizationId, q),
+          breakdown: await computeAccountBreakdown(c, org.organizationId, q),
+        };
+      },
+      { isolation: 'repeatable read' },
+    );
+    const byId = new Map(connections.map((x) => [x.id, toOnboardingConnection(x)]));
+    const accounts = breakdown.flatMap((b) => {
+      const conn = byId.get(b.connectionId);
+      return conn
+        ? [
+            {
+              ...b,
+              platform: conn.platform,
+              displayName: conn.displayName,
+              status: conn.status,
+              backfill: conn.backfill,
+            },
+          ]
+        : [];
+    });
+    const sync =
+      accounts.length === 0
+        ? 'no_connections'
+        : accounts.some((a) => a.backfill?.status === 'pending' || a.backfill?.status === 'running')
+          ? 'syncing'
+          : 'ready';
+    return {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      reviewModeChoice: row?.review_mode_choice ?? null,
+      defaults: view.categories
+        .filter((x) => x.action !== 'remove')
+        .map((x) => ({ category: x.category, action: x.action })),
+      sync,
+      totals: summary.totals,
+      categories: summary.categories,
+      accounts,
+      empty: summary.totals.comments === 0,
+    };
+  }
+
+  /** Finishing the last step sets completed_at (in #mutate). Never blocked by a running sync. */
+  async completeReport(org: OrgContext): Promise<OnboardingStateDto> {
+    return this.#mutate(org, async (_c, cur) => {
+      if (!isReachable(cur.steps, 'report')) throw new ApiError(409, 'onboarding_step_locked');
+      const { next, changed } = markDone(cur.steps, 'report');
+      if (!changed) return { next: cur };
+      return {
+        next: { ...cur, steps: next },
+        audit: {
+          action: 'onboarding.step_completed',
+          details: { step: 'report', brandId: cur.brandId },
         },
       };
     });

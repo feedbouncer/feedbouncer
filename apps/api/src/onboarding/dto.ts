@@ -1,4 +1,5 @@
 import type { ReviewModeState } from '@feedbouncer/connectors';
+import type { AccountBreakdown, PeriodSummary } from '@feedbouncer/reports';
 import type { ConnectionView } from '../connections/connections.service.js';
 import type { Step, StepStatuses } from './steps.js';
 
@@ -75,4 +76,21 @@ export interface OnboardingDefaultsDto {
   categories: DefaultCategoryDto[];
   /** Fingerprint of `categories`; PUT must echo it so a stale view cannot overwrite newer settings. */
   basedOn: string;
+}
+
+export interface OnboardingReportDto {
+  range: { from: string; to: string };
+  reviewModeChoice: 'review' | 'automatic' | null;
+  defaults: { category: string; action: string }[];
+  sync: 'no_connections' | 'syncing' | 'ready';
+  totals: PeriodSummary['totals'];
+  categories: PeriodSummary['categories'];
+  accounts: (AccountBreakdown & {
+    platform: string;
+    displayName: string | null;
+    status: WizardConnectionStatus;
+    backfill: OnboardingConnectionDto['backfill'];
+  })[];
+  /** totals.comments === 0. */
+  empty: boolean;
 }

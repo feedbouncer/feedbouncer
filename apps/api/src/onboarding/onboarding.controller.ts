@@ -68,6 +68,20 @@ export class OnboardingController {
     return this.svc.saveDefaults(req.org, parseBody(DefaultsBody, body));
   }
 
+  @Get('report')
+  @RequireCapability('org.update')
+  report(@Req() req: OrgRequest) {
+    return this.svc.report(req.org);
+  }
+
+  @Post('report/complete')
+  @HttpCode(200)
+  @RequireCapability('org.update')
+  completeReport(@Req() req: OrgRequest, @Body() body: unknown) {
+    parseBody(Empty, body);
+    return this.svc.completeReport(req.org);
+  }
+
   @Put('review-mode')
   @RequireCapability('org.update')
   reviewMode(@Req() req: OrgRequest, @Body() body: unknown) {
