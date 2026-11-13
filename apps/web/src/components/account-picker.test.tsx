@@ -137,3 +137,39 @@ describe('accountNotes', () => {
     ]);
   });
 });
+
+describe('AccountPicker in the onboarding wizard', () => {
+  const wizard = renderToStaticMarkup(
+    <AccountPicker
+      orgId="o"
+      brandId="b"
+      platform="instagram"
+      grantId="g"
+      accounts={[IG]}
+      returnHref="/orgs/o/onboarding/connect"
+      hideReviewModeChoice
+    />,
+  );
+
+  it('hideReviewModeChoice omits the review-mode fieldset', () => {
+    expect(wizard).not.toContain('name="reviewMode"');
+    expect(wizard).not.toContain('<fieldset');
+    expect(render([IG])).toContain('name="reviewMode"');
+  });
+
+  it('uses returnHref for the way back', () => {
+    const none = renderToStaticMarkup(
+      <AccountPicker
+        orgId="o"
+        brandId="b"
+        platform="instagram"
+        grantId="g"
+        accounts={[NO_IG]}
+        returnHref="/orgs/o/onboarding/connect"
+      />,
+    );
+    expect(none).toContain('href="/orgs/o/onboarding/connect"');
+    expect(none).toContain('Back to setup');
+    expect(render([NO_IG])).toContain('Back to connections');
+  });
+});

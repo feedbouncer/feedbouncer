@@ -8,7 +8,7 @@ hide_table_of_contents: true
 
 This shows intent, not a commitment.
 
-**Last updated:** 2026-10-25
+**Last updated:** 2026-11-13
 
 Items describe what you get, not when you get it.
 
@@ -56,6 +56,7 @@ Shipped means merged on the main branch. It reaches you in the next release, or 
 - **Text moderation endpoint**: Send any text through your rules and classifier and get an allow, review or block verdict back.
 - **Data retention, export and deletion**: Choose how long data is kept, export it, or delete it.
 - **Self-host Meta app guide**: Follow a step-by-step guide to set up your own Meta app.
+- **Setup wizard**: Connect your accounts, pick how comments are handled and see a first report in four steps.
 - **Documentation site**: Read guides, concepts and the API reference.
 - **Public roadmap**: See what is planned, what is coming next and what has shipped.
 

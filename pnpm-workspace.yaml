@@ -5,6 +5,7 @@ packages:
 allowBuilds:
   '@parcel/watcher': false
   '@prisma/engines': true
+  '@swc/core': false
   core-js: false
   cpu-features: false
   esbuild: false

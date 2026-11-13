@@ -13,7 +13,7 @@ export interface BrandScope {
  * brand of another organization (or an archived one) is a plain 404.
  */
 export async function requireBrand(
-  pool: pg.Pool,
+  pool: Pick<pg.Pool, 'query'>,
   org: Pick<OrgContext, 'organizationId'>,
   rawBrandId: unknown,
 ): Promise<BrandScope> {

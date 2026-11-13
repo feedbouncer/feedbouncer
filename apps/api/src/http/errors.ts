@@ -104,7 +104,13 @@ export type ErrorCode =
   | 'pending_limit_reached'
   | 'scan_in_progress'
   | 'scan_not_completed'
-  | 'page_not_eligible';
+  | 'page_not_eligible'
+  | 'onboarding_no_working_connection'
+  | 'onboarding_step_locked'
+  | 'onboarding_review_unavailable'
+  | 'onboarding_defaults_stale'
+  | 'onboarding_no_brand'
+  | 'onboarding_rerun_unconfirmed';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
@@ -211,6 +217,15 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   scan_in_progress: 'A scan of this Page is already running. Try again when it finishes.',
   scan_not_completed: 'Only a finished scan can be shared.',
   page_not_eligible: 'This Page cannot be scanned. You need to be able to moderate it.',
+  onboarding_no_working_connection:
+    "Connect at least one account that's working before you continue.",
+  onboarding_step_locked: 'Finish the earlier steps first.',
+  onboarding_review_unavailable:
+    'Review first is not available because review has already ended on your connected accounts.',
+  onboarding_defaults_stale:
+    "Someone else changed these settings a moment ago. We've loaded their version. Check it and save again.",
+  onboarding_no_brand: 'Create a brand first. Accounts and settings belong to a brand.',
+  onboarding_rerun_unconfirmed: 'Confirm that you want to run setup again.',
 };
 
 export interface ErrorIssue {
@@ -255,6 +270,8 @@ export class ApiError extends Error {
       readonly maxLength?: number;
       /** The caller's own running scan of the Page, for a 409 scan_in_progress. */
       readonly scanId?: string;
+      /** The current settings, for 409 onboarding_defaults_stale. */
+      readonly categories?: readonly unknown[];
     },
     /** Response headers to send with the error (Retry-After, WWW-Authenticate). */
     readonly headers?: Readonly<Record<string, string>>,
@@ -281,6 +298,7 @@ export function errorBody(e: ApiError): {
     problem?: string;
     maxLength?: number;
     scanId?: string;
+    categories?: readonly unknown[];
   };
 } {
   return { error: { ...e.details, code: e.code, message: e.message } };

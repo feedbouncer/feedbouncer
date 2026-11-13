@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('./fonts', () => ({ display: { variable: 'fd' }, body: { variable: 'fb' } }));
 vi.mock('../components/beta-notice', () => ({ BetaNotice: () => <aside>beta notice</aside> }));
 vi.mock('./globals.css', () => ({}));
+// The provider infers locale and messages from the Next request config, which does not exist here.
+vi.mock('next-intl', () => ({
+  NextIntlClientProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
 
 import RootLayout from './layout';
 

@@ -65,7 +65,14 @@ export type AuditAction =
   | 'privacy.access_denied'
   | 'retention.purged'
   | 'retention.held'
-  | 'retention.confirmed';
+  | 'retention.confirmed'
+  | 'onboarding.started'
+  | 'onboarding.brand_selected'
+  | 'onboarding.step_completed'
+  | 'onboarding.defaults_saved'
+  | 'onboarding.review_mode_chosen'
+  | 'onboarding.dismissed'
+  | 'onboarding.rerun';
 
 export interface AuditInput {
   organizationId: string;

@@ -245,3 +245,21 @@ describe('Threads outcomes', () => {
     expect(outcomeText('throttled')).not.toBe(outcomeText('definitely_not_a_code'));
   });
 });
+
+describe('onboarding error codes', () => {
+  it.each([
+    [
+      'onboarding_no_working_connection',
+      "Connect at least one account that's working before you continue.",
+    ],
+    ['onboarding_step_locked', 'Finish the earlier steps first.'],
+    [
+      'onboarding_defaults_stale',
+      "Someone else changed these settings a moment ago. We've loaded their version. Check it and save again.",
+    ],
+    ['onboarding_no_brand', 'Create a brand first. Accounts and settings belong to a brand.'],
+    ['onboarding_rerun_unconfirmed', 'Confirm that you want to run setup again.'],
+  ])('%s has its text', (code, text) => {
+    expect(messageFor(code)).toBe(text);
+  });
+});

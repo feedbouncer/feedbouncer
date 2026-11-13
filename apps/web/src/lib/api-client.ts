@@ -25,6 +25,8 @@ export class ApiRequestError extends Error {
     readonly count?: number | undefined,
     /** The caller's own running scan of the Page, on scan_in_progress. */
     readonly scanId?: string | undefined,
+    /** The current onboarding category settings, on onboarding_defaults_stale. */
+    readonly categories?: unknown[] | undefined,
   ) {
     super(message);
   }
@@ -88,6 +90,7 @@ export async function apiFetch<T>(
       tag?: unknown;
       count?: unknown;
       scanId?: unknown;
+      categories?: unknown;
     };
   } | null;
   if (!res.ok) {
@@ -104,6 +107,7 @@ export async function apiFetch<T>(
       tagOf(e?.tag),
       safeInt(e?.count),
       typeof e?.scanId === 'string' ? e.scanId : undefined,
+      Array.isArray(e?.categories) ? e.categories : undefined,
     );
   }
   return data as T;

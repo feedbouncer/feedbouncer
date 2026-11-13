@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { ApiRequestError, apiFetch } from '../lib/api-client';
+import { onboardingReturnCookie } from '../lib/onboarding';
 import { messageFor } from '../lib/messages';
 import { safeAuthorizationUrl } from '../lib/oauth';
 import type { ConnectablePlatform } from '../lib/platforms';
@@ -11,6 +12,8 @@ export function ConnectButton(props: {
   platform: ConnectablePlatform;
   label: string;
   reconnectConnectionId?: string;
+  /** Set in the setup wizard: marks the OAuth round trip as started there. */
+  onboardingOrgId?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +33,10 @@ export function ConnectButton(props: {
       );
       const url = safeAuthorizationUrl(res.authorizationUrl);
       if (!url) throw new Error('unsafe authorization url');
+      if (props.onboardingOrgId) {
+        // Non-secret marker read by the callback pages.
+        document.cookie = onboardingReturnCookie(props.onboardingOrgId);
+      }
       window.location.assign(url.href);
     } catch (err) {
       // An unconfigured platform answers 404 platform_not_configured, shown as such.

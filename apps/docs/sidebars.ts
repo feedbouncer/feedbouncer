@@ -12,6 +12,7 @@ const sidebars: SidebarsConfig = {
       label: 'Concepts',
       items: [
         'concepts/overview',
+        'concepts/setup-wizard',
         'concepts/comment-lifecycle',
         'concepts/organizations-brands-connections',
         'concepts/tiktok',

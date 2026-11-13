@@ -8,6 +8,7 @@ import {
   bulkDecide,
   dismissSuggestion,
   endReviewModeEarly,
+  endReviewModeEarlyWithin,
   loadBrandName,
   loadConnectionInfo,
   requestBulkByFilter,
@@ -17,6 +18,8 @@ import {
   type SuggestionStatus,
 } from '@feedbouncer/actions';
 import { systemClock } from '@feedbouncer/connectors';
+import type { ConnectionScope } from '@feedbouncer/secrets';
+import type pg from 'pg';
 import type { AppDeps } from '../deps.js';
 import { recordAudit } from '../audit/audit.js';
 import { ConnectionsService } from '../connections/connections.service.js';
@@ -171,6 +174,44 @@ export class ReviewModeService {
     });
     if (r.status === 'refused') throw refusal(r.code);
     return r;
+  }
+
+  /**
+   * `end` with `pending: 'leave'` inside the caller's transaction, for callers that already hold
+   * the organization lock. The connection must belong to the brand; true when it was ended,
+   * false when its window was not active.
+   */
+  async endLeavingPendingWithin(
+    c: pg.PoolClient,
+    org: OrgContext,
+    scope: ConnectionScope,
+  ): Promise<boolean> {
+    const n = await endReviewModeEarlyWithin({ clock: systemClock, audit: recordAudit }, c, scope, {
+      userId: org.actorUserId,
+      pending: 'leave',
+    });
+    return n !== null;
+  }
+
+  /**
+   * Opts a connection whose review window has not started out of review mode, inside the caller's
+   * transaction and under its organization lock.
+   */
+  async optOutWithin(c: pg.PoolClient, org: OrgContext, scope: ConnectionScope): Promise<void> {
+    const { rowCount } = await c.query(
+      `UPDATE connection SET review_mode = 'opted_out'
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3
+          AND review_mode = 'on' AND review_mode_started_at IS NULL`,
+      [scope.organizationId, scope.brandId, scope.connectionId],
+    );
+    if (rowCount !== 1) return;
+    await recordAudit(c, {
+      ...scope,
+      actorUserId: org.actorUserId,
+      action: 'review_mode.opted_out',
+      subjectType: 'connection',
+      subjectId: scope.connectionId,
+    });
   }
 
   async list(

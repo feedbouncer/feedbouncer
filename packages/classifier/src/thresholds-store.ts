@@ -32,7 +32,7 @@ const toOverrides = (rows: readonly Row[]) =>
   rows.map((x) => ({ category: x.category, threshold: Number(x.threshold), action: x.action }));
 
 export class PgThresholdStore {
-  constructor(private readonly pool: pg.Pool) {}
+  constructor(private readonly pool: Pick<pg.Pool, 'query'>) {}
 
   async policy(s: BrandScope): Promise<ThresholdPolicy> {
     const r = await this.pool.query<Row>(SELECT, [s.organizationId, s.brandId]);

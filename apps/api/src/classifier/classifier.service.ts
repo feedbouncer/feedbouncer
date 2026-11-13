@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type pg from 'pg';
 import { can } from '@feedbouncer/authz';
 import {
   CLASSIFIER_RERUN_JOB,
@@ -82,28 +83,36 @@ export class ClassifierService {
   }
 
   async update(org: OrgContext, scope: BrandScope, items: readonly ThresholdItem[]) {
-    await withTransaction(this.deps.pool, async (c) => {
-      if (!can(await lockedActor(c, org), 'rule.write')) throw new ApiError(403, 'forbidden');
-      const changes = await this.#thresholds.apply(c, scope, items, org.actorUserId);
-      for (const ch of changes) {
-        await recordAudit(c, {
-          organizationId: scope.organizationId,
-          brandId: scope.brandId,
-          actorUserId: org.actorUserId,
-          action: ch.after === null ? 'classifier_threshold.reset' : 'classifier_threshold.updated',
-          subjectType: 'classifier_threshold',
-          subjectId: null,
-          details: {
-            category: ch.category,
-            threshold_before: ch.before?.threshold ?? null,
-            action_before: ch.before?.action ?? null,
-            threshold_after: ch.after?.threshold ?? null,
-            action_after: ch.after?.action ?? null,
-          },
-        });
-      }
-    });
+    await withTransaction(this.deps.pool, (c) => this.updateWithin(c, org, scope, items));
     return { categories: await this.#views(scope) };
+  }
+
+  /** The write of `update` inside the caller's transaction, for callers that already hold one. */
+  async updateWithin(
+    c: pg.PoolClient,
+    org: OrgContext,
+    scope: BrandScope,
+    items: readonly ThresholdItem[],
+  ): Promise<void> {
+    if (!can(await lockedActor(c, org), 'rule.write')) throw new ApiError(403, 'forbidden');
+    const changes = await this.#thresholds.apply(c, scope, items, org.actorUserId);
+    for (const ch of changes) {
+      await recordAudit(c, {
+        organizationId: scope.organizationId,
+        brandId: scope.brandId,
+        actorUserId: org.actorUserId,
+        action: ch.after === null ? 'classifier_threshold.reset' : 'classifier_threshold.updated',
+        subjectType: 'classifier_threshold',
+        subjectId: null,
+        details: {
+          category: ch.category,
+          threshold_before: ch.before?.threshold ?? null,
+          action_before: ch.before?.action ?? null,
+          threshold_after: ch.after?.threshold ?? null,
+          action_after: ch.after?.action ?? null,
+        },
+      });
+    }
   }
 
   async preview(

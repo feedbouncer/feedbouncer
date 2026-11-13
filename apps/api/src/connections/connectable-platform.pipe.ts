@@ -3,6 +3,7 @@ import { isPlatform, type Platform } from '@feedbouncer/connectors';
 import type { AppDeps } from '../deps.js';
 import { ApiError } from '../http/errors.js';
 import { DEPS } from '../tokens.js';
+import { connectablePlatforms } from './connectable-platforms.js';
 
 /**
  * Resolves the `:platform` path segment of the connect flow. Only a registered
@@ -15,11 +16,7 @@ export class ConnectablePlatformPipe implements PipeTransform<unknown, Platform>
   constructor(@Inject(DEPS) private readonly deps: AppDeps) {}
 
   transform(value: unknown): Platform {
-    if (
-      isPlatform(value) &&
-      this.deps.connectors?.registry.get(value)?.capabilities.accountSelection === 'multiple'
-    )
-      return value;
+    if (isPlatform(value) && connectablePlatforms(this.deps).includes(value)) return value;
     throw new ApiError(404, 'platform_not_configured');
   }
 }
