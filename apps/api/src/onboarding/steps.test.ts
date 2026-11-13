@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   isComplete,
   isReachable,
-  isStep,
   markDone,
   resetAll,
   resumeStep,
@@ -63,10 +62,5 @@ describe('onboarding steps', () => {
   it('is complete only when every step is done', () => {
     expect(isComplete(allDone)).toBe(true);
     expect(isComplete(allPending)).toBe(false);
-  });
-
-  it('accepts only known step names', () => {
-    expect(isStep('../x')).toBe(false);
-    expect(isStep('report')).toBe(true);
   });
 });

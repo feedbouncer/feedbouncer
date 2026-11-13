@@ -20,7 +20,7 @@ export default async function OrgsPage({
   const only = me.memberships.length === 1 ? me.memberships[0] : undefined;
   if (only && only.role !== 'member' && only.organizationStatus === 'active') {
     const state = await loadOnboardingOrNull(only.organizationId);
-    if (state?.autoStart && !state.preconfigured) redirect(onboardingHref(only.organizationId));
+    if (state?.autoStart) redirect(onboardingHref(only.organizationId));
   }
   return (
     <main>

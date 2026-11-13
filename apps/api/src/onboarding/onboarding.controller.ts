@@ -86,15 +86,11 @@ export class OnboardingController {
   @Put('review-mode')
   @RequireCapability('org.update')
   reviewMode(@Req() req: OrgRequest, @Body() body: unknown) {
-    const r = ReviewModeBody.safeParse(body);
-    if (!r.success) {
-      // Same refusal as the connect flow when the risk was not acknowledged.
-      const b = body as { choice?: unknown; acknowledgeRisk?: unknown } | null;
-      if (b?.choice === 'automatic' && b.acknowledgeRisk !== true)
-        throw new ApiError(422, 'risk_not_acknowledged');
-      parseBody(ReviewModeBody, body);
-    }
-    return this.svc.chooseReviewMode(req.org, r.data!.choice);
+    // Same refusal as the connect flow when the risk was not acknowledged.
+    const b = body as { choice?: unknown; acknowledgeRisk?: unknown } | null;
+    if (b?.choice === 'automatic' && b.acknowledgeRisk !== true)
+      throw new ApiError(422, 'risk_not_acknowledged');
+    return this.svc.chooseReviewMode(req.org, parseBody(ReviewModeBody, body).choice);
   }
 
   @Post('dismiss')

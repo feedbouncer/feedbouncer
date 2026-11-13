@@ -18,6 +18,7 @@ import {
   type SuggestionStatus,
 } from '@feedbouncer/actions';
 import { systemClock } from '@feedbouncer/connectors';
+import type { ConnectionScope } from '@feedbouncer/secrets';
 import type pg from 'pg';
 import type { AppDeps } from '../deps.js';
 import { recordAudit } from '../audit/audit.js';
@@ -26,7 +27,6 @@ import { ApiError, notFound, type ErrorCode } from '../http/errors.js';
 import { requireBrand, type BrandScope } from '../tenancy/brand-scope.js';
 import { orgCan, type OrgContext } from '../tenancy/org-access.guard.js';
 import { DEPS } from '../tokens.js';
-import type { ConnectionScope } from '@feedbouncer/secrets';
 import {
   toDecisionDto,
   toHandledDetails,

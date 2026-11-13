@@ -42,7 +42,7 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
   const canEdit = role !== 'member';
   const manager = can(role, 'org.update');
   const onboarding = manager ? await loadOnboardingOrNull(orgId) : null;
-  if (onboarding?.autoStart && !onboarding.preconfigured) redirect(onboardingHref(orgId));
+  if (onboarding?.autoStart) redirect(onboardingHref(orgId));
   const t = await getTranslations('onboarding.setupCard');
   return (
     <main>

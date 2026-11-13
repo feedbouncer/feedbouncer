@@ -2,10 +2,6 @@ export const STEPS = ['connect', 'defaults', 'review_mode', 'report'] as const;
 export type Step = (typeof STEPS)[number];
 export type StepStatuses = Record<Step, 'pending' | 'done'>;
 
-export function isStep(v: unknown): v is Step {
-  return typeof v === 'string' && (STEPS as readonly string[]).includes(v);
-}
-
 export function resumeStep(s: StepStatuses): Step | null {
   return STEPS.find((step) => s[step] === 'pending') ?? null;
 }

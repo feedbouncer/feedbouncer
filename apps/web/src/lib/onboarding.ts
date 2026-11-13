@@ -100,7 +100,3 @@ const ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 export function safeErrorCode(v: unknown): string | null {
   return typeof v === 'string' && ERROR_CODE.test(v) ? v : null;
 }
-
-export function isReachable(s: StepStatuses, step: Step): boolean {
-  return STEPS.slice(0, STEPS.indexOf(step)).every((earlier) => s[earlier] === 'done');
-}

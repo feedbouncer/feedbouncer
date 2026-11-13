@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { can } from '@feedbouncer/authz';
-import { CATEGORIES, type Category } from '@feedbouncer/classifier';
+import { CATEGORIES, PgThresholdStore, type Category } from '@feedbouncer/classifier';
 import { reviewModeState, systemClock } from '@feedbouncer/connectors';
 import { withTransaction } from '@feedbouncer/db';
 import { computeAccountBreakdown, computePeriodSummary } from '@feedbouncer/reports';
@@ -9,7 +9,7 @@ import type pg from 'pg';
 import { recordAudit, type AuditAction } from '../audit/audit.js';
 import { connectablePlatforms } from '../connections/connectable-platforms.js';
 import { ClassifierService } from '../classifier/classifier.service.js';
-import { ConnectionsService } from '../connections/connections.service.js';
+import { ConnectionsService, viewStatus } from '../connections/connections.service.js';
 import type { AppDeps } from '../deps.js';
 import { ApiError } from '../http/errors.js';
 import { ReviewModeService } from '../review-mode/review-mode.service.js';
@@ -132,10 +132,13 @@ export class OnboardingService {
   }
 
   async completeConnect(org: OrgContext): Promise<OnboardingStateDto> {
-    return this.#mutate(org, async (_c, cur) => {
+    return this.#mutate(org, async (c, cur) => {
       if (!cur.brandId) throw new ApiError(409, 'onboarding_no_brand');
-      const list = await this.connections.list(org, cur.brandId);
-      if (!list.some((x) => x.status === 'connected'))
+      const { rows } = await c.query<{ status: string; status_reason: string | null }>(
+        'SELECT status, status_reason FROM connection WHERE organization_id = $1 AND brand_id = $2',
+        [org.organizationId, cur.brandId],
+      );
+      if (!rows.some((x) => viewStatus(x.status, x.status_reason) === 'connected'))
         throw new ApiError(409, 'onboarding_no_working_connection');
       const { next, changed } = markDone(cur.steps, 'connect');
       if (!changed) return { next: cur };
@@ -158,13 +161,13 @@ export class OnboardingService {
       row?.brand_id ?? null,
     );
     if (!brandId) throw new ApiError(409, 'onboarding_no_brand');
-    return this.#defaultsView({ organizationId: org.organizationId, brandId });
+    return this.#defaultsView(this.deps.pool, { organizationId: org.organizationId, brandId });
   }
 
   /**
    * Saves the moderation defaults. `choices` is exactly the categories whose current action is
    * not `remove` (those are left alone); only the ones that differ are written, each keeping its
-   * current threshold. The fingerprint is checked under the row and brand locks.
+   * current threshold. The fingerprint is checked under the row lock.
    */
   async saveDefaults(
     org: OrgContext,
@@ -175,13 +178,8 @@ export class OnboardingService {
       if (!cur.brandId) throw new ApiError(409, 'onboarding_no_brand');
       if (!orgCan(org, 'rule.write')) throw new ApiError(403, 'forbidden');
       const scope = { organizationId: org.organizationId, brandId: cur.brandId };
-      // Keeps the threshold reads below consistent with the fingerprint check within this
-      // transaction. The organization lock taken by #mutate is what serializes classifier writers.
-      await c.query('SELECT 1 FROM brand WHERE organization_id = $1 AND id = $2 FOR UPDATE', [
-        scope.organizationId,
-        scope.brandId,
-      ]);
-      const view = await this.#defaultsView(scope);
+      // The organization lock taken by #mutate serializes classifier writers.
+      const view = await this.#defaultsView(c, scope);
       if (view.basedOn !== input.basedOn)
         throw new ApiError(409, 'onboarding_defaults_stale', undefined, {
           categories: view.categories,
@@ -319,7 +317,7 @@ export class OnboardingService {
     if (!brandId) throw new ApiError(409, 'onboarding_no_brand');
     const [connections, view] = await Promise.all([
       this.connections.list(org, brandId),
-      this.#defaultsView({ organizationId: org.organizationId, brandId }),
+      this.#defaultsView(this.deps.pool, { organizationId: org.organizationId, brandId }),
     ]);
     const to = new Date(systemClock.now());
     const from = new Date(to.getTime() - 30 * 86_400_000);
@@ -386,18 +384,23 @@ export class OnboardingService {
     });
   }
 
-  async #defaultsView(scope: {
-    organizationId: string;
-    brandId: string;
-  }): Promise<OnboardingDefaultsDto> {
-    const s = await this.classifier.settings(scope);
-    const categories: DefaultCategoryDto[] = s.categories.map((x) => ({
-      category: x.category,
-      action: x.action as DefaultCategoryDto['action'],
-      threshold: x.threshold,
-      source: x.source,
-    }));
-    return { aiEnabled: s.provider.enabled, categories, basedOn: defaultsFingerprint(categories) };
+  async #defaultsView(
+    db: Pick<pg.Pool, 'query'>,
+    scope: { organizationId: string; brandId: string },
+  ): Promise<OnboardingDefaultsDto> {
+    const categories: DefaultCategoryDto[] = (await new PgThresholdStore(db).list(scope)).map(
+      (x) => ({
+        category: x.category,
+        action: x.action as DefaultCategoryDto['action'],
+        threshold: x.threshold,
+        source: x.source,
+      }),
+    );
+    return {
+      aiEnabled: this.deps.env.classifier.enabled,
+      categories,
+      basedOn: defaultsFingerprint(categories),
+    };
   }
 
   async dismiss(org: OrgContext): Promise<OnboardingStateDto> {
