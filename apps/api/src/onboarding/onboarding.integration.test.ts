@@ -246,6 +246,31 @@ describe('connect/complete', () => {
     expect(r.body.connections[0]).toMatchObject({
       status: 'failed',
       statusReason: 'oauth_refresh_rejected',
+      needsReconnect: true,
+    });
+  });
+
+  it('needsReconnect follows the connection status, not the reason code', async () => {
+    const f = await fresh();
+    const a = await api.seedConnection(f, { platform: 'facebook', externalAccountId: `nr${seq}a` });
+    const b = await api.seedConnection(f, { platform: 'facebook', externalAccountId: `nr${seq}b` });
+    await api.pool.query(
+      "UPDATE connection SET status = 'reconnect_required', status_reason = 'page_role_lost' WHERE id = $1",
+      [a.scope.connectionId],
+    );
+    await api.pool.query(
+      "UPDATE connection SET status = 'error', status_reason = 'credential_decrypt_failed' WHERE id = $1",
+      [b.scope.connectionId],
+    );
+    const r = await call('GET', url(f), f.owner);
+    const byId = new Map(r.body.connections.map((c: { id: string }) => [c.id, c]));
+    expect(byId.get(a.scope.connectionId)).toMatchObject({
+      status: 'failed',
+      needsReconnect: true,
+    });
+    expect(byId.get(b.scope.connectionId)).toMatchObject({
+      status: 'failed',
+      needsReconnect: false,
     });
   });
 });

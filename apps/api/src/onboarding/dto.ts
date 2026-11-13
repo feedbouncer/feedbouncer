@@ -12,6 +12,8 @@ export interface OnboardingConnectionDto {
   status: WizardConnectionStatus;
   /** A snake_case code (e.g. oauth_refresh_rejected); the web app maps it to text. */
   statusReason: string | null;
+  /** True when the connection's status is needs_reconnect (access lost; reconnecting can fix it). */
+  needsReconnect: boolean;
   reviewMode: ReviewModeState;
   backfill: {
     status: 'pending' | 'running' | 'completed' | 'failed';
@@ -57,6 +59,7 @@ export function toOnboardingConnection(c: ConnectionView): OnboardingConnectionD
     displayName: c.displayName,
     status: toWizardStatus(c.status),
     statusReason: c.statusReason,
+    needsReconnect: c.status === 'needs_reconnect',
     reviewMode: c.reviewMode.state,
     backfill: c.backfill && { status: c.backfill.status, importedCount: c.backfill.importedCount },
   };

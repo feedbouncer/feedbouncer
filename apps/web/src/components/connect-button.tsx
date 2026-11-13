@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { ApiRequestError, apiFetch } from '../lib/api-client';
-import { ONBOARDING_RETURN_COOKIE } from '../lib/onboarding';
+import { onboardingReturnCookie } from '../lib/onboarding';
 import { messageFor } from '../lib/messages';
 import { safeAuthorizationUrl } from '../lib/oauth';
 import type { ConnectablePlatform } from '../lib/platforms';
@@ -34,8 +34,8 @@ export function ConnectButton(props: {
       const url = safeAuthorizationUrl(res.authorizationUrl);
       if (!url) throw new Error('unsafe authorization url');
       if (props.onboardingOrgId) {
-        // Non-secret marker read by the callback pages; one hour is enough for an OAuth round trip.
-        document.cookie = `${ONBOARDING_RETURN_COOKIE}=${props.onboardingOrgId}; Path=/; Max-Age=3600; SameSite=Lax`;
+        // Non-secret marker read by the callback pages.
+        document.cookie = onboardingReturnCookie(props.onboardingOrgId);
       }
       window.location.assign(url.href);
     } catch (err) {

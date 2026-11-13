@@ -14,6 +14,7 @@ const conn = (over: Partial<OnboardingConnectionDto>): OnboardingConnectionDto =
   displayName: 'Shop Page',
   status: 'connected',
   statusReason: null,
+  needsReconnect: false,
   reviewMode: 'reviewing',
   backfill: null,
   ...over,
@@ -50,7 +51,13 @@ describe('StepConnect', () => {
   it('failed row with needs_reconnect shows expired text, an alert and Try again', () => {
     const html = render(
       state({
-        connections: [conn({ status: 'failed', statusReason: 'oauth_refresh_rejected' })],
+        connections: [
+          conn({
+            status: 'failed',
+            statusReason: 'oauth_refresh_rejected',
+            needsReconnect: true,
+          }),
+        ],
       }),
     );
     expect(html).toContain('Authorization expired or revoked');
@@ -62,7 +69,7 @@ describe('StepConnect', () => {
     const html = render(
       state({
         connections: [
-          conn({ id: 'a', status: 'failed', statusReason: 'setup_not_queued' }),
+          conn({ id: 'a', status: 'failed', statusReason: 'oauth_access_rejected' }),
           conn({ id: 'b', status: 'pending', statusReason: null }),
         ],
       }),
@@ -86,9 +93,25 @@ describe('StepConnect', () => {
 
   it('no configured platforms shows the explanation and no connect buttons', () => {
     const html = render(state({ configuredPlatforms: [] }));
-    expect(html).toContain('docs/self-hosting/README.md');
+    expect(html).toContain('self-hosting guide');
     expect(html).not.toContain('>Connect Facebook');
     expect(html).not.toContain('btn-primary');
+  });
+
+  it('branches on needsReconnect, not on the reason code', () => {
+    const html = render(
+      state({
+        connections: [conn({ status: 'failed', statusReason: 'oauth_access_rejected' })],
+      }),
+    );
+    expect(html).toContain('Couldn&#x27;t connect');
+    expect(html).not.toContain('Authorization expired or revoked');
+  });
+
+  it('noPlatforms links to the self-host guide with a relative path', () => {
+    const html = render(state({ configuredPlatforms: [] }));
+    expect(html).toContain('<a href="/feedbouncer/docs/concepts/self-hosting/">');
+    expect(html).not.toMatch(/https?:\/\//);
   });
 
   it('one connect button per configured platform', () => {

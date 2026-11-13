@@ -31,7 +31,7 @@
       "createBrandLabel": "Brand name",
       "createBrand": "Create brand",
       "createBrandIntro": "Create a brand first. Accounts and settings belong to a brand.",
-      "noPlatforms": "This server has no platform configured yet, so there is nothing to connect. See docs/self-hosting/README.md in the FeedBouncer repository to set one up, or skip setup for now.",
+      "noPlatforms": "This server has no platform configured yet, so there is nothing to connect. Read the <guide>self-hosting guide</guide> to set one up, or skip setup for now.",
       "status": {
         "connected": "Connected",
         "expired": "Authorization expired or revoked",

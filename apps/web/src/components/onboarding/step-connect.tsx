@@ -8,6 +8,7 @@ import {
   onboardingHref,
   ONBOARDING_RETURN_COOKIE,
   safeErrorCode,
+  SELF_HOST_GUIDE_PATH,
   type OnboardingConnectionDto,
   type OnboardingStateDto,
 } from '../../lib/onboarding';
@@ -18,11 +19,6 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 
 const platformLabel = (p: string): string => (isConnectable(p) ? PLATFORM_COPY[p].label : p);
-
-// A failed connection whose access was lost: the reason code names an OAuth or credential problem.
-const needsReconnect = (c: OnboardingConnectionDto): boolean =>
-  c.statusReason !== null &&
-  (c.statusReason.startsWith('oauth_') || c.statusReason.startsWith('credential_'));
 
 export function StepConnect(props: {
   orgId: string;
@@ -78,7 +74,7 @@ export function StepConnect(props: {
   function statusText(c: OnboardingConnectionDto): string {
     if (c.status === 'connected') return t('status.connected');
     if (c.status === 'pending') return t('status.pending');
-    return needsReconnect(c) ? t('status.expired') : t('status.failed');
+    return c.needsReconnect ? t('status.expired') : t('status.failed');
   }
 
   if (brand === null) {
@@ -143,7 +139,11 @@ export function StepConnect(props: {
         </ul>
       ) : null}
       {state.configuredPlatforms.length === 0 ? (
-        <p>{t('noPlatforms')}</p>
+        <p>
+          {t.rich('noPlatforms', {
+            guide: (chunks) => <a href={SELF_HOST_GUIDE_PATH}>{chunks}</a>,
+          })}
+        </p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {state.configuredPlatforms.filter(isConnectable).map((p) => (

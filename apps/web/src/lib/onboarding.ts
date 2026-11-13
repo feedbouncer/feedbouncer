@@ -16,6 +16,8 @@ export interface OnboardingConnectionDto {
   status: WizardConnectionStatus;
   /** A snake_case code (e.g. oauth_refresh_rejected); mapped to text here. */
   statusReason: string | null;
+  /** True when the connection's own status is needs_reconnect (access lost; Try again can fix it). */
+  needsReconnect: boolean;
   reviewMode: ReviewModeState;
   backfill: {
     status: 'pending' | 'running' | 'completed' | 'failed';
@@ -59,6 +61,16 @@ export interface OnboardingReportDto {
 
 /** Non-secret cookie that marks an in-progress OAuth round trip as started from the wizard. */
 export const ONBOARDING_RETURN_COOKIE = 'fb_onboarding_return';
+
+/** Where the self-host guide is served by apps/docs (baseUrl + routeBasePath), as a relative path. */
+export const SELF_HOST_GUIDE_PATH = '/feedbouncer/docs/concepts/self-hosting/';
+
+/** 30 minutes covers an OAuth round trip. */
+const ONBOARDING_RETURN_MAX_AGE_SECONDS = 1800;
+
+export function onboardingReturnCookie(orgId: string): string {
+  return `${ONBOARDING_RETURN_COOKIE}=${orgId}; Path=/; Max-Age=${ONBOARDING_RETURN_MAX_AGE_SECONDS}; SameSite=Lax`;
+}
 
 export function onboardingHref(orgId: string, step?: Step): string {
   return step ? `/orgs/${orgId}/onboarding/${step}` : `/orgs/${orgId}/onboarding`;

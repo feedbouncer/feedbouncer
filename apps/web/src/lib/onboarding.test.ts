@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { onboardingHref, parseStep, safeErrorCode, STEPS } from './onboarding';
+import {
+  onboardingHref,
+  onboardingReturnCookie,
+  parseStep,
+  safeErrorCode,
+  STEPS,
+} from './onboarding';
 
 describe('onboarding helpers', () => {
   it('parseStep accepts only known steps', () => {
@@ -20,5 +26,13 @@ describe('onboarding helpers', () => {
   it('onboardingHref builds server-side paths', () => {
     expect(onboardingHref('o1')).toBe('/orgs/o1/onboarding');
     expect(onboardingHref('o1', 'review_mode')).toBe('/orgs/o1/onboarding/review_mode');
+  });
+});
+
+describe('onboardingReturnCookie', () => {
+  it('lives for 30 minutes, site-wide, Lax', () => {
+    expect(onboardingReturnCookie('o1')).toBe(
+      'fb_onboarding_return=o1; Path=/; Max-Age=1800; SameSite=Lax',
+    );
   });
 });
