@@ -45,7 +45,8 @@ describe('onboarding guards', () => {
   });
 
   it('no deployment branching or hosted dependencies', () => {
-    const re = /process\.env|https?:\/\/|feedbouncer-cloud|paddle|billing|checkout|signup|telemetry/i;
+    const re =
+      /process\.env|https?:\/\/|feedbouncer-cloud|paddle|billing|checkout|signup|telemetry/i;
     const offenders = files.filter((f) => re.test(read(f)));
     expect(offenders).toEqual([]);
   });
