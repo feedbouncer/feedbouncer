@@ -108,10 +108,11 @@ describe('StepConnect', () => {
     expect(html).not.toContain('Authorization expired or revoked');
   });
 
-  it('noPlatforms links to the self-host guide with a relative path', () => {
+  it('noPlatforms links to the published self-host guide', () => {
     const html = render(state({ configuredPlatforms: [] }));
-    expect(html).toContain('<a href="/feedbouncer/docs/concepts/self-hosting/">');
-    expect(html).not.toMatch(/https?:\/\//);
+    expect(html).toContain(
+      '<a href="https://feedbouncer.github.io/feedbouncer/docs/concepts/self-hosting/">',
+    );
   });
 
   it('one connect button per configured platform', () => {
