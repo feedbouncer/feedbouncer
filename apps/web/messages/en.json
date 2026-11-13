@@ -20,12 +20,6 @@
       "review_mode": "Review mode",
       "report": "First report"
     },
-    "placeholder": {
-      "connect": "Connect your social accounts here.",
-      "defaults": "Choose how FeedBouncer handles each kind of comment.",
-      "review_mode": "Decide whether to review actions before they happen.",
-      "report": "See what FeedBouncer found in your recent comments."
-    },
     "connect": {
       "brandLabel": "Brand",
       "createBrandLabel": "Brand name",
@@ -46,6 +40,109 @@
       "unnamed": "Unnamed account",
       "brandChangeFailed": "Could not change the brand. Try again.",
       "connectionsLabel": "Connected accounts"
+    },
+    "category": {
+      "spam": {
+        "name": "Spam",
+        "description": "Repeated, pointless or bulk comments that clutter your posts."
+      },
+      "scam_phishing": {
+        "name": "Scam or phishing",
+        "description": "Fake offers, giveaways and links that try to steal money or login details."
+      },
+      "harassment_abuse": {
+        "name": "Harassment or abuse",
+        "description": "Insults, threats and attacks aimed at you, your team or other commenters."
+      },
+      "hate_speech": {
+        "name": "Hate speech",
+        "description": "Comments that attack people for who they are, such as their race, religion or gender."
+      },
+      "sexual_content": {
+        "name": "Sexual content",
+        "description": "Explicit or sexually suggestive comments that do not belong on your page."
+      },
+      "profanity": {
+        "name": "Profanity",
+        "description": "Swearing and crude language, even when it is not aimed at anyone."
+      },
+      "self_promotion": {
+        "name": "Self-promotion",
+        "description": "People advertising their own page, product or channel in your comments."
+      }
+    },
+    "action": {
+      "hide": "Hide it automatically",
+      "flag": "Flag it for a person to review",
+      "approve": "Leave it visible"
+    },
+    "defaults": {
+      "intro": "Choose what FeedBouncer does when it spots each kind of comment. You can change this any time in the classifier settings.",
+      "aiOff": "The AI classifier is not switched on for this server, so these choices will start working once it is. You can still set them now.",
+      "removeNote": "These comments are removed by your classifier settings, so there is nothing to pick here. <link>Open classifier settings</link>",
+      "continue": "Continue",
+      "saveFailed": "Could not save your choices. Try again."
+    },
+    "reviewMode": {
+      "intro": "Decide how cautious FeedBouncer should be when it first starts acting on comments.",
+      "legend": "When should FeedBouncer act?",
+      "review": {
+        "label": "Review first (recommended)",
+        "body": "For the first 7 days after each account connects, FeedBouncer only suggests actions. Flagged comments stay visible until someone approves the suggestion in the review queue, and after that it acts on the choices from the previous step."
+      },
+      "automatic": {
+        "label": "Act automatically",
+        "body": "FeedBouncer hides comments right away using the choices from the previous step. Every action is logged with its reason and can be undone from Hidden today."
+      },
+      "reviewUnavailable": "Review first is not available because review has already ended on your connected accounts.",
+      "acknowledge": "I understand that FeedBouncer will start hiding comments right away, and that a mistake can affect real people before I notice.",
+      "continue": "Continue",
+      "saveFailed": "Could not save your choice. Try again."
+    },
+    "report": {
+      "heading": "Your first report",
+      "reviewMode": "Review mode: {mode}",
+      "mode": {
+        "review": "Review first",
+        "automatic": "Act automatically",
+        "none": "Not chosen yet"
+      },
+      "defaultsLabel": "Your defaults",
+      "defaultItem": "{category}: {action}",
+      "defaultsNone": "No defaults chosen yet.",
+      "syncing": "{count, plural, one {Imported # comment so far} other {Imported # comments so far}}",
+      "syncFailed": "Could not refresh the numbers. We will try again.",
+      "empty": "No comments yet. New comments are checked within about a minute, and results appear here and in the weekly report on Monday. Imported history is shown for context, but it is not checked.",
+      "noConnections": "No accounts are connected yet. Go back to connect one.",
+      "totals": {
+        "comments": "Comments",
+        "hidden": "Hidden",
+        "replied": "Replied",
+        "unanswered": "Unanswered"
+      },
+      "account": {
+        "comments": "Comments",
+        "imported": "Imported",
+        "checked": "Checked",
+        "hidden": "Hidden",
+        "awaitingReview": "Awaiting review",
+        "topCategoriesNone": "None yet",
+        "unnamed": "Unnamed account",
+        "categoryCount": "{category} ({count})",
+        "topCategoriesLine": "Top categories: {list}"
+      },
+      "finish": "Finish",
+      "finishFailed": "Could not finish setup. Try again.",
+      "done": "Setup is finished. FeedBouncer is now working on your comments. <dashboard>Go to your dashboard</dashboard>"
+    },
+    "setupCard": {
+      "title": "Setup wizard",
+      "description": "Connect your accounts, pick how comments are handled and see a first report.",
+      "continue": "Continue setup",
+      "start": "Start setup",
+      "rerun": "Run setup again",
+      "rerunConfirm": "Run setup again? You will go through the steps from the start. Your accounts and settings stay as they are until you change them.",
+      "rerunFailed": "Could not restart setup. Try again."
     }
   }
 }

@@ -15,7 +15,7 @@ const conn = (over: Partial<OnboardingConnectionDto>): OnboardingConnectionDto =
   status: 'connected',
   statusReason: null,
   needsReconnect: false,
-  reviewMode: 'reviewing',
+  reviewMode: 'active',
   backfill: null,
   ...over,
 });

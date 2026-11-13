@@ -1,8 +1,10 @@
 import { can } from '@feedbouncer/authz';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
+import { notFound, redirect } from 'next/navigation';
 import { AlertsNavLink } from '../../../components/alerts/alerts-nav-link';
 import { ApiForm } from '../../../components/api-form';
+import { RerunSetupButton } from '../../../components/onboarding/rerun-setup-button';
 import { CreateBrandForm } from '../../../components/create-brand-form';
 import { OrgTimezoneForm } from '../../../components/org-timezone-form';
 import { Badge } from '../../../components/ui/badge';
@@ -10,6 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui
 import { ListPanel, ListRow } from '../../../components/ui/list';
 import { PageHeader } from '../../../components/ui/page-header';
 import { isUuid } from '../../../lib/ids';
+import { onboardingHref } from '../../../lib/onboarding';
+import { loadOnboarding } from '../../../lib/onboarding-server';
 import { dataOrThrow, requireMe, serverGet, type Role } from '../../../lib/server-api';
 
 interface Brand {
@@ -36,13 +40,34 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
   ).brands;
   const role = org.role;
   const canEdit = role !== 'member';
+  const manager = can(role, 'org.update');
+  const onboarding = manager ? await loadOnboarding(orgId) : null;
+  if (onboarding?.autoStart && !onboarding.preconfigured) redirect(onboardingHref(orgId));
+  const t = await getTranslations('onboarding.setupCard');
   return (
     <main>
       <PageHeader
         title={org.organization.name}
         actions={<Badge className="capitalize">{role}</Badge>}
       />
-      {can(role, 'org.update') ? (
+      {onboarding ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('title')}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-start gap-3">
+            <p>{t('description')}</p>
+            {onboarding.started && onboarding.complete ? (
+              <RerunSetupButton orgId={orgId} />
+            ) : (
+              <Link href={onboardingHref(orgId)}>
+                {onboarding.started ? t('continue') : t('start')}
+              </Link>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+      {manager ? (
         <Card>
           <CardHeader>
             <CardTitle>Workspace settings</CardTitle>

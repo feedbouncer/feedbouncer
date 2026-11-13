@@ -1,9 +1,12 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { ApiForm } from '../../../components/api-form';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { ListPanel, ListRow } from '../../../components/ui/list';
 import { PageHeader } from '../../../components/ui/page-header';
 import { messageFor } from '../../../lib/messages';
+import { onboardingHref } from '../../../lib/onboarding';
+import { loadOnboarding } from '../../../lib/onboarding-server';
 import { requireMe } from '../../../lib/server-api';
 
 export default async function OrgsPage({
@@ -13,6 +16,12 @@ export default async function OrgsPage({
 }) {
   const me = await requireMe('/orgs');
   const { error, notice } = await searchParams;
+  // A manager of exactly one workspace that still needs setup goes straight to the wizard.
+  const only = me.memberships.length === 1 ? me.memberships[0] : undefined;
+  if (only && only.role !== 'member' && only.organizationStatus === 'active') {
+    const state = await loadOnboarding(only.organizationId);
+    if (state.autoStart && !state.preconfigured) redirect(onboardingHref(only.organizationId));
+  }
   return (
     <main>
       <PageHeader title="My organizations" />

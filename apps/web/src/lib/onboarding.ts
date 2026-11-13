@@ -7,7 +7,7 @@ export type Step = (typeof STEPS)[number];
 export type StepStatuses = Record<Step, 'pending' | 'done'>;
 
 export type WizardConnectionStatus = 'connected' | 'failed' | 'pending';
-export type ReviewModeState = 'off' | 'reviewing' | 'ended';
+export type ReviewModeState = 'off' | 'active' | 'ended' | 'ended_early' | 'opted_out';
 
 export interface OnboardingConnectionDto {
   id: string;
@@ -41,6 +41,21 @@ export interface OnboardingStateDto {
   connections: OnboardingConnectionDto[];
   reviewModeChoice: 'review' | 'automatic' | null;
 }
+
+export interface DefaultCategoryDto {
+  category: string;
+  action: 'hide' | 'flag' | 'approve' | 'remove';
+  threshold: number;
+  source: 'default' | 'brand';
+}
+
+export interface OnboardingDefaultsDto {
+  aiEnabled: boolean;
+  categories: DefaultCategoryDto[];
+  /** Fingerprint of `categories`; PUT must echo it so a stale view cannot overwrite newer settings. */
+  basedOn: string;
+}
+export type DefaultsDto = OnboardingDefaultsDto;
 
 export interface OnboardingReportDto {
   range: { from: string; to: string };

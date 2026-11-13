@@ -2,11 +2,18 @@ import { can } from '@feedbouncer/authz';
 import { getTranslations } from 'next-intl/server';
 import { notFound, redirect } from 'next/navigation';
 import { StepConnect } from '../../../../../components/onboarding/step-connect';
+import { StepDefaults } from '../../../../../components/onboarding/step-defaults';
+import { StepReport } from '../../../../../components/onboarding/step-report';
+import { StepReviewMode } from '../../../../../components/onboarding/step-review-mode';
 import { WizardFrame } from '../../../../../components/onboarding/wizard-frame';
 import { PageHeader } from '../../../../../components/ui/page-header';
 import { isUuid } from '../../../../../lib/ids';
 import { onboardingHref, parseStep, safeErrorCode } from '../../../../../lib/onboarding';
-import { loadOnboarding } from '../../../../../lib/onboarding-server';
+import {
+  loadOnboarding,
+  loadOnboardingDefaults,
+  loadOnboardingReport,
+} from '../../../../../lib/onboarding-server';
 import { dataOrThrow, requireMe, serverGet, type Role } from '../../../../../lib/server-api';
 
 export default async function OnboardingStepPage({
@@ -46,9 +53,16 @@ export default async function OnboardingStepPage({
             state={state}
             error={safeErrorCode((await searchParams).error)}
           />
+        ) : step === 'defaults' ? (
+          <StepDefaults
+            orgId={orgId}
+            brandId={state.brand?.id}
+            initial={await loadOnboardingDefaults(orgId)}
+          />
+        ) : step === 'review_mode' ? (
+          <StepReviewMode orgId={orgId} state={state} />
         ) : (
-          // Task 10 replaces this placeholder with the real step components.
-          <p>{t(`placeholder.${step}`)}</p>
+          <StepReport orgId={orgId} initial={await loadOnboardingReport(orgId)} />
         )}
       </WizardFrame>
     </main>
