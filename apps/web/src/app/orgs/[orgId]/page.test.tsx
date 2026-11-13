@@ -15,6 +15,9 @@ vi.mock('next/navigation', () => ({
   notFound: () => {
     throw new Error('NOTFOUND');
   },
+  unstable_rethrow: (e: unknown) => {
+    if (e instanceof Error && /^(REDIRECT|NOTFOUND)/.test(e.message)) throw e;
+  },
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 vi.mock('../../../lib/server-api', async () => ({
@@ -83,6 +86,24 @@ describe('org overview', () => {
 
     answer('owner', onboarding({ autoStart: false, preconfigured: true, started: false }));
     await run();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('renders the page without the card when the onboarding load fails', async () => {
+    serverGet.mockImplementation(async (p: string) => {
+      if (p.endsWith('/onboarding')) throw new Error('boom');
+      if (p.endsWith('/brands')) return { status: 200, data: { brands: [] } };
+      return {
+        status: 200,
+        data: {
+          role: 'owner',
+          organization: { id: OID, name: 'Acme', timezone: 'UTC', timezoneSet: true },
+        },
+      };
+    });
+    const html = renderToStaticMarkup(withIntl(await run()));
+    expect(html).toContain('Acme');
+    expect(html).not.toContain('Setup wizard');
     expect(redirect).not.toHaveBeenCalled();
   });
 });

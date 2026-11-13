@@ -11,6 +11,9 @@ const redirect = vi.fn((to: string) => {
 });
 vi.mock('next/navigation', () => ({
   redirect: (to: string) => redirect(to),
+  unstable_rethrow: (e: unknown) => {
+    if (e instanceof Error && /^(REDIRECT|NOTFOUND)/.test(e.message)) throw e;
+  },
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 vi.mock('../../../lib/server-api', async () => ({
@@ -65,6 +68,14 @@ describe('/orgs', () => {
 
     requireMe.mockResolvedValue(me([membership({ organizationStatus: 'suspended' })]));
     renderToStaticMarkup(await run());
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('still renders the list when the onboarding load fails', async () => {
+    requireMe.mockResolvedValue(me([membership()]));
+    serverGet.mockRejectedValue(new Error('boom'));
+    const html = renderToStaticMarkup(await run());
+    expect(html).toContain('Acme');
     expect(redirect).not.toHaveBeenCalled();
   });
 });

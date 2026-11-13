@@ -19,17 +19,35 @@ export function StepReport(props: { orgId: string; initial: OnboardingReportDto 
   const [finishing, setFinishing] = useState(false);
   const [finished, setFinished] = useState(false);
   const [finishFailed, setFinishFailed] = useState(false);
+  const [syncFailed, setSyncFailed] = useState(false);
   const syncing = report.sync === 'syncing';
 
   useEffect(() => {
     if (!syncing) return;
+    let inFlight = false;
+    let active = true;
     const id = setInterval(() => {
-      apiFetch<OnboardingReportDto>(`/api/v1/orgs/${orgId}/onboarding/report`).then(
-        setReport,
-        () => undefined,
-      );
+      if (inFlight) return;
+      inFlight = true;
+      apiFetch<OnboardingReportDto>(`/api/v1/orgs/${orgId}/onboarding/report`)
+        .then(
+          (r) => {
+            if (!active) return;
+            setReport(r);
+            setSyncFailed(false);
+          },
+          () => {
+            if (active) setSyncFailed(true);
+          },
+        )
+        .finally(() => {
+          inFlight = false;
+        });
     }, POLL_MS);
-    return () => clearInterval(id);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
   }, [syncing, orgId]);
 
   async function onFinish() {
@@ -79,6 +97,7 @@ export function StepReport(props: { orgId: string; initial: OnboardingReportDto 
       <div aria-live="polite">
         {syncing ? <p>{t('report.syncing', { count: imported })}</p> : null}
       </div>
+      {syncFailed ? <p role="alert">{t('report.syncFailed')}</p> : null}
       {report.sync === 'no_connections' ? <p role="note">{t('report.noConnections')}</p> : null}
       {report.empty ? <p>{t('report.empty')}</p> : null}
       <StatGrid>

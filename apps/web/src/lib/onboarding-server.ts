@@ -1,4 +1,5 @@
 import 'server-only';
+import { unstable_rethrow } from 'next/navigation';
 import type { OnboardingDefaultsDto, OnboardingReportDto, OnboardingStateDto } from './onboarding';
 import { dataOrThrow, serverGet } from './server-api';
 
@@ -8,6 +9,17 @@ export async function loadOnboarding(orgId: string): Promise<OnboardingStateDto>
     await serverGet<OnboardingStateDto>(`/api/v1/orgs/${orgId}/onboarding`),
     'onboarding',
   );
+}
+
+/** For entry points: a failed load hides the wizard instead of breaking the page. */
+export async function loadOnboardingOrNull(orgId: string): Promise<OnboardingStateDto | null> {
+  try {
+    return await loadOnboarding(orgId);
+  } catch (e) {
+    // redirect() and notFound() from the loader must still take effect.
+    unstable_rethrow(e);
+    return null;
+  }
 }
 
 export async function loadOnboardingDefaults(orgId: string): Promise<OnboardingDefaultsDto> {

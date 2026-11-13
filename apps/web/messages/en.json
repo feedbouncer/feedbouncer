@@ -100,7 +100,6 @@
       "saveFailed": "Could not save your choice. Try again."
     },
     "report": {
-      "heading": "Your first report",
       "reviewMode": "Review mode: {mode}",
       "mode": {
         "review": "Review first",

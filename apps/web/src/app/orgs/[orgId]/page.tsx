@@ -13,7 +13,7 @@ import { ListPanel, ListRow } from '../../../components/ui/list';
 import { PageHeader } from '../../../components/ui/page-header';
 import { isUuid } from '../../../lib/ids';
 import { onboardingHref } from '../../../lib/onboarding';
-import { loadOnboarding } from '../../../lib/onboarding-server';
+import { loadOnboardingOrNull } from '../../../lib/onboarding-server';
 import { dataOrThrow, requireMe, serverGet, type Role } from '../../../lib/server-api';
 
 interface Brand {
@@ -41,7 +41,7 @@ export default async function OrgPage({ params }: { params: Promise<{ orgId: str
   const role = org.role;
   const canEdit = role !== 'member';
   const manager = can(role, 'org.update');
-  const onboarding = manager ? await loadOnboarding(orgId) : null;
+  const onboarding = manager ? await loadOnboardingOrNull(orgId) : null;
   if (onboarding?.autoStart && !onboarding.preconfigured) redirect(onboardingHref(orgId));
   const t = await getTranslations('onboarding.setupCard');
   return (

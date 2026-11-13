@@ -55,7 +55,6 @@ export interface OnboardingDefaultsDto {
   /** Fingerprint of `categories`; PUT must echo it so a stale view cannot overwrite newer settings. */
   basedOn: string;
 }
-export type DefaultsDto = OnboardingDefaultsDto;
 
 export interface OnboardingReportDto {
   range: { from: string; to: string };
