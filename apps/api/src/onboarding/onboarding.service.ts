@@ -157,7 +157,7 @@ export class OnboardingService {
   ): Promise<OnboardingStateDto> {
     const row = await withTransaction(this.deps.pool, async (c) => {
       const role = await lockedActor(c, org);
-      if (!can(role, 'connection.manage', org.grants)) throw new ApiError(403, 'forbidden');
+      if (!can(role, 'org.update', org.grants)) throw new ApiError(403, 'forbidden');
       const brandId = await this.#targetBrand(c, org.organizationId, null);
       const ins = await c.query(
         `INSERT INTO onboarding_state (organization_id, brand_id, started_by_user_id, last_actor_user_id)
