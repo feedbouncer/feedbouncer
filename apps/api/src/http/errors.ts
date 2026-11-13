@@ -104,7 +104,12 @@ export type ErrorCode =
   | 'pending_limit_reached'
   | 'scan_in_progress'
   | 'scan_not_completed'
-  | 'page_not_eligible';
+  | 'page_not_eligible'
+  | 'onboarding_no_working_connection'
+  | 'onboarding_step_locked'
+  | 'onboarding_defaults_stale'
+  | 'onboarding_no_brand'
+  | 'onboarding_rerun_unconfirmed';
 
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   invalid_request: 'The request is not valid.',
@@ -211,6 +216,13 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   scan_in_progress: 'A scan of this Page is already running. Try again when it finishes.',
   scan_not_completed: 'Only a finished scan can be shared.',
   page_not_eligible: 'This Page cannot be scanned. You need to be able to moderate it.',
+  onboarding_no_working_connection:
+    "Connect at least one account that's working before you continue.",
+  onboarding_step_locked: 'Finish the earlier steps first.',
+  onboarding_defaults_stale:
+    "Someone else changed these settings a moment ago. We've loaded their version. Check it and save again.",
+  onboarding_no_brand: 'Create a brand first. Accounts and settings belong to a brand.',
+  onboarding_rerun_unconfirmed: 'Confirm that you want to run setup again.',
 };
 
 export interface ErrorIssue {

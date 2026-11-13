@@ -90,6 +90,8 @@ import { RulesService } from './rules/rules.service.js';
 import { OrgController, OrgsListController } from './orgs/orgs.controller.js';
 import { TagsController } from './tags/tags.controller.js';
 import { TagsService } from './tags/tags.service.js';
+import { OnboardingController } from './onboarding/onboarding.controller.js';
+import { OnboardingService } from './onboarding/onboarding.service.js';
 import { ReviewModeController } from './review-mode/review-mode.controller.js';
 import { ReviewModeService } from './review-mode/review-mode.service.js';
 import { SuggestionsController } from './review-mode/suggestions.controller.js';
@@ -156,6 +158,7 @@ export class AppModule {
         ActionsController,
         ReviewController,
         HiddenTodayController,
+        OnboardingController,
         ReviewModeController,
         SuggestionsController,
         DomainsController,
@@ -206,6 +209,7 @@ export class AppModule {
         RuleChangesService,
         ActionsService,
         HiddenTodayService,
+        OnboardingService,
         ReviewModeService,
         ClassifierService,
         PoliciesService,
