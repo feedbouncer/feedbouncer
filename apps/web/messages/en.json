@@ -1,0 +1,26 @@
+{
+  "onboarding": {
+    "title": "Set up FeedBouncer",
+    "notAllowed": "Only owners and admins can set up this workspace.",
+    "skip": "Skip setup for now",
+    "skipFailed": "Could not skip setup. Try again.",
+    "startFailed": "Could not start setup. Reload the page to try again.",
+    "back": "Back",
+    "progress": {
+      "label": "Setup progress",
+      "stepOf": "Step {current} of {total}"
+    },
+    "steps": {
+      "connect": "Connect accounts",
+      "defaults": "Pick defaults",
+      "review_mode": "Review mode",
+      "report": "First report"
+    },
+    "placeholder": {
+      "connect": "Connect your social accounts here.",
+      "defaults": "Choose how FeedBouncer handles each kind of comment.",
+      "review_mode": "Decide whether to review actions before they happen.",
+      "report": "See what FeedBouncer found in your recent comments."
+    }
+  }
+}
