@@ -69,9 +69,9 @@ beforeEach(() => {
 describe('connections page in wizard mode', () => {
   const home = `/orgs/${ORG}/onboarding/connect`;
 
-  it('redirects to the wizard connect step', async () => {
+  it('renders the normal page for a visit without an OAuth result', async () => {
     cookieValue = ORG;
-    expect(await run()).toBe(home);
+    expect(await run()).toContain('Connect a platform');
   });
 
   it('forwards a safe error code', async () => {
@@ -86,6 +86,6 @@ describe('connections page in wizard mode', () => {
 
   it.each([undefined, OTHER])('with cookie %s renders the normal page', async (value) => {
     cookieValue = value;
-    expect(await run()).toContain('Connect a platform');
+    expect(await run('denied')).toContain('Connect a platform');
   });
 });

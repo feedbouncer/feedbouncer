@@ -106,7 +106,7 @@ const audits = async (orgId: string, action: string) =>
   );
 
 describe('PUT /review-mode', () => {
-  it('automatic reports an active connection with no started window as skipped', async () => {
+  it('automatic opts out an active connection whose window has not started', async () => {
     const { f, id } = await atStep3();
     const { scope } = await api.seedConnection(f, {
       platform: 'facebook',
@@ -126,9 +126,12 @@ describe('PUT /review-mode', () => {
     expect(a.rows[0].details).toEqual({
       choice: 'automatic',
       endedConnectionIds: id,
-      skippedConnectionIds: scope.connectionId,
+      optedOutConnectionIds: scope.connectionId,
     });
-    expect((await conn(scope.connectionId)).review_mode_ended_at).toBeNull();
+    expect((await conn(scope.connectionId)).review_mode).toBe('opted_out');
+    expect(await audits(f.orgId, 'review_mode.opted_out')).toBe(1);
+    await put(f, { choice: 'automatic', acknowledgeRisk: true });
+    expect(await audits(f.orgId, 'review_mode.opted_out')).toBe(1);
   });
 
   it('review then automatic after the step is done ends the active connections, audits once more', async () => {
@@ -192,7 +195,7 @@ describe('PUT /review-mode', () => {
     expect(a.rows[0].details).toEqual({
       choice: 'automatic',
       endedConnectionIds: id,
-      skippedConnectionIds: '',
+      optedOutConnectionIds: '',
     });
     expect(await audits(f.orgId, 'review_mode.ended_early')).toBe(1);
   });
@@ -206,12 +209,12 @@ describe('PUT /review-mode', () => {
     expect(await audits(f.orgId, 'onboarding.review_mode_chosen')).toBe(1);
   });
 
-  it('review after everything is ended -> 409 onboarding_step_locked', async () => {
+  it('review after everything is ended -> 409 onboarding_review_unavailable', async () => {
     const { f } = await atStep3();
     await put(f, { choice: 'automatic', acknowledgeRisk: true });
     const r = await put(f, { choice: 'review' });
     expect(r.status).toBe(409);
-    expect(r.body.error.code).toBe('onboarding_step_locked');
+    expect(r.body.error.code).toBe('onboarding_review_unavailable');
   });
 
   it('step locked before defaults is done -> 409', async () => {

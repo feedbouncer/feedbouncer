@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
-import { can, type Role } from '@feedbouncer/authz';
+import { can } from '@feedbouncer/authz';
 import { CATEGORIES, PgThresholdStore, type Category } from '@feedbouncer/classifier';
 import { reviewModeState, systemClock } from '@feedbouncer/connectors';
 import { withTransaction } from '@feedbouncer/db';
@@ -173,10 +173,9 @@ export class OnboardingService {
     org: OrgContext,
     input: { choices: { category: Category; action: DefaultAction }[]; basedOn: string },
   ): Promise<OnboardingStateDto> {
-    return this.#mutate(org, async (c, cur, _created, role) => {
+    return this.#mutate(org, async (c, cur) => {
       if (!isReachable(cur.steps, 'defaults')) throw new ApiError(409, 'onboarding_step_locked');
       if (!cur.brandId) throw new ApiError(409, 'onboarding_no_brand');
-      if (!can(role, 'rule.write', org.grants)) throw new ApiError(403, 'forbidden');
       const scope = { organizationId: org.organizationId, brandId: cur.brandId };
       // The organization lock taken by #mutate serializes classifier writers.
       const view = await this.#defaultsView(c, scope);
@@ -222,7 +221,7 @@ export class OnboardingService {
 
   /**
    * Step 3. `review` changes nothing; `automatic` ends every active review window of the target
-   * brand, leaving queued suggestions for a human. Retry-safe: ended windows are skipped and an
+   * brand, leaving queued suggestions for a human. Retry-safe: ended windows are left as they are and an
    * unchanged outcome writes no audit event.
    */
   async chooseReviewMode(
@@ -261,10 +260,10 @@ export class OnboardingService {
       }));
       const active = states.filter((s) => s.state === 'active');
       const endedIds: string[] = [];
-      const skippedIds: string[] = [];
+      const optedOutIds: string[] = [];
       if (choice === 'review') {
         if (active.length === 0 && states.some((s) => s.state !== 'off'))
-          throw new ApiError(409, 'onboarding_step_locked');
+          throw new ApiError(409, 'onboarding_review_unavailable');
       } else {
         // No connection.manage check: org.update and connection.manage are both owner/admin-only
         // and neither is grantable, so #mutate's org.update recheck already covers it.
@@ -274,10 +273,13 @@ export class OnboardingService {
             brandId: cur.brandId,
             connectionId: s.id,
           };
-          // A window that never started cannot be ended; that connection starts its window on
-          // first activation, so it is reported instead of dropped.
+          // A window that never started cannot be ended and would start on first activation,
+          // so that connection is opted out of review mode instead.
           if (await this.reviewMode.endLeavingPendingWithin(c, org, scope)) endedIds.push(s.id);
-          else skippedIds.push(s.id);
+          else {
+            await this.reviewMode.optOutWithin(c, org, scope);
+            optedOutIds.push(s.id);
+          }
         }
       }
       const { next, changed } = markDone(cur.steps, 'review_mode');
@@ -285,7 +287,7 @@ export class OnboardingService {
         !changed &&
         cur.reviewModeChoice === choice &&
         endedIds.length === 0 &&
-        skippedIds.length === 0
+        optedOutIds.length === 0
       )
         return { next: cur };
       return {
@@ -296,7 +298,7 @@ export class OnboardingService {
           details: {
             choice,
             endedConnectionIds: endedIds.join(','),
-            skippedConnectionIds: skippedIds.join(','),
+            optedOutConnectionIds: optedOutIds.join(','),
           },
         },
       };
@@ -432,11 +434,11 @@ export class OnboardingService {
    */
   async #mutate(
     org: OrgContext,
-    fn: (c: pg.PoolClient, cur: WizardState, created: boolean, role: Role) => Promise<Mutation>,
+    fn: (c: pg.PoolClient, cur: WizardState, created: boolean) => Promise<Mutation>,
   ): Promise<OnboardingStateDto> {
     const row = await withTransaction(this.deps.pool, async (c) => {
-      const role = await lockedActor(c, org);
-      if (!can(role, 'org.update', org.grants)) throw new ApiError(403, 'forbidden');
+      if (!can(await lockedActor(c, org), 'org.update', org.grants))
+        throw new ApiError(403, 'forbidden');
       const brandId = await this.#targetBrand(c, org.organizationId, null);
       const ins = await c.query(
         `INSERT INTO onboarding_state (organization_id, brand_id, started_by_user_id, last_actor_user_id)
@@ -447,7 +449,7 @@ export class OnboardingService {
       const cur = (await this.#row(c, org.organizationId, true))!;
       const state = stateOf(cur);
       state.brandId = await this.#targetBrand(c, org.organizationId, cur.brand_id);
-      const { next, audit } = await fn(c, state, created, role);
+      const { next, audit } = await fn(c, state, created);
       const done = isComplete(next.steps);
       const upd = await c.query<StateRow>(
         `UPDATE onboarding_state SET brand_id = $2, run = $3, connect_status = $4,

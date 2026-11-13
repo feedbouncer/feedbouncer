@@ -193,6 +193,27 @@ export class ReviewModeService {
     return n !== null;
   }
 
+  /**
+   * Opts a connection whose review window has not started out of review mode, inside the caller's
+   * transaction and under its organization lock.
+   */
+  async optOutWithin(c: pg.PoolClient, org: OrgContext, scope: ConnectionScope): Promise<void> {
+    const { rowCount } = await c.query(
+      `UPDATE connection SET review_mode = 'opted_out'
+        WHERE organization_id = $1 AND brand_id = $2 AND id = $3
+          AND review_mode = 'on' AND review_mode_started_at IS NULL`,
+      [scope.organizationId, scope.brandId, scope.connectionId],
+    );
+    if (rowCount !== 1) return;
+    await recordAudit(c, {
+      ...scope,
+      actorUserId: org.actorUserId,
+      action: 'review_mode.opted_out',
+      subjectType: 'connection',
+      subjectId: scope.connectionId,
+    });
+  }
+
   async list(
     org: OrgContext,
     brandId: unknown,

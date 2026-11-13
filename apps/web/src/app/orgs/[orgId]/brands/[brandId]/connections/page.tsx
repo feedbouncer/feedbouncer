@@ -115,8 +115,9 @@ export default async function ConnectionsPage({
   const { orgId, brandId } = await params;
   if (!isUuid(orgId) || !isUuid(brandId)) notFound();
   await requireMe(`/orgs/${orgId}/brands/${brandId}/connections`);
-  if (await isWizardReturn(orgId)) {
-    const code = safeErrorCode((await searchParams).error);
+  const { error } = await searchParams;
+  if (error !== undefined && (await isWizardReturn(orgId))) {
+    const code = safeErrorCode(error);
     redirect(onboardingHref(orgId, 'connect') + (code ? `?error=${code}` : ''));
   }
   const review = await loadReviewMode(orgId, brandId);

@@ -107,6 +107,7 @@ export type ErrorCode =
   | 'page_not_eligible'
   | 'onboarding_no_working_connection'
   | 'onboarding_step_locked'
+  | 'onboarding_review_unavailable'
   | 'onboarding_defaults_stale'
   | 'onboarding_no_brand'
   | 'onboarding_rerun_unconfirmed';
@@ -219,6 +220,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   onboarding_no_working_connection:
     "Connect at least one account that's working before you continue.",
   onboarding_step_locked: 'Finish the earlier steps first.',
+  onboarding_review_unavailable:
+    'Review first is not available because review has already ended on your connected accounts.',
   onboarding_defaults_stale:
     "Someone else changed these settings a moment ago. We've loaded their version. Check it and save again.",
   onboarding_no_brand: 'Create a brand first. Accounts and settings belong to a brand.',
