@@ -105,6 +105,51 @@ const audits = async (orgId: string, action: string) =>
   );
 
 describe('PUT /review-mode', () => {
+  it('automatic reports an active connection with no started window as skipped', async () => {
+    const { f, id } = await atStep3();
+    const { scope } = await api.seedConnection(f, {
+      platform: 'facebook',
+      externalAccountId: `u${++seq}`,
+    });
+    await api.pool.query(
+      `UPDATE connection SET review_mode = 'on', review_mode_started_at = NULL,
+              review_mode_ends_at = NULL WHERE id = $1`,
+      [scope.connectionId],
+    );
+    const r = await put(f, { choice: 'automatic', acknowledgeRisk: true });
+    expect(r.status).toBe(200);
+    const a = await api.pool.query(
+      `SELECT details FROM audit_event WHERE organization_id = $1 AND action = 'onboarding.review_mode_chosen'`,
+      [f.orgId],
+    );
+    expect(a.rows[0].details).toEqual({
+      choice: 'automatic',
+      endedConnectionIds: id,
+      skippedConnectionIds: scope.connectionId,
+    });
+    expect((await conn(scope.connectionId)).review_mode_ended_at).toBeNull();
+  });
+
+  it('review then automatic after the step is done ends the active connections, audits once more', async () => {
+    const { f, id } = await atStep3();
+    expect((await put(f, { choice: 'review' })).status).toBe(200);
+    const r = await put(f, { choice: 'automatic', acknowledgeRisk: true });
+    expect(r.status).toBe(200);
+    expect(r.body.reviewModeChoice).toBe('automatic');
+    expect((await conn(id)).review_mode_ended_at).not.toBeNull();
+    expect(await audits(f.orgId, 'review_mode.ended_early')).toBe(1);
+    expect(await audits(f.orgId, 'onboarding.review_mode_chosen')).toBe(2);
+  });
+
+  it("automatic in one org does not end another org's active connections", async () => {
+    const a = await atStep3();
+    const b = await atStep3();
+    expect((await put(a.f, { choice: 'automatic', acknowledgeRisk: true })).status).toBe(200);
+    expect((await conn(a.id)).review_mode_ended_at).not.toBeNull();
+    expect((await conn(b.id)).review_mode_ended_at).toBeNull();
+    expect(await audits(b.f.orgId, 'review_mode.ended_early')).toBe(0);
+  });
+
   it("review leaves review_mode='on' and window columns unchanged", async () => {
     const { f, id } = await atStep3();
     const before = await conn(id);
@@ -143,7 +188,11 @@ describe('PUT /review-mode', () => {
       `SELECT details FROM audit_event WHERE organization_id = $1 AND action = 'onboarding.review_mode_chosen'`,
       [f.orgId],
     );
-    expect(a.rows[0].details).toEqual({ choice: 'automatic', endedConnectionIds: id });
+    expect(a.rows[0].details).toEqual({
+      choice: 'automatic',
+      endedConnectionIds: id,
+      skippedConnectionIds: '',
+    });
     expect(await audits(f.orgId, 'review_mode.ended_early')).toBe(1);
   });
 
@@ -173,7 +222,7 @@ describe('PUT /review-mode', () => {
     expect(r.body.error.code).toBe('onboarding_step_locked');
   });
 
-  it('automatic needs connection.manage', async () => {
+  it('automatic is refused for a member', async () => {
     const { f, id } = await atStep3();
     expect((await put(f, { choice: 'automatic', acknowledgeRisk: true }, f.member)).status).toBe(
       403,

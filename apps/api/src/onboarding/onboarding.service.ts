@@ -258,29 +258,43 @@ export class OnboardingService {
       }));
       const active = states.filter((s) => s.state === 'active');
       const endedIds: string[] = [];
+      const skippedIds: string[] = [];
       if (choice === 'review') {
         if (active.length === 0 && states.some((s) => s.state !== 'off'))
           throw new ApiError(409, 'onboarding_step_locked');
       } else {
-        if (!orgCan(org, 'connection.manage')) throw new ApiError(403, 'forbidden');
+        // No connection.manage check: org.update and connection.manage are both owner/admin-only
+        // and neither is grantable, so #mutate's org.update recheck already covers it.
         for (const s of active) {
           const scope = {
             organizationId: org.organizationId,
             brandId: cur.brandId,
             connectionId: s.id,
           };
+          // A window that never started cannot be ended; that connection starts its window on
+          // first activation, so it is reported instead of dropped.
           if (await this.reviewMode.endLeavingPendingWithin(c, org, scope)) endedIds.push(s.id);
+          else skippedIds.push(s.id);
         }
       }
       const { next, changed } = markDone(cur.steps, 'review_mode');
-      if (!changed && cur.reviewModeChoice === choice && endedIds.length === 0)
+      if (
+        !changed &&
+        cur.reviewModeChoice === choice &&
+        endedIds.length === 0 &&
+        skippedIds.length === 0
+      )
         return { next: cur };
       return {
         next: { ...cur, steps: next, reviewModeChoice: choice },
         audit: {
           action: 'onboarding.review_mode_chosen',
           // Audit details are scalars only, so the ids are comma-joined.
-          details: { choice, endedConnectionIds: endedIds.join(',') },
+          details: {
+            choice,
+            endedConnectionIds: endedIds.join(','),
+            skippedConnectionIds: skippedIds.join(','),
+          },
         },
       };
     });
