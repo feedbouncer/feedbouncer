@@ -11,3 +11,4 @@ export * from './subscriptions.js';
 export { WeeklyReportScheduler } from './scheduler.js';
 export { WeeklyReportDispatcher } from './dispatcher.js';
 export * from './period-summary.js';
+export * from './account-breakdown.js';
