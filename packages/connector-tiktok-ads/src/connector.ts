@@ -1,5 +1,5 @@
 import { ConnectorError, systemClock, type Clock, type Connector } from '@feedbouncer/connectors';
-import { NUMERIC_ID, type SkipLog } from '@feedbouncer/tiktok-business-api';
+import { NUMERIC_ID, TIKTOK_API_HOST, type SkipLog } from '@feedbouncer/tiktok-business-api';
 import { act, respond } from './actions.js';
 import { listAccounts } from './accounts.js';
 import { getComment, listConnectionComments } from './comments.js';
@@ -32,7 +32,10 @@ export function createTikTokAdsConnector(
         urgentReservePoints: 10,
         defaultRetryAfterMs: 60_000,
       },
-      apiHosts: [cfg.apiHost],
+      // OAuth exchange/refresh always calls TIKTOK_API_HOST (production): TikTok's sandbox host
+      // rejects them (tiktok_error_40008). Only data calls (accounts, comments, actions) use
+      // cfg.apiHost, so both hosts must be allowed.
+      apiHosts: [...new Set([TIKTOK_API_HOST, cfg.apiHost])],
       authorizationHosts: ['business-api.tiktok.com'],
       defaultScopes: [],
       maxPageSize: 100,
