@@ -224,6 +224,7 @@ them commented out.
 | `TIKTOK_ADS_CONNECTOR_ENABLED`      | true/false   | `false`             | Turns the connector on. `true` requires an app id and secret.    |
 | `TIKTOK_ADS_APP_ID`                 | app id       | `TIKTOK_APP_ID`     | The Marketing API app id.                                        |
 | `TIKTOK_ADS_APP_SECRET`             | 16-128 chars | `TIKTOK_APP_SECRET` | The app secret. `TIKTOK_ADS_APP_SECRET_FILE` is supported.       |
+| `TIKTOK_ADS_API_HOST`               | hostname     | `business-api.tiktok.com` | Testing only. Points every Marketing API call at TikTok's isolated sandbox environment (`sandbox-ads.tiktok.com`) instead of production. Never set in production. |
 | `TIKTOK_ADS_POLL_INTERVAL_SEC`      | 60-3600      | 300                 | Worker. Poll interval per advertiser.                            |
 | `TIKTOK_ADS_POLL_OVERLAP_SEC`       | 0-86400      | 900                 | Worker. How far before the last high-water mark a pass re-reads. |
 | `TIKTOK_ADS_FULL_SCAN_INTERVAL_SEC` | 3600-604800  | 86400               | Worker. Full re-read of the 30-day window.                       |

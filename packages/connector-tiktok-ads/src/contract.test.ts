@@ -1,6 +1,7 @@
 import { Secret } from '@feedbouncer/service-runtime';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FakeTikTok } from '@feedbouncer/tiktok-business-api/testing';
+import { TIKTOK_API_HOST } from '@feedbouncer/tiktok-business-api';
 import { createMemoryStack, type Stack } from '@feedbouncer/connectors/testing';
 import { createTikTokAdsConnector } from './connector.js';
 import { APP } from './test-world.js';
@@ -14,7 +15,7 @@ let stack: Stack;
 beforeEach(async () => {
   fake = new FakeTikTok(APP);
   stack = await createMemoryStack(
-    createTikTokAdsConnector({ ...APP, appSecret: new Secret(APP.appSecret) }),
+    createTikTokAdsConnector({ ...APP, appSecret: new Secret(APP.appSecret), apiHost: TIKTOK_API_HOST }),
     {
       webhookSecret: null,
       redirectUri: REDIRECT,

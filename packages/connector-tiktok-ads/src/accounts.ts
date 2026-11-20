@@ -17,7 +17,7 @@ export async function listAccounts(
   ctx: OAuthContext,
 ): Promise<readonly GrantableAccount[]> {
   const { data } = await tiktokRequest(
-    { http: ctx.http, signal: ctx.signal, accessToken: userToken.reveal() },
+    { http: ctx.http, signal: ctx.signal, accessToken: userToken.reveal(), apiHost: cfg.apiHost },
     {
       endpoint: 'adAdvertiserGet',
       method: 'GET',

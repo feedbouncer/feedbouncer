@@ -14,6 +14,8 @@ export interface TikTokCall {
   /** Sent as the Access-Token header only. */
   readonly accessToken?: string;
   readonly reportQuota?: CallContext['reportQuota'];
+  /** Overrides TIKTOK_API_HOST, e.g. for TikTok's isolated sandbox-ads.tiktok.com environment. */
+  readonly apiHost?: string;
 }
 export interface TikTokResult<T> {
   readonly data: T;
@@ -43,7 +45,7 @@ export async function tiktokRequest<T>(
   }
   const url = new URL(
     `/open_api/v1.3/${TIKTOK_ENDPOINTS[req.endpoint]}`,
-    `https://${TIKTOK_API_HOST}`,
+    `https://${call.apiHost ?? TIKTOK_API_HOST}`,
   );
   for (const [k, v] of Object.entries(req.query ?? {})) url.searchParams.set(k, v);
 

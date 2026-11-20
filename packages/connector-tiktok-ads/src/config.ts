@@ -1,5 +1,6 @@
 import { EnvError, readSecret, Secret, readString, type Env } from '@feedbouncer/service-runtime';
 import type { ModerationAction, ResponseKind } from '@feedbouncer/connectors';
+import { TIKTOK_API_HOST } from '@feedbouncer/tiktok-business-api';
 
 /** V15: drop 'delete' if the Marketing API does not allow it. */
 export const TIKTOK_ADS_ACTIONS: readonly ModerationAction[] = ['hide', 'unhide', 'delete'];
@@ -13,7 +14,10 @@ export const AD_COMMENT_HIDE_FIELD = 'operation';
 export interface TikTokAdsConfig {
   readonly appId: string;
   readonly appSecret: Secret;
+  readonly apiHost: string;
 }
+
+const HOST = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
 
 /** Settings that may be supplied as <NAME>_FILE. Apps add these to their own *_FILE_VARS. */
 export const TIKTOK_ADS_FILE_VARS = ['TIKTOK_ADS_APP_SECRET'] as const;
@@ -41,5 +45,12 @@ export function parseTikTokAdsEnv(raw: Env): TikTokAdsConfig | null {
   if (appSecret.length > 128) {
     throw new EnvError('TIKTOK_ADS_APP_SECRET must be at most 128 characters (value not shown).');
   }
-  return { appId, appSecret: new Secret(appSecret) };
+  // Testing only: points calls at TikTok's isolated sandbox-ads.tiktok.com environment.
+  // Never set in production.
+  const apiHost = readString(env, 'TIKTOK_ADS_API_HOST', {
+    fallback: TIKTOK_API_HOST,
+    maxLength: 253,
+    pattern: HOST,
+  });
+  return { appId, appSecret: new Secret(appSecret), apiHost };
 }

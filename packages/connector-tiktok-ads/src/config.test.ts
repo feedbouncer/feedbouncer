@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EnvError, Secret } from '@feedbouncer/service-runtime';
+import { TIKTOK_API_HOST } from '@feedbouncer/tiktok-business-api';
 import {
   AD_COMMENT_HIDE_FIELD,
   TIKTOK_ADS_ACTIONS,
@@ -32,6 +33,7 @@ describe('parseTikTokAdsEnv', () => {
     expect(parseTikTokAdsEnv(full)).toEqual({
       appId: full.TIKTOK_ADS_APP_ID,
       appSecret: new Secret(full.TIKTOK_ADS_APP_SECRET),
+      apiHost: TIKTOK_API_HOST,
     });
   });
   it('falls back to the organic app credentials', () => {
@@ -43,10 +45,19 @@ describe('parseTikTokAdsEnv', () => {
     expect(parseTikTokAdsEnv(shared)).toEqual({
       appId: shared.TIKTOK_APP_ID,
       appSecret: new Secret(shared.TIKTOK_APP_SECRET),
+      apiHost: TIKTOK_API_HOST,
     });
     expect(parseTikTokAdsEnv({ ...shared, ...full })).toEqual({
       appId: full.TIKTOK_ADS_APP_ID,
       appSecret: new Secret(full.TIKTOK_ADS_APP_SECRET),
+      apiHost: TIKTOK_API_HOST,
+    });
+  });
+  it('overrides the API host for the isolated TikTok sandbox environment', () => {
+    expect(parseTikTokAdsEnv({ ...full, TIKTOK_ADS_API_HOST: 'sandbox-ads.tiktok.com' })).toEqual({
+      appId: full.TIKTOK_ADS_APP_ID,
+      appSecret: new Secret(full.TIKTOK_ADS_APP_SECRET),
+      apiHost: 'sandbox-ads.tiktok.com',
     });
   });
   it.each(['TIKTOK_ADS_APP_ID', 'TIKTOK_ADS_APP_SECRET'])(

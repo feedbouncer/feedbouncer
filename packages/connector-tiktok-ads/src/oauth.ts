@@ -45,7 +45,7 @@ export async function exchangeCode(
   ctx: OAuthContext,
 ): Promise<{ tokens: TokenSet }> {
   const { data } = await tiktokRequest(
-    { http: ctx.http, signal: ctx.signal },
+    { http: ctx.http, signal: ctx.signal, apiHost: cfg.apiHost },
     {
       endpoint: 'adOauthToken',
       method: 'POST',
@@ -64,7 +64,7 @@ export async function refreshTokens(
 ): Promise<TokenSet> {
   try {
     const { data } = await tiktokRequest(
-      { http: ctx.http, signal: ctx.signal },
+      { http: ctx.http, signal: ctx.signal, apiHost: cfg.apiHost },
       {
         endpoint: 'adOauthRefresh',
         method: 'POST',

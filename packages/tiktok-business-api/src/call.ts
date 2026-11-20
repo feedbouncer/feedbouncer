@@ -3,11 +3,12 @@ import type { TikTokCall } from './request.js';
 
 export type SkipLog = (msg: string, fields: { code: string; count?: number }) => void;
 
-export const callOf = (ctx: CallContext): TikTokCall => ({
+export const callOf = (ctx: CallContext, apiHost?: string): TikTokCall => ({
   http: ctx.http,
   signal: ctx.signal,
   accessToken: ctx.accessToken.reveal(),
   reportQuota: ctx.reportQuota,
+  ...(apiHost !== undefined && { apiHost }),
 });
 
 export const isPermissionDenied = (e: unknown): boolean =>

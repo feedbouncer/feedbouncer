@@ -15,7 +15,7 @@ export async function world(setup: (fake: FakeTikTok) => void = () => {}) {
   setup(fake);
   const log: Mock<Log> = vi.fn<Log>();
   const connector = createTikTokAdsConnector(
-    { ...APP, appSecret: new Secret(APP.appSecret) },
+    { ...APP, appSecret: new Secret(APP.appSecret), apiHost: TIKTOK_API_HOST },
     { clock: { now: () => NOW.getTime() }, log },
   );
   let tamper: { path: string; fn: (data: Record<string, unknown>) => unknown } | null = null;

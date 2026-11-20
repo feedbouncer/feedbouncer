@@ -1,5 +1,5 @@
 import { ConnectorError, systemClock, type Clock, type Connector } from '@feedbouncer/connectors';
-import { NUMERIC_ID, TIKTOK_API_HOST, type SkipLog } from '@feedbouncer/tiktok-business-api';
+import { NUMERIC_ID, type SkipLog } from '@feedbouncer/tiktok-business-api';
 import { act, respond } from './actions.js';
 import { listAccounts } from './accounts.js';
 import { getComment, listConnectionComments } from './comments.js';
@@ -32,7 +32,7 @@ export function createTikTokAdsConnector(
         urgentReservePoints: 10,
         defaultRetryAfterMs: 60_000,
       },
-      apiHosts: [TIKTOK_API_HOST],
+      apiHosts: [cfg.apiHost],
       authorizationHosts: ['business-api.tiktok.com'],
       defaultScopes: [],
       maxPageSize: 100,
@@ -41,12 +41,12 @@ export function createTikTokAdsConnector(
     exchangeCode: (input, ctx) => exchangeCode(cfg, now, input, ctx),
     refreshTokens: (token, ctx) => refreshTokens(cfg, now, token, ctx),
     listAccounts: (token, ctx) => listAccounts(cfg, token, ctx),
-    listConnectionComments: (ctx, req) => listConnectionComments(log, ctx, req),
+    listConnectionComments: (ctx, req) => listConnectionComments(log, cfg.apiHost, ctx, req),
     // Ad comments are only listed per connection; there is no per-source listing.
     listComments: () => Promise.reject(new ConnectorError('unsupported', 'listing_unsupported')),
-    getComment: (ctx, ref) => getComment(log, now, ctx, ref),
-    act,
-    respond: (ctx, req) => respond(log, now, ctx, req),
+    getComment: (ctx, ref) => getComment(log, now, cfg.apiHost, ctx, ref),
+    act: (ctx, req) => act(cfg, ctx, req),
+    respond: (ctx, req) => respond(cfg, log, now, ctx, req),
     lifecycle: {
       onConnected: async () => {},
       // The Marketing API has no revoke endpoint.

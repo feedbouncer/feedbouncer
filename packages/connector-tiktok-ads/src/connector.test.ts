@@ -5,7 +5,11 @@ import { TIKTOK_API_HOST } from '@feedbouncer/tiktok-business-api';
 import { createTikTokAdsConnector } from './connector.js';
 import { APP } from './test-world.js';
 
-const c = createTikTokAdsConnector({ ...APP, appSecret: new Secret(APP.appSecret) });
+const c = createTikTokAdsConnector({
+  ...APP,
+  appSecret: new Secret(APP.appSecret),
+  apiHost: TIKTOK_API_HOST,
+});
 
 describe('createTikTokAdsConnector', () => {
   it('passes framework validation', () => expect(() => validateConnector(c)).not.toThrow());

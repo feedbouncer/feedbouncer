@@ -16,11 +16,15 @@ import {
 import * as z from 'zod';
 import { scoped } from './call.js';
 import { findComment } from './comments.js';
-import { AD_COMMENT_HIDE_FIELD } from './config.js';
+import { AD_COMMENT_HIDE_FIELD, type TikTokAdsConfig } from './config.js';
 
 const REPLY_SCHEMA = z.object({ comment_id: z.unknown().optional() });
 
-export async function act(ctx: CallContext, req: ActionRequest): Promise<RawActionOutcome> {
+export async function act(
+  cfg: TikTokAdsConfig,
+  ctx: CallContext,
+  req: ActionRequest,
+): Promise<RawActionOutcome> {
   const { action } = req;
   if (action !== 'hide' && action !== 'unhide' && action !== 'delete') {
     throw new ConnectorError('unsupported', 'action_unsupported');
@@ -31,7 +35,7 @@ export async function act(ctx: CallContext, req: ActionRequest): Promise<RawActi
   };
   const res = await gone(() =>
     scoped(() =>
-      tiktokRequest(callOf(ctx), {
+      tiktokRequest(callOf(ctx, cfg.apiHost), {
         endpoint: action === 'delete' ? 'adCommentDelete' : 'adCommentStatusUpdate',
         method: 'POST',
         body:
@@ -52,6 +56,7 @@ export async function act(ctx: CallContext, req: ActionRequest): Promise<RawActi
  * so the comment is looked up first (V13/V15).
  */
 export async function respond(
+  cfg: TikTokAdsConfig,
   log: SkipLog,
   now: () => number,
   ctx: CallContext,
@@ -59,12 +64,12 @@ export async function respond(
 ): Promise<RawRespondOutcome> {
   if (req.kind !== 'public_reply') throw new ConnectorError('unsupported', 'response_unsupported');
   const commentId = opaqueId(req.target.externalId);
-  const found = await findComment(log, now, ctx, commentId);
+  const found = await findComment(log, now, cfg.apiHost, ctx, commentId);
   // The lookup only covers recent comments, so a miss does not mean the comment is gone.
   if (found === null) throw new ConnectorError('permanent', 'comment_lookup_missed');
   const res = await gone(() =>
     scoped(() =>
-      tiktokRequest(callOf(ctx), {
+      tiktokRequest(callOf(ctx, cfg.apiHost), {
         endpoint: 'adCommentPost',
         method: 'POST',
         body: {

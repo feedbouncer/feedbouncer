@@ -86,6 +86,7 @@ function toAdComment(raw: unknown): AdComment | null {
 
 async function fetchPage(
   log: SkipLog,
+  apiHost: string,
   ctx: CallContext,
   q: {
     since: Date;
@@ -106,7 +107,7 @@ async function fetchPage(
     throw invalidRequest();
   }
   const { data } = await scoped(() =>
-    tiktokRequest(callOf(ctx), {
+    tiktokRequest(callOf(ctx, apiHost), {
       endpoint: 'adCommentList',
       method: 'GET',
       query: {
@@ -136,10 +137,11 @@ async function fetchPage(
 
 export async function listConnectionComments(
   log: SkipLog,
+  apiHost: string,
   ctx: CallContext,
   req: { since: Date; until: Date; page: number; pageSize: number },
 ): Promise<ConnectionCommentsPage> {
-  const { items, hasMore } = await fetchPage(log, ctx, {
+  const { items, hasMore } = await fetchPage(log, apiHost, ctx, {
     ...req,
     searchField: 'ADVERTISER_ID',
     searchValue: ctx.externalAccountId,
@@ -164,12 +166,13 @@ export async function listConnectionComments(
 export async function findComment(
   log: SkipLog,
   now: () => number,
+  apiHost: string,
   ctx: CallContext,
   commentId: string,
 ): Promise<AdComment | null> {
   const until = new Date(now());
   const since = new Date(until.getTime() - (MAX_WINDOW_DAYS - 1) * DAY_MS);
-  const { items } = await fetchPage(log, ctx, {
+  const { items } = await fetchPage(log, apiHost, ctx, {
     since,
     until,
     page: 1,
@@ -183,8 +186,9 @@ export async function findComment(
 export async function getComment(
   log: SkipLog,
   now: () => number,
+  apiHost: string,
   ctx: CallContext,
   ref: CommentRef,
 ): Promise<NormalizedComment | null> {
-  return (await findComment(log, now, ctx, ref.externalId))?.comment ?? null;
+  return (await findComment(log, now, apiHost, ctx, ref.externalId))?.comment ?? null;
 }
