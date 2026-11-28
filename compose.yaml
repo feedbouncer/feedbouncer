@@ -109,7 +109,7 @@ services:
           memory: 512M
 
   redis:
-    image: redis:8.10-alpine
+    image: redis:8.12-alpine
     restart: unless-stopped
     # noeviction is required by BullMQ. No persistence: queued dev jobs are
     # disposable. The password is visible in `docker inspect` (dev only).
