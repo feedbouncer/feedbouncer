@@ -23,12 +23,21 @@ export interface FacebookConfig {
   readonly appId: string;
   readonly appSecret: Secret;
   readonly graphVersion: string;
-  /** Echoed by Meta in the hub.verify_token handshake. */
-  readonly webhookVerifyToken: Secret;
+  /**
+   * Echoed by Meta in the hub.verify_token handshake. Only the API's webhook
+   * route reads this; null for a caller that opts out via
+   * `requireWebhookToken: false` (the worker, which never handles webhooks
+   * and so is not granted this secret -- see infra/docs/secrets.md).
+   */
+  readonly webhookVerifyToken: Secret | null;
 }
 
 /** Null when FACEBOOK_APP_ID is unset (connector not enabled); throws EnvError on partial or invalid config. */
-export function parseFacebookEnv(env: Env, warn: (msg: string) => void): FacebookConfig | null {
+export function parseFacebookEnv(
+  env: Env,
+  warn: (msg: string) => void,
+  opts: { readonly requireWebhookToken?: boolean } = {},
+): FacebookConfig | null {
   const appId = env.FACEBOOK_APP_ID?.trim();
   if (!appId) return null;
   if (!/^\d{5,20}$/.test(appId)) {
@@ -36,13 +45,18 @@ export function parseFacebookEnv(env: Env, warn: (msg: string) => void): Faceboo
   }
   const appEnv = readAppEnv(env);
   const appSecret = readSecret(env, 'FACEBOOK_APP_SECRET', { minLength: 16 });
-  const webhookVerifyToken = readSecret(env, 'FACEBOOK_WEBHOOK_VERIFY_TOKEN', { minLength: 20 });
   checkNotPlaceholder(appEnv, 'FACEBOOK_APP_SECRET', appSecret, warn);
-  checkNotPlaceholder(appEnv, 'FACEBOOK_WEBHOOK_VERIFY_TOKEN', webhookVerifyToken, warn);
+  const requireWebhookToken = opts.requireWebhookToken ?? true;
+  let webhookVerifyToken: Secret | null = null;
+  if (requireWebhookToken || env.FACEBOOK_WEBHOOK_VERIFY_TOKEN?.trim()) {
+    const token = readSecret(env, 'FACEBOOK_WEBHOOK_VERIFY_TOKEN', { minLength: 20 });
+    checkNotPlaceholder(appEnv, 'FACEBOOK_WEBHOOK_VERIFY_TOKEN', token, warn);
+    webhookVerifyToken = new Secret(token);
+  }
   return {
     appId,
     appSecret: new Secret(appSecret),
-    webhookVerifyToken: new Secret(webhookVerifyToken),
+    webhookVerifyToken,
     graphVersion: readString(env, 'FACEBOOK_GRAPH_API_VERSION', {
       fallback: 'v26.0',
       maxLength: 8,

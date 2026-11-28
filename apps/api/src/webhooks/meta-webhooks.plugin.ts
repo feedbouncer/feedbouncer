@@ -122,6 +122,9 @@ export async function registerMetaWebhooks(fastify: FastifyInstance, deps: AppDe
     });
 
     if (fb) {
+      // Non-null here: the api's env loader always calls parseFacebookEnv with the
+      // default requireWebhookToken: true (only the worker opts out, in apps/worker/src/env.ts).
+      if (!fb.webhookVerifyToken) throw new Error('facebook.webhookVerifyToken missing in api env');
       // Both platforms are subscribed on the same Meta app, so they share its verify token.
       const common = { verifyToken: fb.webhookVerifyToken, connectors, deliver };
       registerMetaWebhook(scope, { ...common, platform: 'facebook', path: FACEBOOK_WEBHOOK_PATH });

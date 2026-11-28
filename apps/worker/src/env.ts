@@ -326,7 +326,9 @@ export function loadWorkerEnv(
   const appEnv = readAppEnv(env);
   const databaseUrl = readUrl(env, 'DATABASE_URL', PG_PROTOCOLS);
   const redisUrl = readUrl(env, 'REDIS_URL', REDIS_PROTOCOLS);
-  const facebook = parseFacebookEnv(env, opts.warn);
+  // The worker never handles webhooks, so it is not granted FACEBOOK_WEBHOOK_VERIFY_TOKEN
+  // (infra/docs/secrets.md scopes it to api only).
+  const facebook = parseFacebookEnv(env, opts.warn, { requireWebhookToken: false });
   const instagram = parseInstagramEnv(env, facebook);
   const metaAds = parseMetaAdsEnv(env, facebook);
   const adPolling = metaAds ? readAdPollingConfig(env) : null;
